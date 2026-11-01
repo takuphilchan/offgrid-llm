@@ -5,6 +5,7 @@ import { agentContextText } from '../../i18n/agent-context';
 import { SkillLibrary, sameSkill } from './SkillLibrary';
 import { skillLibraryText } from '../../i18n/skill-library';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { FilePicker } from '../../components/FilePicker';
 
 function decoded(content:string) {
   try {const text=new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(content),char=>char.charCodeAt(0)));return text.includes('\0')?`base64: ${content}`:text;}
@@ -66,7 +67,7 @@ export function AgentContextResources({profile,selected,onChange,disabled=false}
       <p className="profile-hint">{copy.skillHint}</p>
       <fieldset className="skill-controls" disabled={disabled||busy||!supported}><legend className="sr-only">{copy.skills}</legend>
         <div className="skill-toolbar">
-        <label>{copy.import}<input type="file" multiple {...{webkitdirectory:''}} onChange={event=>{const files=Array.from(event.currentTarget.files??[]);event.currentTarget.value='';void run(()=>importFiles(files));}}/></label>
+        <FilePicker label={copy.import} directory disabled={disabled||busy||!supported} onFiles={files=>run(()=>importFiles(files))}/>
         <button type="button" className="secondary-button" onClick={()=>void run(refreshSkills)}>{copy.refresh}</button>
         </div>
         <SkillLibrary skills={skills} selected={selected} onChange={onChange} inspect={ref=>void run(()=>inspect(ref))}/>

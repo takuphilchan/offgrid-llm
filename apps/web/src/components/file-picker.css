@@ -1,0 +1,5 @@
+@layer controls {
+  .file-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; min-width: 0; max-width: 100%; }
+  .file-picker > .file-picker-trigger { flex: 0 1 auto; justify-content: flex-start; text-align: start; }
+  .file-picker-selection { flex: 0 1 auto; min-width: 0; max-width: min(100%, 32rem); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: var(--type-caption); }
+}

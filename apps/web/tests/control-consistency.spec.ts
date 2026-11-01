@@ -24,6 +24,18 @@ async function fixture(page: Page, locale = 'en', theme = 'dark') {
   });
 }
 
+for (const width of [390,1440]) for(const theme of ['light','dark']) test(`preference controls keep a readable measure at ${width}px ${theme}`,async({page},info)=>{
+  await page.setViewportSize({width,height:900});
+  await fixture(page,'en',theme);await page.goto('/ui/#/settings');
+  const language=page.locator('#settings-language');
+  await expect(language).toBeVisible();
+  const box=await language.boundingBox();expect(box!.width).toBeLessThanOrEqual(320);
+  await language.focus();await language.press('ArrowDown');await language.press('Enter');
+  await expect(language).toHaveValue('fr');await expect(language).toBeFocused();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:info.outputPath('preferences.png'),fullPage:true});
+});
+
 for (const theme of ['dark', 'light'] as const) {
   test(`native select options remain readable in ${theme} even with the opposite OS theme`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: theme === 'dark' ? 'light' : 'dark' });

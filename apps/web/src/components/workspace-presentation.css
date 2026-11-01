@@ -22,7 +22,6 @@
   .settings-group h3 { margin: 0; font-size: var(--type-body); line-height: var(--leading-ui); }
   .settings-group .settings-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); border: 0; border-block-end: 1px solid var(--line); border-radius: 0; background: transparent; padding: var(--space-4) 0; }
   .settings-group .settings-panel > div { min-width: 0; }
-  .settings-panel > select { width: min(100%, 20rem); flex: 0 1 auto; }
   .settings-group .settings-panel > :is(button, .segmented-control, .settings-actions) { justify-self: start; }
   .settings-group .settings-panel > label { font-size: var(--type-body); font-weight: var(--weight-medium); }
   .settings-service-details { display: grid; gap: 12px; }
@@ -110,4 +109,10 @@
     .composer .composer-actions { flex-wrap: wrap; }
     .composer .composer-footer { row-gap: 12px; }
   }
+}
+
+/* Geometry exceptions belong after the shared controls layer, which otherwise
+   stretches every select to its grid track regardless of selector specificity. */
+@layer controls {
+  .settings-panel > select { width: min(100%, 20rem); justify-self: start; }
 }

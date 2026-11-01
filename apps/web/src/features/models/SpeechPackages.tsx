@@ -7,6 +7,7 @@ import { modelAcquisition } from '../../i18n/model-acquisition';
 import { useWorkspace } from '../../lib/workspace-context';
 import { formatBytes } from './model-format';
 import { preparePackageImport } from './package-import';
+import { FilePicker } from '../../components/FilePicker';
 
 export function SpeechPackages({ importOnly = false, language = false, onChanged }: { importOnly?: boolean; language?: boolean; onChanged?: () => Promise<void> }) {
   const { locale, messages: text } = useI18n();
@@ -55,15 +56,15 @@ export function SpeechPackages({ importOnly = false, language = false, onChanged
         </div>
       </article>)}
       {admin && <>
-        <label className="field"><span>{copy.folder}</span><input type="file" multiple disabled={busy} ref={node => { node?.setAttribute('webkitdirectory', ''); }} onChange={async event => {
-          const version = ++selection.current; const files = Array.from(event.target.files ?? []); setPrepared(null); setError('');
+        <FilePicker label={copy.folder} directory disabled={busy} onFiles={async files => {
+          const version = ++selection.current; setPrepared(null); setError('');
           if (!files.length) return;
           try { const result = await preparePackageImport(files); if (version === selection.current) {
             if (language !== (result.manifest.architecture === 'mlx-text' || result.manifest.architecture === 'transformers-text')) throw new Error('wrong_package_category');
             setPrepared(result);
           } }
           catch { if (version === selection.current) setError(copy.invalid); }
-        }} /></label>
+        }} />
         {prepared && <p>{prepared.manifest.name} · {prepared.manifest.revision} · {formatBytes(prepared.manifest.artifacts.reduce((n, artifact) => n + artifact.size, 0))}</p>}
         <div className="model-actions"><button className="primary-button" disabled={!prepared || busy} onClick={() => void perform(async signal => { if (prepared) { await api.importModelPackage(prepared.body, signal); setPrepared(null); } }).catch(() => {})}>{busy ? text.common.loading : copy.import}</button>
         {busy && <button onClick={() => active.current?.abort()}>{text.models.cancel}</button>}</div>

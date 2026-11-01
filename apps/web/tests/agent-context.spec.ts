@@ -3,10 +3,31 @@ import {agentContextText} from '../src/i18n/agent-context';
 import {agentProfilesText} from '../src/i18n/agent-profiles';
 import {skillLibraryText} from '../src/i18n/skill-library';
 import type {LocaleCode} from '../src/i18n';
+import {mkdtemp,writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
 
 const digest='a'.repeat(64),model='local-model';
 const skill={id:'skill-one',revision:1,digest,name:'test-writer',description:'Write exact notes',draft:false,created_at:'2026-10-25T00:00:00Z'};
 const content='---\nname: test-writer\ndescription: Write exact notes\n---\nKeep Unicode — café 日本語 exactly.\n';
+
+test('skill folder selection uses a keyboard button and permits selecting the same folder again',async({page},info)=>{
+  const {writes}=await fixture(page),copy=agentContextText.en;
+  const panel=page.getByRole('region',{name:`${copy.skills} / ${copy.memory}`});
+  await panel.locator('summary').first().click();
+  const picker=panel.getByRole('button',{name:copy.import,exact:true});
+  await expect(panel.locator('input[type=file]')).toBeHidden();
+  await picker.focus();const chooser=page.waitForEvent('filechooser');await picker.press('Enter');
+  const directory=await mkdtemp(join(tmpdir(),'offgrid-skill-picker-'));
+  await writeFile(join(directory,'SKILL.md'),content);
+  await(await chooser).setFiles(directory);
+  await expect.poll(()=>writes.filter(item=>item.path==='/api/v2/agent-skills'&&item.method==='POST').length).toBe(1);
+  await expect(panel.locator('.file-picker-selection')).toContainText('offgrid-skill-picker-');
+  await expect(picker).toBeEnabled();await picker.focus();const second=page.waitForEvent('filechooser');await picker.press('Enter');await(await second).setFiles(directory);
+  await expect.poll(()=>writes.filter(item=>item.path==='/api/v2/agent-skills'&&item.method==='POST').length).toBe(2);
+  expect(writes.some(item=>item.path.includes('/turns')||item.path==='/api/v2/jobs')).toBe(false);
+  await page.screenshot({path:info.outputPath('skill-folder-picker.png'),fullPage:true});
+});
 async function fixture(page:Page,locale:LocaleCode='en') {
   await page.addInitScript(locale=>{localStorage.setItem('offgrid.locale',locale);localStorage.setItem('offgrid.onboarding.complete','true');},locale);
   const profile={id:'Writer',actor:'local',workspace:'context-test',revision:1,digest:'profile',archived:false,created_at:'2026-10-25T00:00:00Z',settings:{name:'Writer',model,max_iterations:10,skills:[] as unknown[]}};
@@ -137,7 +158,7 @@ test('draft review failure keeps the skill inactive, then explicit review pins t
 for(const locale of Object.keys(agentContextText) as LocaleCode[])test(`context controls: ${locale}, narrow layout, no implicit writes`,async({page})=>{
   await page.setViewportSize({width:320,height:480});const {writes}=await fixture(page,locale),copy=agentContextText[locale];
   const panel=page.getByRole('region',{name:`${copy.skills} / ${copy.memory}`});await panel.locator('summary').first().click();
-  await expect(panel.getByLabel(copy.import,{exact:true})).toBeVisible();
+  await expect(panel.getByRole('button',{name:copy.import,exact:true})).toBeVisible();
   await panel.getByRole('searchbox',{name:skillLibraryText[locale].search}).fill('no matching skill');
   await expect(panel.getByText(skillLibraryText[locale].noMatch,{exact:true})).toBeVisible();
   await panel.locator('summary').filter({hasText:copy.memory}).click();await expect(panel.getByRole('checkbox',{name:copy.enabled})).not.toBeChecked();
