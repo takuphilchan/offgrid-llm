@@ -423,7 +423,10 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release
             -DGGML_NATIVE=OFF
             -DGGML_STATIC=ON
-            -DLLAMA_CURL=OFF
+            # The managed worker uses loopback HTTP; OffGrid owns downloads/TLS.
+            # CURL is no longer the switch for cpp-httplib in this pinned tree.
+            -DLLAMA_OPENSSL=OFF
+            -DLLAMA_BUILD_UI=OFF
           )
           # macOS ships Bash 3.2. With `set -u`, expanding an empty array is an
           # unbound-variable error. ARM builds have no x86 GGML arguments, so
@@ -449,6 +452,7 @@ jobs:
             # ignored by cl.exe, so use its supported AVX2 codegen switch.
             CMAKE_ARGS+=("-DCMAKE_C_FLAGS=/arch:AVX2")
             CMAKE_ARGS+=("-DCMAKE_CXX_FLAGS=/arch:AVX2 /EHsc")
+            CMAKE_ARGS+=(-A x64 -T host=x64)
             echo "Using MSVC AVX2 flags for the Windows bundle"
           elif [ -n "$CPU_FLAGS" ]; then
             CMAKE_ARGS+=("-DCMAKE_C_FLAGS=$CPU_FLAGS")
@@ -581,6 +585,7 @@ jobs:
         if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
+          set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
           BUNDLE_NAME="offgrid-${VERSION}-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }}-${{ matrix.cpu_features }}"
           
@@ -594,6 +599,10 @@ jobs:
             cp offgrid.exe "$BUNDLE_NAME/"
             cp /tmp/llama.cpp/build/bin/Release/llama-server.exe "$BUNDLE_NAME/" 2>/dev/null || \
               cp /tmp/llama.cpp/build/bin/llama-server.exe "$BUNDLE_NAME/"
+            runtime_cache="$(cygpath -w /tmp/llama.cpp/build/CMakeCache.txt)"
+            echo "WINDOWS_RUNTIME_CMAKE_CACHE=$runtime_cache" >> "$GITHUB_ENV"
+            powershell -NoProfile -File scripts/release/prepare-windows-runtime.ps1 \
+              -BundleDirectory "$BUNDLE_NAME" -CMakeCache "$runtime_cache"
             
             # Copy whisper binary
             cp /tmp/whisper.cpp/build/bin/Release/whisper-cli.exe "$BUNDLE_NAME/audio/whisper/" 2>/dev/null || \
@@ -704,6 +713,8 @@ jobs:
           # Copy main binaries
           Copy-Item offgrid.exe C:\Program Files\OffGrid\
           Copy-Item llama-server.exe C:\Program Files\OffGrid\
+          Copy-Item *.dll C:\Program Files\OffGrid\
+          # Keep the app-local DLLs beside llama-server.exe.
           
           # Audio binaries are in audio\ folder
           ```
@@ -759,8 +770,8 @@ jobs:
           # Create checksums (use shasum on macOS, sha256sum on Linux)
           cd "$BUNDLE_NAME"
           if [ "${{ matrix.platform }}" = "windows" ]; then
-            sha256sum offgrid.exe llama-server.exe > checksums.sha256 2>/dev/null || \
-              shasum -a 256 offgrid.exe llama-server.exe > checksums.sha256
+            sha256sum offgrid.exe llama-server.exe ./*.dll runtime-dependencies.json > checksums.sha256 2>/dev/null || \
+              shasum -a 256 offgrid.exe llama-server.exe ./*.dll runtime-dependencies.json > checksums.sha256
           elif [ "${{ matrix.platform }}" = "darwin" ]; then
             shasum -a 256 offgrid llama-server > checksums.sha256
           else
@@ -778,6 +789,15 @@ jobs:
           fi
           
           echo "BUNDLE_NAME=${BUNDLE_NAME}" >> $GITHUB_ENV
+
+      - name: Verify archived Windows worker before upload
+        if: matrix.platform == 'windows' && steps.existing.outputs.skip != 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $unpacked = Join-Path $env:RUNNER_TEMP ('offgrid-runtime-' + [Guid]::NewGuid().ToString('N'))
+          Expand-Archive -LiteralPath $env:ASSET_PATH -DestinationPath $unpacked
+          ./scripts/release/prepare-windows-runtime.ps1 -BundleDirectory (Join-Path $unpacked $env:BUNDLE_NAME) -CMakeCache $env:WINDOWS_RUNTIME_CMAKE_CACHE -VerifyOnly
 
       - name: Upload artifact
         if: steps.existing.outputs.skip != 'true'

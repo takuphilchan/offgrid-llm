@@ -45,14 +45,14 @@ static void test_offgrid_bare_json(testing & t) {
     t.assert_true("pinned template available", file.good());
     const std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     common_chat_template tmpl(source, "", "");
-    autoparser::generation_params inputs;
+    ::autoparser::generation_params inputs;
     inputs.messages = json::parse(R"([{"role":"user","content":"hello"}])");
     inputs.tools = json::parse(R"([{"type":"function","function":{"name":"read_fixture","parameters":{"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":2000}},"required":["limit"],"additionalProperties":false}}}])");
     inputs.parallel_tool_calls = false;
     inputs.reasoning_format = COMMON_REASONING_FORMAT_NONE;
     for (bool required : {false, true}) {
         inputs.tool_choice = required ? COMMON_CHAT_TOOL_CHOICE_REQUIRED : COMMON_CHAT_TOOL_CHOICE_AUTO;
-        auto data = autoparser::peg_generator::generate_parser(tmpl, inputs);
+        auto data = ::autoparser::peg_generator::generate_parser(tmpl, inputs);
         t.assert_true("bare JSON native grammar present", !data.grammar.empty());
         t.assert_equal("only optional grammar is lazy", !required, data.grammar_lazy);
         if (data.grammar.empty()) { continue; }
@@ -82,7 +82,7 @@ static void test_offgrid_bare_json(testing & t) {
         }
     }
     inputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_NONE;
-    t.assert_true("explicit no-tools unchanged", autoparser::peg_generator::generate_parser(tmpl, inputs).grammar.empty());
+    t.assert_true("explicit no-tools unchanged", ::autoparser::peg_generator::generate_parser(tmpl, inputs).grammar.empty());
 }
 
 static void test_offgrid_native_sequential(testing & t) {
@@ -90,19 +90,19 @@ static void test_offgrid_native_sequential(testing & t) {
     for (bool parallel : {false, true}) {
         for (bool required : {false, true}) {
             t.test(std::string(parallel ? "parallel" : "sequential") + (required ? "_required" : "_optional"), [&](testing & t) {
-                autoparser::generation_params inputs;
+                ::autoparser::generation_params inputs;
                 inputs.parallel_tool_calls = parallel;
                 inputs.tool_choice = required ? COMMON_CHAT_TOOL_CHOICE_REQUIRED : COMMON_CHAT_TOOL_CHOICE_AUTO;
                 inputs.tools = json::parse(R"([{"type":"function","function":{"name":"read_fixture","parameters":{"type":"object","properties":{"path":{"type":"string"}},"required":["path"],"additionalProperties":false}}}])");
-                autoparser::analyze_tools tools;
-                tools.format.mode = autoparser::tool_format::JSON_NATIVE;
+                ::autoparser::analyze_tools tools;
+                tools.format.mode = ::autoparser::tool_format::JSON_NATIVE;
                 tools.format.per_call_start = "<tool_call>";
                 tools.format.per_call_end = "</tool_call>";
                 tools.format.name_field = "name";
                 tools.format.args_field = "arguments";
                 tools.format.parameter_order = {"name", "arguments"};
                 auto parser = build_chat_peg_parser([&](common_chat_peg_builder & p) {
-                    autoparser::parser_build_context ctx(p, inputs);
+                    ::autoparser::parser_build_context ctx(p, inputs);
                     return tools.build_parser(ctx);
                 });
                 const std::string call = R"(<tool_call>{"name":"read_fixture","arguments":{"path":"café 日本語"}}</tool_call>)";

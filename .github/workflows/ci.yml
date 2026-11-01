@@ -14,6 +14,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows-worker-package:
+    name: Windows worker dependency packaging
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify app-local MSVC and OpenMP closure with compiled fixtures
+        shell: powershell
+        run: ./scripts/release/test-windows-runtime-bundle.ps1
+
   native-tool-parser:
     name: Pinned native tool parser and grammar
     runs-on: ubuntu-latest
