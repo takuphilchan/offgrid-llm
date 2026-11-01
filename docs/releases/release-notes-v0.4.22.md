@@ -30,16 +30,28 @@ termination and Windows inference-worker packaging.
 - Windows runtime packaging verifies app-local compiler/OpenMP dependencies.
   Governed tool generation avoids a native regex-grammar defect while retaining
   full argument validation, and keeps stable prompt prefixes across tool results.
+- Memory-admission failures retain a typed code across streaming and saved
+  history. Chat explains recovery in the selected language, keeps technical
+  details expandable, preserves the draft when opening Models, and stops showing
+  confirmed failed work as running. This does not reduce memory safety reserves
+  or automatically retry or change models.
 
 ## Verification and limits
 
-The final local renderer run passed 666 tests; the earlier visual-enabled run
-passed 682. Desktop, companion, Python protocol, Go, API and structural checks
+The final local renderer run passed 678 tests with 28 opt-in/environment skips;
+the earlier visual-enabled run passed 682. Desktop, companion, Python protocol,
+Go, API and structural checks
 are recorded with skips and initial failures in the
 [verification evidence](../quality/evidence/native-agent-termination-2026-10-31.md).
 Three isolated packaged Windows CPU agent journeys independently verified exact
 artifact bytes, preview and saved-state restart. They do not establish all-model
 accuracy or latency guarantees.
+
+Those native passes used candidate binaries. A subsequent downloaded Windows CPU
+desktop attempt was rejected by memory admission before its first reply; this
+failure remains recorded in the [completion audit](../quality/evidence/workspace-completion-audit-2026-11-01.md).
+The package's digest and worker startup were verified, but that attempt does not
+qualify inference. Available memory, model size and context still constrain use.
 
 Real vision interpretation, manual screen-reader testing, participant usability
 studies and the complete native platform/model matrix remain unqualified. Image
