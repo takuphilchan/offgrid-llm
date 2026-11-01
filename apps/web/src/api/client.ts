@@ -228,8 +228,9 @@ export const api = {
     if (!response.ok) {
       const body = await response.text();
       let message = `${response.status} ${response.statusText}`;
-      try { const error = JSON.parse(body); message = error.error?.message ?? error.error ?? message; } catch { /* Do not show an HTML proxy page. */ }
-      throw new APIError(message, response.status);
+      let data: Record<string, any> | undefined;
+      try { data = JSON.parse(body); const detail = data?.error?.message ?? data?.error; if (typeof detail === 'string') message = detail; } catch { /* Do not show an HTML proxy page. */ }
+      throw new APIError(message, response.status, data);
     }
     return readSessionStream(response, onEvent);
   },

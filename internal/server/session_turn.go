@@ -137,12 +137,15 @@ func (h *SessionHandlers) executeTurn(ctx context.Context, scoped *sessions.Scop
 		turn.Error = "Response could not finish. Your draft and partial output are retained; review before retrying."
 		if typed, ok := err.(*serviceError); ok {
 			turn.Error = typed.message
+			turn.ErrorCode = typed.code
 		}
 		if ctx.Err() != nil {
+			turn.ErrorCode = ""
 			turn.Status = "cancelled"
 			turn.Error = "Generation stopped. Partial output is not completed conversational context."
 		}
 		if h.runtimeContext != nil && h.runtimeContext.Err() != nil {
+			turn.ErrorCode = ""
 			turn.Status = "interrupted"
 			turn.Error = "Service stopped before completion. Review before retrying."
 		}
@@ -278,7 +281,7 @@ func (h *SessionHandlers) followTurn(w http.ResponseWriter, r *http.Request, nam
 				_ = json.Unmarshal(turn.Metrics, &metrics)
 				_ = write(ChatStreamEvent{Type: "done", Session: session, Message: &sessions.Message{Role: "assistant", Content: turn.Output, Timestamp: session.UpdatedAt, KnowledgeSources: turn.KnowledgeSources}, Metrics: &metrics, FinishReason: turn.FinishReason})
 			} else {
-				_ = write(ChatStreamEvent{Type: "error", Error: turn.Error})
+				_ = write(ChatStreamEvent{Type: "error", Error: turn.Error, ErrorCode: turn.ErrorCode})
 			}
 			return
 		}

@@ -1,9 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
+import { chatRecovery } from '../src/i18n/chat-recovery';
 
-async function streamingWorkspace(page: Page) {
-  await page.addInitScript(() => {
+async function streamingWorkspace(page: Page, locale = 'en') {
+  await page.addInitScript(locale => {
     localStorage.setItem('offgrid.onboarding.complete', 'true');
-    localStorage.setItem('offgrid.locale', 'en');
+    localStorage.setItem('offgrid.locale', locale);
     const original = window.fetch.bind(window);
     window.fetch = async (input, init) => {
       if (!String(input).endsWith('/generate')) return original(input, init);
@@ -27,12 +28,13 @@ async function streamingWorkspace(page: Page) {
             controller.close();
           };
           (window as any).breakGeneration = () => controller.close();
+          (window as any).failGeneration = (error: string, error_code: string) => { emit({type:'error',error,error_code}); controller.close(); };
           init!.signal?.addEventListener('abort', () => controller.error(new DOMException('Stopped', 'AbortError')), { once: true });
         }
       });
       return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
     };
-  });
+  }, locale);
   const sessions: Record<string, any> = {};
   await page.route('**/health', route => route.fulfill({ json: { status: 'healthy' } }));
   await page.route('**/v1/**', route => {
@@ -93,6 +95,85 @@ test('unexpected stream closure retains the draft and labels partial text as uns
   await expect(page.locator('.streaming-response')).toContainText('Partial response');
   await expect(page.locator('.composer textarea')).toHaveValue('Stream my answer');
   await expect(page.locator('.composer-actions > button')).toHaveText('Send');
+});
+
+test('typed memory failure offers model recovery, retains the draft and stops claiming running work', async ({ page }, info) => {
+  await streamingWorkspace(page);
+  await expect(page.getByRole('button',{name:'Known work',exact:true})).toContainText('Running');
+  const name = await page.evaluate(() => (window as any).generationSession as string);
+  const diagnostic = 'insufficient memory for the requested 512-token allocation (estimated available capacity: 0)';
+  const turn = {id:'capacity-turn',status:'failed',phase:'loading',prompt:'Stream my answer',model:'stream-model',profile:'interactive',knowledge:false,max_tokens:1024,output:'Hello 世界',error:diagnostic,error_code:'insufficient_runtime_capacity'};
+  const session = {name,model_id:'stream-model',messages:[],turn,updated_at:new Date().toISOString()};
+  await page.route('**/v1/sessions/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/v1/sessions/'+encodeURIComponent(name)) return route.fulfill({json:session});
+    if (path.endsWith('/turn')) return route.fulfill({json:{turn}});
+    return route.fallback();
+  });
+  await page.evaluate(({diagnostic}) => (window as any).failGeneration(diagnostic,'insufficient_runtime_capacity'), {diagnostic});
+  const notice = page.getByRole('alert');
+  await expect(notice).toContainText('Not enough available memory for this model and context');
+  await expect(notice.getByRole('button',{name:'Check request status'})).toHaveCount(0);
+  await expect(notice.locator('details p')).toBeHidden();
+  await page.screenshot({path:info.outputPath('capacity-recovery.png')});
+  await notice.getByText('Technical details',{exact:true}).click();
+  await expect(notice.locator('details p')).toHaveText(diagnostic);
+  await expect(page.locator('.composer textarea')).toHaveValue('Stream my answer');
+  await expect(page.getByRole('button',{name:'Known work',exact:true})).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).generationCount)).toBe(1);
+  await page.reload();
+  await expect(page.getByRole('alert')).toContainText('Not enough available memory for this model and context');
+  await expect(page.locator('.composer textarea')).toHaveValue('Stream my answer');
+  await page.getByRole('alert').getByRole('button',{name:'Choose a chat model',exact:true}).click();
+  await expect(page).toHaveURL(/#\/models/);
+  expect(await page.evaluate(() => (window as any).generationCount ?? 0)).toBe(0);
+  await page.goto('/ui/#/chat');
+  await expect(page.locator('.composer textarea')).toHaveValue('Stream my answer');
+});
+
+test('unknown stream failure codes preserve the diagnostic and do not suggest memory recovery', async ({ page }) => {
+  await streamingWorkspace(page);
+  await page.evaluate(() => (window as any).failGeneration('Provider unavailable','future_provider_failure'));
+  await expect(page.getByRole('alert')).toContainText('Provider unavailable');
+  await expect(page.getByRole('alert').getByRole('button',{name:'Check request status',exact:true})).toBeVisible();
+  await expect(page.getByRole('alert').getByRole('button',{name:'Choose a chat model',exact:true})).toHaveCount(0);
+  await expect(page.locator('.composer textarea')).toHaveValue('Stream my answer');
+});
+
+test('memory rejection before streaming uses the typed HTTP error without another submission', async ({page}) => {
+  await streamingWorkspace(page);
+  await page.evaluate(() => (window as any).finishGeneration());
+  await expect(page.locator('.composer textarea')).toHaveValue('');
+  await page.evaluate(() => {
+    const original = window.fetch.bind(window);
+    (window as any).capacityAttempts = 0;
+    window.fetch = async (input, init) => {
+      if (!String(input).endsWith('/generate')) return original(input, init);
+      (window as any).capacityAttempts++;
+      return Response.json({error:{message:'Allocation rejected',code:'insufficient_runtime_capacity'}},{status:503});
+    };
+  });
+  await page.locator('.composer textarea').fill('Keep my next prompt');
+  await page.locator('.composer-actions > button').click();
+  await expect(page.getByRole('alert')).toContainText('Not enough available memory');
+  await expect(page.getByRole('alert').getByRole('button',{name:'Choose a chat model',exact:true})).toBeVisible();
+  await expect(page.locator('.composer textarea')).toHaveValue('Keep my next prompt');
+  expect(await page.evaluate(() => (window as any).capacityAttempts)).toBe(1);
+});
+
+for (const [locale, message] of Object.entries(chatRecovery)) test(`memory recovery is localized and reachable at narrow width (${locale})`, async ({page}, info) => {
+  await page.setViewportSize({width:390,height:844});
+  await streamingWorkspace(page, locale);
+  await page.evaluate(() => (window as any).failGeneration('Private runtime diagnostic','insufficient_runtime_capacity'));
+  const notice = page.getByRole('alert');
+  await expect(notice).toContainText(message);
+  await expect(notice.locator('details p')).toBeHidden();
+  await expect(notice.getByRole('button')).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  if(locale === 'ar') await page.screenshot({path:info.outputPath('capacity-recovery-rtl.png')});
+  await notice.getByRole('button').click();
+  await expect(page).toHaveURL(/#\/models/);
+  expect(await page.evaluate(() => (window as any).generationCount)).toBe(1);
 });
 
 for (const backgroundCheck of [false, true]) test(`new chat detaches and returns to saved work without replay (background check: ${backgroundCheck})`, async ({ page }) => {

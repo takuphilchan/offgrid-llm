@@ -99,11 +99,50 @@ process check found no remaining OffGrid or llama-server test workers. No user
 applications were stopped, no safety reserve was reduced, and no inference was
 silently moved to a different model or device.
 
-The raw capacity message and generic "Check request status" action are a
-remaining recovery-presentation weakness. Zero estimated context capacity must
-not be described as zero physical RAM. Download integrity, extraction, and
-startup are verified; successful inference from this downloaded desktop remains
-unverified. Earlier candidate successes are not substituted for this failure.
+The raw capacity message and generic "Check request status" action exposed a
+recovery-presentation weakness in that release artifact. Zero estimated context
+capacity must not be described as zero physical RAM. Download integrity,
+extraction, and startup are verified; successful inference from this downloaded
+desktop remains unverified. Earlier candidate successes are not substituted for
+this failure.
+
+## Typed memory-recovery follow-up
+
+The follow-up preserves optional `error_code` through ordinary session SSE and
+durable saved turns. The web/desktop client now preserves typed errors both
+before stream startup and within a stream. Known capacity failures receive
+nine-locale explanatory copy, a model-selection handoff that retains the draft,
+and collapsed original diagnostic details. Unknown codes keep their existing
+diagnostic/status-inspection behavior. Reconciled failed turns no longer remain
+in the active-work counter. Neither the memory estimator nor its reserve, model
+selection, GPU policy, context allocation or retry authority changed.
+
+Validation on the follow-up source:
+
+- `go test ./...` passed on Windows.
+- `go test -race ./internal/sessions ./internal/server` passed in WSL; server
+  package time was 305.633 seconds. This is focused race coverage, not the entire
+  CI race package list.
+- Dedicated Go tests cover legacy/durable terminal error codes, saved failed
+  status, retained prompt, untouched completed context and read-only replay.
+- API generation/check, TypeScript/build and the source-size ratchet passed.
+- Focused streaming/continuity checks passed **34/34**, including HTTP rejection,
+  SSE failure, reload, no duplicate submission, model navigation, preserved drafts,
+  unknown codes and all nine locales at 390px width.
+- The full isolated renderer passed **678 tests, 28 existing skips** in 5.3
+  minutes. Desktop-width and narrow Arabic recovery screenshots were inspected.
+  These are browser fixtures, not a manual screen-reader or native-language review.
+
+Initial test failures remain in `capacity-recovery-ui*.log`: one assertion
+incorrectly expected an active-work button after terminal work was removed, one
+used the wrong existing button label, and the HTTP case caught a second real
+client path that discarded structured errors. The final run fixes the product
+path and checks the actual labels and removal behavior. Logs and captures remain
+under ignored build/test storage. No prior native inference failure is erased.
+
+This follow-up is newer than release source `7f72bd76`. Do not claim the existing
+v0.4.22 tag or already-built artifacts contain it. Publication/rebuild identity
+must be verified separately.
 
 ## Completion boundary
 

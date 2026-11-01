@@ -7,6 +7,9 @@ export type SessionResult = { session: ChatSession; message: SessionMessage; met
 export type SessionEvent = Extract<components['schemas']['SessionStreamEvent'], { type: 'phase' | 'delta' }>;
 
 export class StreamInterruptedError extends Error {}
+export class SessionResponseError extends Error {
+  constructor(message: string, public readonly code = '') { super(message); }
+}
 
 // fetch is required for authenticated POST streams. Decode across arbitrary UTF-8
 // and network boundaries; EOF without a persisted `done` event is never success.
@@ -22,7 +25,7 @@ export async function readSessionStream(response: Response, onEvent: (event: Ses
     if (line !== '' || data.length === 0) return;
     const event = JSON.parse(data.join('\n'));
     data = [];
-    if (event.type === 'error') throw new Error(event.error || 'Generation failed');
+    if (event.type === 'error') throw new SessionResponseError(event.error || 'Generation failed', typeof event.error_code === 'string' ? event.error_code : '');
     if (event.type === 'done') {
       if (!event.session?.name || !Array.isArray(event.session.messages) || event.message?.role !== 'assistant') throw new StreamInterruptedError('Invalid saved response');
       return event as SessionResult;

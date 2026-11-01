@@ -1,6 +1,8 @@
 import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
 import { SidebarContext, SidebarSlot } from '../../components/shell/SidebarSlot';
 import { interaction } from '../../i18n/interaction';
+import { ChatFailureNotice } from './ChatFailureNotice';
+import { APIError } from '../../api/client';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import { useContext, useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { workspaceRefinement } from '../../i18n/workspace-refinement';
@@ -12,8 +14,8 @@ import { HistoryDeleteDialog, type HistoryItem } from '../../components/HistoryD
 import { useI18n } from '../../i18n';
 import { copyText } from '../../lib/clipboard';
 import { clearSubmittedDraft, draftKey, readDraft, useDraft, writeDraft } from '../../lib/drafts';
-import { type ChatMetrics, type ChatPhase } from '../../api/session-stream';
-import { readPreference, writePreference } from '../../lib/preferences';
+import { SessionResponseError, type ChatMetrics, type ChatPhase } from '../../api/session-stream';
+import { writePreference } from '../../lib/preferences';
 import { ReadAloudButton, VoiceInputButton } from '../../components/VoiceInputButton';
 import { ResponseSpeech, stopSpeechEvent, type SpeechState } from '../../lib/response-speech';
 import { voiceText } from '../../i18n/voice';
@@ -43,17 +45,10 @@ import { TaskAccessPolicy, type TaskComputerPolicy } from '../agents/TaskAccessP
 import { conversationWorkText } from '../../i18n/conversation-work';
 import { ExecutionWorkspace } from './ExecutionWorkspace';
 import { executionWorkspaceText } from '../../i18n/execution-workspace';
-import { messageText, newSessionName } from './chat-presentation';
+import { messageText, newSessionName, readPreferences } from './chat-presentation';
 import { ConversationHistory } from './ConversationHistory';
 import { PinnedAgentModel } from './PinnedAgentModel';
 import './composer-hierarchy.css';
-
-function readPreferences(key: string): { profile: string; maxTokens: number } {
-  try {
-    const value = JSON.parse(readPreference(key) ?? '{}');
-    return { profile: value.profile === 'extended' ? 'extended' : 'interactive', maxTokens: [256, 1024, 4096].includes(value.maxTokens) ? value.maxTokens : 1024 };
-  } catch { return { profile: 'interactive', maxTokens: 1024 }; }
-}
 
 export function ChatPage({ scope, models, model, setModel, onboardingPending, onFirstResponse, onOpenModels }: {
   scope: string;
@@ -148,7 +143,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     setPreferences(next);
     writePreference(preferencesKey, JSON.stringify(next));
   };
-  const [error, setError] = useState('');
+  const [error, setErrorText] = useState('');
+  const [errorCode, setErrorCode] = useState('');
+  const setError = (message: string, code = '') => { setErrorText(message); setErrorCode(code); };
   const [errorAction, setErrorAction] = useState<'history' | 'request' | 'cancel' | null>('history');
   const [deleteItems, setDeleteItems] = useState<HistoryItem[] | null>(null);
   const [deleteWork, setDeleteWork] = useState<'' | 'retain' | 'stop'>('');
@@ -234,7 +231,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         const key = draftKey(draftScope, 'chat', session.name), savedDraft = readDraft(key);
         if (savedDraft.trim() === turn.prompt) {clearSubmittedDraft(key, savedDraft);const user=session.messages.filter(message=>message.role==='user').at(-1);if(user?.images?.length)clearSubmittedDraft(draftKey(draftScope,'chat-images',session.name),JSON.stringify(user.images));}
         setMetrics(turn.metrics); setLimited(turn.finish_reason === 'length');
-      } else { setConversation([...session.messages, { role: 'user', content: turn.prompt,images:turn.images }]); setStreamed(turn.output); setInterrupted(true); setError(turn.error || text.chatStreaming.unsaved); }
+      } else { setConversation([...session.messages, { role: 'user', content: turn.prompt,images:turn.images }]); setStreamed(turn.output); setInterrupted(true); setError(turn.error || text.chatStreaming.unsaved, turn.error_code); }
       return;
     }
     const watch = new AbortController(); controller.current = watch;
@@ -253,7 +250,10 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       if (savedDraft.trim() === turn.prompt) {clearSubmittedDraft(key, savedDraft);if(turn.images?.length)clearSubmittedDraft(draftKey(draftScope,'chat-images',session.name),JSON.stringify(turn.images));}
       setSessions(current => [result.session, ...current.filter(item => item.name !== session.name)]);
     } catch (reason) {
-      if (mounted.current && revision === selectionRevision.current) { setStreamed(partial || turn.output); setInterrupted(true); setErrorAction('request'); setError(reason instanceof Error ? reason.message : text.common.error); }
+      if (mounted.current && revision === selectionRevision.current) {
+        setStreamed(partial || turn.output); setInterrupted(true); setErrorAction('request'); setError(reason instanceof Error ? reason.message : text.common.error, reason instanceof SessionResponseError ? reason.code : '');
+        try { const { turn: stored } = await api.currentTurn(session.name); if (mounted.current && revision === selectionRevision.current && stored?.id === turn.id) work.rememberChat(session.name, stored.status); } catch { /* Unknown transport outcome still requires inspection. */ }
+      }
     } finally { if (controller.current === watch) { controller.current = null; if (mounted.current) setBusy(false); } }
   };
 
@@ -479,12 +479,13 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       clearTimeout(flush); flush = undefined;
       if (!currentView()) return;
       setStreamed(partial); setInterrupted(true);
-      setError(requestController.signal.aborted ? text.chatStreaming.cancelled : reason instanceof Error ? reason.message : text.common.error);
+      setError(requestController.signal.aborted ? text.chatStreaming.cancelled : reason instanceof Error ? reason.message : text.common.error, reason instanceof SessionResponseError ? reason.code : reason instanceof APIError ? reason.data?.error?.code : '');
       if (sessionName) {
         try {
           const stored = await api.session(sessionName);
           if (!currentView()) return;
           setConversation(stored.messages);
+          if (stored.turn) work.rememberChat(sessionName, stored.turn.status);
           setSessions(current => [stored, ...current.filter(item => item.name !== stored.name)]);
         } catch { /* The primary error is more useful. */ }
       }
@@ -560,7 +561,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
           <div className="generation-status" role="status">{interrupted ? text.chatStreaming.unsaved : text.chatStreaming[phase]}{!interrupted && phase === 'loading' && <p>{text.guidance.coldStart}</p>}</div>
         </article>}
         {limited && <div className="generation-status" role="status">{text.chatStreaming.limitReached}</div>}
-        {error && <ScopedNotice kind="error" action={errorAction && <button className="secondary-button" onClick={() => void (errorAction === 'cancel' ? stop() : loadSessions())}>{errorAction === 'cancel' ? text.chat.stop : errorAction === 'history' ? interaction[locale].refreshHistory : interaction[locale].checkRequest}</button>}>{error}</ScopedNotice>}
+        {error && <ChatFailureNotice error={error} code={errorCode} chooseModel={() => { handoff.begin({ origin: '#/chat', destination: 'models', draft: { kind: 'chat', id: activeName } }); onOpenModels(); }} action={errorAction && <button className="secondary-button" onClick={() => void (errorAction === 'cancel' ? stop() : loadSessions())}>{errorAction === 'cancel' ? text.chat.stop : errorAction === 'history' ? interaction[locale].refreshHistory : interaction[locale].checkRequest}</button>} />}
         {unsaved && <div className="inline-error" role="alert">{text.recovery.draftWarning}</div>}
         </div>
       </div>

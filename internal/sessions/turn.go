@@ -30,6 +30,7 @@ type Turn struct {
 	Phase              string             `json:"phase"`
 	Output             string             `json:"output"`
 	Error              string             `json:"error,omitempty"`
+	ErrorCode          string             `json:"error_code,omitempty"`
 	FinishReason       string             `json:"finish_reason,omitempty"`
 	Metrics            json.RawMessage    `json:"metrics,omitempty"`
 }

@@ -161,6 +161,14 @@ the saved external-agent configuration. Battery percentage and transient pressur
 do not change the planned catalog context. Load-time memory checks and runtime
 confirmation remain separate from service-only readiness inspection.
 
+Session Chat also preserves an optional `error_code` in terminal SSE error events
+and saved `SessionTurn` snapshots, including `insufficient_runtime_capacity`.
+Clients can use this code for recovery copy across reloads; unknown or absent
+codes retain the supplied diagnostic. A terminal error is not a saved answer.
+Reading the turn or reopening model selection never resubmits inference. Zero
+estimated context capacity means the model plus reserves cannot fit the measured
+memory budget, not that the machine has zero physical RAM.
+
 Accepted streamed chat emits a standard assistant-role chunk before waiting for
 the inference runtime. This is acceptance, not generated text or task completion.
 SSE comments contain request-local phase/elapsed metadata (`waiting_for_runtime`,

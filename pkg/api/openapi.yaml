@@ -2058,6 +2058,7 @@ components:
           properties:
             type: { type: string, enum: [error] }
             error: { type: string }
+            error_code: { type: string, description: Optional machine-readable failure code. Unknown codes retain the supplied error message. }
     ErrorResponse:
       type: object
       required: [error]
@@ -2648,6 +2649,7 @@ components:
         phase: { type: string }
         output: { type: string }
         error: { type: string }
+        error_code: { type: string, description: Optional machine-readable failure code retained for recovery. }
         finish_reason: { type: string }
         metrics: { $ref: '#/components/schemas/ChatTimings' }
     ChatSession:

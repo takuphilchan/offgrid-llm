@@ -32,6 +32,7 @@ type ChatStreamEvent struct {
 	Phase        string            `json:"phase,omitempty"`
 	Delta        string            `json:"delta,omitempty"`
 	Error        string            `json:"error,omitempty"`
+	ErrorCode    string            `json:"error_code,omitempty"`
 	Session      *sessions.Session `json:"session,omitempty"`
 	Message      *sessions.Message `json:"message,omitempty"`
 	Metrics      *ChatTimings      `json:"metrics,omitempty"`
@@ -107,10 +108,12 @@ func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request,
 		fail := func(err error) {
 			log.Printf("Session generation failed: %v", err)
 			message := "Response interrupted or could not be saved. Your draft is retained; reload the conversation before retrying."
+			code := ""
 			if typed, ok := err.(*serviceError); ok {
 				message = typed.message
+				code = typed.code
 			}
-			_ = emit(ChatStreamEvent{Type: "error", Error: message})
+			_ = emit(ChatStreamEvent{Type: "error", Error: message, ErrorCode: code})
 		}
 		unlock, err := h.lockSessionContext(ctx, name)
 		if err != nil {

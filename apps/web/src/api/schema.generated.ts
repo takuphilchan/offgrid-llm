@@ -1578,6 +1578,8 @@ export interface components {
             /** @enum {string} */
             type: "error";
             error: string;
+            /** @description Optional machine-readable failure code. Unknown codes retain the supplied error message. */
+            error_code?: string;
         };
         ErrorResponse: {
             error: string | {
@@ -2097,6 +2099,8 @@ export interface components {
             phase: string;
             output: string;
             error?: string;
+            /** @description Optional machine-readable failure code retained for recovery. */
+            error_code?: string;
             finish_reason?: string;
             metrics?: components["schemas"]["ChatTimings"];
         };
