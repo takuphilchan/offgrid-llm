@@ -1,5 +1,5 @@
 import { refreshWorkspace } from './lib/workspace-refresh';
-import { supportsChat } from './api/model-capabilities';
+import { chatAvailable, initialChatModel } from './api/model-capabilities';
 import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react';
 import { APIError, api, setAgentReplayScope, type Model, type PublicUser } from './api/client';
 import { WorkSearchNavigation, WorkSearchReturn } from './components/WorkSearchNavigation';
@@ -26,6 +26,7 @@ import { WorkspaceDraftProvider, DraftRecoveryNotice } from './lib/draft-scope';
 import { ActiveWorkProvider } from './lib/active-work';
 import { WorkspaceHelp } from './components/WorkspaceHelp';
 import { workspaceHelp } from './i18n/workspace-help';
+import { chatReadiness } from './i18n/chat-readiness';
 
 class PageBoundary extends Component<{ children: ReactNode; message: string; retry: string }, { failed: boolean }> {
   state = { failed: false };
@@ -126,8 +127,9 @@ export function App() {
       setAccess('ready');
       setModels(modelResult.value);
       setModel(current => {
-        if (current && modelResult.value.some(item => item.id === current && supportsChat(item))) return current;
-        return modelResult.value.find(supportsChat)?.id ?? '';
+        // Refresh must not silently switch a saved selection when its files or
+        // runtime are unavailable. The composer offers an explicit repair.
+        return current || initialChatModel(modelResult.value);
       });
     } else if (modelResult.reason instanceof APIError && modelResult.reason.status === 401) {
       setAccess('login');
@@ -179,10 +181,11 @@ export function App() {
     setShowOnboarding(false);
     window.location.hash = `#/${target}`;
   };
-  const chatModels = models.filter(supportsChat);
+  const chatModels = models.filter(chatAvailable);
+  const chatReady = chatModels.some(item => item.id === model);
   const commandActions: CommandAction[] = [
-    { id:'help',label:workspaceHelp[locale].help,group:text.shell.system,icon:'help',run:()=>setShowHelp(true) },
     ...navigationGroups.flatMap(group => group.items.map(item => ({ id: `page-${item}`, label: text.nav[item], group: text.shell[group.label], icon: item, run: () => { window.location.hash = `#/${item}`; } }))),
+    { id:'help',label:workspaceHelp[locale].help,group:text.shell.system,icon:'help',run:()=>setShowHelp(true) },
     { id: 'theme-system', label: text.shell.systemTheme, group: text.shell.appearance, icon: 'settings', keywords: text.shell.theme, run: () => theme.setChoice('system') },
     { id: 'theme-dark', label: text.shell.darkTheme, group: text.shell.appearance, icon: 'settings', keywords: text.shell.theme, run: () => theme.setChoice('dark') },
     { id: 'theme-light', label: text.shell.lightTheme, group: text.shell.appearance, icon: 'settings', keywords: text.shell.theme, run: () => theme.setChoice('light') }
@@ -228,19 +231,20 @@ export function App() {
     </main>
     {showHelp && !showOnboarding && <WorkspaceHelp close={()=>setShowHelp(false)} guide={()=>{setShowHelp(false);setShowOnboarding(true);}} />}
     {showCommands && !showOnboarding && !showHelp && <CommandPalette workSearch={workSearch} actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
-    {showOnboarding && <Onboarding health={health} chatModelCount={chatModels.length} pending={onboardingPending} onAction={() => continueSetup(chatModels.length > 0 ? 'chat' : 'models')} onRetry={refreshBase} onClose={() => setShowOnboarding(false)} />}
+    {showOnboarding && <Onboarding health={health} chatModelCount={chatModels.length} chatReady={chatReady} pending={onboardingPending} onAction={() => continueSetup(chatReady ? 'chat' : 'models')} onRetry={refreshBase} onClose={() => setShowOnboarding(false)} />}
   </div></SidebarContext.Provider></WorkSearchNavigation></ActiveWorkProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
 }
 
-function Onboarding({ health, chatModelCount, pending, onAction, onRetry, onClose }: {
+function Onboarding({ health, chatModelCount, chatReady, pending, onAction, onRetry, onClose }: {
   health: Health;
   chatModelCount: number;
+  chatReady: boolean;
   pending: boolean;
   onAction: () => void;
   onRetry: () => Promise<void>;
   onClose: () => void;
 }) {
-  const { messages: text } = useI18n();
+  const { messages: text, locale } = useI18n();
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const element = dialog.current!;
@@ -256,14 +260,14 @@ function Onboarding({ health, chatModelCount, pending, onAction, onRetry, onClos
     if (event.shiftKey && (active === first || !event.currentTarget.contains(active))) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && (active === last || !event.currentTarget.contains(active))) { event.preventDefault(); first.focus(); }
   };
-  const action = !pending ? text.onboarding.close : health !== 'ready' ? text.onboarding.retryService : chatModelCount > 0 ? text.onboarding.startChat : text.onboarding.chooseModel;
+  const action = !pending ? text.onboarding.close : health !== 'ready' ? text.onboarding.retryService : chatReady ? text.onboarding.startChat : text.onboarding.chooseModel;
   return <dialog ref={dialog} className="onboarding" aria-labelledby="onboarding-title" onKeyDown={containFocus} onCancel={event => { event.preventDefault(); onClose(); }}>
     <button className="onboarding-close icon-button" onClick={onClose} aria-label={text.onboarding.close}><Icon name="close" size={18} /></button>
     <div className="onboarding-mark"><Icon name="models" size={28} /></div><span className="eyebrow">{text.privateWorkspace}</span>
     <h2 id="onboarding-title">{text.onboarding.title}</h2><p>{text.onboarding.body}</p>
     <p>{text.guidance.connectionMeaning}</p>
     <div className="readiness-list"><div><i className={health === 'ready' ? 'ready' : ''} /><span>{text.onboarding.service}</span><strong>{health === 'ready' ? text.status.ready : text.status.offline}</strong></div><div><i className={chatModelCount > 0 ? 'ready' : ''} /><span>{text.onboarding.models}</span><strong>{chatModelCount}</strong></div><div><span aria-hidden="true" /><span>{text.onboarding.privacy}</span><strong>{text.onboarding.local}</strong></div></div>
-    {pending && <p className="onboarding-next">{chatModelCount > 0 ? text.onboarding.firstReplyHint : text.onboarding.modelHint}</p>}
+    {pending && <p className="onboarding-next">{chatReady ? text.onboarding.firstReplyHint : chatReadiness[locale].setup}</p>}
     <button autoFocus className="primary-button" onClick={!pending ? onClose : health !== 'ready' ? () => void onRetry() : onAction}>{action}</button>
   </dialog>;
 }

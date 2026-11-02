@@ -2,6 +2,8 @@ import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
 import { SidebarContext, SidebarSlot } from '../../components/shell/SidebarSlot';
 import { interaction } from '../../i18n/interaction';
 import { ChatFailureNotice } from './ChatFailureNotice';
+import { chatAvailable } from '../../api/model-capabilities';
+import { chatReadiness } from '../../i18n/chat-readiness';
 import { ChatWorkBlocker } from './ChatWorkBlocker';
 import { reviewConversationWork, submitComposerInput } from './chat-input';
 import { APIError } from '../../api/client';
@@ -119,6 +121,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const agentKey = agent ? `${agent.id}:${agent.revision}` : '';
   const restrictions = agentResources.profile === agentKey ? agentResources.restrictions : {};
   const effectiveModel = agent?.settings.model ?? model;
+  const unavailableModel = !agent && !!model && !models.some(item => item.id === model && chatAvailable(item));
   const [linkedTurn, setLinkedTurn] = useState<SessionTurn | null>(null);
   const [recoveryNeeded, setRecoveryNeeded] = useState(false);
   const { run: linkedRun, connection: jobConnection, error: jobReadError, refresh: refreshJob } = useTaskRun(linkedTurn?.job_id ?? '');
@@ -381,7 +384,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const send = async () => {
     setErrorAction('request');
     const prompt = draft.trim();
-    if ((!prompt&&!imageDraft.images.length) || !effectiveModel || busy || checkingTurn || missingSession || controller.current || deleteItems || imageDraft.processing) return;
+    if ((!prompt&&!imageDraft.images.length) || !effectiveModel || unavailableModel || busy || checkingTurn || missingSession || controller.current || deleteItems || imageDraft.processing) return;
     if(imageDraft.blocker){setError(imageDraft.blocker);return;}
     if (selectedSources.length && (!scopedReady || linkedUnsettled)) { setError(linkedUnsettled ? scopeCopy.active : scopeCopy.unsupported); return; }
     if (linkedUnsettled) {
@@ -529,7 +532,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     <SidebarSlot action><button className="new-chat-button" title={text.chat.newChat} aria-label={text.chat.newChat} disabled={!!deleteItems} onClick={() => { sidebar.close(); startNew(); }}><Icon name="plus" size={18} /><span>{text.chat.newChat}</span></button></SidebarSlot>
     <SidebarSlot><ConversationHistory sessions={sessions} activeName={activeName} busy={busy} loading={loading} locked={!!deleteItems} notice={historyNotice} select={selectSession} remove={setDeleteItems} refresh={() => void loadSessions()} /></SidebarSlot>
     <div className="chat-layout">
-      {(!model || onboardingPending) && <div className="setup-inline" role="status"><span>{model ? text.onboarding.firstReplyHint : text.onboarding.modelHint}</span>{!model && <button className="secondary-button" onClick={() => { handoff.begin({ origin: '#/chat', destination: 'models', draft: { kind: 'chat', id: activeName } }); onOpenModels(); }}>{text.onboarding.chooseModel}</button>}</div>}
+      {!agent && (!model || unavailableModel || onboardingPending) && <div className="setup-inline" role="status"><span>{unavailableModel ? chatReadiness[locale].unavailable : model ? text.onboarding.firstReplyHint : chatReadiness[locale].setup}</span>{(!model || unavailableModel) && <button className="secondary-button" onClick={() => { handoff.begin({ origin: '#/chat', destination: 'models', draft: { kind: 'chat', id: activeName } }); onOpenModels(); }}>{text.onboarding.chooseModel}</button>}</div>}
 <div ref={conversationPane} className="conversation" tabIndex={0} onWheel={event => { userScrollUntil.current = performance.now() + 1200; if (event.deltaY < 0) followOutput.current = false; }} onTouchStart={() => { userScrollUntil.current = performance.now() + 1200; }} onKeyDown={event => { if (['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) userScrollUntil.current = performance.now() + 1200; }} onScroll={event => { const el = event.currentTarget; const distance = el.scrollHeight - el.scrollTop - el.clientHeight; const atBottom = distance < 100; if (performance.now() <= userScrollUntil.current) followOutput.current = atBottom; else if (followOutput.current && distance > 1) followConversation(); setShowLatest(!atBottom && !followOutput.current); }}>
         <div ref={conversationContent} className="conversation-content">
         {conversation.length === 0 && !loading && <div className="empty-chat"><div className="orb"><Icon name="models" size={28} /></div><h2>{text.chat.emptyTitle}</h2><p>{text.chat.emptyBody}</p></div>}
@@ -589,7 +592,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
           </UtilityPopover>
           {imageDraft.control}<ComposerSpeech presentation="status" enabled={speakResponses} checking={checkingSpeech} busy={busy} state={speechState} error={speechError} toggle={toggleSpeech} stop={stopSpeech} />
           </div>
-      <div className="composer-actions"><VoiceInputButton contextKey={composerDraftKey} disabled={loading || checkingTurn || busy} onTranscript={value => setDraft(draft ? `${draft} ${value}` : value)} /><button aria-label={busy ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} disabled={busy ? false : loading || checkingTurn || missingSession || (!draft.trim()&&!imageDraft.images.length) || imageDraft.processing || !!imageDraft.blocker || !effectiveModel || (linkedUnsettled && !canSendInstruction)} onClick={busy ? () => void stop() : () => void send()}>{busy ? text.chat.stop : <><span>{canSendInstruction ? jobCopy.update : text.chat.send}</span><Icon name="send" size={18} /></>}</button></div>
+      <div className="composer-actions"><VoiceInputButton contextKey={composerDraftKey} disabled={loading || checkingTurn || busy} onTranscript={value => setDraft(draft ? `${draft} ${value}` : value)} /><button aria-label={busy ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} disabled={busy ? false : loading || checkingTurn || missingSession || (!draft.trim()&&!imageDraft.images.length) || imageDraft.processing || !!imageDraft.blocker || !effectiveModel || unavailableModel || (linkedUnsettled && !canSendInstruction)} onClick={busy ? () => void stop() : () => void send()}>{busy ? text.chat.stop : <><span>{canSendInstruction ? jobCopy.update : text.chat.send}</span><Icon name="send" size={18} /></>}</button></div>
         </div>
       </div>
     </div>

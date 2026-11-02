@@ -243,12 +243,15 @@ test('conversation history remains accessible at narrow desktop width', async ({
 });
 
 test('command palette navigates and applies appearance with the keyboard', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   await mockWorkspace(page, true);
   await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete', 'true'));
   await page.goto('/ui/#/chat');
   await page.keyboard.press('Control+K');
   const palette = page.getByRole('dialog', { name: 'Quick actions' });
   await expect(palette).toBeVisible();
+  await expect(palette.getByRole('group', { name: 'System', exact: true })).toHaveCount(1);
   const search = palette.getByRole('combobox', { name: 'Search pages and actions…' });
   await expect(search).toHaveCSS('outline-style', 'none');
   await expect(search).toHaveCSS('box-shadow', 'none');
@@ -263,4 +266,5 @@ test('command palette navigates and applies appearance with the keyboard', async
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  expect(errors.filter(message => message.includes('same key'))).toEqual([]);
 });

@@ -19,7 +19,8 @@ test('Activity ignores a late response for the previous selected task',async({pa
   if(path==='/v1/runs')return{runs:['A','B'].map(id=>({id,status:'completed',updated_at:new Date().toISOString(),event_count:1,data:{prompt:'Task '+id}}))};
   if(path.endsWith('/events')){const id=path.includes('/A/')?'A':'B';await new Promise(r=>setTimeout(r,id==='A'?700:50));return{events:[{id,type:id+'-result',sequence:1,time:new Date().toISOString()}]};}
  });
- await page.goto('/ui/#/activity');await openActivityArchive(page);await page.getByRole('button',{name:/^Task A/}).click();await page.getByRole('button',{name:/^Task B/}).click();
+ // Legacy services expose their run list directly; Diagnostics is not its owner.
+ await page.goto('/ui/#/activity');await page.getByRole('button',{name:/^Task A/}).click();await page.getByRole('button',{name:/^Task B/}).click();
   await expect(page.locator('.event-list')).toContainText('B result');await page.waitForTimeout(850);
   await expect(page.locator('.run-row.selected')).toContainText('Task B');await expect(page.locator('.event-list')).not.toContainText('A result');
 });
@@ -84,5 +85,5 @@ test('an active chat reconnects after navigation without submitting new work',as
  });
  await page.addInitScript(()=>{const original=window.fetch.bind(window);(window as any).attachments=0;window.fetch=async(input,init)=>{if(!String(input).includes('/turn/events'))return original(input,init);(window as any).attachments++;return new Response(new ReadableStream({start(c){c.enqueue(new TextEncoder().encode('data: {"type":"delta","delta":"Retained partial"}\n\n'));init?.signal?.addEventListener('abort',()=>c.error(new DOMException('aborted','AbortError')),{once:true});}}),{headers:{'content-type':'text/event-stream'}});};});
  await page.goto('/ui/#/chat');await expect(page.locator('.streaming-response')).toContainText('Retained partial');await page.locator('.sidebar a[href="#/models"]').click();expect(cancellations).toBe(0);
- await page.locator('.sidebar a[href="#/chat"]').click();await expect(page.locator('.streaming-response')).toContainText('Retained partial');expect(await page.evaluate(()=>(window as any).attachments)).toBe(2);await page.locator('.composer-actions').getByRole('button', { name: 'Stop', exact: true }).click();await expect.poll(()=>cancellations).toBe(1);
+ await page.locator('.sidebar a[href="#/chat"]').click();await expect(page.locator('.streaming-response')).toContainText('Retained partial');await expect.poll(()=>page.evaluate(()=>(window as any).attachments)).toBe(2);await page.locator('.composer-actions').getByRole('button', { name: 'Stop', exact: true }).click();await expect.poll(()=>cancellations).toBe(1);
 });
