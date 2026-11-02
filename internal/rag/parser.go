@@ -1,29 +1,40 @@
 package rag
 
 import (
-	"archive/zip"
 	"bytes"
-	"compress/zlib"
+	"context"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
 	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
 // DocumentParser handles parsing of various document formats
 type DocumentParser struct {
-	maxFileSize int64 // Maximum file size in bytes
+	maxFileSize      int64 // Maximum file size in bytes
+	maxExtractedSize int64
+	pdfWorker        string // Trusted app-local worker, never supplied by a document.
+	pdfCacheDir      string // Compiled engine code only; no document data.
+	ocrWorker        string // Trusted packaged OCR worker, never from document input.
+	ocrLanguage      []byte // Explicitly configured, digest-verified offline language data.
+	ocrSetupErr      error
 }
 
 // NewDocumentParser creates a new document parser
 func NewDocumentParser() *DocumentParser {
+	worker := bundledPDFWorker()
+	cache := ""
+	if worker != "" {
+		cache = pdfWorkerCacheDir()
+	}
 	return &DocumentParser{
-		maxFileSize: 100 * 1024 * 1024, // 100MB default limit
+		maxFileSize:      100 * 1024 * 1024, // 100MB default limit
+		maxExtractedSize: 16 * 1024 * 1024,
+		pdfWorker:        worker,
+		pdfCacheDir:      cache,
+		ocrWorker:        bundledDocumentWorker("offgrid-ocr-worker"),
 	}
 }
 
@@ -34,12 +45,48 @@ type ParseResult struct {
 	Metadata    map[string]string
 	PageCount   int
 	WordCount   int
+	SourceUnits []SourceUnit        `json:"source_units,omitempty"`
+	State       ExtractionState     `json:"state,omitempty"`
+	Warnings    []ExtractionWarning `json:"warnings,omitempty"`
 }
 
 // Parse attempts to parse a document based on its extension
 func (p *DocumentParser) Parse(content []byte, filename string, ext string) (*ParseResult, error) {
+	return p.ParseContext(context.Background(), content, filename, ext)
+}
+
+// ParseContext keeps cancellation attached to external extraction. The legacy
+// Parse entry point remains compatible; both enforce input and output bounds.
+func (p *DocumentParser) ParseContext(ctx context.Context, content []byte, filename string, ext string) (result *ParseResult, err error) {
+	release, err := sharedExtractionScheduler.acquire(ctx, extractionQueueTimeout)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return p.parseContext(ctx, content, filename, ext)
+}
+
+// parseContext is called only while an extraction slot is owned. Durable imports
+// acquire before loading their saved bytes; ordinary callers use ParseContext.
+func (p *DocumentParser) parseContext(ctx context.Context, content []byte, filename string, ext string) (result *ParseResult, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	defer func() {
+		if ctx.Err() != nil {
+			result, err = nil, ctx.Err()
+		}
+		if err == nil && result != nil && int64(len(result.Content)) > p.maxExtractedSize {
+			result, err = nil, &ParseError{Code: "document_limit", Message: "Extracted document text exceeds the supported limit."}
+		}
+		if err != nil {
+			err = classifyParseError(err)
+		} else {
+			bindSourceUnits(result, content)
+		}
+	}()
 	if int64(len(content)) > p.maxFileSize {
-		return nil, fmt.Errorf("file size exceeds maximum allowed (%d MB)", p.maxFileSize/(1024*1024))
+		return nil, &ParseError{Code: "document_limit", Message: fmt.Sprintf("File size exceeds maximum allowed (%d MB).", p.maxFileSize/(1024*1024))}
 	}
 
 	ext = strings.ToLower(ext)
@@ -65,8 +112,12 @@ func (p *DocumentParser) Parse(content []byte, filename string, ext string) (*Pa
 		return p.ParseCode(content, ext)
 	// Document formats
 	case ".pdf":
-		return p.ParsePDF(content)
-	case ".xlsx", ".xls":
+		return p.parsePDF(ctx, content)
+	case ".xls":
+		return nil, &ParseError{Code: "document_unsupported_format", Message: "The legacy XLS format requires a separate converter; export this workbook as XLSX or CSV before importing."}
+	case ".doc", ".ppt", ".odt", ".ods", ".odp", ".eml", ".msg", ".mbox", ".png", ".jpg", ".jpeg", ".tif", ".tiff":
+		return nil, &ParseError{Code: "document_unsupported_format", Message: "This format requires a dedicated local document adapter. Export its text to a supported format before importing."}
+	case ".xlsx":
 		return p.ParseXLSX(content)
 	case ".pptx":
 		return p.ParsePPTX(content)
@@ -75,631 +126,15 @@ func (p *DocumentParser) Parse(content []byte, filename string, ext string) (*Pa
 		if utf8.Valid(content) {
 			return p.ParsePlainText(content)
 		}
-		return nil, fmt.Errorf("unsupported file format: %s", ext)
+		return nil, &ParseError{Code: "document_unsupported_format", Message: fmt.Sprintf("Unsupported file format: %s", ext)}
 	}
-}
-
-// ParsePDF extracts text from a PDF file with layout awareness
-// First tries pdftotext (poppler-utils) for best results, falls back to basic extraction
-// Also detects images and provides metadata about document structure
-func (p *DocumentParser) ParsePDF(content []byte) (*ParseResult, error) {
-	// Check PDF signature
-	if len(content) < 5 || string(content[:5]) != "%PDF-" {
-		return nil, fmt.Errorf("invalid PDF file: missing PDF header")
-	}
-
-	// Detect images in PDF
-	imageCount := countPDFImages(content)
-	hasImages := imageCount > 0
-
-	// Try pdftotext first (best quality extraction with layout)
-	text, err := p.extractPDFWithPdftotext(content)
-	if err == nil && text != "" {
-		text = cleanExtractedText(text)
-		if text != "" {
-			pageCount := countPDFPages(content)
-			metadata := map[string]string{
-				"format":      "pdf",
-				"page_count":  fmt.Sprintf("%d", pageCount),
-				"extractor":   "pdftotext",
-				"has_images":  fmt.Sprintf("%t", hasImages),
-				"image_count": fmt.Sprintf("%d", imageCount),
-			}
-
-			// Add warning if images detected
-			if hasImages {
-				metadata["note"] = "PDF contains images - text from images not extracted"
-			}
-
-			return &ParseResult{
-				Content:     text,
-				ContentType: "application/pdf",
-				Metadata:    metadata,
-				PageCount:   pageCount,
-				WordCount:   countWords(text),
-			}, nil
-		}
-	}
-
-	// Fallback to basic extraction
-	text, err = p.extractPDFBasic(content)
-	if err != nil {
-		return nil, err
-	}
-
-	text = cleanExtractedText(text)
-	if text == "" {
-		if hasImages {
-			return nil, fmt.Errorf("no text content extracted from PDF (contains %d images - may be scanned/image-based)", imageCount)
-		}
-		return nil, fmt.Errorf("no text content extracted from PDF (may be using unsupported font encoding)")
-	}
-
-	pageCount := countPDFPages(content)
-	metadata := map[string]string{
-		"format":      "pdf",
-		"page_count":  fmt.Sprintf("%d", pageCount),
-		"extractor":   "basic",
-		"has_images":  fmt.Sprintf("%t", hasImages),
-		"image_count": fmt.Sprintf("%d", imageCount),
-	}
-
-	if hasImages {
-		metadata["note"] = "PDF contains images - text from images not extracted"
-	}
-
-	return &ParseResult{
-		Content:     text,
-		ContentType: "application/pdf",
-		Metadata:    metadata,
-		PageCount:   pageCount,
-		WordCount:   countWords(text),
-	}, nil
-}
-
-// extractPDFWithPdftotext uses the pdftotext command from poppler-utils
-func (p *DocumentParser) extractPDFWithPdftotext(content []byte) (string, error) {
-	// Check if pdftotext is available
-	_, err := exec.LookPath("pdftotext")
-	if err != nil {
-		return "", fmt.Errorf("pdftotext not found")
-	}
-
-	// Create temp file for the PDF
-	tmpFile, err := os.CreateTemp("", "pdf-*.pdf")
-	if err != nil {
-		return "", err
-	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
-
-	if _, err := tmpFile.Write(content); err != nil {
-		return "", err
-	}
-	tmpFile.Close()
-
-	// Run pdftotext with layout preservation
-	cmd := exec.Command("pdftotext", "-layout", "-enc", "UTF-8", tmpFile.Name(), "-")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-
-	return string(output), nil
-}
-
-// extractPDFBasic uses regex-based extraction for simple PDFs
-func (p *DocumentParser) extractPDFBasic(content []byte) (string, error) {
-	var textBuilder strings.Builder
-	contentStr := string(content)
-
-	// Find stream objects with their dictionaries (to check for compression)
-	streamPattern := regexp.MustCompile(`<<([^>]*(?:>(?!>)[^>]*)*)>>\s*stream\r?\n([\s\S]*?)\r?\nendstream`)
-	matches := streamPattern.FindAllSubmatchIndex(content, -1)
-
-	for _, match := range matches {
-		if len(match) >= 6 {
-			dictStart, dictEnd := match[2], match[3]
-			streamStart, streamEnd := match[4], match[5]
-
-			if dictStart < 0 || dictEnd < 0 || streamStart < 0 || streamEnd < 0 {
-				continue
-			}
-
-			dictContent := string(content[dictStart:dictEnd])
-			streamContent := content[streamStart:streamEnd]
-
-			// Check if stream is FlateDecode compressed
-			var decompressed []byte
-			if strings.Contains(dictContent, "FlateDecode") {
-				reader, err := zlib.NewReader(bytes.NewReader(streamContent))
-				if err != nil {
-					continue
-				}
-				decompressed, err = io.ReadAll(reader)
-				reader.Close()
-				if err != nil {
-					continue
-				}
-			} else {
-				decompressed = streamContent
-			}
-
-			// Extract text from the decompressed stream
-			text := extractPDFText(string(decompressed))
-			if text != "" {
-				textBuilder.WriteString(text)
-				textBuilder.WriteString(" ")
-			}
-		}
-	}
-
-	// Also try to extract BT/ET text blocks from the raw content
-	btRegex := regexp.MustCompile(`BT\s*([\s\S]*?)\s*ET`)
-	btMatches := btRegex.FindAllStringSubmatch(contentStr, -1)
-	for _, match := range btMatches {
-		if len(match) > 1 {
-			text := extractPDFTextFromBlock(match[1])
-			if text != "" {
-				textBuilder.WriteString(text)
-				textBuilder.WriteString(" ")
-			}
-		}
-	}
-
-	return textBuilder.String(), nil
-}
-
-// countPDFPages counts pages in a PDF
-func countPDFPages(content []byte) int {
-	pageRegex := regexp.MustCompile(`/Type\s*/Page[^s]`)
-	matches := pageRegex.FindAll(content, -1)
-	return len(matches)
-}
-
-// countPDFImages counts images in a PDF by looking for image XObjects
-func countPDFImages(content []byte) int {
-	count := 0
-
-	// Look for image XObject subtype declarations
-	imageSubtype := regexp.MustCompile(`/Subtype\s*/Image`)
-	matches := imageSubtype.FindAll(content, -1)
-	count += len(matches)
-
-	// Also look for inline images (BI...ID...EI)
-	inlineImage := regexp.MustCompile(`\bBI\b[\s\S]*?\bID\b`)
-	inlineMatches := inlineImage.FindAll(content, -1)
-	count += len(inlineMatches)
-
-	return count
-}
-
-// extractPDFText extracts text from a PDF stream
-func extractPDFText(stream string) string {
-	var text strings.Builder
-
-	// Look for text strings in parentheses (Tj operator)
-	tjRegex := regexp.MustCompile(`\(([^)]*)\)\s*Tj`)
-	matches := tjRegex.FindAllStringSubmatch(stream, -1)
-	for _, m := range matches {
-		if len(m) > 1 {
-			text.WriteString(decodePDFString(m[1]))
-			text.WriteString(" ")
-		}
-	}
-
-	// Look for TJ arrays
-	tjArrayRegex := regexp.MustCompile(`\[(.*?)\]\s*TJ`)
-	arrayMatches := tjArrayRegex.FindAllStringSubmatch(stream, -1)
-	for _, m := range arrayMatches {
-		if len(m) > 1 {
-			text.WriteString(extractTJArrayText(m[1]))
-			text.WriteString(" ")
-		}
-	}
-
-	return text.String()
-}
-
-// extractPDFTextFromBlock extracts text from a BT/ET block
-func extractPDFTextFromBlock(block string) string {
-	var text strings.Builder
-
-	// Extract strings in parentheses
-	stringRegex := regexp.MustCompile(`\(([^)]*)\)`)
-	matches := stringRegex.FindAllStringSubmatch(block, -1)
-	for _, m := range matches {
-		if len(m) > 1 {
-			decoded := decodePDFString(m[1])
-			if decoded != "" {
-				text.WriteString(decoded)
-				text.WriteString(" ")
-			}
-		}
-	}
-
-	return text.String()
-}
-
-// extractTJArrayText extracts text from a TJ array
-func extractTJArrayText(array string) string {
-	var text strings.Builder
-	stringRegex := regexp.MustCompile(`\(([^)]*)\)`)
-	matches := stringRegex.FindAllStringSubmatch(array, -1)
-	for _, m := range matches {
-		if len(m) > 1 {
-			text.WriteString(decodePDFString(m[1]))
-		}
-	}
-	return text.String()
-}
-
-// decodePDFString decodes escape sequences in PDF strings
-func decodePDFString(s string) string {
-	// Handle common escape sequences
-	s = strings.ReplaceAll(s, "\\n", "\n")
-	s = strings.ReplaceAll(s, "\\r", "\r")
-	s = strings.ReplaceAll(s, "\\t", "\t")
-	s = strings.ReplaceAll(s, "\\(", "(")
-	s = strings.ReplaceAll(s, "\\)", ")")
-	s = strings.ReplaceAll(s, "\\\\", "\\")
-
-	// Filter out non-printable characters
-	var result strings.Builder
-	for _, r := range s {
-		if r >= 32 && r < 127 || r == '\n' || r == '\r' || r == '\t' || r > 127 {
-			result.WriteRune(r)
-		}
-	}
-
-	return result.String()
-}
-
-// ParseDOCX extracts text from a DOCX file
-func (p *DocumentParser) ParseDOCX(content []byte) (*ParseResult, error) {
-	reader, err := zip.NewReader(bytes.NewReader(content), int64(len(content)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to open DOCX file: %w", err)
-	}
-
-	var textBuilder strings.Builder
-	var pageCount int
-
-	// Read document.xml
-	for _, file := range reader.File {
-		if file.Name == "word/document.xml" {
-			rc, err := file.Open()
-			if err != nil {
-				return nil, fmt.Errorf("failed to open document.xml: %w", err)
-			}
-			defer rc.Close()
-
-			xmlContent, err := io.ReadAll(rc)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read document.xml: %w", err)
-			}
-
-			text, pages := extractDOCXText(xmlContent)
-			textBuilder.WriteString(text)
-			pageCount = pages
-		}
-	}
-
-	extractedText := strings.TrimSpace(textBuilder.String())
-	if extractedText == "" {
-		return nil, fmt.Errorf("no text content extracted from DOCX")
-	}
-
-	return &ParseResult{
-		Content:     extractedText,
-		ContentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-		Metadata: map[string]string{
-			"format":     "docx",
-			"page_count": fmt.Sprintf("%d", pageCount),
-		},
-		PageCount: pageCount,
-		WordCount: countWords(extractedText),
-	}, nil
-}
-
-// DOCX XML structures
-type docxDocument struct {
-	Body docxBody `xml:"body"`
-}
-
-type docxBody struct {
-	Paragraphs []docxParagraph `xml:"p"`
-	Tables     []docxTable     `xml:"tbl"`
-}
-
-type docxParagraph struct {
-	Runs []docxRun `xml:"r"`
-}
-
-type docxRun struct {
-	Text  []docxText  `xml:"t"`
-	Tab   []struct{}  `xml:"tab"`
-	Break []docxBreak `xml:"br"`
-}
-
-type docxText struct {
-	Content string `xml:",chardata"`
-	Space   string `xml:"space,attr"`
-}
-
-type docxBreak struct {
-	Type string `xml:"type,attr"`
-}
-
-type docxTable struct {
-	Rows []docxTableRow `xml:"tr"`
-}
-
-type docxTableRow struct {
-	Cells []docxTableCell `xml:"tc"`
-}
-
-type docxTableCell struct {
-	Paragraphs []docxParagraph `xml:"p"`
-}
-
-// extractDOCXText extracts text from DOCX XML
-func extractDOCXText(xmlContent []byte) (string, int) {
-	var doc docxDocument
-	var text strings.Builder
-	pageCount := 1
-
-	// Handle the namespace
-	xmlContent = removeNamespace(xmlContent)
-
-	if err := xml.Unmarshal(xmlContent, &doc); err != nil {
-		// Fallback: simple regex extraction
-		return extractTextFromXML(string(xmlContent)), 1
-	}
-
-	for _, para := range doc.Body.Paragraphs {
-		paraText := extractDOCXParagraph(para)
-		if paraText != "" {
-			text.WriteString(paraText)
-			text.WriteString("\n\n")
-		}
-	}
-
-	// Extract table text
-	for _, table := range doc.Body.Tables {
-		for _, row := range table.Rows {
-			var rowTexts []string
-			for _, cell := range row.Cells {
-				var cellText strings.Builder
-				for _, para := range cell.Paragraphs {
-					cellText.WriteString(extractDOCXParagraph(para))
-					cellText.WriteString(" ")
-				}
-				rowTexts = append(rowTexts, strings.TrimSpace(cellText.String()))
-			}
-			text.WriteString(strings.Join(rowTexts, " | "))
-			text.WriteString("\n")
-		}
-		text.WriteString("\n")
-	}
-
-	return text.String(), pageCount
-}
-
-func extractDOCXParagraph(para docxParagraph) string {
-	var text strings.Builder
-	for _, run := range para.Runs {
-		for _, t := range run.Text {
-			text.WriteString(t.Content)
-		}
-		for range run.Tab {
-			text.WriteString("\t")
-		}
-		for _, br := range run.Break {
-			if br.Type == "page" {
-				text.WriteString("\n\n--- PAGE BREAK ---\n\n")
-			} else {
-				text.WriteString("\n")
-			}
-		}
-	}
-	return strings.TrimSpace(text.String())
-}
-
-// ParseXLSX extracts text from an XLSX file
-func (p *DocumentParser) ParseXLSX(content []byte) (*ParseResult, error) {
-	reader, err := zip.NewReader(bytes.NewReader(content), int64(len(content)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to open XLSX file: %w", err)
-	}
-
-	// Read shared strings
-	sharedStrings := make([]string, 0)
-	for _, file := range reader.File {
-		if file.Name == "xl/sharedStrings.xml" {
-			rc, err := file.Open()
-			if err != nil {
-				continue
-			}
-			data, _ := io.ReadAll(rc)
-			rc.Close()
-			sharedStrings = extractXLSXSharedStrings(data)
-		}
-	}
-
-	var textBuilder strings.Builder
-	sheetCount := 0
-
-	// Read worksheets
-	for _, file := range reader.File {
-		if strings.HasPrefix(file.Name, "xl/worksheets/sheet") && strings.HasSuffix(file.Name, ".xml") {
-			sheetCount++
-			rc, err := file.Open()
-			if err != nil {
-				continue
-			}
-			data, _ := io.ReadAll(rc)
-			rc.Close()
-
-			sheetText := extractXLSXSheet(data, sharedStrings)
-			if sheetText != "" {
-				textBuilder.WriteString(fmt.Sprintf("--- Sheet %d ---\n", sheetCount))
-				textBuilder.WriteString(sheetText)
-				textBuilder.WriteString("\n\n")
-			}
-		}
-	}
-
-	extractedText := strings.TrimSpace(textBuilder.String())
-	if extractedText == "" {
-		return nil, fmt.Errorf("no text content extracted from XLSX")
-	}
-
-	return &ParseResult{
-		Content:     extractedText,
-		ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-		Metadata: map[string]string{
-			"format":      "xlsx",
-			"sheet_count": fmt.Sprintf("%d", sheetCount),
-		},
-		PageCount: sheetCount,
-		WordCount: countWords(extractedText),
-	}, nil
-}
-
-// XLSX shared strings XML structure
-type xlsxSharedStrings struct {
-	Strings []xlsxString `xml:"si"`
-}
-
-type xlsxString struct {
-	Text     string     `xml:"t"`
-	RichText []xlsxRich `xml:"r"`
-}
-
-type xlsxRich struct {
-	Text string `xml:"t"`
-}
-
-func extractXLSXSharedStrings(data []byte) []string {
-	data = removeNamespace(data)
-	var sst xlsxSharedStrings
-	if err := xml.Unmarshal(data, &sst); err != nil {
-		return nil
-	}
-
-	strings := make([]string, len(sst.Strings))
-	for i, s := range sst.Strings {
-		if s.Text != "" {
-			strings[i] = s.Text
-		} else {
-			// Rich text
-			var text bytes.Buffer
-			for _, r := range s.RichText {
-				text.WriteString(r.Text)
-			}
-			strings[i] = text.String()
-		}
-	}
-	return strings
-}
-
-// XLSX worksheet structure
-type xlsxWorksheet struct {
-	SheetData xlsxSheetData `xml:"sheetData"`
-}
-
-type xlsxSheetData struct {
-	Rows []xlsxRow `xml:"row"`
-}
-
-type xlsxRow struct {
-	Cells []xlsxCell `xml:"c"`
-}
-
-type xlsxCell struct {
-	Type  string `xml:"t,attr"` // "s" for shared string
-	Value string `xml:"v"`
-}
-
-func extractXLSXSheet(data []byte, sharedStrings []string) string {
-	data = removeNamespace(data)
-	var ws xlsxWorksheet
-	if err := xml.Unmarshal(data, &ws); err != nil {
-		return ""
-	}
-
-	var text strings.Builder
-	for _, row := range ws.SheetData.Rows {
-		var cells []string
-		for _, cell := range row.Cells {
-			value := cell.Value
-			if cell.Type == "s" {
-				// Shared string index
-				var idx int
-				fmt.Sscanf(value, "%d", &idx)
-				if idx >= 0 && idx < len(sharedStrings) {
-					value = sharedStrings[idx]
-				}
-			}
-			cells = append(cells, value)
-		}
-		if len(cells) > 0 {
-			text.WriteString(strings.Join(cells, " | "))
-			text.WriteString("\n")
-		}
-	}
-	return text.String()
-}
-
-// ParsePPTX extracts text from a PPTX file
-func (p *DocumentParser) ParsePPTX(content []byte) (*ParseResult, error) {
-	reader, err := zip.NewReader(bytes.NewReader(content), int64(len(content)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to open PPTX file: %w", err)
-	}
-
-	var textBuilder strings.Builder
-	slideCount := 0
-
-	for _, file := range reader.File {
-		if strings.HasPrefix(file.Name, "ppt/slides/slide") && strings.HasSuffix(file.Name, ".xml") {
-			slideCount++
-			rc, err := file.Open()
-			if err != nil {
-				continue
-			}
-			data, _ := io.ReadAll(rc)
-			rc.Close()
-
-			slideText := extractTextFromXML(string(data))
-			if slideText != "" {
-				textBuilder.WriteString(fmt.Sprintf("--- Slide %d ---\n", slideCount))
-				textBuilder.WriteString(slideText)
-				textBuilder.WriteString("\n\n")
-			}
-		}
-	}
-
-	extractedText := strings.TrimSpace(textBuilder.String())
-	if extractedText == "" {
-		return nil, fmt.Errorf("no text content extracted from PPTX")
-	}
-
-	return &ParseResult{
-		Content:     extractedText,
-		ContentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-		Metadata: map[string]string{
-			"format":      "pptx",
-			"slide_count": fmt.Sprintf("%d", slideCount),
-		},
-		PageCount: slideCount,
-		WordCount: countWords(extractedText),
-	}, nil
 }
 
 // ParsePlainText handles plain text files
 func (p *DocumentParser) ParsePlainText(content []byte) (*ParseResult, error) {
+	if !utf8.Valid(content) {
+		return nil, &ParseError{Code: "document_invalid", Message: "This text file is not valid UTF-8. Export it as UTF-8 before importing."}
+	}
 	text := string(content)
 	return &ParseResult{
 		Content:     text,
@@ -713,6 +148,9 @@ func (p *DocumentParser) ParsePlainText(content []byte) (*ParseResult, error) {
 
 // ParseHTML extracts text from HTML
 func (p *DocumentParser) ParseHTML(content []byte) (*ParseResult, error) {
+	if !utf8.Valid(content) {
+		return nil, invalidDocumentEncoding()
+	}
 	text := stripHTMLTags(string(content))
 	text = cleanExtractedText(text)
 
@@ -728,28 +166,31 @@ func (p *DocumentParser) ParseHTML(content []byte) (*ParseResult, error) {
 
 // ParseJSON formats JSON for readability
 func (p *DocumentParser) ParseJSON(content []byte) (*ParseResult, error) {
-	var data interface{}
-	if err := json.Unmarshal(content, &data); err != nil {
+	if !utf8.Valid(content) {
+		return nil, invalidDocumentEncoding()
+	}
+	// Format syntax without decoding into maps/floats: preserve large identifiers,
+	// decimal spelling, member order and even duplicate members from the source.
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, content, "", "  "); err != nil {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
 	}
 
-	pretty, err := json.MarshalIndent(data, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-
 	return &ParseResult{
-		Content:     string(pretty),
+		Content:     pretty.String(),
 		ContentType: "application/json",
 		Metadata: map[string]string{
 			"format": "json",
 		},
-		WordCount: countWords(string(pretty)),
+		WordCount: countWords(pretty.String()),
 	}, nil
 }
 
 // ParseCSV handles CSV files
 func (p *DocumentParser) ParseCSV(content []byte) (*ParseResult, error) {
+	if !utf8.Valid(content) {
+		return nil, invalidDocumentEncoding()
+	}
 	return &ParseResult{
 		Content:     string(content),
 		ContentType: "text/csv",
@@ -762,7 +203,10 @@ func (p *DocumentParser) ParseCSV(content []byte) (*ParseResult, error) {
 
 // ParseXML extracts text from XML
 func (p *DocumentParser) ParseXML(content []byte) (*ParseResult, error) {
-	text := extractTextFromXML(string(content))
+	text, err := extractXMLDocument(content, p.maxExtractedSize)
+	if err != nil {
+		return nil, err
+	}
 	return &ParseResult{
 		Content:     text,
 		ContentType: "application/xml",
@@ -788,6 +232,9 @@ func (p *DocumentParser) ParseRTF(content []byte) (*ParseResult, error) {
 
 // ParseCode handles source code files with syntax awareness
 func (p *DocumentParser) ParseCode(content []byte, ext string) (*ParseResult, error) {
+	if !utf8.Valid(content) {
+		return nil, invalidDocumentEncoding()
+	}
 	text := string(content)
 	language := strings.TrimPrefix(ext, ".")
 
@@ -804,27 +251,6 @@ func (p *DocumentParser) ParseCode(content []byte, ext string) (*ParseResult, er
 }
 
 // Helper functions
-
-// removeNamespace strips XML namespaces for easier parsing
-func removeNamespace(data []byte) []byte {
-	// Remove xmlns attributes
-	nsRegex := regexp.MustCompile(`\s+xmlns[^=]*="[^"]*"`)
-	data = nsRegex.ReplaceAll(data, []byte{})
-
-	// Remove namespace prefixes from tags
-	prefixRegex := regexp.MustCompile(`<(/?)(\w+):`)
-	data = prefixRegex.ReplaceAll(data, []byte("<$1"))
-
-	return data
-}
-
-// extractTextFromXML extracts text content from XML
-func extractTextFromXML(xmlContent string) string {
-	// Remove all tags and extract text
-	tagRegex := regexp.MustCompile(`<[^>]+>`)
-	text := tagRegex.ReplaceAllString(xmlContent, " ")
-	return cleanExtractedText(text)
-}
 
 // extractRTFText extracts text from RTF content
 func extractRTFText(rtf string) string {
@@ -852,27 +278,10 @@ func cleanExtractedText(text string) string {
 		// Also allow common whitespace and newlines
 		if r == '\n' || r == '\r' || r == '\t' || r == ' ' {
 			cleaned.WriteRune(r)
-		} else if r >= 0x20 && r < 0x7F {
-			// Printable ASCII
+		} else if r != utf8.RuneError && (unicode.IsPrint(r) || r == '\u200c' || r == '\u200d') {
+			// Unicode categories preserve all scripts, combining marks and symbols.
+			// A language-range allowlist silently erased valid source documents.
 			cleaned.WriteRune(r)
-		} else if r >= 0x80 && r <= 0xFFFF {
-			// Check if it's a valid unicode letter/digit/punctuation
-			// Skip private use area and other problematic ranges
-			if (r >= 0x00A0 && r <= 0x024F) || // Latin Extended
-				(r >= 0x0400 && r <= 0x04FF) || // Cyrillic
-				(r >= 0x0600 && r <= 0x06FF) || // Arabic
-				(r >= 0x4E00 && r <= 0x9FFF) || // CJK Unified Ideographs
-				(r >= 0x3000 && r <= 0x303F) || // CJK Punctuation
-				(r >= 0x3040 && r <= 0x309F) || // Hiragana
-				(r >= 0x30A0 && r <= 0x30FF) || // Katakana
-				(r >= 0xAC00 && r <= 0xD7AF) || // Korean Hangul
-				(r >= 0x2000 && r <= 0x206F) || // General Punctuation
-				(r >= 0x2010 && r <= 0x2027) || // Dashes and punctuation
-				(r >= 0x2030 && r <= 0x205E) { // Additional punctuation
-				cleaned.WriteRune(r)
-			} else {
-				garbledCount++
-			}
 		} else {
 			garbledCount++
 		}

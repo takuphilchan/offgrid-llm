@@ -3,9 +3,7 @@ package rag
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -17,8 +15,10 @@ import (
 
 // Engine is the main RAG engine that coordinates document ingestion and search
 type Engine struct {
+	retention         retentionRunner
+	imports           importExecution
 	mu                sync.RWMutex
-	ingestMu          sync.Mutex
+	ingestMu          ingestionGate
 	store             Store // Interface for vector store
 	storageErr        error // Startup failure; never substitute volatile storage.
 	chunker           *Chunker
@@ -91,6 +91,9 @@ func NewEngine(embeddingEngine *inference.EmbeddingEngine, dataDir string) *Engi
 		log.Printf("Knowledge storage unavailable; ingestion is disabled: %v", err)
 	} else {
 		store = sqliteStore
+		if recoveryErr := sqliteStore.RecoverImports(); recoveryErr != nil {
+			err = recoveryErr
+		}
 	}
 
 	return &Engine{
@@ -113,8 +116,10 @@ func (e *Engine) StorageError() error { return e.storageErr }
 
 // Close is called after the service has drained requests and ingestion.
 func (e *Engine) Close() error {
-	e.ingestMu.Lock()
-	defer e.ingestMu.Unlock()
+	e.stopRetention()
+	e.closeImports()
+	_ = e.ingestMu.acquire(context.Background()) // Requests have drained before close.
+	defer e.ingestMu.release()
 	if e.store != nil {
 		return e.store.Close()
 	}
@@ -338,217 +343,22 @@ func (e *Engine) AnalyzeDocument(content string) DocumentAnalysis {
 	return analysis
 }
 
-// IngestText ingests plain text content
-func (e *Engine) IngestText(ctx context.Context, name, content string, metadata map[string]string) (*Document, error) {
-	e.ingestMu.Lock()
-	defer e.ingestMu.Unlock()
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	if !e.enabled {
-		return nil, fmt.Errorf("RAG is not enabled")
-	}
-
-	// Clean and validate content
-	content = strings.TrimSpace(content)
-	if len(content) < 10 {
-		return nil, fmt.Errorf("content too short (minimum 10 characters)")
-	}
-
-	// Create document ID from content hash
-	docID := GenerateDocumentID([]byte(content))
-
-	// Check for duplicate
-	existingDoc, err := e.store.GetDocument(docID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check for existing document: %w", err)
-	}
-	if existingDoc != nil {
-		return nil, fmt.Errorf("document with identical content already exists: %s", existingDoc.Name)
-	}
-
-	doc := &Document{
-		ID:             docID,
-		Name:           name,
-		ContentType:    "text/plain",
-		Size:           int64(len(content)),
-		ContentHash:    GenerateContentHash(content),
-		IndexStatus:    "indexing",
-		SourceRetained: true,
-		RawContent:     content,
-		Metadata:       metadata,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
-	}
-
-	// Use auto-tuned chunking if enabled
-	var chunker *Chunker
-	if e.autoTuneChunks {
-		opts, analysis := AutoTuneChunkingOptions(content)
-		chunker = NewChunker(opts)
-		log.Printf("[RAG] Auto-tuned chunking for '%s': type=%s, chunk_size=%d, reasoning=%s",
-			name, analysis.DocumentType, opts.ChunkSize, analysis.Reasoning)
-		// Store analysis in metadata
-		if doc.Metadata == nil {
-			doc.Metadata = make(map[string]string)
-		}
-		doc.Metadata["doc_type"] = analysis.DocumentType
-		doc.Metadata["chunk_size"] = fmt.Sprintf("%d", opts.ChunkSize)
-		doc.Metadata["auto_tuned"] = "true"
-	} else {
-		chunker = e.chunker
-	}
-
-	// Chunk the document
-	chunks := chunker.ChunkText(docID, content)
-	if len(chunks) == 0 {
-		return nil, fmt.Errorf("no chunks generated from content")
-	}
-	doc.ChunkCount = len(chunks)
-
-	// Generate embeddings for all chunks in batches
-	const batchSize = 32
-	allEmbeddings := make([][]float32, 0, len(chunks))
-
-	for i := 0; i < len(chunks); i += batchSize {
-		end := i + batchSize
-		if end > len(chunks) {
-			end = len(chunks)
-		}
-
-		texts := make([]string, end-i)
-		for j, chunk := range chunks[i:end] {
-			texts[j] = chunk.Content
-		}
-
-		embeddings, err := e.generateEmbeddings(ctx, texts)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate embeddings for batch %d: %w", i/batchSize, err)
-		}
-		allEmbeddings = append(allEmbeddings, embeddings...)
-	}
-	if len(allEmbeddings) != len(chunks) || len(allEmbeddings) == 0 {
-		return nil, fmt.Errorf("embedding response count mismatch: got %d for %d chunks", len(allEmbeddings), len(chunks))
-	}
-	embeddingDim := len(allEmbeddings[0])
-	if embeddingDim == 0 {
-		return nil, fmt.Errorf("embedding model returned an empty vector")
-	}
-	for i, embedding := range allEmbeddings {
-		if len(embedding) != embeddingDim {
-			return nil, fmt.Errorf("embedding %d has dimension %d, expected %d", i, len(embedding), embeddingDim)
-		}
-		chunks[i].Embedding = append([]float32(nil), embedding...)
-		chunks[i].CreatedAt = time.Now().UTC()
-	}
-	doc.IndexStatus = "ready"
-	doc.IndexedAt = time.Now().UTC()
-
-	indexMetadata := IndexMetadata{
-		EmbeddingIdentity: e.embeddingIdentity,
-		SchemaVersion:     IndexSchemaVersion,
-		EmbeddingModel:    e.embeddingModel,
-		EmbeddingDim:      embeddingDim,
-		ChunkerVersion:    chunkerVersion,
-		ParserVersion:     parserVersion,
-		UpdatedAt:         time.Now().UTC(),
-	}
-	if metadataStore, ok := e.store.(indexMetadataStore); ok {
-		existing, found, err := metadataStore.GetIndexMetadata()
-		if err != nil {
-			return nil, fmt.Errorf("read index metadata: %w", err)
-		}
-		if found && (existing.EmbeddingModel != indexMetadata.EmbeddingModel || existing.EmbeddingDim != embeddingDim) {
-			return nil, fmt.Errorf("embedding identity mismatch: index uses %s/%d, model returned %s/%d",
-				existing.EmbeddingModel, existing.EmbeddingDim, indexMetadata.EmbeddingModel, embeddingDim)
-		}
-	}
-
-	// Store the document and all chunks as one logical operation.
-	if store, ok := e.store.(batchStore); ok {
-		if err := store.AddDocumentWithChunks(doc, chunks, allEmbeddings); err != nil {
-			return nil, fmt.Errorf("failed to atomically store document: %w", err)
-		}
-	} else {
-		if err := e.store.AddDocument(doc); err != nil {
-			return nil, fmt.Errorf("failed to store document: %w", err)
-		}
-		for i, chunk := range chunks {
-			if err := e.store.AddChunk(chunk, allEmbeddings[i]); err != nil {
-				_ = e.store.DeleteDocument(doc.ID)
-				return nil, fmt.Errorf("failed to store chunk %d: %w", i, err)
-			}
-		}
-	}
-	if metadataStore, ok := e.store.(indexMetadataStore); ok {
-		if err := metadataStore.SetIndexMetadata(indexMetadata); err != nil {
-			_ = e.store.DeleteDocument(doc.ID)
-			return nil, fmt.Errorf("persist index metadata: %w", err)
-		}
-	}
-
-	// Persist to disk (No longer needed with SQLite, but keeping for backward compatibility if we had other stores)
-	// if err := e.saveToDisk(); err != nil {
-	// 	log.Printf("Warning: failed to save RAG data to disk: %v", err)
-	// }
-
-	log.Printf("[RAG] Ingested document '%s' with %d chunks (%d embeddings)", name, len(chunks), len(allEmbeddings))
-	return doc, nil
-}
-
-// IngestFile ingests a file from the filesystem
-// Now supports PDF, DOCX, XLSX, PPTX, and many more formats
-func (e *Engine) IngestFile(ctx context.Context, filePath string, metadata map[string]string) (*Document, error) {
-	// Read file content
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
-	}
-
-	// Detect content type
-	ext := strings.ToLower(filepath.Ext(filePath))
-
-	// Use the document parser for advanced formats
-	parser := NewDocumentParser()
-	result, err := parser.Parse(content, filepath.Base(filePath), ext)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse %s file: %w", ext, err)
-	}
-
-	if metadata == nil {
-		metadata = make(map[string]string)
-	}
-	metadata["source_file"] = filePath
-	metadata["file_ext"] = ext
-	metadata["content_type"] = result.ContentType
-
-	// Merge parser metadata
-	for k, v := range result.Metadata {
-		metadata[k] = v
-	}
-
-	return e.IngestText(ctx, filepath.Base(filePath), result.Content, metadata)
-}
-
-// IngestReader ingests content from an io.Reader
-func (e *Engine) IngestReader(ctx context.Context, name string, reader io.Reader, metadata map[string]string) (*Document, error) {
-	content, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read content: %w", err)
-	}
-	return e.IngestText(ctx, name, string(content), metadata)
-}
-
 // ReindexDocument rebuilds all derived chunks and embeddings from the retained
 // source text, then swaps the index atomically. Documents created by older
 // versions must be ingested once more because their source was not retained.
 func (e *Engine) ReindexDocument(ctx context.Context, documentID string) (*Document, error) {
-	e.ingestMu.Lock()
-	defer e.ingestMu.Unlock()
+	if err := e.ingestMu.acquire(ctx); err != nil {
+		return nil, err
+	}
+	defer e.ingestMu.release()
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	if !e.enabled {
 		return nil, fmt.Errorf("RAG is not enabled")
+	}
+	principal := principalFromContext(ctx)
+	if err := e.documentAccess(principal, strings.TrimSpace(documentID), true); err != nil {
+		return nil, err
 	}
 	doc, err := e.store.GetDocument(strings.TrimSpace(documentID))
 	if err != nil {
@@ -575,6 +385,15 @@ func (e *Engine) ReindexDocument(ctx context.Context, documentID string) (*Docum
 	doc.LastError = ""
 	doc.IndexedAt = time.Now().UTC()
 	doc.UpdatedAt = doc.IndexedAt
+	if sqlite, ok := e.store.(*SQLiteStore); ok {
+		identity := IndexMetadata{EmbeddingIdentity: e.embeddingIdentity, SchemaVersion: IndexSchemaVersion,
+			EmbeddingModel: e.embeddingModel, EmbeddingDim: embeddingDim, ChunkerVersion: chunkerVersion,
+			ParserVersion: parserVersion, UpdatedAt: doc.IndexedAt}
+		if err := sqlite.replaceDocumentWithChunks(doc, chunks, embeddings, &identity, principal); err != nil {
+			return nil, fmt.Errorf("replace document index: %w", err)
+		}
+		return doc, nil
+	}
 	if err := store.ReplaceDocumentWithChunks(doc, chunks, embeddings); err != nil {
 		return nil, fmt.Errorf("replace document index: %w", err)
 	}
@@ -602,7 +421,10 @@ func (e *Engine) buildDocumentIndex(ctx context.Context, doc *Document, content 
 		doc.Metadata["chunk_size"] = fmt.Sprintf("%d", opts.ChunkSize)
 		doc.Metadata["auto_tuned"] = "true"
 	}
-	chunks := chunker.ChunkText(doc.ID, content)
+	chunks, err := chunker.chunkDocument(doc)
+	if err != nil {
+		return nil, nil, 0, err
+	}
 	if len(chunks) == 0 {
 		return nil, nil, 0, fmt.Errorf("no chunks generated from source content")
 	}
@@ -642,6 +464,10 @@ func (e *Engine) buildDocumentIndex(ctx context.Context, doc *Document, content 
 
 // Search searches for relevant chunks using hybrid search (semantic + keyword)
 func (e *Engine) Search(ctx context.Context, query string, opts SearchOptions) (*RAGContext, error) {
+	return e.search(ctx, query, opts, e.generateEmbeddings)
+}
+
+func (e *Engine) search(ctx context.Context, query string, opts SearchOptions, embed func(context.Context, []string) ([][]float32, error)) (*RAGContext, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -654,9 +480,27 @@ func (e *Engine) Search(ctx context.Context, query string, opts SearchOptions) (
 	if query == "" {
 		return nil, fmt.Errorf("query cannot be empty")
 	}
+	principal := principalFromContext(ctx)
+	if !principal.valid() {
+		return nil, ErrCollectionUnavailable
+	}
+	if store, ok := e.store.(*SQLiteStore); ok {
+		requested := opts.DocumentFilter
+		if len(requested) == 0 {
+			requested = nil
+		}
+		ids, err := store.authorizedDocumentIDs(principal, requested)
+		if err != nil {
+			return nil, err
+		}
+		if len(ids) == 0 {
+			return &RAGContext{Query: query, Results: []SearchResult{}}, nil
+		}
+		opts.DocumentFilter = ids
+	}
 
 	// Generate embedding for query
-	embeddings, err := e.generateEmbeddings(ctx, []string{query})
+	embeddings, err := embed(ctx, []string{query})
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
@@ -684,6 +528,11 @@ func (e *Engine) Search(ctx context.Context, query string, opts SearchOptions) (
 	if err != nil {
 		// Never drop document filters to disguise a retrieval failure.
 		return nil, fmt.Errorf("search failed: %w", err)
+	}
+	for _, result := range results {
+		if err := e.documentAccess(principal, result.DocumentID, false); err != nil {
+			return nil, err
+		}
 	}
 
 	// Apply MMR (Maximal Marginal Relevance) reranking for diversity
@@ -777,11 +626,7 @@ func (e *Engine) EnhancePrompt(ctx context.Context, userMessage string) (string,
 	}
 
 	// Check if we have any documents
-	docs, err := e.store.ListDocuments()
-	if err != nil {
-		log.Printf("[RAG] Failed to list documents: %v", err)
-		return userMessage, nil, err
-	}
+	docs := e.viewForContext(ctx).ListDocuments()
 	log.Printf("[RAG] EnhancePrompt: %d documents in store", len(docs))
 	if len(docs) == 0 {
 		return userMessage, &RAGContext{Query: userMessage}, nil
@@ -813,46 +658,17 @@ func (e *Engine) EnhancePrompt(ctx context.Context, userMessage string) (string,
 
 // ListDocuments returns all documents
 func (e *Engine) ListDocuments() []*Document {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	if e.store == nil {
-		return []*Document{}
-	}
-	docs, err := e.store.ListDocuments()
-	if err != nil {
-		log.Printf("Failed to list documents: %v", err)
-		return []*Document{}
-	}
-	return docs
+	return e.viewForContext(context.Background()).ListDocuments()
 }
 
 // GetDocument returns a document by ID
 func (e *Engine) GetDocument(id string) *Document {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	if e.store == nil {
-		return nil
-	}
-	doc, err := e.store.GetDocument(id)
-	if err != nil {
-		log.Printf("Failed to get document %s: %v", id, err)
-		return nil
-	}
-	return doc
+	return e.viewForContext(context.Background()).GetDocument(id)
 }
 
 // DeleteDocument removes a document and its chunks
 func (e *Engine) DeleteDocument(id string) bool {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.store == nil {
-		return false
-	}
-
-	if err := e.store.DeleteDocument(id); err == nil {
-		return true
-	}
-	return false
+	return e.viewForContext(context.Background()).DeleteDocument(id)
 }
 
 // Stats returns statistics about the RAG engine
@@ -867,6 +683,7 @@ func (e *Engine) Stats() map[string]interface{} {
 	}
 
 	stats := e.store.Stats()
+	stats["retention"] = e.RetentionStatus()
 	stats["storage_available"] = true
 	stats["enabled"] = e.enabled
 	stats["embedding_model"] = e.embeddingModel

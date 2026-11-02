@@ -1,0 +1,44 @@
+{
+  "qualification": "evaluation only; not bundled or enabled",
+  "engine_repository": "https://github.com/Danlock/gogosseract",
+  "engine_revision": "2521da518be1e69041b7b9a48f0f27fc09cf9f9b",
+  "engine_sha256": "fc618fbb130edfa457863efed91c69ba9711877c2d7212b90a1537ec959f3e9e",
+  "tesseract_version": "5.3.0",
+  "runner": "wazero v1.5.0 (evaluation only; v1.12.0 ABI mismatch recorded)",
+  "language_repository": "https://github.com/tesseract-ocr/tessdata_fast",
+  "language_revision": "87416418657359cb625c412a48b6e1d6d41c29bd",
+  "language": "eng",
+  "language_sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+  "results": [
+    {
+      "fixture": "scan",
+      "exit": 0,
+      "seconds": 3.046,
+      "expected": "Scanned receipt total 42",
+      "output_sha256": "1d4e2a7801033b1e5612bc591f0a8d2c464712aadbaa6ef0968c172cb5f720ac",
+      "source_sha256": "3f94ccc95bd27d17082dd4a7444574719c603957792fb3e4a42a1584dae1ae62",
+      "width": 1700,
+      "height": 2200
+    },
+    {
+      "fixture": "mixed",
+      "exit": 0,
+      "seconds": 3.219,
+      "expected": "Scanned page total 34",
+      "output_sha256": "44ff15987cb9b2218b85f551b904118d5e15219ba8b7d483efb2d8aece2379e5",
+      "source_sha256": "73fd5ba70021c128a378c0050015b5c8286c44440cdb7cfc19661143ca6fc157",
+      "width": 1700,
+      "height": 2200
+    },
+    {
+      "fixture": "scan-rotated",
+      "exit": 0,
+      "seconds": 2.953,
+      "expected": "Rotated scan total 37",
+      "output_sha256": "09b7d75605dd6590b56416014d8339ce545ba8582d417f0db02ccbbe894486c9",
+      "source_sha256": "929202fc13c73acb492701bee8f2be4ff08cb24bf5a51c17eff6fe55f4e24eac",
+      "width": 1700,
+      "height": 2200
+    }
+  ]
+}

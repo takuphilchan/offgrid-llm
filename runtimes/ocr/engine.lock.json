@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "revision": "tesseract-5.5.4-acfa0590d55b0762-offgrid1",
+  "wasm_sha256": "acfa0590d55b0762fc9d82fbafa6b13fa8700613356bfdf94cf933497dc298cf",
+  "notices_sha256": "eb7f09dcdebde4a4dd6a35327ce45e09ea8e1ab4e5abcd4549dee8b2d6d8ef0a",
+  "source_lock": "source.lock.json",
+  "qualified": false
+}

@@ -29,48 +29,56 @@ type IndexMetadata struct {
 
 // Document represents an uploaded document
 type Document struct {
-	ID             string            `json:"id"`
-	Name           string            `json:"name"`
-	ContentType    string            `json:"content_type"` // "text/plain", "application/pdf", etc.
-	Size           int64             `json:"size"`
-	ChunkCount     int               `json:"chunk_count"`
-	ContentHash    string            `json:"content_hash"`
-	IndexStatus    string            `json:"index_status"`
-	LastError      string            `json:"last_error,omitempty"`
-	IndexedAt      time.Time         `json:"indexed_at,omitempty"`
-	SourceRetained bool              `json:"source_retained"`
-	RawContent     string            `json:"-"` // Retained locally so indexes can be rebuilt safely.
-	Metadata       map[string]string `json:"metadata,omitempty"`
-	CreatedAt      time.Time         `json:"created_at"`
-	UpdatedAt      time.Time         `json:"updated_at"`
+	collection       string
+	publicationActor *knowledgePrincipal
+	original         *OriginalSource
+	OriginalRetained bool              `json:"original_retained"`
+	SourceRanges     []SourceRange     `json:"-"`
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	ContentType      string            `json:"content_type"` // "text/plain", "application/pdf", etc.
+	Size             int64             `json:"size"`
+	ChunkCount       int               `json:"chunk_count"`
+	ContentHash      string            `json:"content_hash"`
+	IndexStatus      string            `json:"index_status"`
+	LastError        string            `json:"last_error,omitempty"`
+	IndexedAt        time.Time         `json:"indexed_at,omitempty"`
+	SourceRetained   bool              `json:"source_retained"`
+	RawContent       string            `json:"-"` // Retained locally so indexes can be rebuilt safely.
+	Metadata         map[string]string `json:"metadata,omitempty"`
+	CreatedAt        time.Time         `json:"created_at"`
+	UpdatedAt        time.Time         `json:"updated_at"`
 }
 
 // Chunk represents a chunk of text from a document
 type Chunk struct {
-	ID          string    `json:"id"`
-	DocumentID  string    `json:"document_id"`
-	Content     string    `json:"content"`
-	Index       int       `json:"index"`      // Position in document
-	StartChar   int       `json:"start_char"` // Character offset in original document
-	EndChar     int       `json:"end_char"`
-	Page        int       `json:"page,omitempty"`
-	Section     string    `json:"section,omitempty"`
-	ContentHash string    `json:"content_hash,omitempty"`
-	Embedding   []float32 `json:"-"` // Used during reranking; persisted separately.
-	CreatedAt   time.Time `json:"created_at"`
+	Truncated   bool         `json:"truncated,omitempty"`
+	Source      *SourceRange `json:"source,omitempty"`
+	ID          string       `json:"id"`
+	DocumentID  string       `json:"document_id"`
+	Content     string       `json:"content"`
+	Index       int          `json:"index"`      // Position in document
+	StartChar   int          `json:"start_char"` // Character offset in original document
+	EndChar     int          `json:"end_char"`
+	Page        int          `json:"page,omitempty"`
+	Section     string       `json:"section,omitempty"`
+	ContentHash string       `json:"content_hash,omitempty"`
+	Embedding   []float32    `json:"-"` // Used during reranking; persisted separately.
+	CreatedAt   time.Time    `json:"created_at"`
 }
 
 // Locator is a stable, machine-readable citation target.
 type Locator struct {
-	DocumentID  string `json:"document_id"`
-	ChunkID     string `json:"chunk_id"`
-	Document    string `json:"document"`
-	Page        int    `json:"page,omitempty"`
-	Section     string `json:"section,omitempty"`
-	StartChar   int    `json:"start_char"`
-	EndChar     int    `json:"end_char"`
-	ContentHash string `json:"content_hash,omitempty"`
-	SourceURL   string `json:"source_url,omitempty"`
+	Source      *SourceRange `json:"source,omitempty"`
+	DocumentID  string       `json:"document_id"`
+	ChunkID     string       `json:"chunk_id"`
+	Document    string       `json:"document"`
+	Page        int          `json:"page,omitempty"`
+	Section     string       `json:"section,omitempty"`
+	StartChar   int          `json:"start_char"`
+	EndChar     int          `json:"end_char"`
+	ContentHash string       `json:"content_hash,omitempty"`
+	SourceURL   string       `json:"source_url,omitempty"`
 }
 
 // SearchResult represents a search result with relevance score
@@ -372,8 +380,15 @@ func (rc *RAGContext) FormatContext() string {
 		if locator.Section != "" {
 			sb.WriteString(fmt.Sprintf(" | section=%s", locator.Section))
 		}
-		sb.WriteString(fmt.Sprintf(" | chars=%d-%d | relevance=%.0f%%]\n", locator.StartChar, locator.EndChar, result.Score*100))
+		offsetUnit := "chars"
+		if locator.Source != nil {
+			offsetUnit = "utf8_bytes"
+		}
+		sb.WriteString(fmt.Sprintf(" | %s=%d-%d | relevance=%.0f%%]\n", offsetUnit, locator.StartChar, locator.EndChar, result.Score*100))
 		sb.WriteString(result.Chunk.Content)
+		if result.Chunk.Truncated {
+			sb.WriteString("\n[Excerpt truncated for context; the retained source is unchanged.]")
+		}
 		sb.WriteString("\n\n")
 	}
 
@@ -393,7 +408,11 @@ func (rc *RAGContext) FormatContext() string {
 		if locator.Section != "" {
 			sb.WriteString(fmt.Sprintf(", section %s", locator.Section))
 		}
-		sb.WriteString(fmt.Sprintf(", chars %d-%d)", locator.StartChar, locator.EndChar))
+		offsetUnit := "chars"
+		if locator.Source != nil {
+			offsetUnit = "UTF-8 bytes"
+		}
+		sb.WriteString(fmt.Sprintf(", %s %d-%d)", offsetUnit, locator.StartChar, locator.EndChar))
 		metadata := result.Metadata
 		if metadata != nil {
 			if url, ok := metadata["source_url"]; ok && url != "" {
@@ -441,7 +460,14 @@ func (rc *RAGContext) TruncateContext(maxLen int) {
 		chunk := *original
 		content := []rune(chunk.Content)
 		if len(content) > maxLen/2 {
-			chunk.Content = string(content[:maxLen/2]) + "... [truncated]"
+			chunk.Content = string(content[:maxLen/2])
+			if chunk.Source != nil {
+				chunk.EndChar = chunk.StartChar + len(chunk.Content)
+				chunk.Source = sourceForSpan(*chunk.Source, chunk.StartChar, chunk.EndChar)
+				chunk.Truncated = true
+			} else {
+				chunk.Content += "... [truncated]"
+			}
 			chunk.ContentHash = GenerateContentHash(chunk.Content)
 		}
 		rc.Results[0].Chunk = &chunk
@@ -453,6 +479,7 @@ func (rc *RAGContext) TruncateContext(maxLen int) {
 func locatorForResult(result SearchResult) Locator {
 	locator := Locator{DocumentID: result.DocumentID, Document: result.DocName}
 	if result.Chunk != nil {
+		locator.Source = result.Chunk.Source
 		locator.ChunkID = result.Chunk.ID
 		locator.Page = result.Chunk.Page
 		locator.Section = result.Chunk.Section

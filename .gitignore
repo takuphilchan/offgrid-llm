@@ -73,6 +73,8 @@ Thumbs.db
 
 # Build artifacts
 /build/
+/runtimes/pdfium/assets/
+/runtimes/ocr/worker/assets/
 *.dmg
 *.pkg
 *.deb
@@ -90,6 +92,9 @@ docs/paper.tex
 docs/PAPER.md
 docs/PAPER_README.md
 *.pdf
+# Authored, digest-pinned parser fixtures; never user documents.
+!/internal/rag/testdata/documents/corpus/*.pdf
+!/internal/rag/testdata/documents/ocr/inputs/*.pdf
 
 # Python
 __pycache__/

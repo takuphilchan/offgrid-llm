@@ -13,7 +13,7 @@ func (e *Engine) EnhancePromptForDocuments(ctx context.Context, query string, id
 	}
 	before := map[string]string{}
 	for _, id := range ids {
-		doc := e.GetDocument(id)
+		doc := e.viewForContext(ctx).GetDocument(id)
 		if doc == nil || doc.IndexStatus != "ready" || doc.ChunkCount == 0 {
 			return query, nil, fmt.Errorf("selected document unavailable")
 		}
@@ -26,7 +26,7 @@ func (e *Engine) EnhancePromptForDocuments(ctx context.Context, query string, id
 		return query, nil, err
 	}
 	for id, hash := range before {
-		doc := e.GetDocument(id)
+		doc := e.viewForContext(ctx).GetDocument(id)
 		if doc == nil || doc.IndexStatus != "ready" || doc.ContentHash != hash {
 			return query, nil, fmt.Errorf("selected document changed during retrieval")
 		}

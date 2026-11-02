@@ -1,0 +1,68 @@
+{
+  "provenance": "Authored by OffGrid for testing; no personal or third-party document content.",
+  "qualification": "Expected source content, not a claim of successful OCR.",
+  "cases": [
+    {
+      "path": "visible-rotation-0.pdf",
+      "sha256": "22d1b42aab402f286e00056b7bd43016c693e306945ae733a6f56b39f99d4056",
+      "rotation": 0,
+      "expected_text": [
+        "Harvest total 37 bags"
+      ],
+      "page": 1,
+      "mixed_same_page": false
+    },
+    {
+      "path": "visible-rotation-90.pdf",
+      "sha256": "9406c04d9f35756b6a7d2696c4c5f4bdcea26fdf517185ea63cd5e8537cbd60e",
+      "rotation": 90,
+      "expected_text": [
+        "Harvest total 37 bags"
+      ],
+      "page": 1,
+      "mixed_same_page": false
+    },
+    {
+      "path": "visible-rotation-180.pdf",
+      "sha256": "d4512473d6ebd92e4340fdc2e732fefb688c17e79e9f36fe53032efd4092bed2",
+      "rotation": 180,
+      "expected_text": [
+        "Harvest total 37 bags"
+      ],
+      "page": 1,
+      "mixed_same_page": false
+    },
+    {
+      "path": "visible-rotation-270.pdf",
+      "sha256": "5e332f6d51c54a90dde4a5f53730227dabb82c704509661a0de88c4e0e245cfc",
+      "rotation": 270,
+      "expected_text": [
+        "Harvest total 37 bags"
+      ],
+      "page": 1,
+      "mixed_same_page": false
+    },
+    {
+      "path": "mixed-same-page.pdf",
+      "sha256": "633bd14613e0299eadd010c80713146312e45e59cfaa1780596ed51540b25470",
+      "rotation": 0,
+      "expected_text": [
+        "Native stock total 12 bags",
+        "Harvest total 37 bags"
+      ],
+      "page": 1,
+      "mixed_same_page": true
+    },
+    {
+      "path": "mixed-repeated-text.pdf",
+      "sha256": "90aba59cb14d273a88be73c567f1a059c99674fd0dd914fa892f5e5352c6fbab",
+      "rotation": 0,
+      "expected_text": [
+        "Harvest total 37 bags",
+        "Harvest total 37 bags"
+      ],
+      "page": 1,
+      "mixed_same_page": true
+    }
+  ]
+}

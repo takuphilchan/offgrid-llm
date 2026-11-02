@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>hOCR text</title>
+  <meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+  <meta name='ocr-system' content='tesseract 5.3.0' />
+  <meta name='ocr-capabilities' content='ocr_page ocr_carea ocr_par ocr_line ocrx_word ocrp_wconf' />
+</head>
+<body>
+    <div class='ocr_page' id='page_1' title='image "unknown"; bbox 0 0 1700 2200; ppageno 0; scan_res 70 70'>
+   <div class='ocr_carea' id='block_1_1' title="bbox 1689 139 1700 497">
+    <p class='ocr_par' id='par_1_1' lang='eng' title="bbox 1689 139 1700 497">
+     <span class='ocr_line' id='line_1_1' title="bbox 1689 139 1700 182; baseline 0 -2; x_size 55; x_descenders 14; x_ascenders 13">
+      <span class='ocrx_word' id='word_1_1' title='bbox 1689 139 1700 182; x_wconf 25'>‘</span>
+     </span>
+     <span class='ocr_line' id='line_1_2' title="bbox 1689 185 1700 217; baseline 0 -4; x_size 55; x_descenders 14; x_ascenders 13">
+      <span class='ocrx_word' id='word_1_2' title='bbox 1689 185 1700 217; x_wconf 19'>g</span>
+     </span>
+     <span class='ocr_line' id='line_1_3' title="bbox 1689 219 1700 239; baseline 0 0; x_size 26.829269; x_descenders 6.8292685; x_ascenders 6.3414631">
+      <span class='ocrx_word' id='word_1_3' title='bbox 1689 219 1700 239; x_wconf 91'>¢</span>
+     </span>
+     <span class='ocr_line' id='line_1_4' title="bbox 1689 242 1700 263; baseline 0 0; x_size 28.170731; x_descenders 7.1707315; x_ascenders 6.6585364">
+      <span class='ocrx_word' id='word_1_4' title='bbox 1689 242 1700 263; x_wconf 54'>c</span>
+     </span>
+     <span class='ocr_line' id='line_1_5' title="bbox 1689 276 1700 292; baseline 0 0; x_size 21.463415; x_descenders 5.4634147; x_ascenders 5.0731707">
+      <span class='ocrx_word' id='word_1_5' title='bbox 1689 276 1700 292; x_wconf 44'>C</span>
+     </span>
+     <span class='ocr_line' id='line_1_6' title="bbox 1689 294 1700 313; baseline 0 0; x_size 25.487804; x_descenders 6.4878049; x_ascenders 6.0243902">
+      <span class='ocrx_word' id='word_1_6' title='bbox 1689 294 1700 313; x_wconf 36'>¢</span>
+     </span>
+     <span class='ocr_line' id='line_1_7' title="bbox 1689 316 1700 343; baseline 0 0; x_size 55; x_descenders 14; x_ascenders 13">
+      <span class='ocrx_word' id='word_1_7' title='bbox 1689 316 1700 343; x_wconf 0'>g</span>
+     </span>
+     <span class='ocr_line' id='line_1_8' title="bbox 1689 372 1700 417; baseline 0 -4; x_size 55; x_descenders 14; x_ascenders 13">
+      <span class='ocrx_word' id='word_1_8' title='bbox 1689 372 1700 417; x_wconf 0'>¢</span>
+     </span>
+     <span class='ocr_line' id='line_1_9' title="bbox 1689 419 1700 449; baseline 0 -2; x_size 55; x_descenders 14; x_ascenders 13">
+      <span class='ocrx_word' id='word_1_9' title='bbox 1689 419 1700 449; x_wconf 45'>é</span>
+     </span>
+     <span class='ocr_line' id='line_1_10' title="bbox 1689 461 1700 497; baseline 0 0; x_size 48.292683; x_descenders 12.292683; x_ascenders 11.414634">
+      <span class='ocrx_word' id='word_1_10' title='bbox 1689 461 1700 497; x_wconf 23'>‘</span>
+     </span>
+    </p>
+   </div>
+  </div>
+
+</body>
+</html>

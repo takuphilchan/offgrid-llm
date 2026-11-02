@@ -1,0 +1,86 @@
+{
+  "qualification": "native ABI evaluation only; not bundled or enabled",
+  "source_lock": "runtimes/ocr/source.lock.json",
+  "tesseract_version": "5.5.4",
+  "language_sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+  "test_source": "runtimes/ocr/bridge_test.cpp",
+  "results": [
+    {
+      "fixture": "scan",
+      "source": "corpus/scan.pdf",
+      "source_sha256": "3f94ccc95bd27d17082dd4a7444574719c603957792fb3e4a42a1584dae1ae62",
+      "output_sha256": "6584e04c17d9f11310ccc57934117522a5d79ad175678d3cf79a0991f28192de",
+      "width": 1700,
+      "height": 2200,
+      "expected": "Scanned receipt total 42",
+      "actual": "Scanned receipt total 42",
+      "exact_match": true
+    },
+    {
+      "fixture": "mixed",
+      "source": "corpus/mixed.pdf",
+      "source_sha256": "73fd5ba70021c128a378c0050015b5c8286c44440cdb7cfc19661143ca6fc157",
+      "output_sha256": "43c4da07533e3d1eda463c8a73a477aff208fc7ef8fd3a0583d2bb9bb892497d",
+      "width": 1700,
+      "height": 2200,
+      "expected": "Scanned page total 34",
+      "actual": "Scanned page total 34",
+      "exact_match": true
+    },
+    {
+      "fixture": "visible-rotation-0",
+      "source": "ocr/inputs/visible-rotation-0.pdf",
+      "source_sha256": "22d1b42aab402f286e00056b7bd43016c693e306945ae733a6f56b39f99d4056",
+      "output_sha256": "bff3232e5237737aed74c257a3d413c3c509f53d8658f1d55f0f0f4bec1ba191",
+      "width": 1112,
+      "height": 1112,
+      "expected": "Harvest total 37 bags",
+      "actual": "Harvest total 37 bags",
+      "exact_match": true
+    },
+    {
+      "fixture": "visible-rotation-90",
+      "source": "ocr/inputs/visible-rotation-90.pdf",
+      "source_sha256": "9406c04d9f35756b6a7d2696c4c5f4bdcea26fdf517185ea63cd5e8537cbd60e",
+      "output_sha256": "8e8b8201aabbe978aac9630cc0c27df17573541ad878583ba8efaa77268fb4d2",
+      "width": 1112,
+      "height": 1112,
+      "expected": "Harvest total 37 bags",
+      "actual": "Harvest total 37 bags",
+      "exact_match": true
+    },
+    {
+      "fixture": "visible-rotation-180",
+      "source": "ocr/inputs/visible-rotation-180.pdf",
+      "source_sha256": "d4512473d6ebd92e4340fdc2e732fefb688c17e79e9f36fe53032efd4092bed2",
+      "output_sha256": "247809086d82ea520c90fcfbbc8bfd6b54164298a42d7d95845dbefd1336c431",
+      "width": 1112,
+      "height": 1112,
+      "expected": "Harvest total 37 bags",
+      "actual": "sBeq /¢€ ]€}0} JseeH",
+      "exact_match": false
+    },
+    {
+      "fixture": "visible-rotation-270",
+      "source": "ocr/inputs/visible-rotation-270.pdf",
+      "source_sha256": "5e332f6d51c54a90dde4a5f53730227dabb82c704509661a0de88c4e0e245cfc",
+      "output_sha256": "6ef669dc1d6471bf03c78c71a06d57dad06a77d43ca31c7e4ca701c8a3200499",
+      "width": 1112,
+      "height": 1112,
+      "expected": "Harvest total 37 bags",
+      "actual": "sBeq /¢€ ]€}0} JseeH",
+      "exact_match": false
+    },
+    {
+      "fixture": "mixed-same-page",
+      "source": "ocr/inputs/mixed-same-page.pdf",
+      "source_sha256": "633bd14613e0299eadd010c80713146312e45e59cfaa1780596ed51540b25470",
+      "output_sha256": "f658d19c13ff1b244449924767d53082865f2c8975f7528167c113d380ca10c0",
+      "width": 1112,
+      "height": 1112,
+      "expected": "Native stock total 12 bags Harvest total 37 bags",
+      "actual": "Native stock total 12 bags Harvest total 37 bags",
+      "exact_match": true
+    }
+  ]
+}

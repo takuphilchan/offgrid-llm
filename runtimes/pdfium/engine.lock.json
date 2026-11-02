@@ -1,0 +1,11 @@
+{
+  "version": "155.0.8057.0",
+  "release": "https://github.com/bblanchon/pdfium-binaries/releases/tag/chromium%2F8057",
+  "archive_url": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F8057/pdfium-wasm.tgz",
+  "archive_sha256": "4c7cf42cc4ebe6f5eb0a44cc9d0d1dc1cde8dcd094a5003e229a1bac2d56b0aa",
+  "wasm_sha256": "0001cb839e62425ba5b645c17300027708d916b5bfccf93c2cec7a8376dc3989",
+  "notices_sha256": "9bbd77b899d97394eff0f307bc129e4b68780b55dbe9a3b654907f67908bc70b",
+  "source_branch": "chromium/8057",
+  "javascript": false,
+  "xfa": false
+}

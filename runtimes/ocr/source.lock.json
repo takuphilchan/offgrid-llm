@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "state": "source baseline; not release-qualified",
+  "toolchain": {
+    "version": "4.0.10",
+    "emsdk_revision": "62a853cd3b3134398ce85cde8bb5cbb2ef0194cb",
+    "release": "8103ffedfb0c42d231c6af6859a5a1a832260b43",
+    "archive_url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/linux/8103ffedfb0c42d231c6af6859a5a1a832260b43/wasm-binaries.tar.xz",
+    "archive_sha256": "0183f887b56c3f8d4b45826cb49856a3324afb66236ad3c13944c0fd2550cbbc"
+  },
+  "evaluation_language": {
+    "id": "eng",
+    "revision": "87416418657359cb625c412a48b6e1d6d41c29bd",
+    "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+  },
+  "tesseract": {
+    "version": "5.5.4",
+    "revision": "7e548e6eff172f38f97664afe7f7ce40db36c8d6",
+    "archive_url": "https://codeload.github.com/tesseract-ocr/tesseract/tar.gz/7e548e6eff172f38f97664afe7f7ce40db36c8d6",
+    "archive_sha256": "445603ab1d0a63df552e193a600d9d5c4021aff36e144f3091af149e5efb381a"
+  },
+  "leptonica": {
+    "version": "1.87.0",
+    "revision": "13275a278eb55b5746e33f95fbf5a2c8f604b3ab",
+    "archive_url": "https://codeload.github.com/DanBloomberg/leptonica/tar.gz/13275a278eb55b5746e33f95fbf5a2c8f604b3ab",
+    "archive_sha256": "e72242133adf678e8584081a506ca3a665c8f6f6de8c3fe7b47d1d5fcf9a4ce4"
+  }
+}

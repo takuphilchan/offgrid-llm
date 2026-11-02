@@ -1,0 +1,23 @@
+  <div class='ocr_page' id='page_1' title='image "unknown"; bbox 0 0 1112 1112; ppageno 0; scan_res 200 200'>
+   <div class='ocr_carea' id='block_1_1' title="bbox 114 250 555 287">
+    <p class='ocr_par' id='par_1_1' lang='eng' title="bbox 114 250 555 287">
+     <span class='ocr_line' id='line_1_1' title="bbox 114 250 555 287; baseline 0.002 -9; x_size 37; x_descenders 8; x_ascenders 7">
+      <span class='ocrx_word' id='word_1_1' title='bbox 114 250 220 279; x_wconf 96'>Native</span>
+      <span class='ocrx_word' id='word_1_2' title='bbox 233 250 323 279; x_wconf 95'>stock</span>
+      <span class='ocrx_word' id='word_1_3' title='bbox 334 250 405 279; x_wconf 95'>total</span>
+      <span class='ocrx_word' id='word_1_4' title='bbox 422 251 459 278; x_wconf 96'>12</span>
+      <span class='ocrx_word' id='word_1_5' title='bbox 475 250 555 287; x_wconf 96'>bags</span>
+     </span>
+    </p>
+   </div>
+   <div class='ocr_carea' id='block_1_2' title="bbox 152 494 483 527">
+    <p class='ocr_par' id='par_1_2' lang='eng' title="bbox 152 494 483 527">
+     <span class='ocr_line' id='line_1_2' title="bbox 152 494 483 527; baseline 0 -6; x_size 33; x_descenders 6; x_ascenders 7">
+      <span class='ocrx_word' id='word_1_6' title='bbox 152 496 269 521; x_wconf 96'>Harvest</span>
+      <span class='ocrx_word' id='word_1_7' title='bbox 279 494 347 521; x_wconf 96'>total</span>
+      <span class='ocrx_word' id='word_1_8' title='bbox 357 495 395 521; x_wconf 96'>37</span>
+      <span class='ocrx_word' id='word_1_9' title='bbox 408 494 483 527; x_wconf 96'>bags</span>
+     </span>
+    </p>
+   </div>
+  </div>

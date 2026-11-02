@@ -17,6 +17,12 @@ docker-compose*.yml text eol=lf
 go.mod text eol=lf
 go.sum text eol=lf
 internal/server/testdata/*.golden text eol=lf
+# Preserve exact fixture/receipt bytes used by the document corpus digest gates.
+internal/rag/testdata/documents/corpus/** -text -whitespace
+internal/rag/testdata/documents/ocr/inputs/** -text -whitespace
+internal/rag/testdata/documents/ocr/*.hocr -text -whitespace
+internal/rag/testdata/documents/ocr/native/*.hocr -text -whitespace
+internal/rag/testdata/documents/**/*.pdf -diff
 
 # Binary files
 *.gguf binary

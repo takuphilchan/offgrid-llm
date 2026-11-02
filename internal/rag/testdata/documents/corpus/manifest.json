@@ -1,0 +1,520 @@
+{
+  "schema_version": 1,
+  "provenance": "Authored OffGrid public fixtures; no user documents. scripts/test/generate-parser-corpus.py",
+  "license": "MIT; embedded Bitstream Vera subset in mapped-latin.pdf is covered by bitstream-vera-license.txt",
+  "generators": {
+    "reportlab": "4.4.4",
+    "pillow": "13.0.0"
+  },
+  "scoring": "Ordered exact snippets after whitespace normalization; errors must match exactly. Source-unit readiness scored separately. OCR expectations describe unavailable-without-OCR, not OCR quality qualification.",
+  "files": [
+    {
+      "path": "plain.pdf",
+      "sha256": "413bb0798d3f743d7ee1e7d667a6323dc61e37eb08a6495a36d1ad431fcf48f2",
+      "bytes": 1388,
+      "family": "pdf_text",
+      "expected_text": [
+        "The clinic opens at 08:30."
+      ],
+      "source_units": [
+        "page:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "compressed.pdf",
+      "sha256": "1c2ec5427a4492b9f49a18e81926e9916a659205816394462d1d431f89525555",
+      "bytes": 1443,
+      "family": "pdf_text",
+      "expected_text": [
+        "The library closes at 17:00."
+      ],
+      "source_units": [
+        "page:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "mapped-latin.pdf",
+      "sha256": "75f79d233b1c11549f601afc8fd80a4aca2b55d12a6dedef5019294bba86f32e",
+      "bytes": 22161,
+      "family": "pdf_text",
+      "expected_text": [
+        "Café déjà vu — naïve façade"
+      ],
+      "source_units": [
+        "page:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "escaped.pdf",
+      "sha256": "d3fe588890748ae7f9c5bddac3298d8df4dc504c310cd2db3d06408b290fc381",
+      "bytes": 1404,
+      "family": "pdf_text",
+      "expected_text": [
+        "Budget (approved) and path C:\\reports"
+      ],
+      "source_units": [
+        "page:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "multiline.pdf",
+      "sha256": "72e9c2ada8fe199955aa1e26a06d27a7340c9aab1d7cba494f3b753a018a287f",
+      "bytes": 1456,
+      "family": "pdf_text",
+      "expected_text": [
+        "First paragraph.",
+        "Second paragraph.",
+        "Third paragraph."
+      ],
+      "source_units": [
+        "page:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "rotated.pdf",
+      "sha256": "15855f9ba8dbf6789a3b10d1624a64f67cd9294ce02f4968d682f7913913d316",
+      "bytes": 1442,
+      "family": "pdf_text",
+      "expected_text": [
+        "Rotated page: harvest total 42."
+      ],
+      "source_units": [
+        "page:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "punctuation.pdf",
+      "sha256": "0aaa4c8bd9e490e7028f774b844a4b6a8316101710d54819088dc5b8c9b9c55f",
+      "bytes": 1464,
+      "family": "pdf_text",
+      "expected_text": [
+        "Email: help@example.test; code #A-17; 12.50%."
+      ],
+      "source_units": [
+        "page:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "three-pages.pdf",
+      "sha256": "f8cd96fe9e54e4a647db50db4255cfcdd40680b82dee38158a3058aba4761701",
+      "bytes": 2352,
+      "family": "pdf_text",
+      "expected_text": [
+        "First page: red beans.",
+        "Second page: green peas.",
+        "Third page: blue sky."
+      ],
+      "source_units": [
+        "page:1",
+        "page:2",
+        "page:3"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "columns.pdf",
+      "sha256": "2a695b96163a857acf4ea109e189a9cae362f2dd399abe6d1a214a34172098c0",
+      "bytes": 1442,
+      "family": "pdf_text",
+      "expected_text": [
+        "Left column: maize",
+        "Right column: rice"
+      ],
+      "source_units": [
+        "page:1"
+      ],
+      "expected_error": "",
+      "notes": "Two independent columns; no claim of general table reconstruction."
+    },
+    {
+      "path": "scan.pdf",
+      "sha256": "3f94ccc95bd27d17082dd4a7444574719c603957792fb3e4a42a1584dae1ae62",
+      "bytes": 7630,
+      "family": "pdf_scan",
+      "expected_text": [
+        "Scanned receipt total 42"
+      ],
+      "source_units": [
+        "page:1"
+      ],
+      "expected_error": "document_ocr_required",
+      "notes": ""
+    },
+    {
+      "path": "scan-rotated.pdf",
+      "sha256": "929202fc13c73acb492701bee8f2be4ff08cb24bf5a51c17eff6fe55f4e24eac",
+      "bytes": 7216,
+      "family": "pdf_scan",
+      "expected_text": [
+        "Rotated scan total 37"
+      ],
+      "source_units": [
+        "page:1"
+      ],
+      "expected_error": "document_ocr_required",
+      "notes": ""
+    },
+    {
+      "path": "mixed.pdf",
+      "sha256": "73fd5ba70021c128a378c0050015b5c8286c44440cdb7cfc19661143ca6fc157",
+      "bytes": 8145,
+      "family": "pdf_mixed",
+      "expected_text": [
+        "Native page total 12",
+        "Scanned page total 34"
+      ],
+      "source_units": [
+        "page:1",
+        "page:2"
+      ],
+      "expected_error": "document_ocr_required",
+      "notes": "Without OCR, partial native text must not be reported complete."
+    },
+    {
+      "path": "encrypted.pdf",
+      "sha256": "87637e8f984ce38f197eabb040abab2a1352a89c8040cf7994e445f3b80f3f1f",
+      "bytes": 1956,
+      "family": "pdf_encrypted",
+      "expected_text": [],
+      "source_units": [],
+      "expected_error": "document_encrypted",
+      "notes": "Authored password, no real secrets."
+    },
+    {
+      "path": "blank.pdf",
+      "sha256": "79a508eeb6cae4a21f30a98ae1a25c8d2cab8adf957345ac77a72e9bb6106ef0",
+      "bytes": 1390,
+      "family": "pdf_empty",
+      "expected_text": [],
+      "source_units": [],
+      "expected_error": "document_empty",
+      "notes": ""
+    },
+    {
+      "path": "truncated.pdf",
+      "sha256": "bbbafa3cc3982617fd5e814bd291b66284e12f1635925fc841f1183d0ebcc0b7",
+      "bytes": 160,
+      "family": "corrupt",
+      "expected_text": [],
+      "source_units": [],
+      "expected_error": "document_invalid",
+      "notes": ""
+    },
+    {
+      "path": "not-a-pdf.pdf",
+      "sha256": "bb9410f71b1e3315049d6e4e6dc5a99d21a5f488790a82f19bb4591fd2f9362f",
+      "bytes": 32,
+      "family": "corrupt",
+      "expected_text": [],
+      "source_units": [],
+      "expected_error": "document_invalid",
+      "notes": ""
+    },
+    {
+      "path": "object-stream.pdf",
+      "sha256": "96eea46e95aae75c07ee5421036e62c5218f8abebb373a19a8f78c4941b0fa36",
+      "bytes": 569,
+      "family": "pdf_text",
+      "expected_text": [
+        "Object stream page: total 23."
+      ],
+      "source_units": [
+        "page:1"
+      ],
+      "expected_error": "",
+      "notes": "Page tree and fonts are compressed into an object stream; real xref stream, PDF 1.5."
+    },
+    {
+      "path": "unused-large-stream.pdf",
+      "sha256": "cd2b3c6d4cde5ac827028faec27e15fd4d64fb2d082ce48f1972cc74cda4596a",
+      "bytes": 18865,
+      "family": "pdf_resource",
+      "expected_text": [
+        "Small visible page"
+      ],
+      "source_units": [
+        "page:1"
+      ],
+      "expected_error": "",
+      "notes": "17 MiB unreferenced stream; reading page text does not require it."
+    },
+    {
+      "path": "latin.txt",
+      "sha256": "769f5f388a876e4087e4636474660a255bda80d3c33b04312d804077a3374d5d",
+      "bytes": 27,
+      "family": "text",
+      "expected_text": [
+        "Café — résumé: 12345."
+      ],
+      "source_units": [
+        "section:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "japanese.txt",
+      "sha256": "876547e50b50f1ed08e4c777a02c53d9e6b320b83fbe0fed84d27aae456b4615",
+      "bytes": 53,
+      "family": "text",
+      "expected_text": [
+        "日本語 図書館は午前九時に開きます。"
+      ],
+      "source_units": [
+        "section:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "greek.txt",
+      "sha256": "1fe19309c903058d2e6cfd59bd5e831c4c7c5876a7b51c3553fbdbe269bf37ae",
+      "bytes": 38,
+      "family": "text",
+      "expected_text": [
+        "Ελληνικά βιβλιοθήκη"
+      ],
+      "source_units": [
+        "section:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "hindi.txt",
+      "sha256": "616c259d1796248ef98f3bfdbb4f007b02d333f315d51ed92710d895a656d687",
+      "bytes": 47,
+      "family": "text",
+      "expected_text": [
+        "हिन्दी पुस्तकालय"
+      ],
+      "source_units": [
+        "section:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "arabic.txt",
+      "sha256": "ccce4e4e430d54293e1747091803c6d6f4630bc530599bb4904a7b1a0431abeb",
+      "bytes": 39,
+      "family": "text",
+      "expected_text": [
+        "المكتبة مفتوحة اليوم"
+      ],
+      "source_units": [
+        "section:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "notes.md",
+      "sha256": "9b3e5f8e443d478001e7e6b8f1fb67b73200398f56a36e3bad0cf3cd79b1da34",
+      "bytes": 42,
+      "family": "text",
+      "expected_text": [
+        "# Demo\n\nBring clean water and a notebook."
+      ],
+      "source_units": [
+        "section:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "table.csv",
+      "sha256": "0b50e1ac937bd65956b060ac7bde5aae4a1d8b24bf04f1ab438bdba6fecde999",
+      "bytes": 31,
+      "family": "text",
+      "expected_text": [
+        "maize",
+        "12",
+        "beans",
+        "7"
+      ],
+      "source_units": [
+        "section:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "record.json",
+      "sha256": "88fd51da1ef031430468e8870c5dac1e70539cc3d3d556559c16c61cbd5f2140",
+      "bytes": 36,
+      "family": "text",
+      "expected_text": [
+        "North",
+        "08:30"
+      ],
+      "source_units": [
+        "section:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "page.html",
+      "sha256": "e970ac39e2abdee8625ed390ce246a45072f0981c31b6ff6441f6df648938ff1",
+      "bytes": 77,
+      "family": "text",
+      "expected_text": [
+        "Clinic",
+        "Open at 08:30."
+      ],
+      "source_units": [
+        "section:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "record.xml",
+      "sha256": "a2ff7c70150dc99f64d8e59625733aa348ed6397fdfea73ba421238cc37849f5",
+      "bytes": 74,
+      "family": "text",
+      "expected_text": [
+        "North",
+        "08:30"
+      ],
+      "source_units": [
+        "section:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "basic.rtf",
+      "sha256": "8f2f06d3f859f9d19bfaff047af918d7c71c8e1a6f1f4a39cb57d7fb18990538",
+      "bytes": 57,
+      "family": "text",
+      "expected_text": [
+        "Clinic opens at 08:30.",
+        "Bring a notebook."
+      ],
+      "source_units": [
+        "section:1"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "invalid-utf8.txt",
+      "sha256": "608caf9a780794a2bb7f3562edc383c9e1cdf35b570a8df1a448d27ff3913694",
+      "bytes": 8,
+      "family": "corrupt",
+      "expected_text": [],
+      "source_units": [],
+      "expected_error": "document_invalid",
+      "notes": ""
+    },
+    {
+      "path": "malformed.json",
+      "sha256": "0908e12ebfb4efa061eb5a29c801c7431d2c3006f96cf4bcefc1ee61a80a4342",
+      "bytes": 8,
+      "family": "corrupt",
+      "expected_text": [],
+      "source_units": [],
+      "expected_error": "document_invalid",
+      "notes": ""
+    },
+    {
+      "path": "ordered-workbook.xlsx",
+      "sha256": "e6308037492828c3a7c80432790e7299ef5dae0d479f597813883e91a388c9bc",
+      "bytes": 5500,
+      "family": "office",
+      "expected_text": [
+        "This sheet is first in workbook order",
+        "Quarterly budget",
+        "日本語 Ελληνικά हिन्दी"
+      ],
+      "source_units": [
+        "sheet:First sheet!A1",
+        "sheet:Budget café!A1",
+        "sheet:Budget café!C3"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "reordered-presentation.pptx",
+      "sha256": "647ce3146409979375753037f20dd6224afc4881792dc2be40f7133fd995abf2",
+      "bytes": 30060,
+      "family": "office",
+      "expected_text": [
+        "Displayed first: café 日本語",
+        "Created first, displayed second",
+        "Displayed third"
+      ],
+      "source_units": [
+        "slide:1",
+        "slide:2",
+        "slide:3"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "paragraphs.docx",
+      "sha256": "593c4ef1b3be5dfc7cced6ffd4f9072ef413515d1ff99dcca56bb8d6bc53c0ff",
+      "bytes": 824,
+      "family": "office",
+      "expected_text": [
+        "Clinic café 日本語",
+        "Open at 08:30."
+      ],
+      "source_units": [
+        "paragraph:1",
+        "paragraph:2"
+      ],
+      "expected_error": "",
+      "notes": ""
+    },
+    {
+      "path": "corrupt.docx",
+      "sha256": "f0238e127c2a959023ee9d9e6bf3c1c7b32e38ca6a1a5b2b6ea32f360eee9bf0",
+      "bytes": 10,
+      "family": "corrupt",
+      "expected_text": [],
+      "source_units": [],
+      "expected_error": "document_invalid",
+      "notes": ""
+    },
+    {
+      "path": "expanding.docx",
+      "sha256": "de12913f21a3b3c4466ec34ff07875ef4488ea387737326af1190884ec79ec00",
+      "bytes": 66394,
+      "family": "resource",
+      "expected_text": [],
+      "source_units": [],
+      "expected_error": "document_limit",
+      "notes": "65 MiB expanded ZIP exceeds archive ceiling."
+    },
+    {
+      "path": "empty-package.xlsx",
+      "sha256": "fc2f2c9275766c926b34081968ef19a6884ea89173be3ab1396944e4b4829974",
+      "bytes": 134,
+      "family": "corrupt",
+      "expected_text": [],
+      "source_units": [],
+      "expected_error": "document_invalid",
+      "notes": ""
+    }
+  ]
+}

@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -18,9 +17,10 @@ import (
 
 // SQLiteStore implements a persistent vector store using SQLite
 type SQLiteStore struct {
-	db     *sql.DB
-	dbPath string
-	mu     sync.RWMutex
+	originalQuota int64
+	db            *sql.DB
+	dbPath        string
+	mu            sync.RWMutex
 }
 
 // NewSQLiteStore creates a new SQLite-based vector store
@@ -36,8 +36,9 @@ func NewSQLiteStore(dataDir string) (*SQLiteStore, error) {
 	}
 
 	store := &SQLiteStore{
-		db:     db,
-		dbPath: dbPath,
+		originalQuota: maxLibraryOriginalBytes,
+		db:            db,
+		dbPath:        dbPath,
 	}
 
 	if err := store.initSchema(); err != nil {
@@ -46,111 +47,6 @@ func NewSQLiteStore(dataDir string) (*SQLiteStore, error) {
 	}
 
 	return store, nil
-}
-
-// initSchema initializes the database schema
-func (s *SQLiteStore) initSchema() error {
-	// Create tables
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS documents (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL,
-			content_type TEXT,
-			size INTEGER,
-			chunk_count INTEGER,
-			content_hash TEXT DEFAULT '',
-			index_status TEXT DEFAULT 'ready',
-			last_error TEXT DEFAULT '',
-			indexed_at DATETIME,
-			raw_content TEXT DEFAULT '',
-			metadata TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		);`,
-		`CREATE TABLE IF NOT EXISTS chunks (
-			id TEXT PRIMARY KEY,
-			document_id TEXT NOT NULL,
-			content TEXT NOT NULL,
-			chunk_index INTEGER,
-			start_char INTEGER,
-			end_char INTEGER,
-			page INTEGER DEFAULT 0,
-			section TEXT DEFAULT '',
-			content_hash TEXT DEFAULT '',
-			embedding BLOB, -- Stored as JSON array of floats for now (simple)
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_chunks_doc_id ON chunks(document_id);`,
-		`CREATE TABLE IF NOT EXISTS index_metadata (
-			id INTEGER PRIMARY KEY CHECK (id = 1),
-			schema_version INTEGER NOT NULL,
-			embedding_model TEXT NOT NULL,
-			embedding_dimension INTEGER NOT NULL,
-			chunker_version TEXT NOT NULL,
-			parser_version TEXT NOT NULL,
-			updated_at DATETIME NOT NULL
-		);`,
-		// FTS5 virtual table for full-text search (hybrid search support)
-		`CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-			chunk_id,
-			content,
-			content='chunks',
-			content_rowid='rowid'
-		);`,
-		// Triggers to keep FTS index in sync
-		`CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
-			INSERT INTO chunks_fts(rowid, chunk_id, content) VALUES (new.rowid, new.id, new.content);
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
-			INSERT INTO chunks_fts(chunks_fts, rowid, chunk_id, content) VALUES('delete', old.rowid, old.id, old.content);
-		END;`,
-		`CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
-			INSERT INTO chunks_fts(chunks_fts, rowid, chunk_id, content) VALUES('delete', old.rowid, old.id, old.content);
-			INSERT INTO chunks_fts(rowid, chunk_id, content) VALUES (new.rowid, new.id, new.content);
-		END;`,
-	}
-
-	for _, query := range queries {
-		if _, err := s.db.Exec(query); err != nil {
-			// Ignore errors for FTS5 if not supported (older SQLite)
-			if !isFTS5Error(err) {
-				return fmt.Errorf("failed to execute init query: %w", err)
-			}
-		}
-	}
-
-	// Add locator columns for indexes created before schema version 2. SQLite
-	// does not support ADD COLUMN IF NOT EXISTS on all supported versions, so
-	// duplicate-column errors are intentionally ignored.
-	for _, migration := range []string{
-		`ALTER TABLE index_metadata ADD COLUMN embedding_identity TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE documents ADD COLUMN content_hash TEXT DEFAULT ''`,
-		`ALTER TABLE documents ADD COLUMN index_status TEXT DEFAULT 'ready'`,
-		`ALTER TABLE documents ADD COLUMN last_error TEXT DEFAULT ''`,
-		`ALTER TABLE documents ADD COLUMN indexed_at DATETIME`,
-		`ALTER TABLE documents ADD COLUMN raw_content TEXT DEFAULT ''`,
-		`ALTER TABLE chunks ADD COLUMN page INTEGER DEFAULT 0`,
-		`ALTER TABLE chunks ADD COLUMN section TEXT DEFAULT ''`,
-		`ALTER TABLE chunks ADD COLUMN content_hash TEXT DEFAULT ''`,
-	} {
-		if _, err := s.db.Exec(migration); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
-			return fmt.Errorf("failed to migrate RAG schema: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// isFTS5Error checks if an error is related to FTS5 not being available
-func isFTS5Error(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	return errStr == "no such module: fts5" ||
-		errStr == "unknown virtual table: fts5" ||
-		errStr == "no such table: chunks_fts"
 }
 
 // Close closes the database connection
@@ -162,15 +58,28 @@ func (s *SQLiteStore) Close() error {
 func (s *SQLiteStore) AddDocument(doc *Document) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if doc.original != nil {
+		return fmt.Errorf("original sources require atomic document publication")
+	}
+	var retained bool
+	if err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM document_originals WHERE document_id=?)`, doc.ID).Scan(&retained); err != nil {
+		return err
+	}
+	if retained {
+		return fmt.Errorf("use atomic reindexing for a document with an original source")
+	}
+	if err := s.checkLegacyReplacementPolicy(doc.ID); err != nil {
+		return err
+	}
 
 	metadataJSON, _ := json.Marshal(doc.Metadata)
 
 	_, err := s.db.Exec(`
 		INSERT OR REPLACE INTO documents
-			(id, name, content_type, size, chunk_count, content_hash, index_status, last_error, indexed_at, raw_content, metadata, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			(id, name, content_type, size, chunk_count, content_hash, index_status, last_error, indexed_at, raw_content, metadata, created_at, updated_at, source_ranges)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, doc.ID, doc.Name, doc.ContentType, doc.Size, doc.ChunkCount, doc.ContentHash, doc.IndexStatus,
-		doc.LastError, doc.IndexedAt, doc.RawContent, string(metadataJSON), doc.CreatedAt, doc.UpdatedAt)
+		doc.LastError, doc.IndexedAt, doc.RawContent, string(metadataJSON), doc.CreatedAt, doc.UpdatedAt, sourceRangesJSON(doc.SourceRanges))
 
 	return err
 }
@@ -193,6 +102,10 @@ func (s *SQLiteStore) AddChunk(chunk *Chunk, embedding []float32) error {
 
 // AddDocumentWithChunks stores a document and all of its embeddings atomically.
 func (s *SQLiteStore) AddDocumentWithChunks(doc *Document, chunks []*Chunk, embeddings [][]float32) error {
+	return s.addDocumentWithChunks(doc, chunks, embeddings, nil)
+}
+
+func (s *SQLiteStore) addDocumentWithChunks(doc *Document, chunks []*Chunk, embeddings [][]float32, index *IndexMetadata) error {
 	if len(chunks) != len(embeddings) {
 		return fmt.Errorf("chunk and embedding counts differ: %d != %d", len(chunks), len(embeddings))
 	}
@@ -211,10 +124,19 @@ func (s *SQLiteStore) AddDocumentWithChunks(doc *Document, chunks []*Chunk, embe
 	}
 	if _, err := tx.Exec(`
 		INSERT INTO documents
-			(id, name, content_type, size, chunk_count, content_hash, index_status, last_error, indexed_at, raw_content, metadata, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			(id, name, content_type, size, chunk_count, content_hash, index_status, last_error, indexed_at, raw_content, metadata, created_at, updated_at, source_ranges)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, doc.ID, doc.Name, doc.ContentType, doc.Size, doc.ChunkCount, doc.ContentHash, doc.IndexStatus,
-		doc.LastError, doc.IndexedAt, doc.RawContent, string(metadataJSON), doc.CreatedAt, doc.UpdatedAt); err != nil {
+		doc.LastError, doc.IndexedAt, doc.RawContent, string(metadataJSON), doc.CreatedAt, doc.UpdatedAt, sourceRangesJSON(doc.SourceRanges)); err != nil {
+		return err
+	}
+	if err := bindPublication(tx, doc); err != nil {
+		return err
+	}
+	if err := completeImport(tx, doc); err != nil {
+		return err
+	}
+	if err := s.storeOriginal(tx, doc); err != nil {
 		return err
 	}
 
@@ -236,12 +158,21 @@ func (s *SQLiteStore) AddDocumentWithChunks(doc *Document, chunks []*Chunk, embe
 			return err
 		}
 	}
+	if index != nil {
+		if err := storePublicationIdentity(tx, *index); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
 }
 
 // ReplaceDocumentWithChunks swaps all derived chunks in one transaction while
 // retaining the stable document ID and creation time.
 func (s *SQLiteStore) ReplaceDocumentWithChunks(doc *Document, chunks []*Chunk, embeddings [][]float32) error {
+	return s.replaceDocumentWithChunks(doc, chunks, embeddings, nil)
+}
+
+func (s *SQLiteStore) replaceDocumentWithChunks(doc *Document, chunks []*Chunk, embeddings [][]float32, index *IndexMetadata, principals ...knowledgePrincipal) error {
 	if len(chunks) != len(embeddings) {
 		return fmt.Errorf("chunk and embedding counts differ: %d != %d", len(chunks), len(embeddings))
 	}
@@ -252,15 +183,21 @@ func (s *SQLiteStore) ReplaceDocumentWithChunks(doc *Document, chunks []*Chunk, 
 		return err
 	}
 	defer tx.Rollback()
+	if len(principals) > 0 {
+		policy, _, err := documentPolicy(tx, doc.ID)
+		if err != nil || !principals[0].allows(policy, true) {
+			return ErrCollectionUnavailable
+		}
+	}
 	metadataJSON, err := json.Marshal(doc.Metadata)
 	if err != nil {
 		return err
 	}
 	result, err := tx.Exec(`UPDATE documents SET
 		name=?, content_type=?, size=?, chunk_count=?, content_hash=?, index_status=?,
-		last_error=?, indexed_at=?, raw_content=?, metadata=?, updated_at=? WHERE id=?`,
+		last_error=?, indexed_at=?, raw_content=?, metadata=?, updated_at=?, source_ranges=? WHERE id=?`,
 		doc.Name, doc.ContentType, doc.Size, doc.ChunkCount, doc.ContentHash, doc.IndexStatus,
-		doc.LastError, doc.IndexedAt, doc.RawContent, string(metadataJSON), doc.UpdatedAt, doc.ID)
+		doc.LastError, doc.IndexedAt, doc.RawContent, string(metadataJSON), doc.UpdatedAt, sourceRangesJSON(doc.SourceRanges), doc.ID)
 	if err != nil {
 		return err
 	}
@@ -284,6 +221,11 @@ func (s *SQLiteStore) ReplaceDocumentWithChunks(doc *Document, chunks []*Chunk, 
 		}
 		if _, err := stmt.Exec(chunk.ID, chunk.DocumentID, chunk.Content, chunk.Index, chunk.StartChar, chunk.EndChar,
 			chunk.Page, chunk.Section, chunk.ContentHash, embeddingJSON, chunk.CreatedAt); err != nil {
+			return err
+		}
+	}
+	if index != nil {
+		if err := storePublicationIdentity(tx, *index); err != nil {
 			return err
 		}
 	}
@@ -338,15 +280,16 @@ func (s *SQLiteStore) GetDocument(id string) (*Document, error) {
 	defer s.mu.RUnlock()
 
 	var doc Document
-	var metadataJSON string
+	var metadataJSON, rangesJSON string
 	var indexedAt sql.NullTime
 
 	err := s.db.QueryRow(`
 		SELECT id, name, content_type, size, chunk_count, content_hash, index_status,
-		       last_error, indexed_at, raw_content, metadata, created_at, updated_at
+		       last_error, indexed_at, raw_content, metadata, created_at, updated_at, source_ranges,
+		       EXISTS(SELECT 1 FROM document_originals WHERE document_id=documents.id AND schema_version=1)
 		FROM documents WHERE id = ?
 	`, id).Scan(&doc.ID, &doc.Name, &doc.ContentType, &doc.Size, &doc.ChunkCount, &doc.ContentHash,
-		&doc.IndexStatus, &doc.LastError, &indexedAt, &doc.RawContent, &metadataJSON, &doc.CreatedAt, &doc.UpdatedAt)
+		&doc.IndexStatus, &doc.LastError, &indexedAt, &doc.RawContent, &metadataJSON, &doc.CreatedAt, &doc.UpdatedAt, &rangesJSON, &doc.OriginalRetained)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -364,6 +307,12 @@ func (s *SQLiteStore) GetDocument(id string) (*Document, error) {
 		doc.IndexedAt = doc.UpdatedAt
 	}
 	doc.SourceRetained = doc.RawContent != ""
+	if err := json.Unmarshal([]byte(rangesJSON), &doc.SourceRanges); err != nil {
+		return nil, fmt.Errorf("invalid retained source ranges: %w", err)
+	}
+	if err := validateSourceRanges(doc.RawContent, doc.SourceRanges); err != nil {
+		return nil, err
+	}
 
 	return &doc, nil
 }
@@ -374,7 +323,8 @@ func (s *SQLiteStore) ListDocuments() ([]*Document, error) {
 	defer s.mu.RUnlock()
 
 	rows, err := s.db.Query(`SELECT id, name, content_type, size, chunk_count, content_hash, index_status,
-		last_error, indexed_at, LENGTH(raw_content) > 0, metadata, created_at, updated_at
+		last_error, indexed_at, LENGTH(raw_content) > 0, metadata, created_at, updated_at,
+		EXISTS(SELECT 1 FROM document_originals WHERE document_id=documents.id AND schema_version=1)
 		FROM documents ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -387,7 +337,7 @@ func (s *SQLiteStore) ListDocuments() ([]*Document, error) {
 		var metadataJSON string
 		var indexedAt sql.NullTime
 		if err := rows.Scan(&doc.ID, &doc.Name, &doc.ContentType, &doc.Size, &doc.ChunkCount, &doc.ContentHash,
-			&doc.IndexStatus, &doc.LastError, &indexedAt, &doc.SourceRetained, &metadataJSON, &doc.CreatedAt, &doc.UpdatedAt); err != nil {
+			&doc.IndexStatus, &doc.LastError, &indexedAt, &doc.SourceRetained, &metadataJSON, &doc.CreatedAt, &doc.UpdatedAt, &doc.OriginalRetained); err != nil {
 			return nil, err
 		}
 		if indexedAt.Valid {
@@ -407,10 +357,31 @@ func (s *SQLiteStore) ListDocuments() ([]*Document, error) {
 func (s *SQLiteStore) DeleteDocument(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.deleteDocument(id)
+}
 
-	// Cascade delete handles chunks
-	_, err := s.db.Exec("DELETE FROM documents WHERE id = ?", id)
-	return err
+func (s *SQLiteStore) deleteDocument(id string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := checkDeletionRetention(tx, id); err != nil {
+		return err
+	}
+	// Invalidate pending duplicates before deletion, so old extraction cannot
+	// recreate the source after deletion commits.
+	_, err = tx.Exec(`UPDATE document_imports SET state='deleted',content=NULL,extraction_json='',attempt=attempt+1,updated_at=? WHERE document_id=? OR (source_sha256 IN (SELECT source_sha256 FROM document_originals WHERE document_id=?) AND id IN (SELECT i.import_id FROM import_collections i JOIN document_collections d ON i.collection_id=d.source_namespace WHERE d.document_id=?))`, time.Now().UTC(), id, id, id)
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec("DELETE FROM documents WHERE id = ?", id); err != nil {
+		return err
+	}
+	if _, err = tx.Exec("DELETE FROM document_retention WHERE document_id = ?", id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Search performs a semantic search using cosine similarity
@@ -423,7 +394,7 @@ func (s *SQLiteStore) Search(queryEmbedding []float32, limit int, minScore float
 	// In a real vector DB, this would be an index scan
 	rows, err := s.db.Query(`
 		SELECT c.id, c.document_id, c.content, c.chunk_index, c.start_char, c.end_char,
-		       c.page, c.section, c.content_hash, c.embedding, d.name, d.metadata
+		       c.page, c.section, c.content_hash, c.embedding, d.name, d.metadata, d.source_ranges
 		FROM chunks c
 		JOIN documents d ON c.document_id = d.id
 	`)
@@ -441,9 +412,10 @@ func (s *SQLiteStore) Search(queryEmbedding []float32, limit int, minScore float
 		var embeddingJSON []byte
 		var docName string
 		var metadataJSON sql.NullString
+		var rangesJSON string
 
 		if err := rows.Scan(&chunk.ID, &chunk.DocumentID, &chunk.Content, &chunk.Index, &chunk.StartChar, &chunk.EndChar,
-			&chunk.Page, &chunk.Section, &chunk.ContentHash, &embeddingJSON, &docName, &metadataJSON); err != nil {
+			&chunk.Page, &chunk.Section, &chunk.ContentHash, &embeddingJSON, &docName, &metadataJSON, &rangesJSON); err != nil {
 			continue
 		}
 
@@ -455,6 +427,12 @@ func (s *SQLiteStore) Search(queryEmbedding []float32, limit int, minScore float
 		if chunk.ContentHash == "" {
 			chunk.ContentHash = GenerateContentHash(chunk.Content)
 		}
+
+		var ranges []SourceRange
+		if err := json.Unmarshal([]byte(rangesJSON), &ranges); err != nil {
+			return nil, fmt.Errorf("invalid retained source ranges: %w", err)
+		}
+		bindChunkSource(&chunk, ranges)
 
 		// Parse document metadata
 		var metadata map[string]string
@@ -550,7 +528,7 @@ func (s *SQLiteStore) HybridSearchWithOptions(queryEmbedding []float32, query st
 	// Fetch all chunks for semantic search with document metadata
 	rows, err := s.db.Query(`
 		SELECT c.id, c.document_id, c.content, c.chunk_index, c.start_char, c.end_char,
-		       c.page, c.section, c.content_hash, c.embedding, d.name, d.metadata
+		       c.page, c.section, c.content_hash, c.embedding, d.name, d.metadata, d.source_ranges
 		FROM chunks c
 		JOIN documents d ON c.document_id = d.id
 		WHERE 1=1`+filterSQL, filterArgs...)
@@ -570,9 +548,10 @@ func (s *SQLiteStore) HybridSearchWithOptions(queryEmbedding []float32, query st
 		var embeddingJSON []byte
 		var docName string
 		var metadataJSON sql.NullString
+		var rangesJSON string
 
 		if err := rows.Scan(&chunk.ID, &chunk.DocumentID, &chunk.Content, &chunk.Index, &chunk.StartChar, &chunk.EndChar,
-			&chunk.Page, &chunk.Section, &chunk.ContentHash, &embeddingJSON, &docName, &metadataJSON); err != nil {
+			&chunk.Page, &chunk.Section, &chunk.ContentHash, &embeddingJSON, &docName, &metadataJSON, &rangesJSON); err != nil {
 			continue
 		}
 		var embedding []float32
@@ -583,6 +562,12 @@ func (s *SQLiteStore) HybridSearchWithOptions(queryEmbedding []float32, query st
 		if chunk.ContentHash == "" {
 			chunk.ContentHash = GenerateContentHash(chunk.Content)
 		}
+
+		var ranges []SourceRange
+		if err := json.Unmarshal([]byte(rangesJSON), &ranges); err != nil {
+			return nil, fmt.Errorf("invalid retained source ranges: %w", err)
+		}
+		bindChunkSource(&chunk, ranges)
 
 		// Parse document metadata
 		var metadata map[string]string
@@ -630,7 +615,7 @@ func (s *SQLiteStore) HybridSearchWithOptions(queryEmbedding []float32, query st
 			chunk := results[i].Chunk
 			results[i].Chunk = &Chunk{ID: chunk.ID, DocumentID: chunk.DocumentID, Index: chunk.Index,
 				StartChar: chunk.StartChar, EndChar: chunk.EndChar, Page: chunk.Page, Section: chunk.Section,
-				ContentHash: chunk.ContentHash}
+				ContentHash: chunk.ContentHash, Source: chunk.Source}
 		}
 	}
 	return results, nil

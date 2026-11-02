@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>hOCR text</title>
+  <meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+  <meta name='ocr-system' content='tesseract 5.3.0' />
+  <meta name='ocr-capabilities' content='ocr_page ocr_carea ocr_par ocr_line ocrx_word ocrp_wconf' />
+</head>
+<body>
+    <div class='ocr_page' id='page_1' title='image "unknown"; bbox 0 0 1700 2200; ppageno 0; scan_res 70 70'>
+   <div class='ocr_carea' id='block_1_1' title="bbox 124 479 565 518">
+    <p class='ocr_par' id='par_1_1' lang='eng' title="bbox 124 479 565 518">
+     <span class='ocr_line' id='line_1_1' title="bbox 124 479 565 518; baseline 0 -7; x_size 39; x_descenders 7; x_ascenders 9">
+      <span class='ocrx_word' id='word_1_1' title='bbox 124 479 279 511; x_wconf 96'>Scanned</span>
+      <span class='ocrx_word' id='word_1_2' title='bbox 294 482 418 518; x_wconf 96'>receipt</span>
+      <span class='ocrx_word' id='word_1_3' title='bbox 429 479 509 511; x_wconf 95'>total</span>
+      <span class='ocrx_word' id='word_1_4' title='bbox 520 481 565 511; x_wconf 95'>42</span>
+     </span>
+    </p>
+   </div>
+  </div>
+
+</body>
+</html>
