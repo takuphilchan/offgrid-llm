@@ -520,13 +520,20 @@ func (s *SQLiteStore) HybridSearchWithOptions(queryEmbedding []float32, query st
 	// Rank keyword matches. We fuse ranks instead of mixing raw BM25 and cosine
 	// values, whose scales are unrelated and vary by corpus.
 	keywordRanks := make(map[string]int)
+	// Apply selection to both keyword candidates and semantic rows before
+	// either ranking or limiting. A global FTS top-k can otherwise crowd out
+	// every matching passage from the selected source.
+	filterSQL, filterArgs := sqliteDocumentSelection(opts.DocumentFilter)
+	keywordArgs := append([]any{query}, filterArgs...)
+	keywordArgs = append(keywordArgs, limit*10)
 	ftsRows, err := s.db.Query(`
-		SELECT chunk_id
+		SELECT c.id
 		FROM chunks_fts
-		WHERE chunks_fts MATCH ?
+		JOIN chunks c ON c.rowid = chunks_fts.rowid
+		WHERE chunks_fts MATCH ?`+filterSQL+`
 		ORDER BY bm25(chunks_fts)
 		LIMIT ?
-	`, query, limit*10)
+	`, keywordArgs...)
 
 	if err == nil {
 		defer ftsRows.Close()
@@ -546,7 +553,7 @@ func (s *SQLiteStore) HybridSearchWithOptions(queryEmbedding []float32, query st
 		       c.page, c.section, c.content_hash, c.embedding, d.name, d.metadata
 		FROM chunks c
 		JOIN documents d ON c.document_id = d.id
-	`)
+		WHERE 1=1`+filterSQL, filterArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -557,10 +564,6 @@ func (s *SQLiteStore) HybridSearchWithOptions(queryEmbedding []float32, query st
 		semantic float32
 	}
 	candidates := make([]candidate, 0)
-	documentFilter := make(map[string]struct{}, len(opts.DocumentFilter))
-	for _, documentID := range opts.DocumentFilter {
-		documentFilter[documentID] = struct{}{}
-	}
 
 	for rows.Next() {
 		var chunk Chunk
@@ -572,12 +575,6 @@ func (s *SQLiteStore) HybridSearchWithOptions(queryEmbedding []float32, query st
 			&chunk.Page, &chunk.Section, &chunk.ContentHash, &embeddingJSON, &docName, &metadataJSON); err != nil {
 			continue
 		}
-		if len(documentFilter) > 0 {
-			if _, allowed := documentFilter[chunk.DocumentID]; !allowed {
-				continue
-			}
-		}
-
 		var embedding []float32
 		if err := json.Unmarshal(embeddingJSON, &embedding); err != nil {
 			continue
