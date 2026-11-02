@@ -1,0 +1,7 @@
+# Design
+
+User-requested download authorizes required data companions, not every quantization in a repository. Resolve the selected weight and compatible projector alternatives from an immutable complete listing. Prefer a reviewed F16 alternative when alternatives represent the same projector family; refuse mixed-family ambiguity and foreign-repository guesses. Preserve hashes, byte sizes and revision before transfer. Shared acquisition code verifies every required artifact before recording completion.
+
+Use a versioned companion receipt bound to the exact local model and source digests. Companion assets have model-specific destinations to avoid generic `mmproj-F16.gguf` collisions. Interrupted operations retain their resolution and can explicitly resume; existing model bytes are verified before reuse and never silently replaced. Registry inspection validates the receipt and excludes companion files from the model picker. Missing or changed assets disable images but do not delete the language model or draft.
+
+The shared service owns acquisition for web, desktop and authenticated CLI. Existing text-only models remain compatible. Repair is explicit and displays required transfer bytes. Successfully downloaded assets do not prove the bundled inference runtime supports the architecture or that image grounding works; preserve the runtime gates and report actual installed-model testing separately.

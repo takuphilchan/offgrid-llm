@@ -1,0 +1,14 @@
+import type { LocaleCode as Locale } from './index';
+
+const copy: Record<Locale, [string, string, string]> = {
+  en: ['Check and repair files', 'Required vision files are included when a matching companion is available. The service pins and verifies the source before completing the download. Runtime compatibility is checked separately.', 'Selected weights; companion size is added during download'],
+  fr: ['Vérifier et réparer les fichiers', 'Les fichiers de vision requis sont inclus si un compagnon compatible est disponible. Le service fixe et vérifie la source avant de terminer. La compatibilité du moteur est vérifiée séparément.', 'Poids sélectionnés ; taille du compagnon ajoutée au téléchargement'],
+  de: ['Dateien prüfen und reparieren', 'Erforderliche Bilddateien werden bei passender Zuordnung mitgeladen. Der Dienst fixiert und prüft die Quelle vor Abschluss. Die Laufzeitkompatibilität wird separat geprüft.', 'Gewählte Gewichte; Zusatzdateien werden beim Download eingerechnet'],
+  es: ['Comprobar y reparar archivos', 'Los archivos de visión necesarios se incluyen cuando hay un complemento compatible. El servicio fija y verifica la fuente antes de finalizar. La compatibilidad del motor se comprueba por separado.', 'Pesos seleccionados; el tamaño adicional se suma al descargar'],
+  ar: ['فحص الملفات وإصلاحها', 'تُضمّن ملفات الرؤية المطلوبة عند توفر ملف مرافق مطابق. تثبّت الخدمة المصدر وتتحقق منه قبل إكمال التنزيل. يُفحص توافق محرك التشغيل بشكل منفصل.', 'الأوزان المحددة؛ يُضاف حجم الملف المرافق أثناء التنزيل'],
+  sw: ['Kagua na rekebisha faili', 'Faili za kuona zinazohitajika hujumuishwa ikiwa faili mwenza inayolingana ipo. Huduma hufunga na kuthibitisha chanzo kabla ya kukamilisha. Uoanifu wa injini hukaguliwa tofauti.', 'Uzito uliochaguliwa; ukubwa wa faili mwenza huongezwa wakati wa kupakua'],
+  sn: ['Ongorora uye gadzirisa mafaira', 'Mafaira ekuona anodiwa anotorwa kana faira rinowirirana riripo. Sevhisi inosimbisa kwakabva mafaira isati yapedza. Kuenderana kweinjini kunoongororwa kwakasiyana.', 'Huremu hwasarudzwa; saizi yefaira rinoperekedza inowedzerwa pakudhaunirodha'],
+  nd: ['Hlola njalo ulungise amafayela', 'Amafayela okubona adingekayo ayafakwa nxa kulefayela elihambelanayo. Isevisi iqinisekisa umthombo ingakaqedi. Ukuhambelana kwenjini kuhlolwa ngokwehlukana.', 'Isisindo esikhethiweyo; ubukhulu befayela elihambisana laso bengezwa ekulandeni'],
+  zu: ['Hlola futhi ulungise amafayela', 'Amafayela okubona adingekayo afakwa uma kukhona ifayela elihambisanayo. Isevisi iqinisekisa umthombo ngaphambi kokuqeda. Ukuhambisana kwenjini kuhlolwa ngokwehlukana.', 'Izisindo ezikhethiwe; usayizi wefayela elengeziwe ufakwa ekulandeni'],
+};
+export const modelBundles = (locale: Locale) => ({ repair: copy[locale][0], hint: copy[locale][1], size: copy[locale][2] });

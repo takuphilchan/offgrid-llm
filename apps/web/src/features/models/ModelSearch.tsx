@@ -9,17 +9,19 @@ import { modelAcquisition } from '../../i18n/model-acquisition';
 import { modelLibrary } from '../../i18n/model-library';
 import { SearchField } from '../../components/SearchField';
 import { ModelChoice } from '../../components/ModelChoice';
+import { modelBundles } from '../../i18n/model-bundles';
 
 type Props = {
   category?: ModelCategory;
   models: Model[];
   progress: Record<string, DownloadProgress>;
   busy: boolean;
+  bundles?: boolean;
   download: (model: Pick<CatalogModel, 'id' | 'repo' | 'file' | 'quant'>) => Promise<void>;
   cancel: (progress: DownloadProgress) => Promise<void>;
 };
 
-export function ModelSearch({ category, models, progress, busy, download, cancel }: Props) {
+export function ModelSearch({ category, models, progress, busy, download, cancel, bundles = false }: Props) {
   const { messages: text, locale } = useI18n();
   const copy = text.modelSearch;
   const [query, setQuery] = useWorkspaceState(`models.${category}.query`, '');
@@ -80,11 +82,11 @@ export function ModelSearch({ category, models, progress, busy, download, cancel
           {!files.some(file => file.supported) ? <p role="status">{copy.noFiles}</p> : <>
             {files.filter(file => file.supported).length > 1 && <ModelChoice defaultOpen label={copy.file} placeholder={copy.noFiles} value={selected} disabled={busy} onChange={setSelected}
               options={files.map(file => ({ id: file.id, name: file.file, disabled: !file.supported, details: [file.size_bytes > 0 ? formatBytes(file.size_bytes) : copy.unknownSize, file.quant, !file.supported ? copy.unsupported : ''].filter(Boolean).join(' · ') }))} />}
-            {choice && <LegacyDownloadReview repository={repo} file={choice.file} bytes={choice.size_bytes} />}
+            {choice && <LegacyDownloadReview repository={repo} file={choice.file} bytes={choice.size_bytes} bundles={bundles} />}
             {current && current.status !== 'complete' && <ModelDownloadProgress download={current} />}
-            <div className="catalog-actions">{installed ? <span className="installed-status" role="status">{text.models.installed}</span> : current && isActiveDownload(current)
+            <div className="catalog-actions">{installed && !bundles ? <span className="installed-status" role="status">{text.models.installed}</span> : current && isActiveDownload(current)
               ? <button className="danger-button" disabled={busy} onClick={() => void cancel(current)}>{text.models.cancel}</button>
-              : <button className="primary-button" disabled={busy || !choice?.supported || installed} onClick={() => { if (choice) void download({ id: choice.id, repo, file: choice.file, quant: choice.quant }); }}>{installed ? text.models.installed : current && current.bytes_done > 0 && ['failed', 'cancelled'].includes(current.status) ? text.models.resume : text.models.download}</button>}
+              : <button className="primary-button" disabled={busy || !choice?.supported} onClick={() => { if (choice) void download({ id: choice.id, repo, file: choice.file, quant: choice.quant }); }}>{installed ? modelBundles(locale).repair : current && current.bytes_done > 0 && ['failed', 'cancelled'].includes(current.status) ? text.models.resume : text.models.download}</button>}
             </div>
           </>}
         </div>}

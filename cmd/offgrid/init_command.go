@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/models"
@@ -140,38 +141,22 @@ func handleInit(args []string) int {
 		return 1
 	}
 
-	var wizardProjector *models.ProjectorSource
-	if projector, err := hf.ResolveProjectorSource(result.Model.ID, nil, result.BestVariant.Filename); err != nil {
-		fmt.Println()
-		printWarning(fmt.Sprintf("Vision adapter lookup failed: %v", err))
-		fmt.Println()
-	} else {
-		wizardProjector = projector
+	bundle, err := hf.ResolveGGUFBundle(context.Background(), result.Model.ID, "", result.BestVariant.Filename)
+	if err != nil {
+		printHelpfulError(err, "Resolve model files")
+		return 1
 	}
-	if wizardProjector != nil {
-		sourceLabel := wizardProjector.ModelID
-		if wizardProjector.Source == "fallback" {
-			sourceLabel = fmt.Sprintf("%s (fallback)", sourceLabel)
-		}
-		fmt.Printf("Vision adapter detected: %s%s%s", brandPrimary, wizardProjector.File.Filename, colorReset)
-		if wizardProjector.File.Size > 0 {
-			fmt.Printf(" · %s", formatBytes(wizardProjector.File.Size))
-		}
-		fmt.Println()
-		fmt.Printf("Source: %s%s%s\n", brandMuted, sourceLabel, colorReset)
-		if wizardProjector.Reason != "" {
-			fmt.Printf("  %s%s%s\n", brandMuted, wizardProjector.Reason, colorReset)
-		}
-		fmt.Printf("%sIt will download automatically after the main model.%s\n\n", brandMuted, colorReset)
+	if bundle.Projector != nil {
+		fmt.Printf("Required vision file: %s (%s)\n", bundle.Projector.Path, formatBytes(bundle.Projector.Size))
 	}
 
 	// Download the model
-	destPath := filepath.Join(cfg.ModelsDir, result.BestVariant.Filename)
+	localName := filepath.Base(result.BestVariant.Filename)
 
 	fmt.Printf("Downloading from: %s\n", result.Model.ID)
 	fmt.Printf("File: %s (%.1fGB)\n\n", result.BestVariant.Filename, result.BestVariant.SizeGB)
 
-	err = hf.DownloadGGUF(result.Model.ID, result.BestVariant.Filename, destPath, func(current, total int64) {
+	err = hf.AcquireGGUFBundle(context.Background(), cfg.ModelsDir, localName, *bundle, func(current, total int64) {
 		percent := float64(current) / float64(total) * 100
 		fmt.Printf("\r  Progress: %.1f%% (%s / %s) · %.1f MB/s",
 			percent,
@@ -190,20 +175,12 @@ func handleInit(args []string) int {
 	fmt.Println()
 	fmt.Printf("%s✓ Setup complete!%s\n\n", brandSuccess+colorBold, colorReset)
 
-	modelName := strings.TrimSuffix(result.BestVariant.Filename, ".gguf")
+	modelName := strings.TrimSuffix(localName, ".gguf")
 	fmt.Println("Next steps:")
 	fmt.Printf("  offgrid run %s         # Start chatting\n", modelName)
 	fmt.Printf("  offgrid list                 # View installed models\n")
 	fmt.Printf("  offgrid search llama         # Find more models\n")
 	fmt.Println()
 
-	if wizardProjector != nil {
-		fmt.Printf("%sVision Adapter%s\n", brandPrimary+colorBold, colorReset)
-		if err := downloadVisionProjector(hf, cfg.ModelsDir, wizardProjector); err != nil {
-			printError(fmt.Sprintf("Vision adapter download failed: %v", err))
-			return 1
-		}
-		fmt.Println()
-	}
 	return 0
 }

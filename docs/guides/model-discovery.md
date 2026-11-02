@@ -25,14 +25,18 @@ being attached to another conversation or resubmitted.
 A single supported variant needs no file-selection step; alternatives stay in
 the same card. Curated language/embedding models use the same review-then-download
 flow. Review, variant selection and page navigation do not start transfers. The
-legacy downloader does not expose immutable source revisions or a disk-space
-preflight, so these limitations are shown explicitly rather than borrowing speech
-package guarantees or displaying invented free space.
+older service may not support complete-model bundles. Services advertising
+`gguf-bundles-v1` pin the source revision and verify SHA-256 identities for the
+selected weights and matching vision projector. The initial review shows weight
+size; download progress includes the companion once resolved. This GGUF path
+still has no disk-space reservation/preflight; required free space stays unknown.
 
 The list displays up to 1,000 repository entries, including nested files. Unknown
 sizes are labelled, not presented as zero-byte models. Split weights and multimodal
-projectors are identified as requiring companion files; this installer flow does
-not pretend one shard/projector is a runnable model. Gated/private repositories
+projectors are excluded as standalone chat models. A complete-model download
+includes one matching projector, not every quantization, draft model or importance
+matrix. Ambiguous/missing companion layouts fail explicitly. Split shards are
+still unsupported. Gated/private repositories
 are not supported by the public browser discovery flow. Downloads require the
 existing model-management permission; discovery does not grant extra privileges.
 
@@ -43,6 +47,27 @@ download remains visible on the Models page even when another search is displaye
 File size is **not** total RAM/VRAM use. Runtime support for the model architecture,
 context/KV-cache memory, available disk space, license, and model quality still need
 checking. A successful download is not a hardware qualification or publisher endorsement.
+
+### Repair an incomplete vision download
+
+In an installed model's action menu, choose **Check and repair files** when its
+download source is recorded. Otherwise find the original repository and exact
+variant in Discover models; the installed variant offers the same repair action.
+Repair verifies existing weights, downloads a missing companion and records its
+model-specific association. It never replaces different existing weights. A
+damaged managed companion is retained with a `.corrupt-…` suffix before repair.
+An old generic projector from another model is never silently substituted.
+
+For example, the Nemotron 3.5 Bolt E4B UD repository supplies `mmproj-F16.gguf`
+alongside the chosen weights. Its other projector precisions are alternatives,
+not additional required downloads. Companion files and receipts live under the
+service model directory; they are not selectable chat models. Interrupted repairs
+resume against their saved revision. Model deletion currently retains managed
+companion/recovery data; no automatic cleanup of those files is claimed.
+
+Image submission does not trigger downloads or switch models. Draft images stay
+available after a readiness error. A complete installation still needs compatible
+llama.cpp architecture/projector support and an actual image-response check.
 
 Installed and discovered entries share readable identities and labelled sizes:
 **Installed size** is stored model artifacts; **Download size** is a selected

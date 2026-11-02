@@ -44,8 +44,10 @@ offgrid list
 
 The catalog example is not a promise of agent or vision quality. For other models,
 use **Models → Find more models** or the [Hugging Face guide](huggingface.md).
-Choose an exact supported GGUF file. Split weights/projectors need their companion
-files; the installer does not treat a single shard as a complete model.
+Choose an exact supported GGUF file. Complete-model services include its matching
+vision projector automatically in that explicit download. Split shards remain
+unsupported; the installer does not treat a projector as a chat model. See
+[repair guidance](model-discovery.md#repair-an-incomplete-vision-download).
 
 Use the installed ID returned by the service. Native default storage is
 `~/.offgrid-llm/models`; containers normally use `/var/lib/offgrid/models`.

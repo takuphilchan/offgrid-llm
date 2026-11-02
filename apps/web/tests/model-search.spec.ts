@@ -58,3 +58,35 @@ test('model discovery is explicit, offers large quantizations, and downloads onl
   await expect(search.getByRole('alert')).toContainText('unavailable');
   await expect(search.getByText('No matching public GGUF repositories. Try a different name.')).toHaveCount(0);
 });
+
+test('complete-model services expose explicit repair without silently downloading companions', async ({ page }) => {
+  let downloads = 0;
+  await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete', 'true'));
+  await page.route('**/health', route => route.fulfill({ json: { status: 'healthy' } }));
+  await page.route('**/v1/users/me', route => route.fulfill({ json: { authenticated: false, user: null } }));
+  await page.route('**/api/v2/system', route => route.fulfill({ json: { product: 'offgrid', api_version: 2, capabilities: ['gguf-bundles-v1'] } }));
+  await page.route('**/v1/models', route => route.fulfill({ json: { data: [{ id: 'nemotron-fixture', object: 'model', type: 'llm' }] } }));
+  await page.route('**/v1/catalog', route => route.fulfill({ json: { models: [] } }));
+  await page.route('**/v1/models/download/progress', route => route.fulfill({ json: {} }));
+  await page.route('**/v1/search?*', route => route.fulfill({ json: { results: [{ id: 'fixture/vision', name: 'vision' }] } }));
+  await page.route('**/v1/search/files?*', route => route.fulfill({ json: { files: [{ id: 'nemotron-fixture', file: 'Nemotron-UD-Q4_K_XL.gguf', size_bytes: 5060482240, quant: 'Q4_K_XL', supported: true }] } }));
+  await page.route('**/v1/models/download', route => {
+    downloads++;
+    expect(route.request().postDataJSON()).toMatchObject({ repository: 'fixture/vision', model_id: 'nemotron-fixture', file_name: 'Nemotron-UD-Q4_K_XL.gguf' });
+    return route.fulfill({ json: { success: true } });
+  });
+  await page.goto('/ui/#/models');
+  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
+  const search = page.getByRole('region', { name: 'Find more models' });
+  await search.getByRole('searchbox').fill('vision');
+  await search.getByRole('button', { name: 'Search', exact: true }).click();
+  await search.getByRole('button', { name: 'Review download' }).click();
+  await expect(search.getByText(/Required vision files are included/)).toBeVisible();
+  await expect(search.getByRole('button', { name: 'Check and repair files' })).toBeVisible();
+  expect(downloads).toBe(0);
+  await search.getByRole('button', { name: 'Check and repair files' }).click();
+  await expect.poll(() => downloads).toBe(1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
