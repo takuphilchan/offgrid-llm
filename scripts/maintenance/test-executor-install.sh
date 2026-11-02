@@ -19,8 +19,18 @@ for bundle in bundle legacy; do
 done
 printf 'fixture worker\n' > "$fixture_root/bundle/execution-runtime/offgrid-executor"
 printf '{"version":"0.4.20"}\n' > "$fixture_root/bundle/execution-runtime/execution-pack.json"
+printf '#!/bin/sh\nexit 0\n' > "$fixture_root/bundle/offgrid-document-worker"
+printf 'fixture pdf notices\n' > "$fixture_root/bundle/document-NOTICE.txt"
+printf '#!/bin/sh\nexit 0\n' > "$fixture_root/bundle/offgrid-ocr-worker"
+printf 'fixture ocr notices\n' > "$fixture_root/bundle/ocr-NOTICE.txt"
 VERSION=v0.4.20
 install_cli "$fixture_root/bundle" linux
+cmp "$fixture_root/bundle/offgrid-document-worker" "$INSTALL_DIR/offgrid-document-worker"
+cmp "$fixture_root/bundle/document-NOTICE.txt" "$INSTALL_DIR/document-NOTICE.txt"
+test -x "$INSTALL_DIR/offgrid-document-worker"
+cmp "$fixture_root/bundle/offgrid-ocr-worker" "$INSTALL_DIR/offgrid-ocr-worker"
+cmp "$fixture_root/bundle/ocr-NOTICE.txt" "$INSTALL_DIR/ocr-NOTICE.txt"
+test -x "$INSTALL_DIR/offgrid-ocr-worker"
 cmp "$fixture_root/bundle/execution-runtime/offgrid-executor" "$INSTALL_DIR/execution-runtime/0.4.20/offgrid-executor"
 VERSION=v0.4.21
 install_cli "$fixture_root/bundle" linux

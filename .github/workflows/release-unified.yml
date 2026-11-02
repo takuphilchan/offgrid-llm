@@ -66,6 +66,12 @@ jobs:
           node .github/scripts/verify-release-ci.mjs "${GITHUB_REPOSITORY}" "$source_sha"
           echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
 
+  document-ocr-runtime:
+    needs: release-context
+    uses: ./.github/workflows/document-ocr-runtime.yml
+    with:
+      source_ref: ${{ needs.release-context.outputs.source_ref }}
+
   publish-containers:
     name: Publish and verify containers
     needs: [release-context, create-release]
@@ -175,7 +181,7 @@ jobs:
   build-bundles:
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: [release-context, create-release, build-ui]
+    needs: [release-context, create-release, build-ui, document-ocr-runtime]
     strategy:
       fail-fast: false
       matrix:
@@ -267,6 +273,11 @@ jobs:
         with:
           name: web-ui
           path: apps/web/dist
+
+      - name: Set up parser asset preparation
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -563,6 +574,13 @@ jobs:
             tar -xzf piper-archive
           fi
 
+      - name: Retrieve verified OCR build assets
+        if: steps.existing.outputs.skip != 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: ocr-runtime
+          path: runtimes/ocr/worker/assets/
+
       - name: Build offgrid binary
         if: steps.existing.outputs.skip != 'true'
         shell: bash
@@ -574,6 +592,10 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
           
+          node scripts/build/prepare-document-runtime.mjs
+          go -C runtimes/pdfium build -mod=readonly -trimpath -ldflags="-s -w" -o "$PWD/offgrid-document-worker${{ matrix.platform == 'windows' && '.exe' || '' }}" .
+          python scripts/build/prepare-ocr-runtime.py --assets runtimes/ocr/worker/assets
+          go -C runtimes/ocr/worker build -mod=readonly -trimpath -ldflags="-s -w" -o "$PWD/offgrid-ocr-worker${{ matrix.platform == 'windows' && '.exe' || '' }}" .
           go build \
             -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
             -o offgrid${{ matrix.platform == 'windows' && '.exe' || '' }} \
@@ -593,6 +615,10 @@ jobs:
           mkdir -p "$BUNDLE_NAME/audio/whisper"
           mkdir -p "$BUNDLE_NAME/audio/piper"
           cp -R execution-runtime "$BUNDLE_NAME/execution-runtime"
+          cp offgrid-document-worker${{ matrix.platform == 'windows' && '.exe' || '' }} "$BUNDLE_NAME/"
+          cp runtimes/pdfium/assets/NOTICE.txt "$BUNDLE_NAME/document-NOTICE.txt"
+          cp offgrid-ocr-worker${{ matrix.platform == 'windows' && '.exe' || '' }} "$BUNDLE_NAME/"
+          cp runtimes/ocr/worker/assets/NOTICE.txt "$BUNDLE_NAME/ocr-NOTICE.txt"
           
           # Copy main binaries
           if [ "${{ matrix.platform }}" = "windows" ]; then
@@ -648,8 +674,12 @@ jobs:
           
           # Install main binaries
           sudo cp "$SCRIPT_DIR/offgrid" /usr/local/bin/offgrid
+          sudo cp "$SCRIPT_DIR/offgrid-document-worker" /usr/local/bin/offgrid-document-worker
+          sudo cp "$SCRIPT_DIR/document-NOTICE.txt" /usr/local/bin/document-NOTICE.txt
+          sudo cp "$SCRIPT_DIR/offgrid-ocr-worker" /usr/local/bin/offgrid-ocr-worker
+          sudo cp "$SCRIPT_DIR/ocr-NOTICE.txt" /usr/local/bin/ocr-NOTICE.txt
           sudo cp "$SCRIPT_DIR/llama-server" /usr/local/bin/llama-server
-          sudo chmod +x /usr/local/bin/offgrid /usr/local/bin/llama-server
+          sudo chmod +x /usr/local/bin/offgrid /usr/local/bin/llama-server /usr/local/bin/offgrid-document-worker /usr/local/bin/offgrid-ocr-worker
           
           # Install audio components
           echo "Installing audio components..."
@@ -713,6 +743,10 @@ jobs:
           # Copy main binaries
           Copy-Item offgrid.exe C:\Program Files\OffGrid\
           Copy-Item llama-server.exe C:\Program Files\OffGrid\
+          Copy-Item offgrid-document-worker.exe C:\Program Files\OffGrid\
+          Copy-Item document-NOTICE.txt C:\Program Files\OffGrid\
+          Copy-Item offgrid-ocr-worker.exe C:\Program Files\OffGrid\
+          Copy-Item ocr-NOTICE.txt C:\Program Files\OffGrid\
           Copy-Item *.dll C:\Program Files\OffGrid\
           # Keep the app-local DLLs beside llama-server.exe.
           
@@ -770,12 +804,12 @@ jobs:
           # Create checksums (use shasum on macOS, sha256sum on Linux)
           cd "$BUNDLE_NAME"
           if [ "${{ matrix.platform }}" = "windows" ]; then
-            sha256sum offgrid.exe llama-server.exe ./*.dll runtime-dependencies.json > checksums.sha256 2>/dev/null || \
-              shasum -a 256 offgrid.exe llama-server.exe ./*.dll runtime-dependencies.json > checksums.sha256
+            sha256sum offgrid.exe llama-server.exe offgrid-document-worker.exe document-NOTICE.txt offgrid-ocr-worker.exe ocr-NOTICE.txt ./*.dll runtime-dependencies.json > checksums.sha256 2>/dev/null || \
+              shasum -a 256 offgrid.exe llama-server.exe offgrid-document-worker.exe document-NOTICE.txt offgrid-ocr-worker.exe ocr-NOTICE.txt ./*.dll runtime-dependencies.json > checksums.sha256
           elif [ "${{ matrix.platform }}" = "darwin" ]; then
-            shasum -a 256 offgrid llama-server > checksums.sha256
+            shasum -a 256 offgrid llama-server offgrid-document-worker document-NOTICE.txt offgrid-ocr-worker ocr-NOTICE.txt > checksums.sha256
           else
-            sha256sum offgrid llama-server > checksums.sha256
+            sha256sum offgrid llama-server offgrid-document-worker document-NOTICE.txt offgrid-ocr-worker ocr-NOTICE.txt > checksums.sha256
           fi
           cd ..
           
@@ -828,7 +862,7 @@ jobs:
   build-desktop:
     name: Build Desktop App (${{ matrix.os }})
     runs-on: ${{ matrix.runner }}
-    needs: [release-context, create-release, build-ui]
+    needs: [release-context, create-release, build-ui, document-ocr-runtime]
     strategy:
       fail-fast: false
       matrix:
@@ -913,6 +947,13 @@ jobs:
           echo "Verified all ${{ matrix.os }} desktop assets; skipping their rebuild"
           echo "skip=true" >> "${GITHUB_OUTPUT}"
 
+      - name: Retrieve verified OCR build assets
+        if: steps.existing.outputs.skip != 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: ocr-runtime
+          path: runtimes/ocr/worker/assets/
+
       - name: Build CLI binaries for bundling
         if: steps.existing.outputs.skip != 'true'
         shell: bash
@@ -921,6 +962,7 @@ jobs:
           BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
 
           mkdir -p build/linux build/macos build/windows
+          node scripts/build/prepare-document-runtime.mjs
 
           if [ "${{ matrix.os }}" = "linux" ]; then
             GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build \

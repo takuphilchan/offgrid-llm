@@ -14,6 +14,23 @@ in the [quality evidence](../../docs/quality/README.md).
 
 ## Development
 
+Prepare the pinned local PDF and OCR engines before packaging the desktop:
+
+```sh
+node scripts/build/prepare-document-runtime.mjs
+# Offline build alternative:
+node scripts/build/prepare-document-runtime.mjs --archive /path/to/pdfium-wasm.tgz
+python scripts/build/prepare-ocr-runtime.py --assets /path/to/verified-ocr-build
+```
+
+The build verifies archive/module/notice digests, builds the matching native Go
+workers and verifies both copied packages beside the service executable. This is a
+maintainer build step; installed users need neither Node, Go nor a PATH-based PDF
+utility. See [PDF runtime boundaries](../../runtimes/pdfium/README.md) for current
+qualification limits and [OCR build instructions](../../runtimes/ocr/README.md).
+The OCR engine and language data have separate readiness; packaging a worker does
+not silently install a language or qualify arbitrary scanned documents.
+
 ### Native agent workspace access (preview)
 
 With a matching service advertising `native-execution-preview-v1`, Chat can select

@@ -331,12 +331,9 @@ stop_running_processes() {
 }
 
 install_cli() {
-    local bundle_dir="$1"
-    local os="$2"
+    local bundle_dir="$1" os="$2" ext="" use_sudo=""
     if [ -d "$bundle_dir/execution-runtime" ]; then case "${VERSION#v}" in ''|*[!0-9A-Za-z.+-]*) spin_fail "Invalid executor version"; return 1 ;; esac; fi
-    local ext=""
     [ "$os" = "windows" ] && ext=".exe"
-    local use_sudo=""
     [ "$os" != "windows" ] && [ ! -w "$INSTALL_DIR" ] && use_sudo="sudo"
     if [ "$LEGACY_INSTALL" = "yes" ] && command -v systemctl >/dev/null 2>&1 && \
        systemctl is-active --quiet "offgrid@${USER}.service" 2>/dev/null; then
@@ -344,9 +341,13 @@ install_cli() {
     fi
     stop_running_processes
     spin "Installing CLI..."
-    if $use_sudo cp -f "$bundle_dir/offgrid${ext}" "$INSTALL_DIR/" 2>/dev/null && \
-       $use_sudo cp -f "$bundle_dir/llama-server${ext}" "$INSTALL_DIR/" 2>/dev/null; then
-        $use_sudo chmod +x "$INSTALL_DIR/offgrid${ext}" "$INSTALL_DIR/llama-server${ext}"
+    local binaries=("offgrid${ext}" "llama-server${ext}") files=() installed=() binary parser
+    for parser in document ocr; do
+        [ ! -f "$bundle_dir/offgrid-${parser}-worker${ext}" ] || { binaries+=("offgrid-${parser}-worker${ext}"); files+=("$bundle_dir/${parser}-NOTICE.txt"); }
+    done
+    files+=("${binaries[@]/#/$bundle_dir/}")
+    for binary in "${binaries[@]}"; do installed+=("$INSTALL_DIR/$binary"); done
+    if $use_sudo cp -f "${files[@]}" "$INSTALL_DIR/" && $use_sudo chmod +x "${installed[@]}"; then
         # Retain versioned assets for rollback; older bundles stay compatible.
         if [ -d "$bundle_dir/execution-runtime" ]; then
             $use_sudo mkdir -p "$INSTALL_DIR/execution-runtime/${VERSION#v}" &&
@@ -354,10 +355,9 @@ install_cli() {
         fi
         spin_done "CLI installed → $INSTALL_DIR/offgrid"
         return 0
-    else
-        spin_fail "Failed to install CLI"
-        return 1
     fi
+    spin_fail "Failed to install CLI"
+    return 1
 }
 
 setup_legacy_systemd() {

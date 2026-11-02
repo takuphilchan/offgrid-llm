@@ -14,6 +14,103 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  document-ocr-runtime:
+    uses: ./.github/workflows/document-ocr-runtime.yml
+
+  document-parser:
+    name: Isolated PDF worker (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: document-ocr-runtime
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: |
+            go.sum
+            runtimes/pdfium/go.sum
+            runtimes/ocr/worker/go.sum
+      - uses: actions/download-artifact@v7
+        with:
+          name: ocr-runtime
+          path: runtimes/ocr/worker/assets/
+      - name: Build pinned parser without native developer libraries
+        shell: bash
+        run: |
+          mkdir -p build
+          node scripts/build/prepare-document-runtime.mjs
+          node --test scripts/build/prepare-document-runtime.test.mjs
+          python scripts/build/prepare-ocr-runtime.py --assets runtimes/ocr/worker/assets
+          go -C runtimes/pdfium test -mod=readonly -count=1
+          go -C runtimes/pdfium build -mod=readonly -trimpath -o ../../build/offgrid-document-worker.exe .
+          go -C runtimes/ocr/worker test -mod=readonly -count=1
+          go -C runtimes/ocr/worker build -mod=readonly -trimpath -o ../../../build/offgrid-ocr-worker.exe .
+      - name: Acquire digest-verified language fixture for isolated tests
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 --output build/eng.traineddata https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata
+          python -c "import hashlib,pathlib; assert hashlib.sha256(pathlib.Path('build/eng.traineddata').read_bytes()).hexdigest() == '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2'"
+      - name: Verify real document corpus and owned worker cancellation
+        shell: bash
+        env:
+          OFFGRID_TEST_DOCUMENT_WORKER: ${{ github.workspace }}/build/offgrid-document-worker.exe
+          OFFGRID_TEST_OCR_WORKER: ${{ github.workspace }}/build/offgrid-ocr-worker.exe
+          OFFGRID_TEST_OCR_LANGUAGE: ${{ github.workspace }}/build/eng.traineddata
+        run: go test ./internal/rag -run 'TestParser' -count=1 -timeout 10m
+      - name: Verify app-local discovery and authenticated CLI document flow
+        shell: bash
+        env:
+          OFFGRID_TEST_PACKAGED_DOCUMENTS: '1'
+          OFFGRID_TEST_OCR_LANGUAGE: ${{ github.workspace }}/build/eng.traineddata
+        run: |
+          mkdir -p build/document-contract
+          worker=offgrid-document-worker
+          if [ "$RUNNER_OS" = Windows ]; then worker="$worker.exe"; fi
+          cp build/offgrid-document-worker.exe "build/document-contract/$worker"
+          ocr_worker=offgrid-ocr-worker
+          if [ "$RUNNER_OS" = Windows ]; then ocr_worker="$ocr_worker.exe"; fi
+          cp build/offgrid-ocr-worker.exe "build/document-contract/$ocr_worker"
+          go test -c ./internal/server -o build/document-contract/server.test.exe
+          cd internal/server
+          ../../build/document-contract/server.test.exe -test.run '^TestPackaged(DocumentCLIAndSessionContract|PartialImportReview)$' -test.v -test.timeout 5m
+      - name: Verify partial PDF review with the real service and built renderer
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          OFFGRID_E2E_DOCUMENT_WORKERS: '1'
+        run: |
+          npm --prefix apps/web ci
+          npm --prefix apps/web run build
+          (cd apps/web && npx playwright install --with-deps chromium)
+          go build -o build/document-contract/offgrid ./cmd/offgrid
+          node scripts/test/test-web-workspace.mjs build/document-contract/offgrid tests/knowledge-partial.spec.ts tests/knowledge-recovery.spec.ts --workers=1
+
+  document-container:
+    name: Offline packaged PDF and OCR corpus
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build dependency-free parser image
+        run: docker build --target document-worker-check -f docker/Dockerfile -t offgrid-pdf-check .
+      - name: Verify PDFs with no host tools, network or writable filesystem
+        run: python3 scripts/test/verify-pdf-container.py --image offgrid-pdf-check
+      - name: Build isolated OCR image and prepare explicit language fixture
+        run: |
+          docker build --target ocr-worker-check -f docker/Dockerfile -t offgrid-ocr-check .
+          mkdir -p build
+          curl --fail --location --max-filesize 33554432 --retry 3 --output build/eng.traineddata https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata
+      - name: Verify raster and OCR without host tools, network or writable filesystem
+        run: python3 scripts/test/verify-ocr-container.py --pdf-image offgrid-pdf-check --ocr-image offgrid-ocr-check --language build/eng.traineddata
+
   windows-worker-package:
     name: Windows worker dependency packaging
     runs-on: windows-latest
@@ -67,7 +164,7 @@ jobs:
       - name: Test client and worker protocol without a live service
         env:
           PYTHONPATH: sdk/python
-        run: python -m pytest -q sdk/python/tests/test_client.py runtimes/python/tests
+        run: python -m pytest -q sdk/python/tests runtimes/python/tests
       - name: Test external provider catalog without network or installed agents
         run: python -m unittest scripts/test/test_hermes_provider.py scripts/test/test_external_model_matrix.py scripts/test/test_external_agent_oracle.py scripts/test/test_external_agent_fixture.py scripts/test/test_tool_result_fidelity.py scripts/test/test_verification_hooks.py
       - name: Build and verify public client wheel
@@ -81,6 +178,7 @@ jobs:
 
   test:
     name: Go, contract, UI, and desktop
+    needs: document-ocr-runtime
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -217,6 +315,15 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Retrieve verified OCR build assets
+        uses: actions/download-artifact@v7
+        with:
+          name: ocr-runtime
+          path: runtimes/ocr/worker/assets/
+
+      - name: Prepare pinned desktop document assets
+        run: node scripts/build/prepare-document-runtime.mjs
+
       - name: Validate Electron package
         working-directory: apps/desktop
         run: |
@@ -264,6 +371,7 @@ jobs:
 
   native-contracts:
     name: Native client and storage (${{ matrix.os }})
+    needs: document-ocr-runtime
     strategy:
       fail-fast: false
       matrix:
@@ -294,6 +402,15 @@ jobs:
       - name: Test desktop compatibility and IPC trust policy
         working-directory: apps/desktop
         run: npm test
+
+      - name: Retrieve verified OCR build assets
+        uses: actions/download-artifact@v7
+        with:
+          name: ocr-runtime
+          path: runtimes/ocr/worker/assets/
+
+      - name: Prepare pinned desktop document assets
+        run: node scripts/build/prepare-document-runtime.mjs
 
       - name: Build the shared renderer and matching native runtime
         shell: bash
@@ -328,6 +445,7 @@ jobs:
             node ../../scripts/test/test-packaged-browser.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
             node ../../scripts/test/test-desktop-theme.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
             node ../../scripts/test/test-desktop-access.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
+              node ../../scripts/test/test-desktop-terminal-packaged.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
           else
             arch=$(node -p process.arch)
             npx electron-builder --dir --mac "--$arch" --publish never

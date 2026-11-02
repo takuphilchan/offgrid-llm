@@ -79,6 +79,20 @@
     ],
     "extraResources": [
       {
+        "from": "../../build/document-runtime/${os}-${arch}",
+        "to": "bin",
+        "filter": [
+          "offgrid-document-worker",
+          "offgrid-document-worker.exe",
+          "document-NOTICE.txt",
+          "document-pack.json",
+          "offgrid-ocr-worker",
+          "offgrid-ocr-worker.exe",
+          "ocr-NOTICE.txt",
+          "ocr-pack.json"
+        ]
+      },
+      {
         "from": "../../build/execution-runtime/${os}-${arch}",
         "to": "execution-runtime"
       },

@@ -3,6 +3,7 @@
 const path=require('node:path');
 const {verifyPack}=require('../computer/pack.cjs');
 module.exports=async context=>{
+ await require('./document-pack.cjs').verify(path.join(context.packager.getResourcesDir(context.appOutDir),'bin'),context.electronPlatformName,require('builder-util').Arch[context.arch]);
  await require('./terminal-pack.cjs').verify(path.join(context.packager.getResourcesDir(context.appOutDir),'terminal-runtime'),require('./package.json').version,context.electronPlatformName,require('builder-util').Arch[context.arch]);
  const executionRoot=path.join(context.packager.getResourcesDir(context.appOutDir),'execution-runtime');
  await require('./execution-pack.cjs').verify(executionRoot,require('./package.json').version,context.electronPlatformName,require('builder-util').Arch[context.arch]);

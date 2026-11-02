@@ -69,6 +69,15 @@ docs/
 
 # Scripts (not needed in container)
 scripts/
+!scripts/
+scripts/*
+!scripts/build/
+scripts/build/*
+!scripts/build/prepare-document-runtime.mjs
+!scripts/build/prepare-ocr-runtime.py
+!scripts/build/build-ocr-runtime.py
+runtimes/pdfium/assets/
+runtimes/ocr/worker/assets/
 
 # Config examples (use volume mounts instead)
 config.yaml

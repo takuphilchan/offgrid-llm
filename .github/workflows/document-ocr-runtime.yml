@@ -1,0 +1,40 @@
+name: Pinned OCR build assets
+
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install isolated builder dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build
+      - name: Build reviewed engine from digest-pinned sources
+        run: python scripts/build/prepare-ocr-runtime.py --build-from-source "$RUNNER_TEMP/offgrid-ocr-build"
+      - name: Verify offline staging and tamper rejection
+        run: |
+          python scripts/test/test-ocr-build.py
+          python scripts/test/test-ocr-preparation.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ocr-runtime
+          path: runtimes/ocr/worker/assets/
+          if-no-files-found: error
+          retention-days: 7

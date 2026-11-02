@@ -130,6 +130,16 @@ try {
         
         Print-Step "Installing to $INSTALL_DIR..."
         Copy-Item $CLI_PATH "$INSTALL_DIR\offgrid.exe" -Force
+        $documentRuntime = Join-Path (Split-Path -Parent $CLI_PATH) 'offgrid-document-worker.exe'
+        if (Test-Path -LiteralPath $documentRuntime) {
+            Copy-Item -LiteralPath $documentRuntime -Destination $INSTALL_DIR -Force -ErrorAction Stop
+            Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $CLI_PATH) 'document-NOTICE.txt') -Destination $INSTALL_DIR -Force -ErrorAction Stop
+        }
+        $ocrRuntime = Join-Path (Split-Path -Parent $CLI_PATH) 'offgrid-ocr-worker.exe'
+        if (Test-Path -LiteralPath $ocrRuntime) {
+            Copy-Item -LiteralPath $ocrRuntime -Destination $INSTALL_DIR -Force -ErrorAction Stop
+            Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $CLI_PATH) 'ocr-NOTICE.txt') -Destination $INSTALL_DIR -Force -ErrorAction Stop
+        }
         
         # Add to PATH
         $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")

@@ -194,6 +194,16 @@ if [ "$INSTALL_CLI" = true ]; then
         sudo chmod +x /usr/local/bin/offgrid /usr/local/bin/llama-server 2>/dev/null || true
     fi
     
+    for parser in document ocr; do
+    DOCUMENT_RUNTIME="$(dirname "$OFFGRID_BIN")/offgrid-${parser}-worker"
+    if [ -f "$DOCUMENT_RUNTIME" ]; then
+        if [ "$EUID" -eq 0 ]; then
+            cp "$DOCUMENT_RUNTIME" /usr/local/bin/ && cp "$(dirname "$OFFGRID_BIN")/${parser}-NOTICE.txt" /usr/local/bin/ && chmod +x "/usr/local/bin/offgrid-${parser}-worker" || exit 1
+        else
+            sudo cp "$DOCUMENT_RUNTIME" /usr/local/bin/ && sudo cp "$(dirname "$OFFGRID_BIN")/${parser}-NOTICE.txt" /usr/local/bin/ && sudo chmod +x "/usr/local/bin/offgrid-${parser}-worker" || exit 1
+        fi
+    fi
+    done
     print_success "CLI binaries installed"
     
     # Install audio components (whisper.cpp and piper)

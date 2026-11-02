@@ -2,6 +2,9 @@
 # Multi-stage build for optimized image size
 # Build from project root: docker build -f docker/Dockerfile -t offgrid-llm .
 
+# The pinned Emscripten compiler is Linux x64; its WASM output is portable.
+ARG OCR_BUILD_PLATFORM=linux/amd64
+
 # =============================================================================
 # Stage 1: Build the web application
 # =============================================================================
@@ -19,6 +22,21 @@ RUN set -eu; \
 COPY apps/web/ ./
 COPY apps/desktop/compatibility.cjs /build/apps/desktop/compatibility.cjs
 RUN npm run build
+
+# Pinned parser assets are acquired only while building, never on import.
+FROM node:22-alpine AS document-assets
+WORKDIR /build
+COPY runtimes/pdfium/engine.lock.json /build/runtimes/pdfium/engine.lock.json
+COPY scripts/build/prepare-document-runtime.mjs /build/scripts/build/prepare-document-runtime.mjs
+RUN node scripts/build/prepare-document-runtime.mjs
+
+# OCR source compilation is a maintainer build step, never a user prerequisite.
+FROM --platform=${OCR_BUILD_PLATFORM} python:3.13-bookworm AS ocr-assets
+RUN apt-get update && apt-get install -y --no-install-recommends cmake ninja-build nodejs && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY runtimes/ocr/engine.lock.json runtimes/ocr/source.lock.json runtimes/ocr/bridge.cpp ./runtimes/ocr/
+COPY scripts/build/prepare-ocr-runtime.py scripts/build/build-ocr-runtime.py ./scripts/build/
+RUN python scripts/build/prepare-ocr-runtime.py --build-from-source /opt/ocr-build
 
 # =============================================================================
 # Stage 2: Build the Go binary
@@ -44,6 +62,12 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 COPY tools/executor-pack/ ./tools/executor-pack/
+COPY runtimes/pdfium/ ./runtimes/pdfium/
+COPY --from=document-assets /build/runtimes/pdfium/assets/ ./runtimes/pdfium/assets/
+RUN CGO_ENABLED=0 GOOS=linux go -C runtimes/pdfium build -mod=readonly -trimpath -ldflags="-s -w" -o /build/offgrid-document-worker .
+COPY runtimes/ocr/worker/ ./runtimes/ocr/worker/
+COPY --from=ocr-assets /build/runtimes/ocr/worker/assets/ ./runtimes/ocr/worker/assets/
+RUN CGO_ENABLED=0 GOOS=linux go -C runtimes/ocr/worker build -mod=readonly -trimpath -ldflags="-s -w" -o /build/offgrid-ocr-worker .
 
 ARG VERSION=dev
 ARG VCS_REF=unknown
@@ -54,6 +78,17 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 	-o offgrid ./cmd/offgrid/
 RUN go run ./tools/executor-pack --output /build/execution-runtime --version "${VERSION}"
 
+# Dependency-free parser qualification target; no shell, network client or fonts.
+FROM scratch AS document-worker-check
+COPY --from=go-builder /build/offgrid-document-worker /offgrid-document-worker
+COPY --from=document-assets /build/runtimes/pdfium/assets/NOTICE.txt /document-NOTICE.txt
+ENTRYPOINT ["/offgrid-document-worker"]
+
+FROM scratch AS ocr-worker-check
+COPY --from=go-builder /build/offgrid-ocr-worker /offgrid-ocr-worker
+COPY --from=ocr-assets /build/runtimes/ocr/worker/assets/NOTICE.txt /ocr-NOTICE.txt
+ENTRYPOINT ["/offgrid-ocr-worker"]
+
 # =============================================================================
 # Optional target for local application/UI refreshes without rebuilding llama.cpp.
 # docker build --target application-artifacts -f docker/Dockerfile ...
@@ -61,6 +96,10 @@ RUN go run ./tools/executor-pack --output /build/execution-runtime --version "${
 # =============================================================================
 FROM alpine:3.24 AS application-artifacts
 COPY --from=go-builder /build/offgrid /usr/local/bin/offgrid
+COPY --from=go-builder /build/offgrid-ocr-worker /usr/local/bin/offgrid-ocr-worker
+COPY --from=ocr-assets /build/runtimes/ocr/worker/assets/NOTICE.txt /usr/local/share/offgrid/ocr-NOTICE.txt
+COPY --from=go-builder /build/offgrid-document-worker /usr/local/bin/offgrid-document-worker
+COPY --from=document-assets /build/runtimes/pdfium/assets/NOTICE.txt /usr/local/share/offgrid/document-NOTICE.txt
 COPY --from=go-builder /build/execution-runtime /usr/local/bin/execution-runtime
 COPY --from=ui-builder /build/apps/web/dist/ /var/lib/offgrid/web/ui/
 
@@ -140,6 +179,10 @@ RUN mkdir -p /var/lib/offgrid/models \
 COPY --from=go-builder /build/offgrid /usr/local/bin/offgrid
 COPY --from=go-builder /build/execution-runtime /usr/local/bin/execution-runtime
 COPY --from=llama-builder /build/llama.cpp/build/bin/llama-server /var/lib/offgrid/bin/llama-server
+COPY --from=go-builder /build/offgrid-ocr-worker /usr/local/bin/offgrid-ocr-worker
+COPY --from=ocr-assets /build/runtimes/ocr/worker/assets/NOTICE.txt /usr/local/share/offgrid/ocr-NOTICE.txt
+COPY --from=go-builder /build/offgrid-document-worker /usr/local/bin/offgrid-document-worker
+COPY --from=document-assets /build/runtimes/pdfium/assets/NOTICE.txt /usr/local/share/offgrid/document-NOTICE.txt
 
 RUN chmod +x /usr/local/bin/offgrid /var/lib/offgrid/bin/llama-server
 
