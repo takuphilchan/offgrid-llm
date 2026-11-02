@@ -1,5 +1,6 @@
 @layer controls {
   .model-select { min-width: 0; max-width: 100%; }
+  .profile-basics .model-select { max-width: 28rem; }
   .model-select > .utility-popover { min-width: 0; width: 100%; }
   .model-select-trigger { min-width: 0; width: 100%; max-width: 100%; gap: 8px; }
   .model-select-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

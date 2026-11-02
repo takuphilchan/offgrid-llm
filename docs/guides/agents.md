@@ -88,8 +88,16 @@ cancel/timeout and incomplete output; a start receipt is not proof of completion
 ### Profile selection
 
 On services advertising agent profiles and conversations, **Agents** is the
-profile library. Create an agent, choose an installed model and instructions,
-then select the Knowledge and tools it may use. **Use in Chat** selects the
+profile library. Create an agent with a name and purpose. A new draft suggests
+your current eligible installed chat model, then a loaded eligible model, then
+another eligible installed model. This does not load a model or change an
+existing profile. You can change the suggestion before saving.
+
+**Tools and context** is optional: open it to attach Knowledge, tools, skills or
+collaborators, or allow requests for computer access. Existing attachments stay
+visible when reviewing a saved profile. **Advanced** contains the description,
+decision budget, workspace limits and runtime details. No resource access is
+granted by a suggested model or an example purpose. **Use in Chat** selects the
 saved revision. You can also select it from Chat's **Agent** control. Selecting
 **No agent** returns future messages to ordinary Chat.
 

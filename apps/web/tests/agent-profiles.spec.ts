@@ -103,6 +103,7 @@ test('profile creation, revision editing, duplication and archive do not execute
   await editor.getByRole('button', { name: 'Model', exact: true }).click();
   await editor.getByRole('option').filter({ hasText: model }).click();
   await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('Use short paragraphs. Cite supporting documents.');
+  await editor.locator('.profile-resource-settings > summary').click();
   await editor.locator('.profile-capability > summary').filter({hasText:agentProfilesText.en.tools}).click();
   await expect(editor.getByRole('checkbox', { name: /read_docs/ })).toBeVisible();
   await editor.getByRole('checkbox', { name: /read_docs/ }).check();
@@ -115,6 +116,7 @@ test('profile creation, revision editing, duplication and archive do not execute
   await editor.getByRole('button', { name: 'Save agent', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Agent saved' })).toBeVisible();
   expect(f.mutations[0].body.settings).toMatchObject({ name: 'Writing assistant', model, knowledge: ['doc-one'], delegates: ['Researcher'], tools: [{ provider:'docs-connection', tool:'read_docs', schema_revision:'schema-1', location:'remote' }] });
+  await editor.locator('.profile-advanced > summary').click();
   await editor.getByRole('textbox', { name: 'Description', exact: true }).fill('Draft with evidence');
   await editor.getByRole('button', { name: 'Save agent', exact: true }).click();
   await expect(editor).toContainText('Revision 2');
@@ -135,6 +137,7 @@ test('Enter in model search cannot submit the enclosing profile form', async ({ 
   const f = await fixture(page);
   await page.goto('/ui/#/agents/profiles');
   await page.getByRole('button', { name: /Researcher/ }).click();
+  await page.locator('.profile-advanced > summary').click();
   await page.getByRole('textbox', { name: 'Description', exact: true }).fill('An unsaved change');
   await page.getByRole('button', { name: 'Model', exact: true }).click();
   await page.getByRole('searchbox', { name: 'Filter installed models' }).fill(model);
@@ -156,7 +159,8 @@ test('purpose examples edit only instructions and hand off the explicitly saved 
   await expect(instructions).toBeFocused();
   await expect(instructions).toHaveValue(/unless I explicitly ask you to save or publish/);
   await expect(page.getByRole('group', { name: 'Start from an example' })).toHaveCount(0);
-  await expect(page.getByRole('checkbox', { name: /Computer use/ })).not.toBeChecked();
+  await expect(page.locator('.profile-resource-settings')).not.toHaveAttribute('open');
+  await expect(page.locator('.profile-resource-settings input[type=checkbox]')).toHaveCount(0);
   expect(f.mutations).toEqual([]);
   await instructions.fill('My reviewed writing instructions.');
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Demo writer');

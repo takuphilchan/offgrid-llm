@@ -59,6 +59,7 @@ async function fixture(page:Page,locale:LocaleCode='en') {
     return route.fulfill({json:data});
   });
   await page.goto('/ui/#/agents/profiles');await page.getByRole('button',{name:/Writer/}).click();
+  await page.locator('.profile-resource-settings > summary').click();
   await page.locator('.profile-advanced > summary').click();return {writes};
 }
 

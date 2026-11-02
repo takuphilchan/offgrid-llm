@@ -13,20 +13,20 @@
   .profile-list-item[aria-current="true"] { background: var(--surface-2); border-color: var(--line-strong); }
   .profile-list-item span { color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui); }
   .profile-list-item :is(strong, span) { overflow-wrap: anywhere; }
-  .profile-editor { display: grid; gap: 1.5rem; padding: 0; background: transparent; border: 0; }
+  .profile-editor { display: grid; gap: 1.5rem; padding: 0; background: transparent; border: 0; width: 100%; max-width: 44rem; }
   .profile-editor header { display: flex; gap: .75rem; align-items: baseline; flex-wrap: wrap; }
   .profile-editor h3 { margin: 0; font-size: 1.1rem; }
   .profile-editor :is(small, .profile-hint) { color: var(--muted); }
   .profile-fields { display: grid; gap: 1rem; padding: 0; border: 0; min-width: 0; margin: 0; }
   .profile-basics { display: grid; gap: 16px; align-content: start; min-width: 0; }
-  .profile-identity { display: grid; gap: 16px; padding-block-end: 20px; border-block-end: 1px solid var(--line); min-width: 0; }
+  .profile-identity { display: grid; gap: 16px; min-width: 0; }
   .profile-identity > label { display: grid; gap: 8px; font-size: .875rem; }
   .agent-purpose { display: grid; gap: 12px; min-width: 0; }
   .agent-purpose h4 { margin: 0; font-size: var(--type-body); font-weight: var(--weight-heading); line-height: 1.5; }
   .agent-purpose label { display: grid; gap: 8px; font-size: .875rem; }
   .agent-purpose-examples { display: flex; flex-wrap: wrap; gap: 8px; }
   .profile-basics > label, .profile-advanced > label { display: grid; gap: .5rem; font-size: .875rem; }
-  .profile-basics .model-select { display: grid; gap: 8px; padding: 0; border: 0; background: none; }
+  .profile-basics .model-select { display: grid; gap: 8px; padding: 0; border: 0; background: none; width: 100%; justify-self: start; }
   .profile-capability { border-block-start: 1px solid var(--line); }
   .profile-capability > summary { cursor: pointer; padding-block: 12px; font-size: var(--type-body); line-height: 1.5; }
   .profile-capability-count { float: inline-end; color: var(--muted); font-variant-numeric: tabular-nums; padding-inline: 8px; }
@@ -36,7 +36,6 @@
   .profile-fields :is(input:not([type="checkbox"]), textarea, select), .profile-library-list input { width: 100%; min-width: 0; }
   .profile-fields textarea { resize: vertical; min-height: 8rem; }
   .profile-fields .profile-hint { margin: 0; }
-  .profile-fields .model-select { max-width: none; }
   .profile-resources { min-width: 0; padding: 1rem 0 0; margin: 0; border: 0; border-block-start: 1px solid var(--line); }
   .profile-resources legend { padding-inline: 0 .5rem; font-size: .875rem; font-weight: 600; }
   .profile-resources details { margin-block-start: 1rem; }
@@ -47,6 +46,10 @@
   .profile-option small { display: block; line-height: 1.5; margin-block-start: .2rem; }
   .profile-advanced > :not(summary) { margin-block-start: 1rem; }
   .profile-advanced > label { max-width: 12rem; }
+  .profile-advanced > .profile-description { max-width: none; }
+  .profile-resource-settings, .profile-advanced { min-width: 0; }
+  .profile-resource-settings > summary, .profile-advanced > summary { cursor: pointer; padding-block: 12px; font-size: var(--type-body); }
+  .profile-resource-settings > .profile-resources { padding-block-start: 12px; border-block-start: 0; }
   .profile-execution-policy { display: grid; gap: .75rem; min-width: 0; margin: 0; padding: 0; border: 0; }
   .profile-execution-policy > label:not(.profile-option) { display: grid; gap: .5rem; font-size: .875rem; }
   .profile-execution-policy > p { margin: 0; }
@@ -62,11 +65,10 @@
   .profile-empty { display: grid; place-items: center; min-height: 15rem; color: var(--muted); text-align: center; padding: 2rem; }
   @container (min-width: 960px) {
     .profile-library-layout { grid-template-columns: 240px minmax(0, 1fr); gap: 32px; }
-    .profile-fields { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); column-gap: 28px; align-items: start; }
-    .profile-fields > .profile-resources { padding-block-start: 0; border-block-start: 0; }
-    .profile-advanced { grid-column: 1; }
-    .profile-fields > .profile-resources { grid-column: 2; grid-row: 1 / 3; }
+    .profile-resource-settings[open] .profile-resources { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-items: start; }
+    .profile-resource-settings .profile-option { grid-column: 1 / -1; }
   }
+  .profile-library-layout.profile-library-empty { grid-template-columns: minmax(0, 1fr); }
   @media (max-width: 720px) {
     .profile-library-layout { grid-template-columns: minmax(0, 1fr); }
     .profile-library-list ul { max-height: 12rem; }

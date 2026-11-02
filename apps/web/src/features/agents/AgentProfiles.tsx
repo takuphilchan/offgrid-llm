@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { APIError, api, type AgentProfile, type AgentProfileSettings, type AgentCapabilityIdentity, type Document, type EffectiveAgentProfile, type Model } from '../../api/client';
+import { APIError, api, type AgentProfile, type AgentProfileSettings, type AgentCapabilityIdentity, type EffectiveAgentProfile, type Model } from '../../api/client';
 import { ModelSelect } from '../../components/ModelSelect';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { SearchField } from '../../components/SearchField';
@@ -15,19 +15,24 @@ import { ExecutionPolicy } from './ExecutionPolicy';
 import { AgentContextResources } from './AgentContextResources';
 import { AgentPurpose } from './AgentPurpose';
 import { ProfileCapability } from './ProfileCapability';
+import { ProfileResources } from './ProfileResources';
+import { supportsChat } from '../../api/model-capabilities';
+import { useProfileResources } from './useProfileResources';
 
-type Draft = { original: AgentProfile | null; settings: AgentProfileSettings };
-type Resources = Awaited<ReturnType<typeof api.agentProfileResources>>;
-const fresh = (): Draft => ({ original: null, settings: { name: '', model: '', max_iterations: 10, tools: [], knowledge: [], delegates: [], computer: false } });
+type Draft = { original: AgentProfile | null; settings: AgentProfileSettings; initial?: AgentProfileSettings };
+const fresh = (model = ''): Draft => {
+  const settings = { name: '', model, max_iterations: 10, tools: [], knowledge: [], delegates: [], computer: false };
+  return { original: null, settings, initial: settings };
+};
 const toolKey = (tool: NonNullable<AgentProfileSettings['tools']>[number]) => JSON.stringify([tool.provider, tool.tool, tool.schema_revision, tool.location]);
 const reference = (tool: AgentCapabilityIdentity): NonNullable<AgentProfileSettings['tools']>[number] => ({ provider: tool.source, tool: tool.name, schema_revision: tool.revision, location: tool.location });
 
-export function AgentProfiles({ models }: { models: Model[] }) {
+export function AgentProfiles({ models, preferredModel = '' }: { models: Model[]; preferredModel?: string }) {
   const { locale, messages } = useI18n(), copy = agentProfilesText[locale];
   const { knowledge: knowledgePermitted,scope,workspace } = useWorkspace();
   const [profiles, setProfiles] = useState<AgentProfile[]>([]);
-  const [resources, setResources] = useState<Resources>();
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const resourceState = useProfileResources(knowledgePermitted, messages.common.error);
+  const { resources, documents } = resourceState;
   const [draft, setDraft] = useWorkspaceState<Draft | null>('agent.profileDraft', null);
   const [, setChatAgent] = useWorkspaceState<AgentProfile | null>('chat.agent', null);
   const [query, setQuery] = useWorkspaceState('agent.profileQuery', '');
@@ -38,17 +43,18 @@ export function AgentProfiles({ models }: { models: Model[] }) {
   const [discardTo, setDiscardTo] = useState<Draft | null>(null);
   const [archiving, setArchiving] = useState<AgentProfile | null>(null);
   const generation = useRef(0), lock = useRef(false), heading = useRef<HTMLHeadingElement>(null);
-  const dirty = !!draft && JSON.stringify(draft.settings) !== JSON.stringify(draft.original?.settings ?? fresh().settings);
+  const dirty = !!draft && JSON.stringify(draft.settings) !== JSON.stringify(draft.original?.settings ?? draft.initial ?? fresh().settings);
+  const eligible = models.filter(model => supportsChat(model) && model.runtime_ready !== false);
+  // Suggest only at explicit new-draft creation. Reloads, model inventory changes
+  // and saved-profile edits never replace the user's choice or load a model.
+  const suggestedModel = eligible.find(model => model.id === preferredModel)?.id || eligible.find(model => model.loaded)?.id || eligible[0]?.id || '';
   const refresh = async () => {
     const current = ++generation.current;
     setLoading(true);
-    const results = await Promise.allSettled([api.agentProfiles(), api.agentProfileResources(), knowledgePermitted ? api.documents() : Promise.resolve({ documents: [] })]);
+    const [result] = await Promise.allSettled([api.agentProfiles(), resourceState.refresh()]);
     if (current !== generation.current) return;
-    if (results[0].status === 'fulfilled') setProfiles(results[0].value);
-    if (results[1].status === 'fulfilled') setResources(results[1].value);
-    if (results[2].status === 'fulfilled') setDocuments(results[2].value.documents);
-    const failed = results.find(result => result.status === 'rejected');
-    setError(failed?.status === 'rejected' ? (failed.reason instanceof Error ? failed.reason.message : messages.common.error) : '');
+    if (result.status === 'fulfilled') setProfiles(result.value);
+    setError(result.status === 'rejected' ? (result.reason instanceof Error ? result.reason.message : messages.common.error) : '');
     setLoading(false);
   };
   useEffect(() => { void refresh(); return () => { generation.current++; }; }, [knowledgePermitted]);
@@ -109,17 +115,17 @@ export function AgentProfiles({ models }: { models: Model[] }) {
   const providerCopy = modelProviderDetails(locale);
   const visibleProfiles = profiles.filter(item => `${item.settings.name} ${item.settings.description ?? ''}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
   return <section className="agent-profiles" aria-label={copy.profiles}>
-    <header className="profile-library-header"><div><h2>{copy.profiles}</h2><p>{messages.guidance.profiles}</p></div><button type="button" className="primary-button" disabled={busy} onClick={() => choose(fresh())}>{copy.create}</button></header>
+    <header className="profile-library-header"><div><h2>{copy.profiles}</h2><p>{messages.guidance.profiles}</p></div><button type="button" className="primary-button" disabled={busy} onClick={() => choose(fresh(suggestedModel))}>{copy.create}</button></header>
     {error && <div className="inline-error" role="alert"><p>{error}</p>{!conflict && <button type="button" className="secondary-button" onClick={() => void refresh()} disabled={loading || busy}>{messages.common.refresh}</button>}</div>}
     {notice && <p role="status">{notice}</p>}
-    <div className="profile-library-layout">
-      <aside className="profile-library-list"><SearchField id="agent-profile-search" className="profile-search" label={copy.search} value={query} onChange={setQuery} />
+    <div className={`profile-library-layout${profiles.length ? '' : ' profile-library-empty'}`}>
+      {(profiles.length > 0 || loading) && <aside className="profile-library-list"><SearchField id="agent-profile-search" className="profile-search" label={copy.search} value={query} onChange={setQuery} />
         {loading && <p role="status">{messages.common.loading}</p>}
         {profiles.length > 0 && !visibleProfiles.length && <EmptyState title={messages.history.noMatches} action={<button type="button" className="text-button" onClick={() => { setQuery(''); document.getElementById('agent-profile-search')?.focus(); }}>{workspaceRefinement[locale].clear}</button>} />}
         <ul>{visibleProfiles.map(item => <li key={item.id}>
           <button type="button" className="profile-list-item" aria-current={draft?.original?.id === item.id ? 'true' : undefined} disabled={busy} onClick={() => choose({ original: item, settings: item.settings })}><strong>{item.settings.name}</strong><span>{item.settings.description || item.settings.model}</span></button>
         </li>)}</ul>
-      </aside>
+      </aside>}
       {draft ? <form className="profile-editor" onSubmit={event => { event.preventDefault(); void save(); }}>
         <header><h3 ref={heading} tabIndex={-1}>{draft.original ? copy.edit : copy.create}</h3>{draft.original && <small>{copy.revision.replace('{revision}', String(draft.original.revision))}</small>}</header>
         {issues.length > 0 && <section className="profile-issues" aria-label={copy.review}><h4>{copy.review}</h4><ul>{issues.map((issue, index) => <li key={`${issue.code}:${issue.reference}:${index}`}><strong>{issue.reference}</strong>: {issue.message}</li>)}</ul></section>}
@@ -128,14 +134,14 @@ export function AgentProfiles({ models }: { models: Model[] }) {
           <div className="profile-basics">
           <div className="profile-identity">
           <label>{copy.name}<input required value={draft.settings.name} maxLength={128} onChange={event => update({ name: event.target.value })} /></label>
-          <label>{copy.description}<input value={draft.settings.description ?? ''} maxLength={512} onChange={event => update({ description: event.target.value })} /></label>
-          <ModelSelect models={models} value={draft.settings.model} onChange={model => update({ model })} />
-          {selectedModel && <p className="profile-hint" role="status">{[selectedModel.engine || 'llama_cpp', selectedModel.format, selectedModel.backend].filter(Boolean).join(' · ')}{selectedModel.context_window ? ` · ${providerCopy.context}: ${selectedModel.context_window.toLocaleString(locale)}` : ''} · {providerCopy.qualified}: {selectedModel.qualified ? providerCopy.yes : providerCopy.unmeasured}</p>}
-          {modelMissing && <p role="status">{draft.settings.model}: {copy.modelMissing}</p>}
           </div>
           <AgentPurpose value={draft.settings.instructions ?? ''} onChange={instructions => update({ instructions })} />
+          <ModelSelect models={models} value={draft.settings.model} onChange={model => update({ model })} />
+          {modelMissing && <p role="status">{draft.settings.model}: {copy.modelMissing}</p>}
           </div>
-          <fieldset className="profile-resources"><legend>{copy.resources}</legend>
+          <ProfileResources key={`${draft.original?.id ?? 'new'}-resources`} title={copy.resources} onOpen={() => void resourceState.load()} count={selectedTools.length + (draft.settings.knowledge?.length ?? 0) + (draft.settings.skills?.length ?? 0) + (draft.settings.delegates?.length ?? 0) + Number(!!draft.settings.computer)}>
+            {resourceState.loading && <p role="status">{messages.common.loading}</p>}
+            {resourceState.error && <div className="inline-error" role="alert"><p>{resourceState.error}</p><button type="button" className="text-button" disabled={resourceState.loading} onClick={() => void resourceState.load()}>{messages.common.retry}</button></div>}
             <label className="profile-option"><input type="checkbox" checked={draft.settings.computer ?? false} disabled={!resources?.computer_permitted && !draft.settings.computer} onChange={event => update({ computer: event.target.checked })} /><span>{copy.computer}<small>{copy.computerHint}</small></span></label>
             <ProfileCapability key={`${draft.original?.id ?? 'new'}-tools`} title={copy.tools} count={selectedTools.length}><p className="profile-hint">{copy.workspaceConnections}</p><div className="profile-options">
               {availableTools.map(tool => { const ref = reference(tool), key = toolKey(ref); return <label className="profile-option" key={key}><input type="checkbox" checked={selectedTools.some(value => toolKey(value) === key)} onChange={event => update({ tools: event.target.checked ? [...selectedTools, ref] : selectedTools.filter(value => toolKey(value) !== key) })} /><span>{tool.name}<small>{tool.description}</small><small>{tool.source} · {tool.location} · {tool.kind}</small></span></label>; })}
@@ -152,8 +158,11 @@ export function AgentProfiles({ models }: { models: Model[] }) {
               {profiles.filter(item => item.id !== draft.original?.id && !item.settings.delegates?.length).map(item => { const selected = draft.settings.delegates?.includes(item.id) ?? false; return <label className="profile-option" key={item.id}><input type="checkbox" checked={selected} disabled={!selected && (draft.settings.delegates?.length ?? 0) >= 4} onChange={event => toggle('delegates', item.id, event.target.checked)} /><span>{item.settings.name}</span></label>; })}
               {(draft.settings.delegates ?? []).filter(id => !profiles.some(item => item.id === id && !item.settings.delegates?.length)).map(id => <label className="profile-option" key={id}><input type="checkbox" checked onChange={() => toggle('delegates', id, false)} /><span>{id}<small>{copy.unavailable}</small></span></label>)}
             </div></ProfileCapability>
-          </fieldset>
-          <details className="profile-advanced"><summary>{copy.advanced}</summary><label>{copy.iterations}<input type="number" required min={1} max={50} value={draft.settings.max_iterations} onChange={event => update({ max_iterations: event.target.valueAsNumber || 1 })} /></label>
+          </ProfileResources>
+          <details className="profile-advanced"><summary>{copy.advanced}</summary>
+            <label className="profile-description">{copy.description}<input value={draft.settings.description ?? ''} maxLength={512} onChange={event => update({ description: event.target.value })} /></label>
+            <label>{copy.iterations}<input type="number" required min={1} max={50} value={draft.settings.max_iterations} onChange={event => update({ max_iterations: event.target.valueAsNumber || 1 })} /></label>
+            {selectedModel && <p className="profile-hint">{[selectedModel.engine || 'llama_cpp', selectedModel.format, selectedModel.backend].filter(Boolean).join(' · ')}{selectedModel.context_window ? ` · ${providerCopy.context}: ${selectedModel.context_window.toLocaleString(locale)}` : ''} · {providerCopy.qualified}: {selectedModel.qualified ? providerCopy.yes : providerCopy.unmeasured}</p>}
             <ExecutionPolicy value={draft.settings.execution} onChange={execution=>update({execution})} />
 
           </details>
