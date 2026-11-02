@@ -1,10 +1,56 @@
 const { contextBridge, ipcRenderer } = require('electron');
+// Geometry only: the service renderer never receives the local terminal bridge.
+let terminalVisible=false,terminalFrame=0,terminalRect='',terminalOverlay=false,terminalBackdrop;
+function measureTerminalWorkspace(){
+  cancelAnimationFrame(terminalFrame);
+  terminalFrame=requestAnimationFrame(()=>{
+    const workspace=document.querySelector('main.workspace');if(!workspace)return;
+    const r=workspace.getBoundingClientRect(),bounds={x:Math.max(0,Math.round(r.x)),y:Math.max(0,Math.round(r.y)),width:Math.max(1,Math.round(r.width)),height:Math.max(1,Math.round(innerHeight-Math.max(0,r.y)))};
+    const key=JSON.stringify(bounds);
+    if(key!==terminalRect){terminalRect=key;void ipcRenderer.invoke('terminal-layout',bounds).catch(()=>{});
+      if(terminalBackdrop)Object.assign(terminalBackdrop.style,{left:`${bounds.x}px`,top:`${bounds.y}px`,width:`${bounds.width}px`,height:`${bounds.height}px`});}
+    const overlay=terminalVisible&&Array.from(document.querySelectorAll(':popover-open,dialog[open],[role="dialog"][aria-modal="true"]')).some(el=>{
+      const box=el.getBoundingClientRect();return box.width>0&&box.height>0&&getComputedStyle(el).visibility!=='hidden'&&box.left<r.right&&box.right>r.left&&box.top<innerHeight&&box.bottom>r.top;
+    });
+    if(terminalBackdrop)terminalBackdrop.hidden=!overlay;
+    if(overlay!==terminalOverlay){terminalOverlay=overlay;void ipcRenderer.invoke('terminal-overlay',overlay).catch(()=>{});}
+  });
+}
+ipcRenderer.on('terminal-visibility',(_event,visible)=>{
+  if(typeof visible!=='boolean')return;terminalVisible=visible;
+  document.documentElement.toggleAttribute('data-native-terminal-visible',visible);
+  const workspace=document.querySelector('main.workspace');if(workspace)workspace.inert=visible;
+  measureTerminalWorkspace();
+});
+window.addEventListener('DOMContentLoaded',()=>{
+  // A larger web overlay temporarily covers the native view. Keep the inert Chat
+  // underneath concealed, without copying private terminal output to the web app.
+  terminalBackdrop=document.createElement('div');terminalBackdrop.hidden=true;terminalBackdrop.setAttribute('aria-hidden','true');
+  terminalBackdrop.style.cssText='position:fixed;pointer-events:none;z-index:40;background:var(--surface-0,Canvas)';
+  document.body.append(terminalBackdrop);
+  const observer=new ResizeObserver(measureTerminalWorkspace);
+  observer.observe(document.documentElement);
+  let observed;
+  new MutationObserver(records=>{
+    if(records.every(record=>record.target===terminalBackdrop))return;
+    const workspace=document.querySelector('main.workspace');
+    if(workspace!==observed){if(observed)observer.unobserve(observed);observed=workspace;if(workspace)observer.observe(workspace);}
+    measureTerminalWorkspace();
+  }).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['style','open','hidden','aria-modal']});
+  document.addEventListener('toggle',measureTerminalWorkspace,true);
+  document.addEventListener('close',measureTerminalWorkspace,true);
+  measureTerminalWorkspace();
+});
+window.addEventListener('resize',measureTerminalWorkspace);
+window.addEventListener('hashchange',()=>{if(terminalVisible)void ipcRenderer.invoke('terminal-hide').catch(()=>{});measureTerminalWorkspace();});
 let presentation;
 try { const value = process.argv.find(item => item.startsWith('--offgrid-presentation=')); if (value) presentation = JSON.parse(Buffer.from(value.split('=')[1], 'base64').toString('utf8')); } catch { /* Main provides validated display preferences. */ }
 
 // Expose safe APIs to renderer process
 contextBridge.exposeInMainWorld('electron', {
   bridgeProtocol: 1,
+  terminalProtocol: 1,
+  openTerminal: () => ipcRenderer.invoke('terminal-open'),
   presentation,
   getPresentation: () => ipcRenderer.invoke('get-presentation'),
   setPresentation: preferences => ipcRenderer.invoke('set-presentation', preferences),

@@ -2,6 +2,11 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { shutdownDesktop } = require('../shutdown');
 
+test('terminal descendants must stop before quit succeeds', async () => {
+  const {options}=fixture({terminal:{stop:async()=>{throw Error('terminal_stop_unconfirmed');}}});
+  await assert.rejects(shutdownDesktop(options),/desktop_stop_unconfirmed/);
+});
+
 function fixture(overrides = {}) {
   const calls = [];
   const step = name => async () => { calls.push(name); };

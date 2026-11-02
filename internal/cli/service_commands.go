@@ -20,6 +20,7 @@ type ServiceDependencies struct {
 	RenderStream            func(io.Writer, io.Writer, io.Reader) error
 	Chat                    func(context.Context, *serviceclient.Client, []string, io.Reader, io.Writer, bool) error
 	ReadAgentLine           func(*bufio.Reader, io.Writer, PresentationStyle, []AgentCommandSuggestion) (string, error)
+	ClearAgentDisplay       func(io.Writer) bool
 	CreateArtifactFile      func(string) (ArtifactFile, error)
 	OpenProfileFile         func(string) (io.ReadCloser, error)
 	ReadSkillDirectory      func(string) ([]agentcontext.SkillFile, error)

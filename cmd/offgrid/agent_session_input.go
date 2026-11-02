@@ -17,6 +17,15 @@ import (
 // This editor reads synchronously from the SAME buffered input as local consent.
 // No background reader can eat a grant response or a later prompt. Raw mode is
 // restored before returning to approvals, streaming, or process shutdown.
+func clearAgentDisplay(out io.Writer) bool {
+	file, ok := cli.AgentOutputTarget(out).(*os.File)
+	if !ok || !term.IsTerminal(file.Fd()) || os.Getenv("TERM") == "dumb" || os.Getenv("OFFGRID_PLAIN") == "1" || os.Getenv("OFFGRID_TUI") == "0" {
+		return false
+	}
+	_, err := fmt.Fprint(out, "\x1b[3J\x1b[2J\x1b[H")
+	return err == nil
+}
+
 func readAgentSessionLine(input *bufio.Reader, out io.Writer, style cli.PresentationStyle, commands []cli.AgentCommandSuggestion) (string, error) {
 	return readAgentSessionLineWithHistory(input, out, style, commands, nil)
 }

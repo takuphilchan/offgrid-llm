@@ -284,6 +284,13 @@ are reported as missing diagnostics, not successful screenshots. The separate
 recovery, real frozen/healthy fixture windows, and bounded capture. On failure,
 a separate bounded helper records the isolated installer's thread wait chains
 and control states, without collecting process memory or named lock objects.
+The optional [desktop terminal](../../docs/setup/desktop-terminal.md) uses a
+separate trusted renderer and a Windows Job Object supervisor. Its native tests
+require the explicit `--isolated-native-test` flag. Run
+`node scripts/test/test-desktop-terminal-packaged.mjs <packaged-exe>` from the
+repository root for isolated real Electron input, tabs, CLI and cleanup checks.
+Windows x64 is the only enabled terminal platform in this preview.
+
 CI preserves
 installer `diagnostics/` and probe evidence on failure, excluding installer
 binaries and installed application directories.

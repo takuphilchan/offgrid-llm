@@ -41,9 +41,12 @@ func TestSessionCommandsNeverSubmitOrAcquireAuthority(t *testing.T) {
 	}}
 	ctx := context.WithValue(context.Background(), agentSessionKey{}, agentSessionPresentation{Profile: profile})
 	var out bytes.Buffer
-	err = RunConversationChat(ctx, client, []string{"chat", "conversation", "--profile", profile.ID, "--profile-revision", "7"}, strings.NewReader("/\n/help\n/skills\n/agents\n/tools\n/session\n/unknown\n/exit\n"), &out, false, nil)
+	err = RunConversationChat(ctx, client, []string{"chat", "conversation", "--profile", profile.ID, "--profile-revision", "7"}, strings.NewReader("/\n/help\n/skills\n/agents\n/tools\n/session\n/clear\n/unknown\n/exit\n"), &out, false, nil)
 	if err != nil || gets != 2 {
 		t.Fatal(err, gets, out.String())
+	}
+	if strings.Contains(out.String(), "\x1b") || !strings.Contains(out.String(), "Saved conversation and context are unchanged") {
+		t.Fatal("clear changed plain output or history", out.String())
 	}
 	for _, want := range []string{"bumblebee", "local-model", "reviewed-skill (revision 3)", "researcher", "owned-provider / lookup", "No message was submitted", "--resume conversation --profile profile-fixture --profile-revision 7"} {
 		if !strings.Contains(out.String(), want) {
@@ -70,5 +73,17 @@ func TestSessionOutputRetainsTerminalAndEscapesResourceNames(t *testing.T) {
 		if !knownAgentSlashCommand(c.Command) {
 			t.Fatal("picker and parser diverged", c)
 		}
+	}
+}
+
+func TestClearUsesDisplayAdapterWithoutChangingProfile(t *testing.T) {
+	var out bytes.Buffer
+	clears := 0
+	p := agentSessionPresentation{Profile: agents.AgentProfile{ID: "profile-fixture", Revision: 7, Settings: agents.ProfileSettings{Name: "Bumblebee", Model: "local-model"}}, ClearDisplay: func(io.Writer) bool { clears++; return true }}
+	if !renderAgentSessionCommand(&out, "/clear", "saved-conversation", p) || clears != 1 {
+		t.Fatal("display adapter not called")
+	}
+	if p.Profile.Revision != 7 || !strings.Contains(out.String(), "Bumblebee") || !strings.Contains(out.String(), "local-model") {
+		t.Fatal("session changed or header missing", out.String())
 	}
 }

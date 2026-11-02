@@ -50,6 +50,7 @@ func osCLIEnvironment() cli.Environment {
 	}
 	env.Service = sessionEnvironment().Service
 	env.Service.ReadAgentLine = newAgentSessionInput()
+	env.Service.ClearAgentDisplay = clearAgentDisplay
 	env.Service.ControlClient = func() (*serviceclient.Client, error) {
 		return serviceclient.New(commandServerURL(), os.Getenv("OFFGRID_API_KEY"), httpClient)
 	}

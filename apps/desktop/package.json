@@ -69,7 +69,13 @@
       "startup.css",
       "startup.js",
       "assets/icon.png",
-      "package.json"
+      "package.json",
+      "terminal*.js",
+      "terminal.html",
+      "terminal.css",
+      "!node_modules/node-pty/third_party/**",
+      "!node_modules/node-pty/prebuilds/win32-arm64/**",
+      "!node_modules/node-pty/**/*.pdb"
     ],
     "extraResources": [
       {
@@ -94,6 +100,10 @@
       {
         "from": "../../LICENSE",
         "to": "LICENSE"
+      },
+      {
+        "from": "../../build/terminal-runtime/${os}-${arch}",
+        "to": "terminal-runtime"
       }
     ],
     "linux": {
@@ -265,10 +275,20 @@
     },
     "portable": {
       "artifactName": "${productName}-${version}-Portable.${ext}"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
+    "npmRebuild": false
   },
   "devDependencies": {
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/addon-search": "0.16.0",
+    "@xterm/xterm": "6.0.0",
+    "node-pty": "1.1.0"
   }
 }

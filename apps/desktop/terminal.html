@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>OffGrid Terminal</title><link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css"><link rel="stylesheet" href="terminal.css"></head>
+<body>
+<header><button id="chat" title="Chat">Chat</button><div id="tabs" role="tablist" aria-label="Terminals"></div><div class="tools"><button id="new" title="New terminal">＋</button><button id="agent" title="Run OffGrid CLI">OffGrid CLI</button><button id="search" title="Search terminal output">⌕</button><button id="hide" title="Return to Chat">−</button></div></header>
+<div id="find" hidden><input id="query" type="search" aria-label="Search terminal output" placeholder="Search terminal output"><button id="previous" aria-label="Previous match">↑</button><button id="next" aria-label="Next match">↓</button><button id="find-close" aria-label="Close search">×</button></div>
+<div id="notice" role="status"></div><main id="panes"><section id="empty"><strong>Your local terminal</strong><p>Switch between Chat and your local commands here. Commands use your computer’s permissions.</p><button id="start">Choose folder and open terminal</button></section></main>
+<footer><span id="identity">Local terminal · not sandboxed</span><span id="hint">Ctrl+Shift+C copy · Ctrl+C interrupt</span></footer>
+<script src="node_modules/@xterm/xterm/lib/xterm.js"></script><script src="node_modules/@xterm/addon-fit/lib/addon-fit.js"></script><script src="node_modules/@xterm/addon-search/lib/addon-search.js"></script><script src="terminal-renderer.js"></script></body></html>

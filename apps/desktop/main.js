@@ -54,6 +54,7 @@ const runtime = new DesktopRuntime({
   uiBuildID: fs.existsSync(path.join(uiDir, 'index.html')) ? fingerprintUI(fs.readFileSync(path.join(uiDir, 'index.html'))) : null
 });
 let mainWindow = null;
+let terminal = null;
 let workspaceNavigationPending = false;
 let tray = null;
 let quitting = false;
@@ -219,6 +220,7 @@ async function createMainWindow() {
     backgroundColor: effectiveTheme() === 'dark' ? '#101011' : '#f7f7f6',
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'), backgroundThrottling: true, spellcheck: true, additionalArguments: ['--offgrid-presentation=' + Buffer.from(JSON.stringify(presentationSnapshot())).toString('base64')] }
   });
+  terminal = require('./terminal-dock').createTerminalDock({electron:require('electron'),window:mainWindow,host:app.isPackaged?path.join(process.resourcesPath,'terminal-runtime','offgrid-terminal-host.exe'):path.join(__dirname,'../../build/terminal-runtime/win-x64/offgrid-terminal-host.exe'),cli:path.join(binaryRoot,binaryName),service:()=>runtime.url,presentation:()=>({theme:effectiveTheme(),locale:presentation.locale})});
   if (state.isMaximized) mainWindow.maximize();
   // A first launch can spend several seconds in Windows reputation scanning
   // and Chromium initialization. Put a real native surface on screen as soon
@@ -300,7 +302,7 @@ function updateMenus() {
       { type: 'separator' },
       { role: process.platform === 'darwin' ? 'close' : 'quit' }
     ] },
-    { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' },
+    { role: 'editMenu' }, { role: 'viewMenu', submenu: [{ label: 'Terminal', accelerator: 'CommandOrControl+`', click: () => void terminal?.toggle().catch(error => dialog.showMessageBox(mainWindow,{type:'error',message:error.message})) }, {type:'separator'}, {role:'reload'}, {role:'toggleDevTools'}, {type:'separator'}, {role:'resetZoom'}, {role:'zoomIn'}, {role:'zoomOut'}, {role:'togglefullscreen'}] }, { role: 'windowMenu' },
     { role: 'help', submenu: [{ label: copy('guide'), click: () => void shell.openExternal('https://github.com/takuphilchan/offgrid-llm/blob/main/docs/setup/desktop-startup.md') }] }
   ]));
   tray?.setContextMenu(Menu.buildFromTemplate([
@@ -357,6 +359,10 @@ handleTrustedIPC('computer-launchable-apps', () => ({ state: 'selecting', target
 handleTrustedIPC('computer-launch-app', request => applicationLauncher.launch(request?.id));
 handleTrustedIPC('computer-stop', () => computer.stop());
 handleTrustedIPC('computer-stop-access', request => computer.stopAccess(request));
+handleTrustedIPC('terminal-open', async () => {try{return await terminal.open();}catch(error){await dialog.showMessageBox(mainWindow,{type:'error',message:'Terminal could not open',detail:error.message});return {visible:false};}});
+handleTrustedIPC('terminal-layout', value => terminal.setWorkspaceBounds(value));
+handleTrustedIPC('terminal-overlay', value => terminal.setOverlayActive(value));
+handleTrustedIPC('terminal-hide', () => terminal.hide());
 handleTrustedIPC('get-presentation', () => presentationSnapshot());
 handleTrustedIPC('set-presentation', value => {
   // Only appearance/language preferences: no caller-provided file paths or commands.
@@ -370,6 +376,7 @@ handleTrustedIPC('set-presentation', value => {
     nativeTheme.themeSource = presentation.theme;
     mainWindow?.setBackgroundColor(effectiveTheme() === 'dark' ? '#101011' : '#f7f7f6');
     updateMenus();
+    terminal?.appearance();
   });
   return presentationQueue;
 });
@@ -396,6 +403,7 @@ nativeTheme.on('updated', () => {
   const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
   mainWindow.setBackgroundColor(effectiveTheme() === 'dark' ? '#101011' : '#f7f7f6');
   mainWindow.webContents.send('system-theme-changed', theme);
+  terminal?.appearance();
 });
 app.on('second-instance', (_event, _argv, _directory, request) => {
   if (request?.quitForInstall === true) app.quit();
@@ -442,7 +450,7 @@ app.on('before-quit', event => {
   void (async () => {
     await require('./shutdown').shutdownDesktop({
       save: async () => { await saveWindowState(); await presentationQueue; },
-      computer, execution, runtime,
+      computer, execution, terminal, runtime,
     });
     tray?.destroy();
     shutdownComplete = true;

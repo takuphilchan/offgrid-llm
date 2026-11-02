@@ -132,6 +132,11 @@ is retained. First-time setup offers an installed model and a General profile wi
 authority. These commands require the matching v0.4.21 service and CLI; an
 older installed v0.4.20 binary does not gain them from a source checkout.
 
+In agent chat, `/clear` clears the visible terminal and its scrollback, then redraws
+the session header. It does not reset model context, delete saved conversation
+history, cancel work or change access. Use `/exit` and start a new conversation
+when you want a fresh context. Plain/piped output receives no clearing escapes.
+
 `--wait` observes canonical job events. Terminal `agent run` follows by default
 and requests current-folder access only when local work needs it on a matching
 conversation-first service; `--detach` explicitly returns early.

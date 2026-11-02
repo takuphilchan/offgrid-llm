@@ -12,9 +12,10 @@ import (
 
 type agentSessionKey struct{}
 type agentSessionPresentation struct {
-	Profile  agents.AgentProfile
-	Style    PresentationStyle
-	ReadLine func(*bufio.Reader, io.Writer, PresentationStyle, []AgentCommandSuggestion) (string, error)
+	Profile      agents.AgentProfile
+	Style        PresentationStyle
+	ReadLine     func(*bufio.Reader, io.Writer, PresentationStyle, []AgentCommandSuggestion) (string, error)
+	ClearDisplay func(io.Writer) bool
 }
 
 type AgentCommandSuggestion struct{ Command, Description string }
@@ -51,6 +52,7 @@ var agentSlashCommands = []agentSlashCommand{
 	{"agents", "Explore", "Inspect configured collaborators"},
 	{"tools", "Explore", "Inspect configured tool attachments"},
 	{"session", "Session", "Profile, model and exact resume command"},
+	{"clear", "Session", "Clear display; saved conversation and context remain"},
 	{"status", "Work", "Inspect the latest saved work"},
 	{"pause", "Work", "Pause new scheduling"},
 	{"stop", "Work", "Stop work; completed actions remain"},
@@ -99,6 +101,12 @@ func renderAgentSessionCommand(w io.Writer, text, name string, p agentSessionPre
 		return true
 	}
 	switch text {
+	case "/clear":
+		if p.ClearDisplay != nil && p.ClearDisplay(w) {
+			agentSessionHeader(w, p)
+		} else {
+			fmt.Fprintln(w, "Display clearing is available in an interactive terminal. Saved conversation and context are unchanged.")
+		}
 	case "/", "/help":
 		heading("Session commands")
 		for _, group := range []string{"Explore", "Work", "Session"} {

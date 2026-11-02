@@ -240,6 +240,7 @@
   .workspace-options-panel .utility-popover-content { gap: 12px; }
   .workspace-options-panel .field { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); align-items: center; gap: 12px; }
   .workspace-options-panel .field label { overflow-wrap: anywhere; }
+  .workspace-options-panel[data-narrow-panel] .field { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .workspace-options-panel .secondary-button { justify-content: flex-start; text-align: start; border-color: transparent; background: transparent; }
   .workspace-options-panel .secondary-button:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
   .workspace-options-panel .workspace-account { font-size: 13px; padding-block-start: 12px; }

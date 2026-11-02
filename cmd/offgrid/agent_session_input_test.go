@@ -14,6 +14,13 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/cli"
 )
 
+func TestAgentClearDoesNotWriteControlsToPipes(t *testing.T) {
+	var output bytes.Buffer
+	if clearAgentDisplay(&output) || output.Len() != 0 {
+		t.Fatal("terminal controls written to pipe")
+	}
+}
+
 // Run only through the isolated PTY driver; never reads a developer terminal
 // during ordinary go test or touches installed profiles/workspaces.
 func TestAgentSessionPTYInput(t *testing.T) {

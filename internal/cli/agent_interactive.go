@@ -102,7 +102,7 @@ func runInteractiveAgent(ctx context.Context, args []string, env Environment) (r
 	if options.model != "" && options.model != profile.Settings.Model {
 		return Usage("The selected model does not match this profile's pinned model. Choose a matching profile or save a new profile revision before starting work")
 	}
-	ctx = context.WithValue(ctx, agentSessionKey{}, agentSessionPresentation{Profile: profile, Style: env.Style, ReadLine: env.Service.ReadAgentLine})
+	ctx = context.WithValue(ctx, agentSessionKey{}, agentSessionPresentation{Profile: profile, Style: env.Style, ReadLine: env.Service.ReadAgentLine, ClearDisplay: env.Service.ClearAgentDisplay})
 	var owned ExecutionLease
 	var demand *conversationWorkspace
 	if options.workspace == "" && env.Execution.OnDemand != nil {

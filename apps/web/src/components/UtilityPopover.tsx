@@ -28,7 +28,14 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
         panel.current.hidePopover();
         return;
       }
-      const panelWidth = Math.min(compact ? 240 : 340, Math.max(0, width - 2 * margin));
+      const sidebar = document.documentElement.hasAttribute('data-native-terminal-visible') ? button.current.closest('.sidebar')?.getBoundingClientRect() : undefined;
+      // Native terminal surfaces cannot be covered with CSS. Fit ordinary sidebar
+      // menus beside them; larger overlays are handled by the desktop host.
+      const besideTerminal = sidebar && sidebar.width >= 200;
+      const areaLeft = besideTerminal ? Math.max(left, sidebar.left) : left;
+      const areaRight = besideTerminal ? Math.min(left + width, sidebar.right) : left + width;
+      const panelWidth = Math.min(compact ? 240 : 340, Math.max(0, areaRight - areaLeft - 2 * margin));
+      panel.current.toggleAttribute('data-narrow-panel', panelWidth < 280);
       const above = Math.max(0, anchor.top - top - margin - gap);
       const below = Math.max(0, top + height - anchor.bottom - margin - gap);
       // Composite panels scroll internally; their clipped outer height is not
@@ -40,7 +47,7 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
       const rightAligned = (getComputedStyle(button.current).direction === 'rtl') !== (align === 'end');
       const start = rightAligned ? anchor.right - panelWidth : anchor.left;
       Object.assign(panel.current.style, {
-        width: `${panelWidth}px`, left: `${Math.max(left + margin, Math.min(start, left + width - panelWidth - margin))}px`,
+        width: `${panelWidth}px`, left: `${Math.max(areaLeft + margin, Math.min(start, areaRight - panelWidth - margin))}px`,
         top: overlay ? `${top + margin}px` : upwards ? 'auto' : `${anchor.bottom + gap}px`,
         bottom: !overlay && upwards ? `${window.innerHeight - anchor.top + gap}px` : 'auto',
         maxHeight: `min(${overlay ? Math.max(0, height - 2 * margin) : upwards ? above : below}px, var(--utility-panel-max-height, 100vh))`,
@@ -52,7 +59,7 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
     if (content.current) observer.observe(content.current);
     // Language/direction can change without changing the panel's dimensions.
     const direction = new MutationObserver(position);
-    direction.observe(document.documentElement, { attributes: true, attributeFilter: ['dir'] });
+    direction.observe(document.documentElement, { attributes: true, attributeFilter: ['dir', 'data-native-terminal-visible'] });
     window.addEventListener('resize', position);
     // Scrolls from the panel/content must not recalculate placement. Otherwise
     // changing max-height/edges during wheel or keyboard scrolling can reset it.
@@ -64,7 +71,7 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
     const dismiss = () => panel.current?.hidePopover();
     window.addEventListener('hashchange', dismiss);
     const escape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || !panel.current?.matches(':popover-open')) return;
+      if (event.key !== 'Escape' || event.defaultPrevented || !panel.current?.matches(':popover-open') || panel.current.querySelector(':popover-open')) return;
       event.preventDefault(); panel.current.hidePopover(); button.current?.focus();
     };
     window.addEventListener('keydown', escape);
@@ -95,9 +102,9 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
           PageDown: el.scrollTop + page, ArrowUp: el.scrollTop - 40, ArrowDown: el.scrollTop + 40 } as Record<string, number>)[event.key];
         if (top !== undefined) { event.preventDefault(); el.scrollTop = top; }
       }}
-      onBeforeToggle={event => setOpen(event.newState === 'open')}
+      onBeforeToggle={event => { if (event.target === event.currentTarget) setOpen(event.newState === 'open'); }}
       onClick={event => { if ((event.target as Element).closest('a[href]')) panel.current?.hidePopover(); }}
-      onToggle={event => onOpenChange?.(event.newState === 'open')}>
+      onToggle={event => { if (event.target === event.currentTarget) onOpenChange?.(event.newState === 'open'); }}>
       <div ref={content} className="utility-popover-content">{children}</div>
     </div>
   </div>;
