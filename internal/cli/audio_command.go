@@ -14,7 +14,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/audio"
 )
 
-func audioCommand(_ context.Context, args []string, env Environment) error {
+func audioCommand(ctx context.Context, args []string, env Environment) error {
 	p := Presenter{Stdout: env.Stdout, Stderr: env.Stderr, JSON: env.Options.JSON, Style: env.Style}
 	// Check for help flag
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
@@ -50,6 +50,9 @@ func audioCommand(_ context.Context, args []string, env Environment) error {
 		return nil
 	}
 
+	if args[0] == "status" {
+		return audioStatusCommand(ctx, env)
+	}
 	cfg, err := localConfig(env)
 	if err != nil {
 		return err
@@ -248,63 +251,6 @@ func audioCommand(_ context.Context, args []string, env Environment) error {
 		}
 
 		p.Success(fmt.Sprintf("Speech generated: %s (%d bytes)", outputFile, written))
-		fmt.Fprintln(env.Stdout)
-
-	case "status":
-		fmt.Fprintln(env.Stdout)
-		p.Section("Audio System Status")
-
-		resp, err := env.Audio.GetClient.Get(baseURL + "/v1/audio/status")
-		if err != nil {
-			p.Error(fmt.Sprintf("Failed to connect to server: %v", err))
-			p.Info("Make sure the server is running: offgrid serve")
-			return nil
-		}
-		defer resp.Body.Close()
-
-		var status map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
-			p.Error(fmt.Sprintf("Failed to parse response: %v", err))
-			return nil
-		}
-
-		// ASR Status
-		asr, _ := status["asr"].(map[string]interface{})
-		asrAvailable, _ := asr["available"].(bool)
-		asrPath, _ := asr["whisper_path"].(string)
-		asrModels, _ := asr["models"].([]interface{})
-
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sSpeech-to-Text (ASR)%s\n", env.Style.Primary+env.Style.Bold, env.Style.Reset)
-		if asrAvailable {
-			fmt.Fprintf(env.Stdout, "    %s%s Available%s\n", env.Style.Success, env.Style.Check, env.Style.Reset)
-			fmt.Fprintf(env.Stdout, "    %sWhisper:%s %s\n", env.Style.Dim, env.Style.Reset, asrPath)
-			fmt.Fprintf(env.Stdout, "    %sModels:%s %d installed\n", env.Style.Dim, env.Style.Reset, len(asrModels))
-		} else {
-			fmt.Fprintf(env.Stdout, "    %s%s Not Available%s\n", env.Style.Error, env.Style.Cross, env.Style.Reset)
-			fmt.Fprintf(env.Stdout, "    %sRun: offgrid audio setup whisper%s\n", env.Style.Dim, env.Style.Reset)
-		}
-
-		// TTS Status
-		tts, _ := status["tts"].(map[string]interface{})
-		ttsAvailable, _ := tts["available"].(bool)
-		ttsPath, _ := tts["piper_path"].(string)
-		ttsVoices, _ := tts["voices"].(float64)
-
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sText-to-Speech (TTS)%s\n", env.Style.Primary+env.Style.Bold, env.Style.Reset)
-		if ttsAvailable {
-			fmt.Fprintf(env.Stdout, "    %s%s Available%s\n", env.Style.Success, env.Style.Check, env.Style.Reset)
-			fmt.Fprintf(env.Stdout, "    %sPiper:%s %s\n", env.Style.Dim, env.Style.Reset, ttsPath)
-			fmt.Fprintf(env.Stdout, "    %sVoices:%s %d installed\n", env.Style.Dim, env.Style.Reset, int(ttsVoices))
-		} else {
-			fmt.Fprintf(env.Stdout, "    %s%s Not Available%s\n", env.Style.Error, env.Style.Cross, env.Style.Reset)
-			fmt.Fprintf(env.Stdout, "    %sRun: offgrid audio setup piper%s\n", env.Style.Dim, env.Style.Reset)
-		}
-
-		dataDir, _ := status["data_dir"].(string)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sData Directory:%s %s\n", env.Style.Dim, env.Style.Reset, dataDir)
 		fmt.Fprintln(env.Stdout)
 
 	case "models":

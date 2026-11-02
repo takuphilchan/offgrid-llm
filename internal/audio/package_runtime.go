@@ -76,8 +76,11 @@ func (p *PackageRuntime) pythonModules(ctx context.Context) map[string]bool {
 	// Probe module metadata without importing inference libraries or loading models.
 	cmd := exec.CommandContext(ctx, speechPython(), "-c", `import importlib.util,json; print(json.dumps({m:importlib.util.find_spec(m) is not None for m in ('qwen_asr','qwen_tts')}))`)
 	var found map[string]bool
-	if b, err := cmd.Output(); err == nil {
-		_ = json.Unmarshal(b, &found)
+	b, err := cmd.Output()
+	if err != nil || json.Unmarshal(b, &found) != nil || found == nil {
+		// A cancelled/failed probe is operational, not measured incompatibility.
+		// Do not poison readiness for a minute after a user cancels setup.
+		return nil
 	}
 	p.modules, p.probeAt = found, time.Now()
 	return found

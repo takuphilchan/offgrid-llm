@@ -75,7 +75,6 @@ func TestAudioUsesInjectedHTTPFilesAndSetupEngine(t *testing.T) {
 	}{
 		{[]string{"audio", "transcribe", input}, "recognized fixture"},
 		{[]string{"audio", "speak", "hello", "--output", output}, "Speech generated"},
-		{[]string{"audio", "status"}, "Audio System Status"},
 		{[]string{"audio", "models"}, "Audio Models"},
 		{[]string{"audio", "setup", "whisper", "--model", "base.en"}, "Whisper model"},
 		{[]string{"audio", "setup", "piper", "--voice", "en_US-amy-medium"}, "Piper voice"},
