@@ -129,19 +129,20 @@ type Server struct {
 }
 
 type DownloadProgress struct {
-	FileName        string  `json:"file_name"`
-	BytesTotal      int64   `json:"bytes_total"`
-	BytesDone       int64   `json:"bytes_done"`
-	Percent         float64 `json:"percent"`
-	Speed           float64 `json:"speed"`      // bytes per second
-	StartedAt       int64   `json:"started_at"` // unix timestamp
-	Status          string  `json:"status"`     // "downloading", "complete", "failed"
-	Error           string  `json:"error,omitempty"`
-	Repository      string  `json:"repository,omitempty"`
-	SourceFile      string  `json:"source_file,omitempty"`
-	ModelID         string  `json:"model_id,omitempty"`
-	Quantization    string  `json:"quantization,omitempty"`
-	EnableKnowledge bool    `json:"enable_knowledge,omitempty"`
+	Bundle          *models.GGUFBundle `json:"bundle,omitempty"`
+	FileName        string             `json:"file_name"`
+	BytesTotal      int64              `json:"bytes_total"`
+	BytesDone       int64              `json:"bytes_done"`
+	Percent         float64            `json:"percent"`
+	Speed           float64            `json:"speed"`      // bytes per second
+	StartedAt       int64              `json:"started_at"` // unix timestamp
+	Status          string             `json:"status"`     // "downloading", "complete", "failed"
+	Error           string             `json:"error,omitempty"`
+	Repository      string             `json:"repository,omitempty"`
+	SourceFile      string             `json:"source_file,omitempty"`
+	ModelID         string             `json:"model_id,omitempty"`
+	Quantization    string             `json:"quantization,omitempty"`
+	EnableKnowledge bool               `json:"enable_knowledge,omitempty"`
 }
 
 type ExportProgress struct {

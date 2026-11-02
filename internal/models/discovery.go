@@ -36,6 +36,9 @@ func ValidHubRepository(repo string) bool {
 
 func standaloneFileReason(filename string) string {
 	name := strings.ToLower(filename)
+	if auxiliaryGGUF(filename) {
+		return "auxiliary_weights"
+	}
 	if splitGGUF.MatchString(name) {
 		return "split_weights"
 	}
@@ -43,6 +46,11 @@ func standaloneFileReason(filename string) string {
 		return "projector"
 	}
 	return ""
+}
+
+// IsStandaloneGGUF distinguishes selectable weights from companion and draft data.
+func IsStandaloneGGUF(filename string) bool {
+	return strings.EqualFold(path.Ext(filename), ".gguf") && standaloneFileReason(filename) == ""
 }
 
 type DiscoveredFile struct {

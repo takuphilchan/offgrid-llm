@@ -74,7 +74,7 @@ func (r *Registry) scanModels(createDirectory bool) error {
 		}
 
 		if info.IsDir() {
-			if info.Name() == PackageDirectory {
+			if info.Name() == PackageDirectory || info.Name() == modelAssetsDirectory {
 				return filepath.SkipDir
 			}
 			return nil
@@ -86,6 +86,9 @@ func (r *Registry) scanModels(createDirectory bool) error {
 		}
 
 		// Check for supported model formats
+		if isProjectorFilename(filepath.Base(path)) || auxiliaryGGUF(filepath.Base(path)) {
+			return nil
+		}
 		ext := filepath.Ext(path)
 		if ext == ".gguf" || ext == ".ggml" || ext == ".bin" {
 			modelID := r.generateModelID(path)
@@ -111,7 +114,9 @@ func (r *Registry) scanModels(createDirectory bool) error {
 
 			// Check for projector
 			projectorFilename := GetProjectorFilename(modelID, filepath.Base(path))
-			if projectorFilename != "" {
+			if projectorPath, ok := InstalledCompanion(path); ok {
+				metadata.ProjectorPath = projectorPath
+			} else if _, receiptErr := os.Lstat(path + ".assets.json"); os.IsNotExist(receiptErr) && projectorFilename != "" {
 				projectorPath := filepath.Join(filepath.Dir(path), projectorFilename)
 				if _, err := os.Stat(projectorPath); err == nil {
 					metadata.ProjectorPath = projectorPath

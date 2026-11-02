@@ -23,7 +23,6 @@ const maxHubMetadata = 16 << 20
 const maxHubFiles = 20000
 const maxResolutionData = 64 << 20
 const maxSmallArtifact = 8 << 20
-
 type ModelAcquisitionError struct {
 	Code    string
 	Message string
@@ -43,12 +42,13 @@ type hubPackageFile struct {
 	} `json:"lfs,omitempty"`
 }
 type hubPackageMetadata struct {
-	ID       string  `json:"id"`
-	SHA      string  `json:"sha"`
-	Private  bool    `json:"private"`
-	Gated    HFGated `json:"gated"`
-	Disabled bool    `json:"disabled"`
-	Card     struct {
+	PipelineTag string  `json:"pipeline_tag"`
+	ID          string  `json:"id"`
+	SHA         string  `json:"sha"`
+	Private     bool    `json:"private"`
+	Gated       HFGated `json:"gated"`
+	Disabled    bool    `json:"disabled"`
+	Card        struct {
 		License  string          `json:"license"`
 		Language json.RawMessage `json:"language"`
 	} `json:"cardData"`

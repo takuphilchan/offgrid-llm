@@ -56,7 +56,7 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 
 	// If only quantization is provided, fetch the model to find the actual filename
 	if req.FileName == "" && req.Quantization != "" {
-		hf := models.NewHuggingFaceClient()
+		hf := s.hubForModels()
 		modelInfo, err := hf.GetModelInfo(req.Repository)
 		if err == nil {
 			quantUpper := strings.ToUpper(req.Quantization)
@@ -68,7 +68,7 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 
 			// Find GGUF file with matching quantization
 			for _, sibling := range modelInfo.Siblings {
-				if !strings.HasSuffix(sibling.Filename, ".gguf") {
+				if !models.IsStandaloneGGUF(sibling.Filename) {
 					continue
 				}
 				fnameUpper := strings.ToUpper(sibling.Filename)
@@ -113,8 +113,29 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid local model filename; provide a safe model_id", 400)
 		return
 	}
+	var bundle *models.GGUFBundle
+	if !req.EnableKnowledge {
+		s.downloadMutex.RLock()
+		previous := s.downloadProgress[destFileName]
+		if previous != nil && previous.Repository == req.Repository && previous.SourceFile == sourceFileName {
+			bundle = previous.Bundle
+		}
+		s.downloadMutex.RUnlock()
+		if bundle == nil {
+			var err error
+			bundle, err = s.hubForModels().ResolveGGUFBundle(r.Context(), req.Repository, "", sourceFileName)
+			if err != nil {
+				modelHTTPError(w, err)
+				return
+			}
+		}
+		if err := bundle.Validate(); err != nil {
+			modelHTTPError(w, err)
+			return
+		}
+	}
 	if _, err := os.Stat(destPath); err == nil {
-		if !req.EnableKnowledge {
+		if !req.EnableKnowledge && bundle == nil {
 			if err := s.registry.ScanModels(); err != nil {
 				writeError(w, "Model exists but could not be discovered. Check storage access.", 500)
 				return
@@ -159,6 +180,12 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithCancel(baseCtx)
 	s.downloadMutex.Lock()
+	if s.downloadCancelFuncs == nil {
+		s.downloadCancelFuncs = make(map[string]context.CancelFunc)
+	}
+	if s.downloadProgress == nil {
+		s.downloadProgress = make(map[string]*DownloadProgress)
+	}
 	if _, active := s.downloadCancelFuncs[destFileName]; active {
 		s.downloadMutex.Unlock()
 		cancel()
@@ -166,8 +193,11 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if previous := s.downloadProgress[destFileName]; previous != nil && req.Repository != "" {
-		if info, statErr := os.Stat(destPath + ".tmp"); statErr == nil && info.Size() > 0 &&
-			(previous.Repository != req.Repository || previous.SourceFile != sourceFileName) {
+		retained := previous.Bundle != nil && models.RetainedGGUFBundleBytes(s.config.ModelsDir, destFileName, *previous.Bundle) > 0
+		if info, statErr := os.Stat(destPath + ".tmp"); statErr == nil && info.Size() > 0 {
+			retained = true
+		}
+		if retained && (previous.Repository != req.Repository || previous.SourceFile != sourceFileName) {
 			s.downloadMutex.Unlock()
 			cancel()
 			writeError(w, "A retained partial download belongs to a different source. Remove or finish it before reusing this model ID.", http.StatusConflict)
@@ -176,6 +206,7 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 	}
 	s.downloadCancelFuncs[destFileName] = cancel
 	s.downloadProgress[destFileName] = &DownloadProgress{
+		Bundle:     bundle,
 		FileName:   destFileName,
 		Status:     "downloading",
 		StartedAt:  time.Now().Unix(),
@@ -255,7 +286,7 @@ func (s *Server) downloadModelAsync(ctx context.Context, repository, sourceFileN
 	log.Printf("Starting resumable download: %s/%s", repository, sourceFileName)
 	startTime := time.Now()
 	destPath := filepath.Join(s.config.ModelsDir, progressKey)
-	hf := models.NewHuggingFaceClient()
+	hf := s.hubForModels()
 	var initialBytes int64 = -1
 	progressCallback := func(done, total int64) {
 		if initialBytes < 0 {
@@ -279,7 +310,15 @@ func (s *Server) downloadModelAsync(ctx context.Context, repository, sourceFileN
 		s.downloadMutex.Unlock()
 	}
 	var err error
-	if info, statErr := os.Stat(destPath); statErr == nil {
+	s.downloadMutex.RLock()
+	var bundle *models.GGUFBundle
+	if progress := s.downloadProgress[progressKey]; progress != nil {
+		bundle = progress.Bundle
+	}
+	s.downloadMutex.RUnlock()
+	if bundle != nil {
+		err = hf.AcquireGGUFBundle(ctx, s.config.ModelsDir, progressKey, *bundle, progressCallback)
+	} else if info, statErr := os.Stat(destPath); statErr == nil {
 		progressCallback(info.Size(), info.Size())
 	} else {
 		err = hf.DownloadGGUFContext(ctx, repository, sourceFileName, destPath, progressCallback)
@@ -339,7 +378,10 @@ func (s *Server) downloadModelAsync(ctx context.Context, repository, sourceFileN
 	// completion refresh can race the scan and never show the installed model.
 	s.downloadMutex.Lock()
 	if progress := s.downloadProgress[progressKey]; progress != nil {
-		if statErr == nil {
+		if bundle != nil {
+			progress.BytesDone = bundle.TotalBytes()
+			progress.BytesTotal = bundle.TotalBytes()
+		} else if statErr == nil {
 			progress.BytesDone = fileInfo.Size()
 			progress.BytesTotal = fileInfo.Size()
 		}

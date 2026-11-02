@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/takuphilchan/offgrid-llm/internal/models"
 	"github.com/takuphilchan/offgrid-llm/internal/storage"
 )
 
@@ -101,6 +102,9 @@ func (s *Server) loadDownloads() error {
 		if item == nil || key != item.FileName || key == "." || key == ".." || !isSafeModelID(strings.TrimSuffix(key, ".gguf")) {
 			return fmt.Errorf("invalid download history identity")
 		}
+		if item.Bundle != nil && (item.Bundle.Validate() != nil || item.Bundle.Repository != item.Repository || item.Bundle.Weights.Path != item.SourceFile) {
+			return fmt.Errorf("invalid download bundle identity")
+		}
 	}
 	if legacy {
 		// Validate everything before writing; preserve an exact, synced original.
@@ -142,7 +146,11 @@ func (s *Server) loadDownloads() error {
 			item.Status = "failed"
 			item.Speed = 0
 			item.Error = "Service stopped. Downloaded data is retained; choose Resume to continue."
-			if info, err := os.Stat(filepath.Join(s.config.ModelsDir, key) + ".tmp"); err == nil {
+			if item.Bundle != nil {
+				item.BytesDone = models.RetainedGGUFBundleBytes(s.config.ModelsDir, key, *item.Bundle)
+				item.BytesTotal = item.Bundle.TotalBytes()
+				item.Percent = float64(item.BytesDone) * 100 / float64(item.BytesTotal)
+			} else if info, err := os.Stat(filepath.Join(s.config.ModelsDir, key) + ".tmp"); err == nil {
 				item.BytesDone = info.Size()
 			}
 		}
