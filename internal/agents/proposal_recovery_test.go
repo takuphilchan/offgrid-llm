@@ -180,7 +180,9 @@ func TestProposalRepairResetAfterProgress(t *testing.T) {
 		return accessProposalAnswer(), nil
 	})
 	task := newProposalTask(t, r)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// This checks decision counts, not storage throughput. Leave enough time
+	// for durable checkpoint writes on shared Windows CI runners.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	task, err := r.Continue(ctx, task.ID, "alice", "start", "", false)
 	if err != nil || task.ErrorCode != proposalRepairLimitCode || modelCalls != 8 || tools.calls.Load() != 1 {

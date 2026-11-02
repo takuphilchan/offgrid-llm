@@ -76,3 +76,29 @@ Release workflow review also found that desktop CI jobs did not acquire the new
 ignored PDF/OCR assets. They now depend on the pinned OCR build, download its
 verified output and prepare PDF assets before packaging. The Windows job also
 runs the packaged terminal regression. Workflow syntax validation passed.
+
+## Cross-platform CI follow-up
+
+Full-candidate CI run 41514698266 passed the pinned parser/grammar, worker
+dependency packaging, Python SDK/worker checks, reproducible OCR build and
+offline PDF/OCR container corpus. It exposed two incorrect parser test
+assumptions: Unix signal termination does not satisfy `ProcessState.Exited`,
+and a warm PDF worker can finish before an arbitrary 80 ms cancellation timer.
+The tests now check that `Cmd.Wait` already reaped the worker and cancel a real
+started worker while its input remains incomplete. This exercises owned-process
+cancellation during input, not cancellation during a particular PDFium operation.
+The existing bounded hanging-worker test still checks deadline propagation.
+Three repeated Windows parser runs passed after the corrections.
+
+The Windows repair-budget test also hit its five-second watchdog while writing
+durable checkpoints. Its watchdog now allows 30 seconds; the exact eight model
+decisions, one dispatched action and repair-limit outcome remain required.
+Three repeated proposal-repair test runs passed. These are test corrections,
+not relaxations of production cancellation, action or repair limits.
+
+Local release-automation shell fixtures could not all run: Windows resolved
+`bash` to WSL initially, and the explicit Git Bash retry lacked `jq`. The
+release-context and CI-gate fixtures passed; asset/finalizer/container shell
+fixtures remain subject to the Linux CI run. No failed local invocation is
+counted as a pass. Logs: `build/release-parser-portable.log`,
+`build/release-repair-portable.log`, `build/release-automation-gitbash.log`.

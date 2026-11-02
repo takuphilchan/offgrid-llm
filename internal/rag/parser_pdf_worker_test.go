@@ -51,9 +51,7 @@ func TestParserWorkerProcessFailureBoundaries(t *testing.T) {
 			if result != nil || err == nil || strings.Contains(err.Error(), "private worker") {
 				t.Fatalf("unsafe %s outcome: %v %v", mode, result, err)
 			}
-			if cmd.ProcessState == nil || !cmd.ProcessState.Exited() && ctx.Err() == nil {
-				t.Fatal("owned worker was not waited on")
-			}
+			assertParserWorkerReaped(t, cmd)
 			if mode == "hang" && !errors.Is(err, context.DeadlineExceeded) {
 				t.Fatalf("deadline lost: %v", err)
 			}
@@ -64,6 +62,18 @@ func TestParserWorkerProcessFailureBoundaries(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func assertParserWorkerReaped(t *testing.T, cmd *exec.Cmd) {
+	t.Helper()
+	// Exited reports a normal exit on Unix, not termination by SIGPIPE or
+	// cancellation. Both are expected here. Wait must have reaped either case.
+	if cmd.ProcessState == nil || cmd.Process == nil {
+		t.Fatal("owned worker was not waited on")
+	}
+	if err := cmd.Wait(); err == nil || err.Error() != "exec: Wait was already called" {
+		t.Fatalf("owned worker was not already reaped: %v", err)
 	}
 }
 
@@ -209,15 +219,34 @@ func TestParserWorkerRealCorpus(t *testing.T) {
 			}
 		})
 	}
-	t.Run("cancel-running-worker", func(t *testing.T) {
-		data, _ := os.ReadFile("testdata/documents/corpus/compressed.pdf")
-		ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	t.Run("cancel-worker-during-input", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+		cmd := exec.CommandContext(ctx, worker)
+		configureParserProcess(cmd)
+		input, writer := io.Pipe()
+		defer input.Close()
+		defer writer.Close()
+		cmd.Stdin = input
+		// exec starts stdin copying only after starting the child. Keep the
+		// document incomplete so even a fast worker cannot finish before cancel.
+		delivered := make(chan error, 1)
+		go func() {
+			_, err := writer.Write([]byte("%PDF-1.7\n"))
+			cancel()
+			_ = writer.CloseWithError(context.Canceled)
+			delivered <- err
+		}()
 		start := time.Now()
-		_, err := p.ParseContext(ctx, data, "test.pdf", ".pdf")
-		if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 3*time.Second {
+		_, err := runParserCommand(ctx, cmd, 20<<20)
+		_ = input.Close()
+		if deliveryErr := <-delivered; deliveryErr != nil {
+			t.Fatalf("worker input was not started: %v", deliveryErr)
+		}
+		if !errors.Is(err, context.Canceled) || time.Since(start) > 3*time.Second {
 			t.Fatalf("worker did not stop promptly: %v %s", err, time.Since(start))
 		}
+		assertParserWorkerReaped(t, cmd)
 	})
 
 	t.Run("code-cache-excludes-source-text", func(t *testing.T) {
