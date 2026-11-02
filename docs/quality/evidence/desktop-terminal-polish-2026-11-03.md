@@ -94,5 +94,6 @@ added so a clean checkout contains the supervisor used by packaging.
 
 The subsequent full web run reported 913 passed, 33 skipped and 27 failures in
 composer, file-publication, Knowledge setup and voice/streaming journeys. Those
-failures are release blockers under investigation; the focused terminal checks
-do not override them.
+failures were release blockers; the focused terminal checks did not override
+them. Subsequent fixes and the full 945-pass disposable-service renderer run are
+recorded in [the local release checks](release-local-checks-2026-11-03.md).

@@ -1,0 +1,291 @@
+{
+  "engine": "current-parser-without-PATH-extractor",
+  "text_or_error_passed": 25,
+  "total": 37,
+  "source_units_qualified": false,
+  "cases": [
+    {
+      "path": "plain.pdf",
+      "family": "pdf_text",
+      "text_or_error_pass": true,
+      "page_count": 1,
+      "page_count_match": true,
+      "duration_ms": 1
+    },
+    {
+      "path": "compressed.pdf",
+      "family": "pdf_text",
+      "text_or_error_pass": false,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 1
+    },
+    {
+      "path": "mapped-latin.pdf",
+      "family": "pdf_text",
+      "text_or_error_pass": false,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 11
+    },
+    {
+      "path": "escaped.pdf",
+      "family": "pdf_text",
+      "text_or_error_pass": false,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 2
+    },
+    {
+      "path": "multiline.pdf",
+      "family": "pdf_text",
+      "text_or_error_pass": false,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 1
+    },
+    {
+      "path": "rotated.pdf",
+      "family": "pdf_text",
+      "text_or_error_pass": false,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 1
+    },
+    {
+      "path": "punctuation.pdf",
+      "family": "pdf_text",
+      "text_or_error_pass": false,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 2
+    },
+    {
+      "path": "three-pages.pdf",
+      "family": "pdf_text",
+      "text_or_error_pass": false,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 1
+    },
+    {
+      "path": "columns.pdf",
+      "family": "pdf_text",
+      "text_or_error_pass": false,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 1
+    },
+    {
+      "path": "scan.pdf",
+      "family": "pdf_scan",
+      "text_or_error_pass": true,
+      "actual_error": "document_ocr_required",
+      "page_count_match": false,
+      "duration_ms": 4
+    },
+    {
+      "path": "scan-rotated.pdf",
+      "family": "pdf_scan",
+      "text_or_error_pass": true,
+      "actual_error": "document_ocr_required",
+      "page_count_match": false,
+      "duration_ms": 4
+    },
+    {
+      "path": "mixed.pdf",
+      "family": "pdf_mixed",
+      "text_or_error_pass": true,
+      "actual_error": "document_ocr_required",
+      "page_count_match": false,
+      "duration_ms": 5
+    },
+    {
+      "path": "encrypted.pdf",
+      "family": "pdf_encrypted",
+      "text_or_error_pass": false,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 2
+    },
+    {
+      "path": "blank.pdf",
+      "family": "pdf_empty",
+      "text_or_error_pass": false,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 1
+    },
+    {
+      "path": "truncated.pdf",
+      "family": "corrupt",
+      "text_or_error_pass": true,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 1
+    },
+    {
+      "path": "not-a-pdf.pdf",
+      "family": "corrupt",
+      "text_or_error_pass": true,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "object-stream.pdf",
+      "family": "pdf_text",
+      "text_or_error_pass": true,
+      "page_count_match": false,
+      "duration_ms": 1
+    },
+    {
+      "path": "unused-large-stream.pdf",
+      "family": "pdf_resource",
+      "text_or_error_pass": false,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 8
+    },
+    {
+      "path": "latin.txt",
+      "family": "text",
+      "text_or_error_pass": true,
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "japanese.txt",
+      "family": "text",
+      "text_or_error_pass": true,
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "greek.txt",
+      "family": "text",
+      "text_or_error_pass": true,
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "hindi.txt",
+      "family": "text",
+      "text_or_error_pass": true,
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "arabic.txt",
+      "family": "text",
+      "text_or_error_pass": true,
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "notes.md",
+      "family": "text",
+      "text_or_error_pass": true,
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "table.csv",
+      "family": "text",
+      "text_or_error_pass": true,
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "record.json",
+      "family": "text",
+      "text_or_error_pass": true,
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "page.html",
+      "family": "text",
+      "text_or_error_pass": true,
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "record.xml",
+      "family": "text",
+      "text_or_error_pass": true,
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "basic.rtf",
+      "family": "text",
+      "text_or_error_pass": true,
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "invalid-utf8.txt",
+      "family": "corrupt",
+      "text_or_error_pass": false,
+      "page_count_match": true,
+      "duration_ms": 0
+    },
+    {
+      "path": "malformed.json",
+      "family": "corrupt",
+      "text_or_error_pass": true,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "ordered-workbook.xlsx",
+      "family": "office",
+      "text_or_error_pass": true,
+      "page_count": 2,
+      "page_count_match": false,
+      "duration_ms": 1
+    },
+    {
+      "path": "reordered-presentation.pptx",
+      "family": "office",
+      "text_or_error_pass": true,
+      "page_count": 3,
+      "page_count_match": true,
+      "duration_ms": 1
+    },
+    {
+      "path": "paragraphs.docx",
+      "family": "office",
+      "text_or_error_pass": true,
+      "page_count": 1,
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "corrupt.docx",
+      "family": "corrupt",
+      "text_or_error_pass": true,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "expanding.docx",
+      "family": "resource",
+      "text_or_error_pass": true,
+      "actual_error": "document_limit",
+      "page_count_match": false,
+      "duration_ms": 0
+    },
+    {
+      "path": "empty-package.xlsx",
+      "family": "corrupt",
+      "text_or_error_pass": true,
+      "actual_error": "document_invalid",
+      "page_count_match": false,
+      "duration_ms": 0
+    }
+  ]
+}
