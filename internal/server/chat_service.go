@@ -192,7 +192,11 @@ type knowledgeRetriever interface {
 func (s *Server) enhanceChatWithKnowledge(ctx context.Context, request *api.ChatCompletionRequest) error {
 	var knowledge knowledgeRetriever
 	if s.ragEngine != nil {
-		knowledge = s.ragEngine
+		actor := "local"
+		if user := users.UserFromContext(ctx); user != nil {
+			actor = user.ID
+		}
+		knowledge = s.ragEngine.ForActor(actor)
 	}
 	return injectKnowledge(ctx, request, knowledge)
 }

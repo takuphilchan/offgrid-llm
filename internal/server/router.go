@@ -191,8 +191,23 @@ func (s *Server) registerKnowledgeRoutes(mux *http.ServeMux, guards routeGuards)
 	mux.HandleFunc("/v1/rag/disable", ragManagerOnly(s.handleRAGDisable))
 	mux.HandleFunc("/v1/documents", ragOnly(s.handleDocumentsList))
 	mux.HandleFunc("/v1/documents/ingest", ragManagerOnly(s.handleDocumentIngest))
+	mux.HandleFunc("/v1/documents/imports", ragManagerOnly(s.handleDocumentImports))
+	mux.HandleFunc("/v1/documents/ocr-languages", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			ragOnly(s.handleOCRLanguages)(w, r)
+		} else {
+			ragManagerOnly(s.handleOCRLanguages)(w, r)
+		}
+	})
 	mux.HandleFunc("/v1/documents/ingest-url", ragManagerOnly(s.handleDocumentIngestURL))
 	mux.HandleFunc("/v1/documents/delete", ragManagerOnly(s.handleDocumentDelete))
+	mux.HandleFunc("/v1/documents/retention", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			ragOnly(s.handleDocumentRetention)(w, r)
+		} else {
+			ragManagerOnly(s.handleDocumentRetention)(w, r)
+		}
+	})
 	mux.HandleFunc("/v1/documents/source", ragOnly(s.handleDocumentSource))
 	mux.HandleFunc("/v1/documents/search", ragOnly(s.handleDocumentSearch))
 	mux.HandleFunc("/v1/documents/reindex", ragManagerOnly(s.handleDocumentReindex))

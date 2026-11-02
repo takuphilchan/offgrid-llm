@@ -92,6 +92,43 @@ func (s *ScopedManager) SearchNames(ctx context.Context, query string, limit int
 			if !s.access.allows(&Session{OwnerID: header.OwnerID}) {
 				continue
 			}
+			if s.access.Knowledge != nil {
+				// Decode references only; text bodies are never indexed or returned.
+				var refs struct {
+					Messages []struct {
+						KnowledgeDocuments []string `json:"knowledge_documents"`
+						KnowledgeSources   []struct {
+							DocumentID string `json:"document_id"`
+						} `json:"knowledge_sources"`
+					} `json:"messages"`
+					Turn *struct {
+						KnowledgeDocuments []string `json:"knowledge_documents"`
+						KnowledgeSources   []struct {
+							DocumentID string `json:"document_id"`
+						} `json:"knowledge_sources"`
+					} `json:"turn"`
+				}
+				if json.Unmarshal(data, &refs) != nil {
+					partial = true
+					continue
+				}
+				ids := []string{}
+				for _, m := range refs.Messages {
+					ids = append(ids, m.KnowledgeDocuments...)
+					for _, p := range m.KnowledgeSources {
+						ids = append(ids, p.DocumentID)
+					}
+				}
+				if refs.Turn != nil {
+					ids = append(ids, refs.Turn.KnowledgeDocuments...)
+					for _, p := range refs.Turn.KnowledgeSources {
+						ids = append(ids, p.DocumentID)
+					}
+				}
+				if s.CheckKnowledge(ids) != nil {
+					continue
+				}
+			}
 			result := api.WorkSearchResult{Kind: "chat", ID: name, Title: name, UpdatedAt: header.UpdatedAt}
 			results = append(results, result)
 			sort.Slice(results, func(i, j int) bool {

@@ -37,6 +37,12 @@ func (s *Server) handleJobCommand(w http.ResponseWriter, r *http.Request, id, ac
 		writeJSON(w, 200, map[string]bool{"success": true})
 		return
 	}
+	canRead := s.taskKnowledgeAllowed(s.agentActor(r), task)
+	controlOnly := action == "cancel" || action == "deny" || action == "pause" || action == "takeover"
+	if !canRead && !controlOnly {
+		writeJobError(w, 403, "knowledge_unavailable", "A source used by this task is no longer available.", false)
+		return
+	}
 	if action == "export" && r.Method == http.MethodGet {
 		w.Header().Set("Content-Disposition", `attachment; filename="`+id+`.json"`)
 		// Owner-scoped public evidence, not the private model checkpoint.
@@ -57,6 +63,9 @@ func (s *Server) handleJobCommand(w http.ResponseWriter, r *http.Request, id, ac
 		recovered, err := s.agentRunner.RecoverExecution(r.Context(), id, task.Actor)
 		if err != nil {
 			writeJobCommandError(w, err)
+			return
+		}
+		if s.rejectUnavailableTask(w, r, recovered) {
 			return
 		}
 		writeJSON(w, 202, taskResponse(recovered))
@@ -123,6 +132,10 @@ func (s *Server) handleJobCommand(w http.ResponseWriter, r *http.Request, id, ac
 	}
 	if err != nil {
 		writeJobCommandError(w, err)
+		return
+	}
+	if !s.taskKnowledgeAllowed(s.agentActor(r), task) {
+		writeJSON(w, 202, map[string]any{"id": task.ID, "status": task.Status})
 		return
 	}
 	writeJSON(w, 202, taskResponse(task))

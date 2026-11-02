@@ -11,6 +11,74 @@ curl http://127.0.0.1:11611/openapi.yaml
 The OpenAPI document is the source of truth for request and response fields.
 This page explains the main workflows and persistence semantics.
 
+## Files in saved Chat
+
+Services advertising `session-files-v1` expose private conversation sources:
+
+- `POST /v1/sessions/{name}/attachments`: multipart `file`, returning attachment metadata.
+- `GET /v1/sessions/{name}/attachments`: source names, identities and extraction states.
+- `POST /v1/sessions/{name}/attachments/{id}/prepare`: retry extraction of a retained original.
+- `GET /v1/sessions/{name}/attachments/{id}/original`: authenticated, digest-verified download.
+- `DELETE /v1/sessions/{name}/attachments/{id}`: remove an unused source; history or active-work references return 409.
+
+An accepted source is `uploaded`, `ready` or `failed`. Failed extraction returns
+422 with `error` and the retained `attachment` when storage succeeded. Inspect
+the inventory after a disconnected upload instead of blindly uploading again.
+Source files are not automatically published to Knowledge or granted tool access.
+
+For ordinary Chat, send `attachments: [{"id":"file-…","revision":"…"}]` with
+`stream: true`, `durable: true` and a stable `request_id` to the existing generate
+endpoint. Attachment identities participate in replay checks and appear on saved
+user messages. Changing them under the same request ID returns a conflict.
+Every admission rechecks ownership, original bytes and extraction revision.
+Agent file context is not yet enabled; unsupported paths fail explicitly.
+
+Limits are eight originals and 100 MiB per conversation, 50 MiB per file and
+500 MiB per owner. Direct conversation context permits 256 KiB of extracted
+source text across the full history; model context admission may impose a lower
+limit. No text is silently truncated. Larger documents require Knowledge
+retrieval. PDF/OCR readiness remains subject to the documented parser limits.
+Draft-chip removal does not delete a retained source. Explicit conversation
+deletion removes its original and extracted attachment files; if cleanup fails,
+the conversation remains for an explicit deletion retry. Backups are separate.
+
+CLI service conversations use the same APIs:
+
+```sh
+offgrid session create research --model MODEL
+offgrid session send research --file notes.pdf "Summarize the key points"
+offgrid session attachments research
+offgrid session chat research
+# In chat: /attach PATH, /attachments, /remove-attachment N|all
+# Recover an existing source: /use-attachment ID, /retry-attachment N
+# Image commands: /image PATH, /images, /remove-image N|all
+
+# Start directly with a file (saved automatically on the connected service):
+offgrid run MODEL --file notes.txt --prompt "Summarize the key points"
+# Omit --prompt for interactive file chat; --save names the new conversation.
+offgrid run MODEL --file notes.txt --save research-files
+```
+
+File runs support the plain terminal and interactive TUI through the same
+service contract. `--json` requires `--prompt`; recovery identifiers go to stderr.
+`--load` selects an existing service conversation without replacing its history.
+Ordinary `offgrid run` also accepts `/attach PATH` after conversation has begun.
+It first copies completed text/image history atomically into a new authenticated
+service conversation and displays its resume command. The original local history
+is left intact. This requires `session-history-seed-v1`; older services fail
+explicitly rather than discarding history. An unconfirmed upload blocks sending
+until resolved or explicitly removed with `/remove-attachment all`.
+Existing image input remains compatible, including images alongside files in
+service conversations. After a disconnected upload, choose **Saved files** in
+Chat or inspect `offgrid session attachments NAME` before uploading again.
+
+`POST /v1/sessions` optionally accepts `history` on services advertising
+`session-history-seed-v1`. Only user/assistant text and valid user images are
+accepted: at most 1,024 messages, 8 MiB text and 12 MiB encoded images, within a
+32 MiB request body. Ownership comes from authentication. Task IDs, source
+references, tool results and system roles cannot be imported; creation does not
+run inference. A conflicting name returns 409 without changing existing history.
+
 ## Images in saved Chat
 
 Services advertising `session-images-v1` accept an optional `images` array on
@@ -783,6 +851,17 @@ request. A successful download is rescanned into the registry before it is
 reported as installed. Verification hashes the model contents and can be
 cancelled with the request context.
 
+With `gguf-bundles-v1`, the same download request resolves an immutable GGUF
+bundle. `DownloadProgress.bundle` contains repository, revision, weights and an
+optional required projector with sizes and SHA-256 identities. Aggregate progress
+covers both files. Repeating the explicit request repairs missing/damaged managed
+companions after verifying unchanged existing weights; it never replaces different
+weights. A saved operation keeps its pinned revision across restart. Ambiguous
+companions, missing source hashes and unsupported split weights fail closed.
+Installation integrity does not imply runtime or vision qualification. Older
+services omit this additive capability/field. Knowledge enablement keeps its
+existing embedding setup contract.
+
 ## Stateless chat
 
 `POST /v1/chat/completions` accepts the OpenAI chat-completions shape:
@@ -959,6 +1038,17 @@ the selected IDs: reusing a request ID with a different source scope returns a
 conflict instead of replaying generation. Historical messages without these
 optional fields remain valid.
 
+Saved messages may also include `knowledge_documents`: source dependencies for
+inventory-based answers or inherited conversation context, even when no passage
+was quoted. These IDs are not access grants. The service rechecks current
+Knowledge permission and source access when reading, searching, continuing or
+publishing saved work. Unavailable dependencies return `knowledge_unavailable`;
+restricted histories are omitted from lists/search rather than exposing retained
+excerpts or derived answers. Previously delivered text cannot be recalled.
+Owners may still stop or delete affected work; those control responses omit
+retained content. Revocation does not itself erase the underlying history or
+backups. Collection management and full retention controls remain unfinished.
+
 The knowledge index is currently shared by callers granted RAG access. Session
 ownership does not make uploaded documents private to their uploader; separate
 collection-level access controls are planned. Do not use one instance as an
@@ -981,6 +1071,73 @@ in-memory index or acknowledge imports it cannot persist. `/v1/rag/status` stays
 available and reports `enabled: false`, `stats.storage_available: false`, and an
 actionable error. Repair disk/access/database problems and restart; retain a
 backup before any database recovery. Do not delete the database as a routine fix.
+
+#### Document retention
+
+Services advertising `knowledge-retention-v1` expose
+`GET /v1/documents/retention?id=DOCUMENT_ID` and revision-checked `PUT` at the same
+path. A policy has `version: 1`, `revision`, `delete_after` (UTC Unix seconds; `0`
+means retain until manually deleted), and `legal_hold`. PUT requires all four
+fields, including the current revision, and returns the next revision. Readers
+may inspect sources they can access. Updating requires Knowledge management
+authority and, for private collections, ownership. A reference grants no access.
+
+A stale revision returns `409 document_retention_conflict`. Deleting a held source
+returns `409 document_held`, rather than a misleading not-found response. Unknown
+retention versions fail closed. Defaults do not expire existing documents.
+
+The service checks expiry at startup and once per minute, processing at most 100
+documents per sweep. An eligible source is removed transactionally with its
+original, extracted text, index and related import payloads; stale workers cannot
+republish it. A legal hold overrides expiry. Failed sweeps retry on the next tick;
+RAG status exposes `stats.retention.error_code` without private document details.
+This is logical source deletion, not secure disk erasure. Backups and saved
+answers have separate retention; deleting a source does not erase their bytes.
+
+CLI: `offgrid kb retention ID` reads the policy. To update, supply all options:
+`offgrid kb retention ID --revision N --delete-after UTC_UNIX_SECONDS --legal-hold true|false`.
+Python uses `client.kb.retention(id)` and
+`client.kb.set_retention(id, revision=N, delete_after=0, legal_hold=True)`.
+Web/desktop Knowledge places the controls in each document's options menu for
+administrators. Clients do not automatically replay failed policy updates; reload
+the policy and inspect its current revision before another save.
+
+`document_formats` is an additive extraction-readiness list, available even when
+Knowledge is disabled. Each entry identifies extensions, runtime, extractor
+revision, source-unit kinds, file/text limits, encrypted-file policy, limitations
+and OCR availability/languages. `runtime_state` is `available` for built-in
+extractors, `installed_unchecked` for a discovered PDF worker, or `unavailable`.
+Presence is not a smoke test or format qualification; `qualification` currently
+remains `unverified`. No worker is launched, dependency downloaded, or inference
+performed by the status request. CLI `kb status --json` and Python `kb.status()`
+preserve these fields. Older clients may ignore them.
+
+### Offline OCR language setup
+
+`GET /v1/documents/ocr-languages` requires Knowledge read permission and returns
+`languages` plus `document_formats`. Language entries contain `language`, `name`,
+`sha256`, `state` (`missing`, `invalid`, `installed_verified`) and `qualification`.
+They never include local paths or model bytes. PDF `ocr_state` distinguishes
+`unavailable`, `language_missing`, `language_invalid` and `installed_unchecked`.
+Installed bytes are not proof of qualified OCR accuracy.
+
+`POST /v1/documents/ocr-languages?language=eng` requires Knowledge management
+permission and an `application/octet-stream` body up to 32 MiB. It accepts only
+the reviewed English language digest returned by the status endpoint. Data is
+verified before atomic installation under the service workspace; requests cannot
+name output paths or load executable code. An import takes its own immutable
+language snapshot. Existing imports, model selections and indexes are unchanged;
+retry a saved failed document import explicitly after setup. There is no automatic
+download, cloud OCR or reindexing.
+
+CLI: `offgrid kb ocr-languages` and
+`offgrid kb import-ocr-language eng /path/to/eng.traineddata`.
+Python: `client.kb.ocr_languages()` and
+`client.kb.import_ocr_language("eng", path)`.
+Web/desktop Knowledge exposes the same operation under **Read scanned documents**
+when a packaged OCR reader is present. English OCR remains experimental pending
+packaging and broader document-quality gates; low confidence or ambiguous layouts
+remain partial and cannot become a ready index.
 
 ## Agent profiles (development API)
 
@@ -1367,6 +1524,107 @@ and occurrence identities remain durable; no credentials are stored in schedules
 Jobs expose additive `schedule` provenance. Existing APIs and ordinary jobs keep
 their current behavior. See OpenAPI and the agent guide for concrete schemas and
 missed/DST/revocation/overlap semantics. This is not an OS wake-up service.
+
+## Knowledge original files
+
+`GET /v1/documents/source?id=DOCUMENT_ID` continues to return extracted-text JSON.
+Saved citations can additionally supply `start_byte`, `end_byte`, `source_sha256`,
+`extractor_revision` and `content_hash` together. This returns only the exact
+passage, including passages beyond the ordinary preview limit, after checking the
+retained source and its revision. Offsets are UTF-8 bytes; passages are bounded to
+800,000 bytes. A successful response includes `citation_verified: true`. Missing
+fields return 400; changed/unavailable evidence returns 409 without substituting
+the current document prefix. Existing Knowledge read permissions still apply.
+New XLSX `KnowledgeSourceLocator` records include optional `cells` references
+from worksheet XML. Only cells intersecting the cited byte range are included;
+context truncation removes omitted references. Existing saved locators without
+cells remain valid and are not upgraded by guessing from extracted text.
+`format=original` returns the digest-checked original as an attachment with
+`application/octet-stream`, `nosniff`, `Cache-Control: no-store` and an
+`X-OffGrid-Source-SHA256` header for independent integrity checks. Both require
+the same Knowledge read permission. Missing legacy originals and unreadable or
+unknown-version records return 410; a deleted document returns 404.
+
+The additive `Document.original_retained` field distinguishes original-file
+presence from `source_retained` (extracted text). New multipart imports publish
+the original and index in one storage transaction; JSON text imports and legacy
+records do not fabricate binary originals. Reindexing preserves original bytes.
+Deletion removes the original through the document foreign key. Backup retention
+is separate. Original storage has a 50 MiB per-file and 2 GiB workspace limit;
+exceeding it returns `document_storage_limit` without publishing a ready document.
+Collection ACLs remain unfinished; published documents retain workspace policy.
+
+## Durable Knowledge imports
+
+Services advertise `document-imports-v1` in `/api/v2/system` when available.
+All `/v1/documents/imports` operations require Knowledge management permission
+and are scoped to the authenticated uploader, including administrators.
+
+The CLI exposes partial page review as `offgrid kb review-import IMPORT_ID`;
+the Python SDK provides `client.kb.review_import(import_id)`. Neither starts
+extraction or publishes a document.
+
+- `POST /v1/documents/imports` accepts a multipart `file` and returns `202` with
+  an `accepted` record. It saves bytes before parsing and does not start extraction.
+  An optional `Idempotency-Key` (1–128 bytes) reuses the same owner-scoped record
+  for identical name/content; changed input returns `409`.
+- `GET /v1/documents/imports` lists the most recent 100 owned records.
+- `GET /v1/documents/imports?id=ID` reads one record without returning source bytes.
+  Clients may poll this read-only endpoint for `queued`, `extracting` and
+  `indexing` progress while an explicit retry is pending. Polling never dispatches
+  work. Reader/import admission returns HTTP 503 with `document_busy` when full
+  or after a 30-second queue wait; inspect the saved record before explicitly
+  retrying. An unstarted import retains its original identity and bytes.
+- `GET /v1/documents/imports?id=ID&view=extraction` explicitly reads retained
+  partial PDF pages for owner review when `review_available` is true. Page text,
+  source digest, extractor revision and readable/empty/OCR-needed states remain
+  separate. This does not index, resume or approve partial content for answers.
+  Retry clears obsolete review text; removing the import removes its review.
+  The JSON is bounded to 32 MiB and shares the workspace original-storage quota.
+- `POST /v1/documents/imports?id=ID&action=retry` explicitly processes the retained
+  source. It returns only when processing ends. Successful publication returns
+  `ready` and `document_id`; retrying an already ready import does not reindex it.
+- `POST /v1/documents/imports?id=ID&action=cancel` revokes the current attempt and
+  cancels its owned work. Pending bytes remain available for an explicit retry.
+- `DELETE /v1/documents/imports?id=ID` removes the record/pending bytes. It does
+  not delete a published document; document deletion uses the existing endpoint.
+
+Services advertising `document-attachment-imports-v1` also accept a saved Chat
+file using `POST /v1/documents/imports` with `Content-Type: application/json`:
+
+```json
+{"attachment":{"session":"my-conversation","id":"file-0123456789abcdef0123456789abcdef","sha256":"<exact 64-character source digest>"}}
+```
+
+This explicitly copies the retained original into an import; it requires both
+current access to that conversation source and Knowledge management permission.
+The JSON reference is limited to 8 KiB. A changed digest returns `409`; an
+unavailable source is not accepted. Without a caller-supplied idempotency key,
+the service derives one from the exact source identity, so repeated acceptance
+returns the same actor-owned record without starting extraction. Inspect its
+state before explicitly indexing. Deleting either private attachment or pending
+import does not delete the other copy. Publishing makes the copy subject to the
+workspace's Knowledge access and retention policy; attaching alone never does.
+
+The matching clients are `offgrid kb import-attachment SESSION FILE_ID SHA256`
+and `client.kb.import_attachment(session, attachment_id, sha256)`. Both accept
+only; `retry-import` / `retry_import` explicitly starts indexing.
+
+Records expose ID, filename, digest, byte size, state, attempt number, timestamps
+and bounded error code. States include `accepted`, `queued`, `extracting`,
+`indexing`, `ready`, `needs_input`, `failed`, `cancelled`, `interrupted`, and
+`deleted`. Missing or cross-owner identities return `404`; a conflicting active
+attempt returns `409`. A processing error can still leave a saved record: inspect
+it after a failed response. No mutation request is automatically replayed.
+
+Restart changes in-flight imports to `interrupted`. Cancellation and deletion
+invalidate the persisted attempt, so a late worker cannot publish it. Publication
+atomically transfers the pending bytes into retained original/index storage.
+Pending and published originals share the 2 GiB quota; the history limit is 4,096
+records per workspace. Existing extracted-text records remain readable and do not
+gain fabricated originals. The legacy multipart ingest endpoint remains
+synchronous and now uses this durable path internally. JSON text and URL imports
+keep their existing contracts.
 
 ## Changing the contract
 

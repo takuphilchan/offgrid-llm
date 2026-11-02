@@ -571,7 +571,7 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
     post:
       operationId: createSession
-      description: Creates a conversation owned by the authenticated caller. Names are installation-wide unique; an existing name returns 409 without overwriting history. Client-supplied ownership is ignored.
+      description: Creates a conversation owned by the authenticated caller. Names are installation-wide unique; an existing name returns 409 without overwriting history. Client-supplied ownership is ignored. Services advertising session-history-seed-v1 accept optional completed user/assistant history atomically, without executing inference or importing task authority. History is limited to 1024 messages, 8 MiB text and 12 MiB encoded images; the whole body is limited to 32 MiB.
       requestBody:
         required: true
         content:
@@ -582,6 +582,19 @@ paths:
               properties:
                 name: { type: string, minLength: 1, maxLength: 128 }
                 model_id: { type: string }
+                history:
+                  type: array
+                  maxItems: 1024
+                  items:
+                    type: object
+                    required: [role, content]
+                    properties:
+                      role: { type: string, enum: [user, assistant] }
+                      content: { type: string }
+                      images:
+                        type: array
+                        maxItems: 4
+                        items: { $ref: '#/components/schemas/SessionImage' }
       responses:
         '201':
           description: Conversation created
@@ -625,6 +638,114 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /v1/sessions/{name}/attachments:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+    get:
+      operationId: listSessionAttachments
+      description: Owner-scoped source metadata only. Does not return extracted text or publish files to Knowledge.
+      responses:
+        '200':
+          description: Retained conversation files
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [attachments]
+                properties:
+                  attachments: { type: array, items: { $ref: '#/components/schemas/SessionAttachment' } }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: uploadSessionAttachment
+      description: Uploads and prepares a private source. Up to eight files, 50 MiB per file, 100 MiB per conversation and 500 MiB per owner. Failed extraction retains the original and returns its attachment identity with an error. No automatic Knowledge publication, model download or filesystem grant.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Prepared attachment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionAttachmentResult' }
+        '422':
+          description: Extraction failed; any accepted original is retained under the returned identity
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionAttachmentResult' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '503':
+          description: Reader queue is full or its wait expired (document_busy); the returned source is retained for explicit retry.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionAttachmentResult' }
+  /v1/sessions/{name}/attachments/{attachment_id}:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+      - { name: attachment_id, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: deleteSessionAttachment
+      description: Deletes an unused source. Saved-history references or an active turn return 409. Removing a draft chip is a separate client action and must not delete a history source.
+      responses:
+        '200':
+          description: Source removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [removed]
+                properties: { removed: { type: boolean } }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /v1/sessions/{name}/attachments/{attachment_id}/prepare:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+      - { name: attachment_id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: prepareSessionAttachment
+      description: Retry extraction from the retained digest-verified original. Ready revisions are immutable. Does not generate an answer.
+      responses:
+        '200':
+          description: Prepared attachment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionAttachmentResult' }
+        '422':
+          description: Source unavailable or extraction failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionAttachmentResult' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503':
+          description: Reader queue is full or its wait expired (document_busy); original bytes remain unchanged.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionAttachmentResult' }
+  /v1/sessions/{name}/attachments/{attachment_id}/original:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+      - { name: attachment_id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getSessionAttachmentOriginal
+      description: Owner-scoped digest-verified original, delivered as a download with no-store and nosniff headers.
+      responses:
+        '200':
+          description: Original bytes
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
   /v1/sessions/{name}/generate:
     parameters:
       - $ref: '#/components/parameters/SessionName'
@@ -639,7 +760,8 @@ paths:
               type: object
               required: [content]
               properties:
-                content: { type: string, description: Text is optional when images are attached; at most 64 KiB. }
+                content: { type: string, description: Text is optional when images or files are attached; at most 64 KiB. }
+                attachments: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/SessionAttachmentReference' }, description: Ordinary durable streaming only. References are owner-scoped and revision-bound; never silently omitted or granted tool authority. }
                 images: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/SessionImage' }, description: Ordinary durable streaming only. Local vision model required; never silently discarded or used by agents. }
                 model_id: { type: string }
                 use_knowledge_base: { type: boolean, default: false }
@@ -735,15 +857,161 @@ paths:
       responses:
         '200': { description: Cancellation requested for this exact turn. Refresh for terminal state. }
         '409': { $ref: '#/components/responses/Error' }
-  /v1/documents/source:
+  /v1/documents/ocr-languages:
     get:
-      operationId: getDocumentSource
-      description: Requires knowledge read permission. Returns retained extracted text, not the original file. Available while inference is disabled.
+      operationId: getOCRLanguages
+      description: Requires Knowledge read permission. Reports reviewed offline OCR language packs independently of runtime qualification; never returns filesystem paths or pack bytes.
+      responses:
+        '200':
+          description: Language installation and document runtime states
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OCRLanguageReadiness' }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: importOCRLanguage
+      description: Requires Knowledge management permission. Explicitly imports up to 32 MiB of pinned language data into this service workspace. No downloads, executable code, inference or automatic reindexing. Only a supported digest is accepted, and active imports retain their immutable snapshot.
+      parameters:
+        - { name: language, in: query, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary, maxLength: 33554432 }
+      responses:
+        '200':
+          description: Verified durable installation; qualification remains separate
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OCRLanguageReadiness' }
+        '403': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /v1/documents/imports:
+    get:
+      operationId: getDocumentImports
+      description: Requires Knowledge management permission. Without id returns the most recent 100 imports owned by the authenticated actor; with id returns that actor's exact record. Never returns original bytes. Restart marks in-flight imports interrupted without replay.
+      parameters:
+        - { name: id, in: query, schema: { type: string } }
+        - { name: view, in: query, description: With id, extraction returns owner-scoped partial PDF pages for review only. Never indexes or resumes work., schema: { type: string, enum: [extraction] } }
+      responses:
+        '200':
+          description: Saved import or recent import list
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/DocumentImport' }
+                  - { $ref: '#/components/schemas/DocumentImportExtraction' }
+                  - type: object
+                    required: [imports]
+                    properties:
+                      imports: { type: array, items: { $ref: '#/components/schemas/DocumentImport' } }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: prepareDocumentImport
+      description: Without id, accept and retain a bounded multipart upload before extraction; returns 202 without starting a worker. Reusing an Idempotency-Key with the same actor/name/bytes returns the same record, changed bytes conflict. With id and action=retry, process the retained source synchronously with durable progress; action=cancel invalidates pending publication. A completed retry returns saved success without replay. Request cancellation retains progress and original bytes for explicit recovery.
+      parameters:
+        - { name: id, in: query, schema: { type: string } }
+        - { name: action, in: query, schema: { type: string, enum: [retry, cancel] } }
+        - { name: Idempotency-Key, in: header, schema: { type: string, maxLength: 128 } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentAttachmentImport'
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '202':
+          description: Original durably accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentImport' }
+        '200':
+          description: Import processed or cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentImport' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { description: Reader/import queue unavailable (document_busy) or packaged reader unavailable. Inspect saved state; no automatic replay., $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: removeDocumentImport
+      description: Remove the actor's import record and pending original, invalidating in-flight publication. Does not delete an already published Knowledge document or backups.
       parameters:
         - { name: id, in: query, required: true, schema: { type: string } }
       responses:
         '200':
-          description: Safe text preview (maximum 200000 Unicode characters)
+          description: Import record removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/documents/retention:
+    get:
+      operationId: getDocumentRetention
+      description: Requires Knowledge read access and current document visibility. Returns no-store, revision-bound retention metadata.
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 256 } }
+      responses:
+        '200':
+          description: Current retention policy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentRetention' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+    put:
+      operationId: setDocumentRetention
+      description: Requires Knowledge management permission and private collection ownership. Both expiry and legal hold must be explicit. Old revisions conflict. No expiry is assigned to legacy documents. The service processes up to 100 eligible documents per minute; held documents are retained. Backups and saved answers have separate retention.
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 256 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DocumentRetention' }
+      responses:
+        '200':
+          description: Updated retention policy with incremented revision
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentRetention' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/documents/source:
+    get:
+      operationId: getDocumentSource
+      description: Requires knowledge read permission. Defaults to retained extracted text. format=original downloads the digest-verified uploaded bytes when retained. Available while inference is disabled. Legacy records never fabricate an original.
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+        - { name: format, in: query, schema: { type: string, enum: [text, original], default: text } }
+        - { name: start_byte, in: query, description: UTF-8 byte offset of a saved citation. Supply all five citation fields together; text format only., schema: { type: integer, minimum: 0 } }
+        - { name: end_byte, in: query, description: Exclusive UTF-8 byte offset. Passage size is at most 800000 bytes., schema: { type: integer, minimum: 1 } }
+        - { name: source_sha256, in: query, schema: { type: string, pattern: '^[a-f0-9]{64}$' } }
+        - { name: extractor_revision, in: query, schema: { type: string, minLength: 1, maxLength: 512 } }
+        - { name: content_hash, in: query, description: Saved passage content hash (first 16 bytes of SHA-256, hex encoded)., schema: { type: string, pattern: '^[a-f0-9]{32}$' } }
+      responses:
+        '200':
+          description: Safe text preview (maximum 200000 Unicode characters), or the retained original as an attachment
+          headers:
+            X-OffGrid-Source-SHA256:
+              description: SHA-256 of the exact original bytes; present only for format=original
+              schema: { type: string, pattern: '^[a-f0-9]{64}$' }
           content:
             application/json:
               schema:
@@ -753,8 +1021,13 @@ paths:
                   document: { $ref: '#/components/schemas/Document' }
                   content: { type: string }
                   truncated: { type: boolean }
+                  citation_verified: { type: boolean, description: Present and true only after exact passage, source digest and extractor revision validation. }
+            application/octet-stream:
+              schema: { type: string, format: binary }
         '404': { $ref: '#/components/responses/Error' }
         '410': { $ref: '#/components/responses/Error' }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /v1/chat/completions:
     post:
       operationId: createChatCompletion
@@ -2507,6 +2780,7 @@ components:
       type: object
       required: [file_name, bytes_total, bytes_done, percent, speed, started_at, status]
       properties:
+        bundle: { $ref: '#/components/schemas/GGUFBundle' }
         repository: { type: string }
         source_file: { type: string }
         model_id: { type: string }
@@ -2521,6 +2795,32 @@ components:
         status: { type: string, enum: [downloading, finalizing, complete, failed, cancelled] }
         error: { type: string }
         error_code: { type: string, description: Stable machine-readable failure code for recovery and automation. }
+    GGUFBundle:
+      type: object
+      description: Immutable download identity; complete files do not establish runtime or vision qualification.
+      required: [schema_version, repository, revision, weights]
+      properties:
+        schema_version: { type: integer, const: 1 }
+        repository: { type: string }
+        revision: { type: string, pattern: '^[a-f0-9]{40}([a-f0-9]{24})?$' }
+        weights: { $ref: '#/components/schemas/GGUFBundleArtifact' }
+        projector: { $ref: '#/components/schemas/GGUFBundleArtifact' }
+    GGUFBundleArtifact:
+      type: object
+      required: [path, role, size, sha256, source]
+      properties:
+        path: { type: string }
+        role: { type: string, enum: [weights, projector] }
+        size: { type: integer, format: int64, minimum: 1 }
+        sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        license: { type: string }
+        source:
+          type: object
+          required: [repository, revision, path]
+          properties:
+            repository: { type: string }
+            revision: { type: string }
+            path: { type: string }
     Verification:
       type: object
       required: [model_id, file_name, size, size_gb, sha256, verified]
@@ -2588,6 +2888,36 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
         data_url: { type: string, description: Local PNG/JPEG base64 data URL. Maximum 2 MiB decoded, 8192 pixels per edge and 32 megapixels. Remote/file URLs are forbidden. }
+    SessionAttachment:
+      type: object
+      required: [id, name, media_type, bytes, sha256, status, created_at]
+      properties:
+        id: { type: string, pattern: '^file-[a-f0-9]{32}$' }
+        name: { type: string, maxLength: 255 }
+        media_type: { type: string }
+        bytes: { type: integer, minimum: 1, maximum: 52428800 }
+        sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        status: { type: string, enum: [uploaded, ready, failed] }
+        revision: { type: string, description: Immutable extracted-source identity when ready. }
+        error_code: { type: string }
+        created_at: { type: string, format: date-time }
+    SessionAttachmentReference:
+      type: object
+      additionalProperties: false
+      required: [id, revision]
+      properties:
+        id: { type: string, pattern: '^file-[a-f0-9]{32}$' }
+        revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+    SessionAttachmentResult:
+      type: object
+      properties:
+        attachment: { $ref: '#/components/schemas/SessionAttachment' }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
     SessionMessage:
       allOf:
         - $ref: '#/components/schemas/ChatMessage'
@@ -2595,19 +2925,35 @@ components:
           required: [timestamp]
           properties:
             timestamp: { type: string, format: date-time }
+            attachments: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/SessionAttachmentReference' } }
             images: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/SessionImage' } }
             job_id: { type: string }
             turn_id: { type: string }
             knowledge_sources: { type: array, items: { $ref: '#/components/schemas/KnowledgePassage' } }
+            knowledge_documents: { type: array, items: { type: string }, description: 'Retained source dependencies checked against current access; not an access grant.' }
     KnowledgePassage:
       type: object
       required: [document_id, name, chunk_id, content, content_hash]
       properties:
+        source: { $ref: '#/components/schemas/KnowledgeSourceLocator' }
         document_id: { type: string }
         name: { type: string }
         chunk_id: { type: string }
         content: { type: string }
         content_hash: { type: string }
+    KnowledgeSourceLocator:
+      type: object
+      description: Parser-derived source unit and exact UTF-8 byte offsets into retained extracted text. Absent for legacy indexes without verified unit structure.
+      required: [kind, index, start_byte, end_byte, source_sha256, extractor_revision]
+      properties:
+        kind: { type: string, enum: [page, slide, sheet, section] }
+        index: { type: integer, minimum: 1 }
+        name: { type: string }
+        cells: { type: array, description: Actual worksheet cell references intersecting this excerpt. Absent for non-spreadsheets and legacy indexes., items: { type: string, pattern: '^[A-Z]{1,3}[1-9][0-9]{0,6}$' } }
+        start_byte: { type: integer, minimum: 0 }
+        end_byte: { type: integer, minimum: 0 }
+        source_sha256: { type: string }
+        extractor_revision: { type: string }
     AgentSelection:
       type: object
       required: [id, revision]
@@ -2638,6 +2984,7 @@ components:
         job_admission: { type: string, enum: [intent, linked], description: Durable conversation bookkeeping, not execution or consent. }
         id: { type: string }
         prompt: { type: string }
+        attachments: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/SessionAttachmentReference' } }
         images: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/SessionImage' }, description: Pending or interrupted images; completed images are stored in the user message. }
         model: { type: string }
         profile: { type: string }
@@ -2757,7 +3104,76 @@ components:
         last_error: { type: string }
         indexed_at: { type: string, format: date-time }
         source_retained: { type: boolean }
+        original_retained: { type: boolean, description: Original uploaded bytes exist separately from extracted source text. Legacy documents may have text without an original. }
         created_at: { type: string, format: date-time }
+    DocumentAttachmentImport:
+      type: object
+      additionalProperties: false
+      required: [attachment]
+      description: Explicitly copy a saved Chat source into an owned Knowledge import. Requires both source session access and Knowledge management permission. Does not start extraction. Without an Idempotency-Key, repeated acceptance of the same source returns the same import. Ordinary attachment upload never publishes to Knowledge.
+      properties:
+        attachment:
+          type: object
+          additionalProperties: false
+          required: [session, id, sha256]
+          properties:
+            session: { type: string, minLength: 1, maxLength: 256 }
+            id: { type: string, pattern: '^file-[a-f0-9]{32}$' }
+            sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+    DocumentRetention:
+      type: object
+      additionalProperties: false
+      required: [version, revision, delete_after, legal_hold]
+      properties:
+        version: { type: integer, enum: [1] }
+        revision: { type: integer, minimum: 1 }
+        delete_after: { type: integer, format: int64, minimum: 0, maximum: 253402300799, description: UTC Unix seconds; zero retains until explicit deletion. }
+        legal_hold: { type: boolean, description: Prevents document deletion, expiry and removal of associated import evidence. }
+    DocumentImport:
+      type: object
+      required: [id, name, sha256, bytes, state, attempt, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        sha256: { type: string }
+        bytes: { type: integer, format: int64 }
+        state: { type: string, enum: [accepted, queued, extracting, indexing, ready, needs_input, failed, cancelled, interrupted, deleted] }
+        attempt: { type: integer }
+        error_code: { type: string }
+        document_id: { type: string }
+        review_available: { type: boolean, description: Partial extraction is retained for explicit owner review; not indexed or ready. }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DocumentImportExtraction:
+      type: object
+      required: [version, source_sha256, state, source_units, warnings]
+      properties:
+        version: { type: integer, enum: [1] }
+        source_sha256: { type: string }
+        state: { type: string, enum: [partial] }
+        source_units:
+          type: array
+          maxItems: 1000
+          items:
+            type: object
+            required: [kind, index, text, state, source_sha256, extractor_revision]
+            properties:
+              kind: { type: string, enum: [page] }
+              index: { type: integer, minimum: 1 }
+              text: { type: string }
+              state: { type: string, enum: [ready, empty, ocr_required, ocr_partial] }
+              source_sha256: { type: string }
+              extractor_revision: { type: string }
+        warnings:
+          type: array
+          nullable: true
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code: { type: string }
+              message: { type: string }
+              source_index: { type: integer }
     RAGStatus:
       type: object
       required: [enabled, stats]
@@ -2765,6 +3181,46 @@ components:
         enabled: { type: boolean }
         embedding_model: { type: string }
         stats: { type: object, additionalProperties: true }
+        document_formats:
+          type: array
+          description: Extraction readiness independent of embeddings. Runtime presence is not document or platform qualification.
+          items: { $ref: '#/components/schemas/DocumentFormatReadiness' }
+    OCRLanguageReadiness:
+      type: object
+      required: [languages, document_formats]
+      properties:
+        languages:
+          type: array
+          items:
+            type: object
+            required: [language, name, sha256, state, qualification]
+            properties:
+              language: { type: string }
+              name: { type: string }
+              sha256: { type: string }
+              state: { type: string, enum: [missing, invalid, installed_verified] }
+              qualification: { type: string }
+        document_formats:
+          type: array
+          items: { $ref: '#/components/schemas/DocumentFormatReadiness' }
+    DocumentFormatReadiness:
+      type: object
+      required: [id, extensions, runtime, runtime_state, qualification, source_units, max_file_bytes, max_text_bytes, ocr_available, ocr_languages, encrypted_policy, limitations]
+      properties:
+        id: { type: string }
+        extensions: { type: array, items: { type: string } }
+        runtime: { type: string }
+        runtime_state: { type: string, enum: [available, installed_unchecked, unavailable] }
+        extractor_revision: { type: string }
+        qualification: { type: string, enum: [unverified] }
+        source_units: { type: array, items: { type: string } }
+        max_file_bytes: { type: integer, format: int64 }
+        max_text_bytes: { type: integer, format: int64 }
+        ocr_available: { type: boolean }
+        ocr_languages: { type: array, items: { type: string } }
+        ocr_state: { type: string, enum: [unavailable, language_missing, language_invalid, installed_unchecked] }
+        encrypted_policy: { type: string, enum: [reject] }
+        limitations: { type: array, items: { type: string } }
     ToolApproval:
       type: object
       required: [id, run_id, call_id, actor, tool, arguments, canonical_arguments, expires_at]

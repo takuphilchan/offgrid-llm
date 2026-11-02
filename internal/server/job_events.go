@@ -60,6 +60,10 @@ func (s *Server) handleJobRead(w http.ResponseWriter, r *http.Request) {
 		writeJobReadError(w, err)
 		return
 	}
+	if !s.taskKnowledgeAllowed(s.agentActor(r), replay.Snapshot) {
+		writeJobError(w, 403, "knowledge_unavailable", "A source used by this task is no longer available.", false)
+		return
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	if len(parts) == 1 {
 		response := taskResponse(replay.Snapshot)
@@ -82,8 +86,14 @@ func (s *Server) handleJobRead(w http.ResponseWriter, r *http.Request) {
 	lastPayload := ""
 	lastSent := time.Now()
 	for {
+		if !s.taskKnowledgeAllowed(s.agentActor(r), replay.Snapshot) {
+			return
+		}
 		_ = controller.SetWriteDeadline(time.Now().Add(10 * time.Second))
 		for _, event := range replay.Events {
+			if !s.taskKnowledgeAllowed(s.agentActor(r), replay.Snapshot) {
+				return
+			}
 			payload, _ := json.Marshal(map[string]any{"type": "activity", "activity": event})
 			if _, err := fmt.Fprintf(w, "id: %d\nevent: activity\ndata: %s\n\n", event.Sequence, payload); err != nil {
 				return
@@ -97,6 +107,9 @@ func (s *Server) handleJobRead(w http.ResponseWriter, r *http.Request) {
 		response["event_cursor"] = strconv.FormatInt(replay.Cursor, 10)
 		payload, _ := json.Marshal(response)
 		if string(payload) != lastPayload {
+			if !s.taskKnowledgeAllowed(s.agentActor(r), replay.Snapshot) {
+				return
+			}
 			if _, err := fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", replay.Cursor, response["type"], payload); err != nil {
 				return
 			}

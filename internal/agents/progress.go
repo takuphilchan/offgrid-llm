@@ -39,6 +39,9 @@ func setRunPhase(task *Task, phase, tool string) {
 }
 
 func (r *Runner) saveProgress(task *Task) error {
+	if err := r.checkSourceAccess(task); err != nil {
+		return err
+	}
 	progress := *task.Progress
 	_, err := r.manager.updateTask(task.ID, func(current *Task) error {
 		if current.Status != TaskRunning {
@@ -62,6 +65,9 @@ func (r *Runner) callWithProgress(ctx context.Context, task *Task, messages []ap
 	dirty := false
 	emit := func(phase, text string) error {
 		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := r.checkSourceAccess(task); err != nil {
 			return err
 		}
 		changed := phase != task.Progress.Phase

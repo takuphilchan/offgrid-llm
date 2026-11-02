@@ -54,6 +54,9 @@ func (s *Server) handleBrowserPairing(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		mode := computer.ApprovalMode(task.Config.RequestedComputerApprovalMode)
+		if s.rejectUnavailableTask(w, r, task) {
+			return
+		}
 		if !mode.Valid() || task.Config.RequestedComputerScope == "selected_window" {
 			writeError(w, "Choose a policy in a new task before requesting desktop access", 409)
 			return

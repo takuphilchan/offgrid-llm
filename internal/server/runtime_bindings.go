@@ -69,8 +69,10 @@ func (s *Server) BindApplicationRuntime(runner *agents.Runner) error {
 		return err
 	}
 	s.agentRunner = runner
+	runner.SourceAccess = func(task *agents.Task) bool { return s.taskKnowledgeAllowed(task.Actor, task) }
 	s.sessionHandlers.requireAuth = s.config.RequireAuth
 	s.sessionHandlers.agentServer = s
+	s.sessionHandlers.knowledgeAccess = s.savedKnowledgeAllowed
 	if err := s.loadDownloads(); err != nil {
 		return err
 	}

@@ -82,6 +82,7 @@ func (s *ScopedManager) CommitJobTurn(name, turnID, hash, jobID, model, output s
 	session.AddMessage("user", t.Prompt)
 	session.AddMessage("assistant", output)
 	session.Messages[len(session.Messages)-1].KnowledgeSources = t.KnowledgeSources
+	session.Messages[len(session.Messages)-1].KnowledgeDocuments = append([]string(nil), t.KnowledgeDocuments...)
 	for index := len(session.Messages) - 2; index < len(session.Messages); index++ {
 		session.Messages[index].JobID, session.Messages[index].TurnID = jobID, turnID
 	}

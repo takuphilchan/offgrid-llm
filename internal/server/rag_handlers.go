@@ -2,11 +2,11 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -24,10 +24,11 @@ type IngestTextRequest struct {
 
 // IngestResponse is the response after ingesting a document
 type IngestResponse struct {
-	Success  bool          `json:"success"`
-	Document *rag.Document `json:"document,omitempty"`
-	Message  string        `json:"message,omitempty"`
-	Error    string        `json:"error,omitempty"`
+	Success   bool          `json:"success"`
+	Document  *rag.Document `json:"document,omitempty"`
+	Message   string        `json:"message,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	ErrorCode string        `json:"error_code,omitempty"`
 }
 
 // SearchRequest is the request for searching documents
@@ -53,9 +54,10 @@ type DocumentListResponse struct {
 
 // RAGStatusResponse is the response for RAG status
 type RAGStatusResponse struct {
-	Enabled        bool                   `json:"enabled"`
-	EmbeddingModel string                 `json:"embedding_model,omitempty"`
-	Stats          map[string]interface{} `json:"stats"`
+	Enabled         bool                   `json:"enabled"`
+	EmbeddingModel  string                 `json:"embedding_model,omitempty"`
+	Stats           map[string]interface{} `json:"stats"`
+	DocumentFormats []rag.FormatReadiness  `json:"document_formats"`
 }
 
 // EnableRAGRequest is the request to enable RAG
@@ -82,30 +84,37 @@ func (s *Server) requireKnowledgeStorage(w http.ResponseWriter) bool {
 
 // handleRAGStatus returns the status of the RAG engine
 func (s *Server) handleRAGStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	formats := rag.NewDocumentParser().FormatReadiness()
+	if s.ragEngine != nil {
+		formats = s.ragEngine.DocumentParser().FormatReadiness()
+	}
 	if s.ragEngine == nil {
 		json.NewEncoder(w).Encode(RAGStatusResponse{
-			Enabled: false,
-			Stats:   map[string]interface{}{"storage_available": false, "error": "RAG engine not initialized"},
+			Enabled:         false,
+			Stats:           map[string]interface{}{"storage_available": false, "error": "RAG engine not initialized"},
+			DocumentFormats: formats,
 		})
 		return
 	}
 
-	stats := s.ragEngine.Stats()
+	stats := s.ragEngine.ForActor(modelActor(r)).Stats()
 	embeddingModel := ""
 	if model, ok := stats["embedding_model"].(string); ok {
 		embeddingModel = model
 	}
 
 	json.NewEncoder(w).Encode(RAGStatusResponse{
-		Enabled:        s.ragEngine.IsEnabled(),
-		EmbeddingModel: embeddingModel,
-		Stats:          stats,
+		Enabled:         s.ragEngine.IsEnabled(),
+		EmbeddingModel:  embeddingModel,
+		Stats:           stats,
+		DocumentFormats: formats,
 	})
 }
 
@@ -163,6 +172,7 @@ func (s *Server) handleRAGDisable(w http.ResponseWriter, r *http.Request) {
 
 // handleDocumentsList lists all documents
 func (s *Server) handleDocumentsList(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -171,7 +181,7 @@ func (s *Server) handleDocumentsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docs := s.ragEngine.ListDocuments()
+	docs := s.ragEngine.ForActor(modelActor(r)).ListDocuments()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(DocumentListResponse{
@@ -224,13 +234,7 @@ func (s *Server) handleDocumentIngest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.Printf("Failed to ingest document: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(IngestResponse{
-			Success: false,
-			Error:   err.Error(),
-		})
+		writeDocumentIngestError(w, err)
 		return
 	}
 
@@ -244,48 +248,11 @@ func (s *Server) handleDocumentIngest(w http.ResponseWriter, r *http.Request) {
 
 // handleFileUpload handles multipart file uploads
 func (s *Server) handleFileUpload(r *http.Request) (*rag.Document, error) {
-	// Limit upload size to 50MB
-	r.ParseMultipartForm(50 << 20)
-
-	file, handler, err := r.FormFile("file")
+	record, err := s.acceptDocumentImport(r)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-
-	content, err := io.ReadAll(file)
-	if err != nil {
-		return nil, err
-	}
-
-	metadata := map[string]string{
-		"original_filename": handler.Filename,
-		"content_type":      handler.Header.Get("Content-Type"),
-	}
-
-	// Get file extension and check if it needs parsing
-	ext := strings.ToLower(filepath.Ext(handler.Filename))
-
-	// Check if file extension is supported
-	if !rag.IsSupportedExtension(ext) {
-		return nil, fmt.Errorf("unsupported file type: %s. Supported: PDF, DOCX, XLSX, PPTX, RTF, TXT, MD, JSON, CSV, XML, HTML, and code files", ext)
-	}
-
-	// Use the document parser to extract text from binary files
-	parser := rag.NewDocumentParser()
-	result, err := parser.Parse(content, handler.Filename, ext)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse %s file: %w", ext, err)
-	}
-
-	// Add parser metadata
-	metadata["file_ext"] = ext
-	metadata["content_type"] = result.ContentType
-	for k, v := range result.Metadata {
-		metadata[k] = v
-	}
-
-	return s.ragEngine.IngestText(r.Context(), handler.Filename, result.Content, metadata)
+	return s.ragEngine.RunImport(r.Context(), modelActor(r), record.ID)
 }
 
 // handleDocumentDelete deletes a document
@@ -314,24 +281,26 @@ func (s *Server) handleDocumentDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.ragEngine.DeleteDocument(docID) {
+	if err := s.ragEngine.ForActor(modelActor(r)).RemoveDocument(docID); err == nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": true,
 			"message": "Document deleted",
 		})
 	} else {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "Document not found",
-		})
+		if errors.Is(err, rag.ErrCollectionUnavailable) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "Document not found"})
+		} else {
+			writeRetentionError(w, err)
+		}
 	}
 }
 
 // handleDocumentSearch searches documents
 func (s *Server) handleDocumentSearch(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -372,8 +341,12 @@ func (s *Server) handleDocumentSearch(w http.ResponseWriter, r *http.Request) {
 		opts.DocumentFilter = req.DocumentFilter
 	}
 
-	ragContext, err := s.ragEngine.Search(r.Context(), req.Query, opts)
+	ragContext, err := s.ragEngine.ForActor(modelActor(r)).Search(r.Context(), req.Query, opts)
 	if err != nil {
+		if errors.Is(err, rag.ErrCollectionUnavailable) {
+			writeDocumentIngestError(w, err)
+			return
+		}
 		log.Printf("Search failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -405,8 +378,12 @@ func (s *Server) handleDocumentReindex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "document_id is required", http.StatusBadRequest)
 		return
 	}
-	doc, err := s.ragEngine.ReindexDocument(r.Context(), req.DocumentID)
+	doc, err := s.ragEngine.ForActor(modelActor(r)).ReindexDocument(r.Context(), req.DocumentID)
 	if err != nil {
+		if errors.Is(err, rag.ErrCollectionUnavailable) {
+			writeDocumentIngestError(w, err)
+			return
+		}
 		status := http.StatusInternalServerError
 		if strings.Contains(err.Error(), "not found") {
 			status = http.StatusNotFound
@@ -443,7 +420,7 @@ func (s *Server) handleRAGEvaluate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "a maximum of 100 evaluation cases is allowed", http.StatusBadRequest)
 		return
 	}
-	report, err := s.ragEngine.Evaluate(r.Context(), req.Cases)
+	report, err := s.ragEngine.ForActor(modelActor(r)).Evaluate(r.Context(), req.Cases)
 	if err != nil {
 		writeRAGJSONError(w, http.StatusBadRequest, err.Error())
 		return

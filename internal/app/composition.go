@@ -53,6 +53,7 @@ func New(cfg *config.Config) (_ *Runtime, err error) {
 	rateLimiter := server.NewRateLimiter(600, time.Minute, 60)
 	inferenceRateLimiter := server.NewInferenceRateLimiter(10, 20)
 	ragEngine := rag.NewEngine(c.embedding, cfg.DataDir)
+	ragEngine.StartRetention()
 	c.owned.add("RAG engine", ragEngine.Close)
 	ragEngine.SetModelResolver(func(modelID string) (string, error) {
 		model, lookupErr := c.registry.GetModel(modelID)

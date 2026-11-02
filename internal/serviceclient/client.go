@@ -18,11 +18,12 @@ import (
 )
 
 type Error struct {
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	Retryable bool   `json:"retryable"`
-	RequestID string `json:"request_id,omitempty"`
-	Status    int    `json:"-"`
+	Code         string `json:"code"`
+	Message      string `json:"message"`
+	Retryable    bool   `json:"retryable"`
+	RequestID    string `json:"request_id,omitempty"`
+	Status       int    `json:"-"`
+	AttachmentID string `json:"attachment_id,omitempty"`
 }
 
 func (e *Error) Error() string { return e.Message }
@@ -112,17 +113,31 @@ func (c *Client) Do(ctx context.Context, method, path, contentType string, body 
 		// Preserve recognized model error codes, but never echo arbitrary server,
 		// proxy or repository text into terminals/logs.
 		var detail struct {
-			Error struct {
-				Code string `json:"code"`
-			} `json:"error"`
+			Attachment struct {
+				ID string `json:"id"`
+			} `json:"attachment"`
+			Error     json.RawMessage `json:"error"`
+			ErrorCode string          `json:"error_code"`
 		}
 		if len(body) <= 4096 && json.Unmarshal(body, &detail) == nil {
-			if safe, ok := modelErrorMessages[detail.Error.Code]; ok {
-				code, message = detail.Error.Code, safe
+			var nested struct {
+				Code string `json:"code"`
+			}
+			_ = json.Unmarshal(detail.Error, &nested)
+			declared := nested.Code
+			if declared == "" {
+				declared = detail.ErrorCode
+			}
+			if safe, ok := modelErrorMessages[declared]; ok {
+				code, message = declared, safe
 			}
 		}
 		// Only rejection before admission is advertised as safe to retry.
-		return nil, &Error{Status: resp.StatusCode, Code: code, Message: message, Retryable: resp.StatusCode == 429, RequestID: safeRequestID(resp.Header.Get("X-Request-ID"))}
+		attachmentID := ""
+		if validAttachmentID(detail.Attachment.ID) {
+			attachmentID = detail.Attachment.ID
+		}
+		return nil, &Error{Status: resp.StatusCode, Code: code, Message: message, Retryable: resp.StatusCode == 429, RequestID: safeRequestID(resp.Header.Get("X-Request-ID")), AttachmentID: attachmentID}
 	}
 	return resp, nil
 }

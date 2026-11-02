@@ -32,6 +32,7 @@ type AgentConfig struct {
 	KnowledgeContext        string                             `json:"knowledge_context,omitempty"`
 	KnowledgeDocuments      []KnowledgeDocument                `json:"knowledge_documents,omitempty"`
 	KnowledgeSources        []api.KnowledgePassage             `json:"knowledge_sources,omitempty"`
+	KnowledgeDependencies   []string                           `json:"knowledge_dependencies,omitempty"`
 	ContextWindow           int                                `json:"context_window,omitempty"`
 	AllowedTools            []string                           `json:"allowed_tools,omitempty"`
 	AllowedCapabilities     map[string]capabilities.Descriptor `json:"allowed_capabilities,omitempty"`

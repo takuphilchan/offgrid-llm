@@ -59,6 +59,7 @@ type Runner struct {
 	caller  RunCaller
 	// Configure before accepting runs. Only public response text is emitted.
 	StreamCaller    RunStreamCaller
+	SourceAccess    func(*Task) bool
 	ContextWindow   func(*Task) int
 	CountContext    func(context.Context, *Task, []api.ChatMessage, []api.Tool) (int, error)
 	mu              sync.Mutex
@@ -467,6 +468,9 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		if err := r.checkSourceAccess(task); err != nil {
+			return r.fail(task, err.Error())
+		}
 		if applied, err := r.applyPendingInstructions(task); err != nil {
 			return nil, err
 		} else if applied {
@@ -606,6 +610,9 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 					return nil, err
 				}
 				return task, nil
+			}
+			if err := r.checkSourceAccess(task); err != nil {
+				return r.fail(task, err.Error())
 			}
 			// Persist consumption BEFORE invoking the tool. Crash after this
 			// point is uncertain, even when the process never reached the tool.
@@ -791,6 +798,9 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 		}
 		cancel()
 		if err != nil {
+			if errors.Is(err, ErrSourceAccess) {
+				return r.fail(task, err.Error())
+			}
 			// Only the owned pre-dispatch adapter gate can classify this as
 			// repairable. Joined persistence failures and provider/network errors
 			// remain failures; never infer retry safety from their text.
@@ -804,6 +814,9 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 				continue
 			}
 			return nil, err
+		}
+		if err := r.checkSourceAccess(task); err != nil {
+			return r.fail(task, err.Error())
 		}
 		if response == nil || len(response.Choices) == 0 {
 			return r.fail(task, "Model returned no response.")

@@ -172,7 +172,7 @@ func (s *Server) ownsTaskArtifact(actor, digest string) bool {
 		return false
 	}
 	for _, task := range s.agentManager.ListTasks() {
-		if task.Actor != actor {
+		if task.Actor != actor || !s.taskKnowledgeAllowed(actor, task) {
 			continue
 		}
 		for _, evidence := range taskArtifacts(task) {
@@ -203,6 +203,10 @@ func (s *Server) downloadTaskArtifact(w http.ResponseWriter, r *http.Request, id
 		writeJobReadError(w, agents.ErrTaskNotFound)
 		return
 	}
+	if !s.taskKnowledgeAllowed(s.agentActor(r), task) {
+		writeJobError(w, 403, "knowledge_unavailable", "A source used by this artifact is no longer available.", false)
+		return
+	}
 	digest := r.URL.Query().Get("digest")
 	var matched *taskArtifactEvidence
 	for _, e := range taskArtifacts(task) {
@@ -228,6 +232,11 @@ func (s *Server) downloadTaskArtifact(w http.ResponseWriter, r *http.Request, id
 		writeJobError(w, 503, "artifact_integrity_failed", "The saved artifact failed its integrity check. Do not use it.", false)
 		return
 	}
+	if !s.taskKnowledgeAllowed(s.agentActor(r), task) {
+		writeJobError(w, 403, "knowledge_unavailable", "A source used by this artifact is no longer available.", false)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": matched.Name}))

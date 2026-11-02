@@ -45,7 +45,12 @@ func (s *Server) handleWorkSearch(w http.ResponseWriter, r *http.Request) {
 	if canTasks && s.agentManager != nil {
 		response.Scopes = append(response.Scopes, "task_requests")
 		results, partial, err := s.agentManager.SearchRequests(ctx, s.agentActor(r), s.profileAdmin(r), query, 20)
-		response.Results = append(response.Results, results...)
+		for _, item := range results {
+			task, ok := s.agentManager.GetTask(item.ID)
+			if ok && s.taskKnowledgeAllowed(s.agentActor(r), task) {
+				response.Results = append(response.Results, item)
+			}
+		}
 		response.Partial = response.Partial || partial || err != nil
 	}
 	if r.Context().Err() != nil {

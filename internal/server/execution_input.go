@@ -106,9 +106,12 @@ func (s *Server) handleExecutionInput(w http.ResponseWriter, r *http.Request, ta
 	if task.Status == agents.TaskPending {
 		task, err = s.agentRunner.Continue(s.agentContext(r, true), task.ID, task.Actor, "start", "", true)
 		if err != nil {
-			writeAgentRunError(w, task, err)
+			s.writeAgentRunError(w, r, task, err)
 			return
 		}
+	}
+	if s.rejectUnavailableTask(w, r, task) {
+		return
 	}
 	writeJSON(w, http.StatusAccepted, taskResponse(task))
 }

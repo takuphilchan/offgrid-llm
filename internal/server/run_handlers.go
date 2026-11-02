@@ -63,6 +63,7 @@ func (s *Server) persistRunOutput(ctx context.Context, runID, output string) (*a
 }
 
 func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -79,6 +80,11 @@ func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
 		if s.agentManager != nil && s.agentManager.IsDeleted(parts[0]) {
 			writeError(w, "Run not found", http.StatusNotFound)
 			return
+		}
+		if s.agentManager != nil {
+			if task, ok := s.agentManager.GetTask(parts[0]); ok && s.rejectUnavailableTask(w, r, task) {
+				return
+			}
 		}
 		if s.runLog == nil {
 			writeError(w, "Run event history unavailable", http.StatusServiceUnavailable)
@@ -153,6 +159,10 @@ func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, task := range s.agentManager.ListTasks() {
+			if !s.taskKnowledgeAllowed(s.agentActor(r), task) {
+				delete(byID, task.ID)
+				continue
+			}
 			summary := byID[task.ID]
 			if summary == nil {
 				summary = &runSummary{ID: task.ID, StartedAt: task.CreatedAt, UpdatedAt: task.CreatedAt}
@@ -175,6 +185,7 @@ func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleArtifacts(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -194,6 +205,10 @@ func (s *Server) handleArtifacts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer reader.Close()
+	if !s.ownsTaskArtifact(s.agentActor(r), digest) {
+		writeJobReadError(w, agents.ErrTaskNotFound)
+		return
+	}
 	if metadata.MediaType != "" {
 		w.Header().Set("Content-Type", metadata.MediaType)
 	}

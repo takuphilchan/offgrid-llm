@@ -13,26 +13,27 @@ var ErrImageCapacity = errors.New("conversation image capacity reached; start a 
 // Turn is a recoverable generation snapshot, separate from completed context.
 // A final answer and its completed status are committed in the SAME session file.
 type Turn struct {
-	Images             []api.SessionImage `json:"images,omitempty"`
-	Agent              *AgentSelection    `json:"agent,omitempty"`
-	JobID              string             `json:"job_id,omitempty"`
-	JobAdmission       string             `json:"job_admission,omitempty"`
-	ID                 string             `json:"id"`
-	RequestHash        string             `json:"request_hash"`
-	Prompt             string             `json:"prompt"`
-	Model              string             `json:"model"`
-	Profile            string             `json:"profile"`
-	Knowledge          bool               `json:"knowledge"`
-	KnowledgeDocuments []string           `json:"knowledge_documents,omitempty"`
-	KnowledgeSources   []KnowledgePassage `json:"knowledge_sources,omitempty"`
-	MaxTokens          int                `json:"max_tokens"`
-	Status             string             `json:"status"`
-	Phase              string             `json:"phase"`
-	Output             string             `json:"output"`
-	Error              string             `json:"error,omitempty"`
-	ErrorCode          string             `json:"error_code,omitempty"`
-	FinishReason       string             `json:"finish_reason,omitempty"`
-	Metrics            json.RawMessage    `json:"metrics,omitempty"`
+	Attachments        []AttachmentReference `json:"attachments,omitempty"`
+	Images             []api.SessionImage    `json:"images,omitempty"`
+	Agent              *AgentSelection       `json:"agent,omitempty"`
+	JobID              string                `json:"job_id,omitempty"`
+	JobAdmission       string                `json:"job_admission,omitempty"`
+	ID                 string                `json:"id"`
+	RequestHash        string                `json:"request_hash"`
+	Prompt             string                `json:"prompt"`
+	Model              string                `json:"model"`
+	Profile            string                `json:"profile"`
+	Knowledge          bool                  `json:"knowledge"`
+	KnowledgeDocuments []string              `json:"knowledge_documents,omitempty"`
+	KnowledgeSources   []KnowledgePassage    `json:"knowledge_sources,omitempty"`
+	MaxTokens          int                   `json:"max_tokens"`
+	Status             string                `json:"status"`
+	Phase              string                `json:"phase"`
+	Output             string                `json:"output"`
+	Error              string                `json:"error,omitempty"`
+	ErrorCode          string                `json:"error_code,omitempty"`
+	FinishReason       string                `json:"finish_reason,omitempty"`
+	Metrics            json.RawMessage       `json:"metrics,omitempty"`
 }
 
 func (t *Turn) Active() bool {
@@ -68,6 +69,9 @@ func (s *ScopedManager) BeginTurn(name string, turn *Turn) (*Turn, bool, error) 
 	if session.TurnRequests[turn.ID] {
 		return nil, false, ErrTurnConflict
 	}
+	if err := s.admitAttachmentContext(name, session, turn); err != nil {
+		return nil, false, err
+	}
 	// Admission and the history byte budget share the mutation lock. Concurrent
 	// completed turns cannot race a handler's earlier projection of this limit.
 	imageBytes := 0
@@ -87,6 +91,9 @@ func (s *ScopedManager) BeginTurn(name string, turn *Turn) (*Turn, bool, error) 
 	}
 	session.TurnRequests[turn.ID] = true
 	session.Turn = turn
+	if err := s.validateKnowledge(session); err != nil {
+		return nil, false, err
+	}
 	if err := s.manager.save(session); err != nil {
 		return nil, false, err
 	}
@@ -104,6 +111,9 @@ func (s *ScopedManager) SaveTurn(name string, turn *Turn) error {
 		return ErrTurnConflict
 	}
 	session.Turn = turn
+	if err := s.validateKnowledge(session); err != nil {
+		return err
+	}
 	if turn.Status == "completed" {
 		if turn.Output == "" {
 			return errors.New("empty answer cannot complete a turn")
@@ -111,9 +121,12 @@ func (s *ScopedManager) SaveTurn(name string, turn *Turn) error {
 		session.ModelID = turn.Model
 		session.AddMessage("user", turn.Prompt)
 		session.Messages[len(session.Messages)-1].Images = turn.Images
+		session.Messages[len(session.Messages)-1].Attachments = turn.Attachments
+		turn.Attachments = nil
 		turn.Images = nil // Completed bytes live once, in the saved user message.
 		session.AddMessage("assistant", turn.Output)
 		session.Messages[len(session.Messages)-1].KnowledgeSources = turn.KnowledgeSources
+		session.Messages[len(session.Messages)-1].KnowledgeDocuments = append([]string(nil), turn.KnowledgeDocuments...)
 	}
 	return s.manager.save(session)
 }

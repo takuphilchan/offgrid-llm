@@ -68,7 +68,11 @@ func (s *Server) validateScheduleResources(ctx context.Context, actor string, co
 			return scheduleBlocked("knowledge_unavailable")
 		}
 		for _, id := range selectedProfileKnowledge(config) {
-			if s.ragEngine.GetDocument(id) == nil {
+			knowledgeActor := actor
+			if s.config == nil || !s.config.RequireAuth {
+				knowledgeActor = "local"
+			}
+			if s.ragEngine.ForActor(knowledgeActor).GetDocument(id) == nil {
 				return scheduleBlocked("knowledge_document_unavailable")
 			}
 		}

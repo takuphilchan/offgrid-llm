@@ -20,19 +20,20 @@ type SessionCompleter func(context.Context, string, []api.ChatMessage, bool) (st
 type SessionHandlers struct {
 	agentServer *Server
 	// Fault hook configured only by isolated admission tests, never by clients.
-	admissionFault func(string) error
-	manager        *sessions.SessionManager
-	completer      SessionCompleter
-	streamer       SessionStreamer
-	imageReady     func(string) error
-	requireAuth    bool
-	locksMu        sync.Mutex
-	sessionLocks   map[string]*sessionLock
-	turnMu         sync.Mutex
-	turnCancels    map[string]context.CancelFunc
-	turnWorkers    sync.WaitGroup
-	turnClosed     bool
-	runtimeContext context.Context
+	admissionFault  func(string) error
+	manager         *sessions.SessionManager
+	completer       SessionCompleter
+	streamer        SessionStreamer
+	imageReady      func(string) error
+	knowledgeAccess func(string, []string) bool
+	requireAuth     bool
+	locksMu         sync.Mutex
+	sessionLocks    map[string]*sessionLock
+	turnMu          sync.Mutex
+	turnCancels     map[string]context.CancelFunc
+	turnWorkers     sync.WaitGroup
+	turnClosed      bool
+	runtimeContext  context.Context
 }
 
 type sessionLock struct {
@@ -105,18 +106,28 @@ func (h *SessionHandlers) lockSessionContext(ctx context.Context, name string) (
 }
 
 func (h *SessionHandlers) scoped(r *http.Request) *sessions.ScopedManager {
+	var knowledge func([]string) bool
+	if h.knowledgeAccess != nil {
+		knowledge = func(ids []string) bool { return h.knowledgeAccess(modelActor(r), ids) }
+	}
 	if !h.requireAuth {
-		return h.manager.WithAccess(sessions.Access{All: true})
+		return h.manager.WithAccess(sessions.Access{All: true, Knowledge: knowledge})
 	}
 	user := users.GetUser(r)
 	if user == nil || !user.HasPermission(users.PermissionSessions) {
 		return h.manager.WithAccess(sessions.Access{})
 	}
-	return h.manager.WithAccess(sessions.Access{UserID: user.ID, All: user.HasPermission(users.PermissionSessionsAll)})
+	return h.manager.WithAccess(sessions.Access{UserID: user.ID, All: user.HasPermission(users.PermissionSessionsAll), Knowledge: knowledge})
 }
 
 func writeSessionError(w http.ResponseWriter, err error) {
+	if typed := attachmentServiceError(err); typed != err {
+		writeServiceError(w, typed)
+		return
+	}
 	switch {
+	case errors.Is(err, sessions.ErrKnowledgeUnavailable):
+		writeErrorWithCode(w, "A source used by this conversation is no longer available. Restore access or start a new conversation.", http.StatusForbidden, "knowledge_unavailable")
 	case errors.Is(err, sessions.ErrInvalidSessionName):
 		writeError(w, "Invalid session name", http.StatusBadRequest)
 	case errors.Is(err, sessions.ErrSessionNotFound):
@@ -178,11 +189,12 @@ func (h *SessionHandlers) HandleSessionCreate(w http.ResponseWriter, r *http.Req
 	}
 
 	var req struct {
-		Name    string `json:"name"`
-		ModelID string `json:"model_id,omitempty"`
+		Name    string             `json:"name"`
+		ModelID string             `json:"model_id,omitempty"`
+		History []sessions.Message `json:"history,omitempty"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<20)).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -191,10 +203,14 @@ func (h *SessionHandlers) HandleSessionCreate(w http.ResponseWriter, r *http.Req
 		writeError(w, "Session name is required", http.StatusBadRequest)
 		return
 	}
+	if err := sessions.ValidateSeedHistory(req.History); err != nil {
+		writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	unlock := h.lockSession(req.Name)
 	defer unlock()
-	session, err := h.scoped(r).Create(req.Name, req.ModelID)
+	session, err := h.scoped(r).CreateWithHistory(req.Name, req.ModelID, req.History)
 	if err != nil {
 		writeSessionError(w, err)
 		return
@@ -235,7 +251,7 @@ func (h *SessionHandlers) HandleSessionDelete(w http.ResponseWriter, r *http.Req
 	h.turnMu.Lock()
 	defer h.turnMu.Unlock()
 	// Authorize before reporting contention; do not reveal another user's work.
-	current, err := h.scoped(r).Load(name)
+	current, err := h.scoped(r).ControlState(name)
 	if err != nil {
 		writeSessionError(w, err)
 		return
@@ -302,22 +318,23 @@ func (h *SessionHandlers) HandleSessionAddMessage(w http.ResponseWriter, r *http
 // exchange under the same session. Calls for one session are serialized so
 // concurrent browser tabs cannot lose messages.
 type sessionGenerateRequest struct {
-	Images                  []api.SessionImage         `json:"images,omitempty"`
-	ExecutionRequestVersion int                        `json:"execution_request_version,omitempty"`
-	Execution               *execution.Reference       `json:"execution,omitempty"`
-	Content                 string                     `json:"content"`
-	ModelID                 string                     `json:"model_id,omitempty"`
-	UseKnowledgeBase        bool                       `json:"use_knowledge_base,omitempty"`
-	KnowledgeDocuments      []string                   `json:"knowledge_documents,omitempty"`
-	Stream                  bool                       `json:"stream,omitempty"`
-	Profile                 string                     `json:"profile,omitempty"`
-	MaxTokens               int                        `json:"max_tokens,omitempty"`
-	Durable                 bool                       `json:"durable,omitempty"`
-	RequestID               string                     `json:"request_id,omitempty"`
-	Agent                   *sessions.AgentSelection   `json:"agent,omitempty"`
-	Restrictions            *agentResourceRestrictions `json:"restrictions,omitempty"`
-	ComputerApprovalMode    string                     `json:"computer_approval_mode,omitempty"`
-	ComputerScope           string                     `json:"computer_scope,omitempty"`
+	Attachments             []sessions.AttachmentReference `json:"attachments,omitempty"`
+	Images                  []api.SessionImage             `json:"images,omitempty"`
+	ExecutionRequestVersion int                            `json:"execution_request_version,omitempty"`
+	Execution               *execution.Reference           `json:"execution,omitempty"`
+	Content                 string                         `json:"content"`
+	ModelID                 string                         `json:"model_id,omitempty"`
+	UseKnowledgeBase        bool                           `json:"use_knowledge_base,omitempty"`
+	KnowledgeDocuments      []string                       `json:"knowledge_documents,omitempty"`
+	Stream                  bool                           `json:"stream,omitempty"`
+	Profile                 string                         `json:"profile,omitempty"`
+	MaxTokens               int                            `json:"max_tokens,omitempty"`
+	Durable                 bool                           `json:"durable,omitempty"`
+	RequestID               string                         `json:"request_id,omitempty"`
+	Agent                   *sessions.AgentSelection       `json:"agent,omitempty"`
+	Restrictions            *agentResourceRestrictions     `json:"restrictions,omitempty"`
+	ComputerApprovalMode    string                         `json:"computer_approval_mode,omitempty"`
+	ComputerScope           string                         `json:"computer_scope,omitempty"`
 }
 
 func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.Request, name string) {
@@ -335,7 +352,7 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 		writeError(w, "Content exceeds 64 KiB", 400)
 		return
 	}
-	if req.Content == "" && len(req.Images) == 0 {
+	if req.Content == "" && len(req.Images) == 0 && len(req.Attachments) == 0 {
 		writeError(w, "Content is required", http.StatusBadRequest)
 		return
 	}
@@ -349,6 +366,10 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 		return
 	}
 	if err := h.validateSessionImageRequest(r, name, &req); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	if err := h.validateSessionAttachments(r, name, &req); err != nil {
 		writeServiceError(w, err)
 		return
 	}
@@ -377,7 +398,7 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 			req.MaxTokens = 1024
 		}
 		if req.Durable {
-			h.generateDurable(w, r, name, req.RequestID, req.Content, req.ModelID, req.UseKnowledgeBase, req.Profile, req.MaxTokens, req.KnowledgeDocuments, req.Images)
+			h.generateDurable(w, r, name, req.RequestID, req.Content, req.ModelID, req.UseKnowledgeBase, req.Profile, req.MaxTokens, req.KnowledgeDocuments, req.Images, req.Attachments)
 			return
 		}
 		h.generateStream(w, r, name, req.Content, req.ModelID, req.UseKnowledgeBase, req.Profile, req.MaxTokens, req.KnowledgeDocuments)
@@ -432,6 +453,7 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 
 // HandleSessions is the main router for session endpoints
 func (h *SessionHandlers) HandleSessions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if h.requireAuth {
 		user := users.GetUser(r)
 		if user == nil {
@@ -475,6 +497,10 @@ func (h *SessionHandlers) HandleSessions(w http.ResponseWriter, r *http.Request)
 	}
 
 	// POST /v1/sessions/{name}/messages
+	if parts[1] == "attachments" || strings.HasPrefix(parts[1], "attachments/") {
+		h.handleSessionAttachments(w, r, sessionName, parts[1])
+		return
+	}
 	if parts[1] == "turn" || parts[1] == "turn/events" || parts[1] == "turn/cancel" || parts[1] == "turn/recover" {
 		h.handleTurn(w, r, sessionName, parts[1])
 		return

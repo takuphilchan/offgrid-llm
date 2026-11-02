@@ -23,7 +23,7 @@ func (s *Server) attachJobKnowledge(w http.ResponseWriter, r *http.Request, requ
 		return false
 	}
 	for _, id := range ids {
-		doc := s.ragEngine.GetDocument(id)
+		doc := s.ragEngine.ForActor(modelActor(r)).GetDocument(id)
 		if doc == nil {
 			writeJobError(w, 422, "knowledge_unavailable", "An attached Knowledge document is unavailable. No schedule was saved.", false)
 			return false

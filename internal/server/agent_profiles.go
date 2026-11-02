@@ -89,7 +89,7 @@ func (s *Server) effectiveProfile(r *http.Request, profile *agents.AgentProfile,
 			issue("knowledge", "", "knowledge_denied", "Knowledge access is not permitted.")
 		} else {
 			for _, id := range profile.Settings.Knowledge {
-				if s.ragEngine == nil || s.ragEngine.StorageError() != nil || s.ragEngine.GetDocument(id) == nil {
+				if s.ragEngine == nil || s.ragEngine.StorageError() != nil || s.ragEngine.ForActor(modelActor(r)).GetDocument(id) == nil {
 					issue("knowledge", id, "knowledge_unavailable", "This Knowledge document is unavailable. Select an existing document.")
 				}
 			}
@@ -234,7 +234,7 @@ func (s *Server) attachProfileKnowledge(w http.ResponseWriter, r *http.Request, 
 	if s.ragEngine == nil {
 		return attachProfileKnowledge(w, r, prompt, config, nil)
 	}
-	return attachProfileKnowledge(w, r, prompt, config, s.ragEngine)
+	return attachProfileKnowledge(w, r, prompt, config, s.ragEngine.ForActor(modelActor(r)))
 }
 
 type profileKnowledgeSource interface {
@@ -294,6 +294,7 @@ func attachProfileKnowledge(w http.ResponseWriter, r *http.Request, prompt strin
 		}
 		material.TruncateContext(6000)
 		config.KnowledgeContext = material.Context
+		captureKnowledge(withKnowledgeScope(r.Context(), documents, &config.KnowledgeSources), material)
 	}
 	return true
 }

@@ -80,6 +80,9 @@ func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if exists {
 		w.Header().Set("Location", "/api/v2/jobs/"+previous.ID)
+		if s.rejectUnavailableTask(w, r, previous) {
+			return
+		}
 		writeJSON(w, 202, taskResponse(previous))
 		return
 	}
@@ -100,11 +103,14 @@ func (s *Server) handleJobSubmit(w http.ResponseWriter, r *http.Request) {
 		accepted := task
 		task, err = s.agentRunner.Continue(s.agentContext(r, true), task.ID, s.agentActor(r), "start", "", true)
 		if err != nil {
-			writeAgentRunError(w, accepted, err)
+			s.writeAgentRunError(w, r, accepted, err)
 			return
 		}
 	}
 	w.Header().Set("Location", "/api/v2/jobs/"+task.ID)
+	if s.rejectUnavailableTask(w, r, task) {
+		return
+	}
 	writeJSON(w, http.StatusAccepted, taskResponse(task))
 }
 
@@ -267,6 +273,9 @@ func (s *Server) handleJobInput(w http.ResponseWriter, r *http.Request, id strin
 		writeJobReadError(w, agents.ErrTaskNotFound)
 		return
 	}
+	if s.rejectUnavailableTask(w, r, task) {
+		return
+	}
 	if req.Execution != nil {
 		s.handleExecutionInput(w, r, task, req.InputID, *req.Execution)
 		return
@@ -288,9 +297,12 @@ func (s *Server) handleJobInput(w http.ResponseWriter, r *http.Request, id strin
 			var err error
 			task, err = s.agentRunner.Continue(s.agentContext(r, true), id, actor, "start", "", true)
 			if err != nil {
-				writeAgentRunError(w, task, err)
+				s.writeAgentRunError(w, r, task, err)
 				return
 			}
+		}
+		if s.rejectUnavailableTask(w, r, task) {
+			return
 		}
 		writeJSON(w, 202, taskResponse(task))
 		return
@@ -326,7 +338,7 @@ func (s *Server) handleJobInput(w http.ResponseWriter, r *http.Request, id strin
 		if errors.Is(err, agents.ErrInferenceBudget) {
 			writeJobError(w, 409, "task_inference_budget_exhausted", "This saved task has no remaining model-check budget. No computer action was executed.", false)
 		} else {
-			writeAgentRunError(w, task, err)
+			s.writeAgentRunError(w, r, task, err)
 		}
 		return
 	}
@@ -347,7 +359,7 @@ func (s *Server) handleJobInput(w http.ResponseWriter, r *http.Request, id strin
 			if err := s.agentRunner.ReserveSyntheticProbeBudget(id, actor, 128, 90*time.Second); err == nil {
 				_ = s.checkComputerVision(probeCtx, task.Model)
 			} else if !errors.Is(err, agents.ErrInferenceBudget) {
-				writeAgentRunError(w, task, err)
+				s.writeAgentRunError(w, r, task, err)
 				return
 			}
 		}
@@ -381,12 +393,15 @@ func (s *Server) handleJobInput(w http.ResponseWriter, r *http.Request, id strin
 	}
 	task, err = s.agentRunner.ResolveComputerInput(id, actor, req.InputID, config)
 	if err != nil {
-		writeAgentRunError(w, task, err)
+		s.writeAgentRunError(w, r, task, err)
 		return
 	}
 	task, err = s.agentRunner.Continue(s.agentContext(r, true), id, actor, "start", "", true)
 	if err != nil {
-		writeAgentRunError(w, task, err)
+		s.writeAgentRunError(w, r, task, err)
+		return
+	}
+	if s.rejectUnavailableTask(w, r, task) {
 		return
 	}
 	writeJSON(w, 202, taskResponse(task))

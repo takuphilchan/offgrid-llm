@@ -1,9 +1,11 @@
+import { validateRetention } from './retention';
 import type { components, operations } from './schema.generated';
 import { readSessionStream, type SessionEvent } from './session-stream';
 import { readAgentStream } from './agent-stream';
 import { workflowText } from '../i18n/workflow';
 
 export type Model = components['schemas']['Model'];
+export type DocumentImport = components['schemas']['DocumentImport'];
 export type WorkSearchResponse = components['schemas']['WorkSearchResponse'];
 export type ModelPackageManifest = components['schemas']['ModelPackageManifest'];
 export type ModelPackageState = components['schemas']['ModelPackageState'];
@@ -16,7 +18,10 @@ export type ModelOperation = components['schemas']['ModelOperation'];
 export type Document = components['schemas']['Document'];
 export type ChatMessage = components['schemas']['ChatMessage'];
 export type SessionMessage = components['schemas']['SessionMessage'];
+export type DocumentCitation = components['schemas']['KnowledgeSourceLocator'] & { content_hash: string };
 export type SessionImage = components['schemas']['SessionImage'];
+export type SessionAttachment = components['schemas']['SessionAttachment'];
+export type SessionAttachmentReference = components['schemas']['SessionAttachmentReference'];
 export type SessionTurn = components['schemas']['SessionTurn'];
 export type ChatSession = components['schemas']['ChatSession'];
 export type CatalogModel = components['schemas']['CatalogModel'];
@@ -166,6 +171,14 @@ export const api = {
     return Array.isArray(result.sessions) ? result.sessions : [];
   },
   session: (name: string) => request<ChatSession>(`/v1/sessions/${encodeURIComponent(name)}`),
+  sessionAttachments: (name: string, signal?: AbortSignal) => request<{ attachments: SessionAttachment[] }>(`/v1/sessions/${encodeURIComponent(name)}/attachments`, { signal }),
+  uploadSessionAttachment: (name: string, file: File, signal?: AbortSignal) => {
+    const form = new FormData(); form.append('file', file, file.name);
+    return request<components['schemas']['SessionAttachmentResult']>(`/v1/sessions/${encodeURIComponent(name)}/attachments`, { method: 'POST', body: form, signal }, 120_000);
+  },
+  prepareSessionAttachment: (name: string, id: string, signal?: AbortSignal) => request<components['schemas']['SessionAttachmentResult']>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}/prepare`, { method: 'POST', signal }, 120_000),
+  deleteSessionAttachment: (name: string, id: string) => request<{ removed: boolean }>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  sessionAttachmentOriginal: (name: string, id: string, signal?: AbortSignal) => request<Blob>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}/original`, { signal }, 120_000, response => response.blob()),
   createSession: (name: string, modelID: string, signal?: AbortSignal) => request<ChatSession>('/v1/sessions', {
     method: 'POST', signal, body: JSON.stringify({ name, model_id: modelID })
   }),
@@ -214,7 +227,8 @@ export const api = {
     if (!response.ok) throw new APIError('Conversation progress unavailable. Refresh to reconnect.', response.status);
     return readSessionStream(response, onEvent);
   },
-  streamSession: async (name: string, content: string, modelID: string, useKnowledgeBase: boolean, profile: string, maxTokens: number, onEvent: (event: SessionEvent) => void, signal: AbortSignal, requestID = crypto.randomUUID(), knowledgeDocuments?: string[], images?: SessionImage[]) => {
+  streamSession: async (name: string, content: string, modelID: string, useKnowledgeBase: boolean, profile: string, maxTokens: number, onEvent: (event: SessionEvent) => void, signal: AbortSignal, requestID = crypto.randomUUID(), knowledgeDocuments?: string[], images?: SessionImage[], attachments?: SessionAttachmentReference[]) => {
+    if(attachments?.length){const identity=await request<components['schemas']['SystemIdentity']>('/api/v2/system',{signal});if(!identity.capabilities?.includes('session-files-v1'))throw new APIError('File input requires an updated service. Your draft is retained.',409);}
     if(images?.length){const identity=await request<components['schemas']['SystemIdentity']>('/api/v2/system',{signal});if(!identity.capabilities?.includes('session-images-v1'))throw new APIError('Image input requires an updated service. Your draft is retained.',409);}
     if (knowledgeDocuments) {
       const identity = await request<components['schemas']['SystemIdentity']>('/api/v2/system', { signal });
@@ -223,7 +237,7 @@ export const api = {
     const response = await fetch(`/v1/sessions/${encodeURIComponent(name)}/generate`, {
       method: 'POST', credentials: 'same-origin', signal,
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-      body: JSON.stringify({ content, images, model_id: modelID, use_knowledge_base: useKnowledgeBase, knowledge_documents: knowledgeDocuments, stream: true, durable: true, request_id: requestID, profile, max_tokens: maxTokens })
+      body: JSON.stringify({ content, images, attachments, model_id: modelID, use_knowledge_base: useKnowledgeBase, knowledge_documents: knowledgeDocuments, stream: true, durable: true, request_id: requestID, profile, max_tokens: maxTokens })
     });
     if (!response.ok) {
       const body = await response.text();
@@ -254,6 +268,9 @@ export const api = {
     return { ...result, documents: Array.isArray(result.documents) ? result.documents : [] };
   },
   ragStatus: (signal?: AbortSignal) => request<RAGStatus>('/v1/rag/status', { signal }),
+  importSessionAttachment: (session: string, file: SessionAttachment, signal?: AbortSignal) => request<DocumentImport>('/v1/documents/imports', { method: 'POST', body: JSON.stringify({ attachment: { session, id: file.id, sha256: file.sha256 } }), signal }),
+  ocrLanguages: (signal?: AbortSignal) => request<components['schemas']['OCRLanguageReadiness']>('/v1/documents/ocr-languages', { signal }),
+  importOCRLanguage: (language: string, file: File, signal?: AbortSignal) => request<components['schemas']['OCRLanguageReadiness']>(`/v1/documents/ocr-languages?language=${encodeURIComponent(language)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file, signal }, 60_000),
   enableRAG: (embeddingModel: string) => request<{ success: boolean; message: string }>('/v1/rag/enable', {
     method: 'POST', body: JSON.stringify({ embedding_model: embeddingModel })
   }),
@@ -360,7 +377,24 @@ export const api = {
     method: 'POST', body: JSON.stringify({ document_id: documentID })
   }, 5 * 60_000),
   deleteDocument: (id: string) => request<{ success: boolean }>(`/v1/documents/delete?id=${encodeURIComponent(id)}`, { method:'DELETE' }),
-  documentSource: (id: string) => request<{ document: Document; content: string; truncated: boolean }>(`/v1/documents/source?id=${encodeURIComponent(id)}`),
+  documentRetention: async (id: string) => validateRetention(await request<unknown>(`/v1/documents/retention?id=${encodeURIComponent(id)}`)),
+  setDocumentRetention: async (id: string, policy: components['schemas']['DocumentRetention']) => validateRetention(await request<unknown>(`/v1/documents/retention?id=${encodeURIComponent(id)}`, {method:'PUT',body:JSON.stringify(policy)}), policy),
+  documentSource: (id: string, citation?: DocumentCitation) => {
+    const query = new URLSearchParams({ id });
+    if (citation) for (const key of ['start_byte', 'end_byte', 'source_sha256', 'extractor_revision', 'content_hash'] as const) query.set(key, String(citation[key]));
+    return request<{ document: Document; content: string; truncated: boolean; citation_verified?: boolean }>(`/v1/documents/source?${query}`);
+  },
+  documentOriginal: (id: string, signal?: AbortSignal) => request<Blob>(`/v1/documents/source?id=${encodeURIComponent(id)}&format=original`, { signal }, 120_000, response => response.blob()),
+  documentImports: (signal?: AbortSignal) => request<{ imports: DocumentImport[] }>('/v1/documents/imports', { signal }),
+  documentImport: (id: string, signal?: AbortSignal) => request<DocumentImport>(`/v1/documents/imports?id=${encodeURIComponent(id)}`, { signal }),
+  documentImportExtraction: (id: string, signal?: AbortSignal) => request<components['schemas']['DocumentImportExtraction']>(`/v1/documents/imports?id=${encodeURIComponent(id)}&view=extraction`, { signal }),
+  acceptDocumentImport: (file: File, key: string, signal?: AbortSignal) => {
+    const body = new FormData(); body.append('file', file);
+    return request<DocumentImport>('/v1/documents/imports', { method: 'POST', body, signal, headers: { 'Idempotency-Key': key } }, 120_000);
+  },
+  retryDocumentImport: (id: string, signal?: AbortSignal) => request<DocumentImport>(`/v1/documents/imports?id=${encodeURIComponent(id)}&action=retry`, { method: 'POST', signal }, 5 * 60_000),
+  cancelDocumentImport: (id: string) => request<DocumentImport>(`/v1/documents/imports?id=${encodeURIComponent(id)}&action=cancel`, { method: 'POST' }),
+  removeDocumentImport: (id: string) => request<{ success: boolean }>(`/v1/documents/imports?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
   ingest: (file: File) => {
     const form = new FormData();
     form.append('file', file);

@@ -490,7 +490,7 @@ export interface paths {
         /** @description Lists owned conversations; sessions:all administrators and local single-user mode can also access unowned legacy conversations. */
         get: operations["listSessions"];
         put?: never;
-        /** @description Creates a conversation owned by the authenticated caller. Names are installation-wide unique; an existing name returns 409 without overwriting history. Client-supplied ownership is ignored. */
+        /** @description Creates a conversation owned by the authenticated caller. Names are installation-wide unique; an existing name returns 409 without overwriting history. Client-supplied ownership is ignored. Services advertising session-history-seed-v1 accept optional completed user/assistant history atomically, without executing inference or importing task authority. History is limited to 1024 messages, 8 MiB text and 12 MiB encoded images; the whole body is limited to 32 MiB. */
         post: operations["createSession"];
         delete?: never;
         options?: never;
@@ -513,6 +513,86 @@ export interface paths {
         post?: never;
         /** @description Requires ownership or sessions:all; other users' conversations return 404. Linked agent work requires ownership. Active linked work requires an explicit retain or stop choice; stop waits for confirmed quiescence and never resolves uncertain effects. Canonical jobs and minimal deduplication records survive deletion. Plain generation still returns 409 while active. */
         delete: operations["deleteSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{name}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+            };
+            cookie?: never;
+        };
+        /** @description Owner-scoped source metadata only. Does not return extracted text or publish files to Knowledge. */
+        get: operations["listSessionAttachments"];
+        put?: never;
+        /** @description Uploads and prepares a private source. Up to eight files, 50 MiB per file, 100 MiB per conversation and 500 MiB per owner. Failed extraction retains the original and returns its attachment identity with an error. No automatic Knowledge publication, model download or filesystem grant. */
+        post: operations["uploadSessionAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{name}/attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Deletes an unused source. Saved-history references or an active turn return 409. Removing a draft chip is a separate client action and must not delete a history source. */
+        delete: operations["deleteSessionAttachment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{name}/attachments/{attachment_id}/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Retry extraction from the retained digest-verified original. Ready revisions are immutable. Does not generate an answer. */
+        post: operations["prepareSessionAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{name}/attachments/{attachment_id}/original": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Owner-scoped digest-verified original, delivered as a download with no-store and nosniff headers. */
+        get: operations["getSessionAttachmentOriginal"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -594,6 +674,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/ocr-languages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Requires Knowledge read permission. Reports reviewed offline OCR language packs independently of runtime qualification; never returns filesystem paths or pack bytes. */
+        get: operations["getOCRLanguages"];
+        put?: never;
+        /** @description Requires Knowledge management permission. Explicitly imports up to 32 MiB of pinned language data into this service workspace. No downloads, executable code, inference or automatic reindexing. Only a supported digest is accepted, and active imports retain their immutable snapshot. */
+        post: operations["importOCRLanguage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Requires Knowledge management permission. Without id returns the most recent 100 imports owned by the authenticated actor; with id returns that actor's exact record. Never returns original bytes. Restart marks in-flight imports interrupted without replay. */
+        get: operations["getDocumentImports"];
+        put?: never;
+        /** @description Without id, accept and retain a bounded multipart upload before extraction; returns 202 without starting a worker. Reusing an Idempotency-Key with the same actor/name/bytes returns the same record, changed bytes conflict. With id and action=retry, process the retained source synchronously with durable progress; action=cancel invalidates pending publication. A completed retry returns saved success without replay. Request cancellation retains progress and original bytes for explicit recovery. */
+        post: operations["prepareDocumentImport"];
+        /** @description Remove the actor's import record and pending original, invalidating in-flight publication. Does not delete an already published Knowledge document or backups. */
+        delete: operations["removeDocumentImport"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Requires Knowledge read access and current document visibility. Returns no-store, revision-bound retention metadata. */
+        get: operations["getDocumentRetention"];
+        /** @description Requires Knowledge management permission and private collection ownership. Both expiry and legal hold must be explicit. Old revisions conflict. No expiry is assigned to legacy documents. The service processes up to 100 eligible documents per minute; held documents are retained. Backups and saved answers have separate retention. */
+        put: operations["setDocumentRetention"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/source": {
         parameters: {
             query?: never;
@@ -601,7 +736,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Requires knowledge read permission. Returns retained extracted text, not the original file. Available while inference is disabled. */
+        /** @description Requires knowledge read permission. Defaults to retained extracted text. format=original downloads the digest-verified uploaded bytes when retained. Available while inference is disabled. Legacy records never fabricate an original. */
         get: operations["getDocumentSource"];
         put?: never;
         post?: never;
@@ -1980,6 +2115,7 @@ export interface components {
             model_id?: string;
         };
         DownloadProgress: {
+            bundle?: components["schemas"]["GGUFBundle"];
             repository?: string;
             source_file?: string;
             model_id?: string;
@@ -1999,6 +2135,29 @@ export interface components {
             error?: string;
             /** @description Stable machine-readable failure code for recovery and automation. */
             error_code?: string;
+        };
+        /** @description Immutable download identity; complete files do not establish runtime or vision qualification. */
+        GGUFBundle: {
+            /** @constant */
+            schema_version: 1;
+            repository: string;
+            revision: string;
+            weights: components["schemas"]["GGUFBundleArtifact"];
+            projector?: components["schemas"]["GGUFBundleArtifact"];
+        };
+        GGUFBundleArtifact: {
+            path: string;
+            /** @enum {string} */
+            role: "weights" | "projector";
+            /** Format: int64 */
+            size: number;
+            sha256: string;
+            license?: string;
+            source: {
+                repository: string;
+                revision: string;
+                path: string;
+            };
         };
         Verification: {
             model_id: string;
@@ -2044,20 +2203,62 @@ export interface components {
             /** @description Local PNG/JPEG base64 data URL. Maximum 2 MiB decoded */
             data_url: string;
         };
+        SessionAttachment: {
+            id: string;
+            name: string;
+            media_type: string;
+            bytes: number;
+            sha256: string;
+            /** @enum {string} */
+            status: "uploaded" | "ready" | "failed";
+            /** @description Immutable extracted-source identity when ready. */
+            revision?: string;
+            error_code?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SessionAttachmentReference: {
+            id: string;
+            revision: string;
+        };
+        SessionAttachmentResult: {
+            attachment?: components["schemas"]["SessionAttachment"];
+            error?: {
+                code: string;
+                message: string;
+            };
+        };
         SessionMessage: components["schemas"]["ChatMessage"] & {
             /** Format: date-time */
             timestamp: string;
+            attachments?: components["schemas"]["SessionAttachmentReference"][];
             images?: components["schemas"]["SessionImage"][];
             job_id?: string;
             turn_id?: string;
             knowledge_sources?: components["schemas"]["KnowledgePassage"][];
+            /** @description Retained source dependencies checked against current access; not an access grant. */
+            knowledge_documents?: string[];
         };
         KnowledgePassage: {
+            source?: components["schemas"]["KnowledgeSourceLocator"];
             document_id: string;
             name: string;
             chunk_id: string;
             content: string;
             content_hash: string;
+        };
+        /** @description Parser-derived source unit and exact UTF-8 byte offsets into retained extracted text. Absent for legacy indexes without verified unit structure. */
+        KnowledgeSourceLocator: {
+            /** @enum {string} */
+            kind: "page" | "slide" | "sheet" | "section";
+            index: number;
+            name?: string;
+            /** @description Actual worksheet cell references intersecting this excerpt. Absent for non-spreadsheets and legacy indexes. */
+            cells?: string[];
+            start_byte: number;
+            end_byte: number;
+            source_sha256: string;
+            extractor_revision: string;
         };
         AgentSelection: {
             id: string;
@@ -2086,6 +2287,7 @@ export interface components {
             job_admission?: "intent" | "linked";
             id: string;
             prompt: string;
+            attachments?: components["schemas"]["SessionAttachmentReference"][];
             /** @description Pending or interrupted images; completed images are stored in the user message. */
             images?: components["schemas"]["SessionImage"][];
             model: string;
@@ -2187,8 +2389,70 @@ export interface components {
             /** Format: date-time */
             indexed_at?: string;
             source_retained?: boolean;
+            /** @description Original uploaded bytes exist separately from extracted source text. Legacy documents may have text without an original. */
+            original_retained?: boolean;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @description Explicitly copy a saved Chat source into an owned Knowledge import. Requires both source session access and Knowledge management permission. Does not start extraction. Without an Idempotency-Key, repeated acceptance of the same source returns the same import. Ordinary attachment upload never publishes to Knowledge. */
+        DocumentAttachmentImport: {
+            attachment: {
+                session: string;
+                id: string;
+                sha256: string;
+            };
+        };
+        DocumentRetention: {
+            /** @enum {integer} */
+            version: 1;
+            revision: number;
+            /**
+             * Format: int64
+             * @description UTC Unix seconds; zero retains until explicit deletion.
+             */
+            delete_after: number;
+            /** @description Prevents document deletion */
+            legal_hold: boolean;
+        };
+        DocumentImport: {
+            id: string;
+            name: string;
+            sha256: string;
+            /** Format: int64 */
+            bytes: number;
+            /** @enum {string} */
+            state: "accepted" | "queued" | "extracting" | "indexing" | "ready" | "needs_input" | "failed" | "cancelled" | "interrupted" | "deleted";
+            attempt: number;
+            error_code?: string;
+            document_id?: string;
+            /** @description Partial extraction is retained for explicit owner review; not indexed or ready. */
+            review_available?: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DocumentImportExtraction: {
+            /** @enum {integer} */
+            version: 1;
+            source_sha256: string;
+            /** @enum {string} */
+            state: "partial";
+            source_units: {
+                /** @enum {string} */
+                kind: "page";
+                index: number;
+                text: string;
+                /** @enum {string} */
+                state: "ready" | "empty" | "ocr_required" | "ocr_partial";
+                source_sha256: string;
+                extractor_revision: string;
+            }[];
+            warnings: {
+                code: string;
+                message: string;
+                source_index?: number;
+            }[] | null;
         };
         RAGStatus: {
             enabled: boolean;
@@ -2196,6 +2460,41 @@ export interface components {
             stats: {
                 [key: string]: unknown;
             };
+            /** @description Extraction readiness independent of embeddings. Runtime presence is not document or platform qualification. */
+            document_formats?: components["schemas"]["DocumentFormatReadiness"][];
+        };
+        OCRLanguageReadiness: {
+            languages: {
+                language: string;
+                name: string;
+                sha256: string;
+                /** @enum {string} */
+                state: "missing" | "invalid" | "installed_verified";
+                qualification: string;
+            }[];
+            document_formats: components["schemas"]["DocumentFormatReadiness"][];
+        };
+        DocumentFormatReadiness: {
+            id: string;
+            extensions: string[];
+            runtime: string;
+            /** @enum {string} */
+            runtime_state: "available" | "installed_unchecked" | "unavailable";
+            extractor_revision?: string;
+            /** @enum {string} */
+            qualification: "unverified";
+            source_units: string[];
+            /** Format: int64 */
+            max_file_bytes: number;
+            /** Format: int64 */
+            max_text_bytes: number;
+            ocr_available: boolean;
+            ocr_languages: string[];
+            /** @enum {string} */
+            ocr_state?: "unavailable" | "language_missing" | "language_invalid" | "installed_unchecked";
+            /** @enum {string} */
+            encrypted_policy: "reject";
+            limitations: string[];
         };
         ToolApproval: {
             id: string;
@@ -3832,6 +4131,12 @@ export interface operations {
                 "application/json": {
                     name: string;
                     model_id?: string;
+                    history?: {
+                        /** @enum {string} */
+                        role: "user" | "assistant";
+                        content: string;
+                        images?: components["schemas"]["SessionImage"][];
+                    }[];
                 };
             };
         };
@@ -3909,6 +4214,178 @@ export interface operations {
             409: components["responses"]["Error"];
         };
     };
+    listSessionAttachments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retained conversation files */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        attachments: components["schemas"]["SessionAttachment"][];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    uploadSessionAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Prepared attachment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionAttachmentResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            /** @description Extraction failed; any accepted original is retained under the returned identity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionAttachmentResult"];
+                };
+            };
+            /** @description Reader queue is full or its wait expired (document_busy); the returned source is retained for explicit retry. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionAttachmentResult"];
+                };
+            };
+        };
+    };
+    deleteSessionAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Source removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        removed: boolean;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    prepareSessionAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Prepared attachment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionAttachmentResult"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            /** @description Source unavailable or extraction failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionAttachmentResult"];
+                };
+            };
+            /** @description Reader queue is full or its wait expired (document_busy); original bytes remain unchanged. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionAttachmentResult"];
+                };
+            };
+        };
+    };
+    getSessionAttachmentOriginal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Original bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
     generateSessionTurn: {
         parameters: {
             query?: never;
@@ -3921,8 +4398,10 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description Text is optional when images are attached; at most 64 KiB. */
+                    /** @description Text is optional when images or files are attached; at most 64 KiB. */
                     content: string;
+                    /** @description Ordinary durable streaming only. References are owner-scoped and revision-bound; never silently omitted or granted tool authority. */
+                    attachments?: components["schemas"]["SessionAttachmentReference"][];
                     /** @description Ordinary durable streaming only. Local vision model required; never silently discarded or used by agents. */
                     images?: components["schemas"]["SessionImage"][];
                     model_id?: string;
@@ -4086,7 +4565,131 @@ export interface operations {
             409: components["responses"]["Error"];
         };
     };
-    getDocumentSource: {
+    getOCRLanguages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Language installation and document runtime states */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OCRLanguageReadiness"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    importOCRLanguage: {
+        parameters: {
+            query: {
+                language: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Verified durable installation; qualification remains separate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OCRLanguageReadiness"];
+                };
+            };
+            403: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getDocumentImports: {
+        parameters: {
+            query?: {
+                id?: string;
+                /** @description With id */
+                view?: "extraction";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved import or recent import list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentImport"] | components["schemas"]["DocumentImportExtraction"] | {
+                        imports: components["schemas"]["DocumentImport"][];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    prepareDocumentImport: {
+        parameters: {
+            query?: {
+                id?: string;
+                action?: "retry" | "cancel";
+            };
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DocumentAttachmentImport"];
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Import processed or cancelled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentImport"];
+                };
+            };
+            /** @description Original durably accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentImport"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            /** @description Reader/import queue unavailable (document_busy) or packaged reader unavailable. Inspect saved state; no automatic replay. */
+            503: components["responses"]["Error"];
+        };
+    };
+    removeDocumentImport: {
         parameters: {
             query: {
                 id: string;
@@ -4097,9 +4700,101 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Safe text preview (maximum 200000 Unicode characters) */
+            /** @description Import record removed */
             200: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    getDocumentRetention: {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current retention policy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentRetention"];
+                };
+            };
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    setDocumentRetention: {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentRetention"];
+            };
+        };
+        responses: {
+            /** @description Updated retention policy with incremented revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentRetention"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    getDocumentSource: {
+        parameters: {
+            query: {
+                id: string;
+                format?: "text" | "original";
+                /** @description UTF-8 byte offset of a saved citation. Supply all five citation fields together; text format only. */
+                start_byte?: number;
+                /** @description Exclusive UTF-8 byte offset. Passage size is at most 800000 bytes. */
+                end_byte?: number;
+                source_sha256?: string;
+                extractor_revision?: string;
+                /** @description Saved passage content hash (first 16 bytes of SHA-256 */
+                content_hash?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Safe text preview (maximum 200000 Unicode characters), or the retained original as an attachment */
+            200: {
+                headers: {
+                    /** @description SHA-256 of the exact original bytes; present only for format=original */
+                    "X-OffGrid-Source-SHA256"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4107,10 +4802,15 @@ export interface operations {
                         document: components["schemas"]["Document"];
                         content: string;
                         truncated: boolean;
+                        /** @description Present and true only after exact passage */
+                        citation_verified?: boolean;
                     };
+                    "application/octet-stream": string;
                 };
             };
+            400: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             410: components["responses"]["Error"];
         };
     };

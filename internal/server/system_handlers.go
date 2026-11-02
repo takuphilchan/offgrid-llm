@@ -98,7 +98,7 @@ func (s *Server) handleStatsV1(w http.ResponseWriter, r *http.Request) {
 		"enabled": s.ragEngine.IsEnabled(),
 	}
 	if s.ragEngine.IsEnabled() {
-		ragStats["documents"] = len(s.ragEngine.ListDocuments())
+		ragStats["documents"] = len(s.ragEngine.ForActor(modelActor(r)).ListDocuments())
 	}
 
 	// Calculate uptime
@@ -212,7 +212,7 @@ func (s *Server) handleSystemStats(w http.ResponseWriter, r *http.Request) {
 	// Get RAG document count
 	ragDocs := 0
 	if s.ragEngine != nil {
-		ragDocs = len(s.ragEngine.ListDocuments())
+		ragDocs = len(s.ragEngine.ForActor(modelActor(r)).ListDocuments())
 	}
 
 	// Get active sessions - use session handlers

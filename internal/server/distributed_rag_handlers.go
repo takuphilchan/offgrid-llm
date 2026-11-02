@@ -109,7 +109,7 @@ func (s *Server) handleDistributedRAGSearch(w http.ResponseWriter, r *http.Reque
 			http.Error(w, `{"error": "RAG not configured or not enabled"}`, http.StatusNotFound)
 			return
 		}
-		ragCtx, err := s.ragEngine.Search(r.Context(), req.Query, rag.SearchOptions{
+		ragCtx, err := s.ragEngine.ForActor(modelActor(r)).Search(r.Context(), req.Query, rag.SearchOptions{
 			TopK:           req.TopK,
 			MinScore:       0.0,
 			IncludeContent: true,
@@ -135,7 +135,7 @@ func (s *Server) handleDistributedRAGSearch(w http.ResponseWriter, r *http.Reque
 		if s.ragEngine == nil || !s.ragEngine.IsEnabled() {
 			return nil, nil
 		}
-		ragCtx, err := s.ragEngine.Search(r.Context(), query, rag.SearchOptions{
+		ragCtx, err := s.ragEngine.ForActor(modelActor(r)).Search(r.Context(), query, rag.SearchOptions{
 			TopK:           topK,
 			MinScore:       0.0,
 			IncludeContent: true,

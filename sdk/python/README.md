@@ -200,6 +200,38 @@ client.models.export_usb("Llama-3.2-3B-Instruct-Q4_K_M", "/media/usb")
 
 ### Knowledge Base (RAG)
 
+Configure Knowledge once in the app with an installed embedding model, or call
+`client.kb.enable(embedding_model="YOUR_INSTALLED_MODEL_ID")`. File imports use
+that existing index; they do not silently enable search or choose another model.
+`client.kb.status()["document_formats"]` reports the service's format readiness.
+PDF and Office files are uploaded as bounded binary multipart data, not decoded
+as UTF-8. Missing local files are errors, not implicit URL imports. A custom
+filename must keep its original extension. Uploads are not automatically retried
+when an acknowledgment is lost.
+
+`client.kb.original(document_id)` returns the retained, digest-verified upload as
+bytes. Legacy documents may have extracted text only. This download uses the same
+Knowledge permission as retrieval; it does not make the shared library private
+to one conversation. Scanned PDFs still require separately available OCR.
+
+For failed file uploads on services with `document-imports-v1`, use
+`client.kb.imports()` and `client.kb.import_status(import_id)` to inspect the saved
+source. `retry_import(import_id)` processes those bytes without uploading again;
+`cancel_import(import_id)` keeps the source but stops its active attempt.
+`remove_import(import_id)` deletes the pending source/history, not a published
+document. These owner-scoped operations require Knowledge management permission.
+Mutations are never automatically retried after an ambiguous response. Restarted
+in-flight imports remain interrupted until explicitly retried.
+
+To reuse a saved Chat source, explicitly call
+`client.kb.import_attachment(session, attachment_id, sha256)`. This copies the
+exact retained original into a pending import, checks conversation access as
+well as Knowledge management permission, and does not start indexing. Inspect
+the returned record before calling `retry_import(record["id"])`. Repeating the
+same acceptance returns the same owned import; no mutation is automatically
+retried. Publication shares the copy under the workspace's Knowledge policy.
+Deleting that copy does not remove the conversation attachment.
+
 ```python
 # Add documents
 client.kb.add("notes.md")

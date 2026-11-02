@@ -24,13 +24,15 @@ var (
 
 // Message represents a single chat message
 type Message struct {
-	Images           []api.SessionImage `json:"images,omitempty"`
-	KnowledgeSources []KnowledgePassage `json:"knowledge_sources,omitempty"`
-	JobID            string             `json:"job_id,omitempty"`
-	TurnID           string             `json:"turn_id,omitempty"`
-	Role             string             `json:"role"` // "user" or "assistant"
-	Content          string             `json:"content"`
-	Timestamp        time.Time          `json:"timestamp"`
+	Attachments        []AttachmentReference `json:"attachments,omitempty"`
+	Images             []api.SessionImage    `json:"images,omitempty"`
+	KnowledgeSources   []KnowledgePassage    `json:"knowledge_sources,omitempty"`
+	KnowledgeDocuments []string              `json:"knowledge_documents,omitempty"`
+	JobID              string                `json:"job_id,omitempty"`
+	TurnID             string                `json:"turn_id,omitempty"`
+	Role               string                `json:"role"` // "user" or "assistant"
+	Content            string                `json:"content"`
+	Timestamp          time.Time             `json:"timestamp"`
 }
 
 // Session represents a conversation session
@@ -330,6 +332,12 @@ func (sm *SessionManager) Delete(name string) error {
 func (sm *SessionManager) delete(name string) error {
 	filePath, err := sm.sessionFilePath(name)
 	if err != nil {
+		return err
+	}
+	// Source cleanup is part of an explicit conversation deletion, never draft
+	// removal. Keep the session record until cleanup succeeds so a failed delete
+	// can be retried; partially removed sources remain unavailable to inference.
+	if err := sm.removeConversationFiles(name); err != nil {
 		return err
 	}
 

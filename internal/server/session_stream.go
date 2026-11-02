@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -28,15 +29,16 @@ type ChatTimings struct {
 }
 
 type ChatStreamEvent struct {
-	Type         string            `json:"type"`
-	Phase        string            `json:"phase,omitempty"`
-	Delta        string            `json:"delta,omitempty"`
-	Error        string            `json:"error,omitempty"`
-	ErrorCode    string            `json:"error_code,omitempty"`
-	Session      *sessions.Session `json:"session,omitempty"`
-	Message      *sessions.Message `json:"message,omitempty"`
-	Metrics      *ChatTimings      `json:"metrics,omitempty"`
-	FinishReason string            `json:"finish_reason,omitempty"`
+	deliveryCheck func() error
+	Type          string            `json:"type"`
+	Phase         string            `json:"phase,omitempty"`
+	Delta         string            `json:"delta,omitempty"`
+	Error         string            `json:"error,omitempty"`
+	ErrorCode     string            `json:"error_code,omitempty"`
+	Session       *sessions.Session `json:"session,omitempty"`
+	Message       *sessions.Message `json:"message,omitempty"`
+	Metrics       *ChatTimings      `json:"metrics,omitempty"`
+	FinishReason  string            `json:"finish_reason,omitempty"`
 }
 
 type ChatStreamResult struct {
@@ -109,6 +111,9 @@ func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request,
 			log.Printf("Session generation failed: %v", err)
 			message := "Response interrupted or could not be saved. Your draft is retained; reload the conversation before retrying."
 			code := ""
+			if errors.Is(err, sessions.ErrKnowledgeUnavailable) {
+				message, code = "Source access changed. No completed answer was saved.", "knowledge_unavailable"
+			}
 			if typed, ok := err.(*serviceError); ok {
 				message = typed.message
 				code = typed.code
@@ -141,7 +146,27 @@ func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request,
 			ids = documents[0]
 		}
 		inferenceCtx := withKnowledgeScope(ctx, ids, &passages)
-		result, err := h.streamer(inferenceCtx, &api.ChatCompletionRequest{Model: model, Messages: messages, UseKnowledgeBase: &knowledge, MaxTokens: &maxTokens, Stream: true}, profile, emit)
+		scope := h.scoped(r)
+		guardedEmit := func(event ChatStreamEvent) error {
+			if err := scope.CheckHistory(current); err != nil {
+				return err
+			}
+			if err := checkPassageAccess(scope, passages); err != nil {
+				return err
+			}
+			ids := make([]string, 0, len(passages))
+			for _, source := range passages {
+				ids = append(ids, source.DocumentID)
+			}
+			event.deliveryCheck = func() error {
+				if err := scope.CheckHistory(current); err != nil {
+					return err
+				}
+				return scope.CheckKnowledge(ids)
+			}
+			return emit(event)
+		}
+		result, err := h.streamer(inferenceCtx, &api.ChatCompletionRequest{Model: model, Messages: messages, UseKnowledgeBase: &knowledge, MaxTokens: &maxTokens, Stream: true}, profile, guardedEmit)
 		if err != nil {
 			fail(err)
 			return
@@ -164,7 +189,9 @@ func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request,
 		result.Metrics.ReadyMS += waitMS
 		result.Metrics.QueueMS += waitMS
 		result.Metrics.FirstTextMS += waitMS
-		_ = emit(ChatStreamEvent{Type: "done", Session: updated, Message: &sessions.Message{Role: "assistant", Content: result.Answer, Timestamp: updated.UpdatedAt, KnowledgeSources: passages}, Metrics: &result.Metrics, FinishReason: result.FinishReason})
+		if err := guardedEmit(ChatStreamEvent{Type: "done", Session: updated, Message: &sessions.Message{Role: "assistant", Content: result.Answer, Timestamp: updated.UpdatedAt, KnowledgeSources: passages}, Metrics: &result.Metrics, FinishReason: result.FinishReason}); err != nil {
+			fail(err)
+		}
 	}()
 	heartbeat := time.NewTicker(10 * time.Second)
 	defer heartbeat.Stop()
@@ -175,6 +202,12 @@ func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request,
 		case event, ok := <-events:
 			if !ok {
 				return
+			}
+			if event.deliveryCheck != nil {
+				if err := event.deliveryCheck(); err != nil {
+					_ = write(ChatStreamEvent{Type: "error", Error: "Source access changed. The response was stopped.", ErrorCode: "knowledge_unavailable"})
+					return
+				}
 			}
 			if err := write(event); err != nil {
 				return

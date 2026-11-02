@@ -131,6 +131,14 @@ func (s *Server) submitConversationJob(w http.ResponseWriter, r *http.Request, n
 			start--
 		}
 		config.ConversationOmitted = start
+		// Later messages may summarize earlier sources, even when those earlier
+		// messages are outside the bounded prompt. Retain all source dependencies.
+		for _, message := range conversation.Messages {
+			config.KnowledgeDependencies = append(config.KnowledgeDependencies, message.KnowledgeDocuments...)
+			for _, source := range message.KnowledgeSources {
+				config.KnowledgeDependencies = append(config.KnowledgeDependencies, source.DocumentID)
+			}
+		}
 		for _, message := range conversation.Messages[start:] {
 			if message.Role == "user" || message.Role == "assistant" {
 				config.ConversationContext = append(config.ConversationContext, api.ChatMessage{Role: message.Role, Content: message.Content})
@@ -158,7 +166,7 @@ func (s *Server) submitConversationJob(w http.ResponseWriter, r *http.Request, n
 		task, err = s.agentRunner.Continue(s.agentContext(r, true), task.ID, actor, "start", "", true)
 		if err != nil {
 			if !errors.Is(err, agents.ErrRunConflict) {
-				writeAgentRunError(w, accepted, err)
+				s.writeAgentRunError(w, r, accepted, err)
 				return
 			}
 			task, _ = s.agentManager.GetTask(accepted.ID)
@@ -177,6 +185,9 @@ func (s *Server) submitConversationJob(w http.ResponseWriter, r *http.Request, n
 	responseTurn := latest.Turn
 	if responseTurn == nil || responseTurn.ID != intent.Origin.TurnID {
 		responseTurn = &sessions.Turn{ID: intent.Origin.TurnID, Prompt: task.Prompt, Model: task.Model, Profile: task.Config.ConversationProfile, MaxTokens: task.Config.MaxTokens, Status: string(task.Status), Output: task.Result, Error: task.Error, JobID: task.ID, JobAdmission: "linked", Agent: &sessions.AgentSelection{ID: task.Config.Profile.ID, Revision: task.Config.Profile.Revision}}
+	}
+	if s.rejectUnavailableTask(w, r, task) {
+		return
 	}
 	writeJSON(w, 202, map[string]any{"turn": responseTurn, "job": taskResponse(task)})
 }
@@ -215,9 +226,7 @@ func (s *Server) finishConversationAdmission(scope *sessions.ScopedManager, inte
 	}
 	turn := &sessions.Turn{ID: intent.Origin.TurnID, RequestHash: intent.Digest, Prompt: prompt, Model: model, Profile: config.ConversationProfile, MaxTokens: config.MaxTokens, Agent: &sessions.AgentSelection{ID: config.Profile.ID, Revision: config.Profile.Revision}, Knowledge: len(selectedProfileKnowledge(config)) > 0}
 	turn.KnowledgeSources = config.KnowledgeSources
-	if len(config.KnowledgeSources) > 0 {
-		turn.KnowledgeDocuments = selectedProfileKnowledge(config)
-	}
+	turn.KnowledgeDocuments = append(append([]string(nil), selectedProfileKnowledge(config)...), config.KnowledgeDependencies...)
 	if _, _, err := scope.BeginJobTurn(intent.Origin.Conversation, turn); err != nil {
 		return nil, err
 	}
@@ -262,7 +271,11 @@ func (s *Server) finishConversationAdmission(scope *sessions.ScopedManager, inte
 }
 
 func (s *Server) conversationScope(actor string) *sessions.ScopedManager {
-	return s.sessionHandlers.manager.WithAccess(sessions.Access{UserID: actor, All: actor == "local-admin" && !s.sessionHandlers.requireAuth})
+	var knowledge func([]string) bool
+	if s.sessionHandlers.knowledgeAccess != nil {
+		knowledge = func(ids []string) bool { return s.sessionHandlers.knowledgeAccess(actor, ids) }
+	}
+	return s.sessionHandlers.manager.WithAccess(sessions.Access{UserID: actor, All: actor == "local-admin" && !s.sessionHandlers.requireAuth, Knowledge: knowledge})
 }
 
 func (s *Server) projectConversationTask(snapshot *agents.Task) {
@@ -285,6 +298,9 @@ func (s *Server) attachConversationTask(task *agents.Task) error {
 		return agents.ErrRunConflict
 	}
 	scope := s.conversationScope(task.Actor)
+	if !s.taskKnowledgeAllowed(task.Actor, task) {
+		return sessions.ErrKnowledgeUnavailable
+	}
 	if task.Status == agents.TaskCompleted {
 		if err := s.admissionStage("before_final_write"); err != nil {
 			return err
@@ -373,6 +389,9 @@ func (s *Server) handleConversationJobTurn(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if action == "turn" && r.Method == http.MethodGet {
+		if s.rejectUnavailableTask(w, r, task) {
+			return
+		}
 		writeJSON(w, 200, map[string]any{"turn": turn, "job": taskResponse(task), "recovery_required": task.Status == agents.TaskCompleted && turn.Status != "completed"})
 		return
 	}
@@ -410,7 +429,7 @@ func (s *Server) deleteAgentConversation(w http.ResponseWriter, r *http.Request,
 		return true
 	}
 	defer unlock()
-	conversation, err := h.scoped(r).Load(name)
+	conversation, err := h.scoped(r).ControlState(name)
 	if err != nil {
 		writeSessionError(w, err)
 		return true

@@ -15,11 +15,14 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
 )
 
-const KnowledgeUsage = "offgrid kb status|list|enable MODEL|disable|add PATH|remove ID|search QUERY|clear --yes"
+const KnowledgeUsage = "offgrid kb status|list|enable MODEL|disable|add PATH|import-attachment SESSION FILE_ID SHA256|imports|import-status ID|review-import ID|retry-import ID|cancel-import ID|remove-import ID|ocr-languages|import-ocr-language LANGUAGE PATH|original ID --output NEW_FILE|retention ID [--revision N --delete-after UTC_UNIX_SECONDS --legal-hold true|false]|remove ID|search QUERY|clear --yes"
 
 func RunKnowledgeService(ctx context.Context, client *serviceclient.Client, args []string, input io.Reader, progress io.Writer, jsonMode bool) (any, error) {
 	if len(args) == 0 {
 		return nil, Usage("Usage: %s", KnowledgeUsage)
+	}
+	if args[0] == "retention" {
+		return runKnowledgeRetention(ctx, client, args)
 	}
 	var result map[string]any
 	get := func(path string) (any, error) {
@@ -37,6 +40,17 @@ func RunKnowledgeService(ctx context.Context, client *serviceclient.Client, args
 		return result, err
 	}
 	switch args[0] {
+	case "import-attachment":
+		return importKnowledgeAttachment(ctx, client, args)
+	case "ocr-languages", "import-ocr-language":
+		return runKnowledgeOCR(ctx, client, args)
+	case "imports", "import-status", "review-import", "retry-import", "cancel-import", "remove-import":
+		return runKnowledgeImportCommand(ctx, client, args)
+	case "original":
+		if len(args) != 4 || args[2] != "--output" || strings.TrimSpace(args[1]) == "" || strings.TrimSpace(args[3]) == "" {
+			return nil, Usage("Usage: offgrid kb original ID --output NEW_FILE")
+		}
+		return downloadKnowledgeOriginal(ctx, client, args[1], args[3])
 	case "status", "list", "ls", "disable":
 		if len(args) != 1 {
 			return nil, Usage("Usage: offgrid kb %s", args[0])

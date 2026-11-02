@@ -5,7 +5,7 @@ Manages document ingestion and RAG (Retrieval-Augmented Generation).
 """
 
 import os
-import base64
+from urllib.parse import urlencode, urlsplit
 from typing import Dict, List, Optional
 
 
@@ -30,16 +30,37 @@ class KnowledgeBase:
             Dictionary with enabled status, document count, etc.
         """
         return self._client._request("GET", "/v1/rag/status")
+
+    def retention(self, doc_id: str) -> dict:
+        """Read the current document retention revision without changing it."""
+        return self._retention_response(self._client._request("GET", "/v1/documents/retention?" + urlencode({"id": doc_id})))
+
+    @staticmethod
+    def _retention_response(value: dict) -> dict:
+        if not isinstance(value, dict) or type(value.get("version")) is not int or value["version"] != 1 or type(value.get("revision")) is not int or value["revision"] < 1 or type(value.get("delete_after")) is not int or not 0 <= value["delete_after"] <= 253402300799 or type(value.get("legal_hold")) is not bool:
+            raise ValueError("Retention response is incomplete. Inspect the document before retrying.")
+        return value
+
+    def set_retention(self, doc_id: str, *, revision: int, delete_after: int, legal_hold: bool) -> dict:
+        """Explicitly replace expiry/hold; stale revisions fail without retry."""
+        if type(revision) is not int or revision < 1 or type(delete_after) is not int or not 0 <= delete_after <= 253402300799 or type(legal_hold) is not bool:
+            raise ValueError("Provide the current revision, UTC Unix expiry (0 retains), and an explicit boolean hold")
+        result = self._retention_response(self._client._request("PUT", "/v1/documents/retention?" + urlencode({"id": doc_id}),
+                                     {"version": 1, "revision": revision, "delete_after": delete_after, "legal_hold": legal_hold}, retry=False))
+        if result["revision"] != revision + 1 or result["delete_after"] != delete_after or result["legal_hold"] != legal_hold:
+            raise ValueError("Retention update was not confirmed. Inspect the document before retrying.")
+        return result
     
-    def enable(self) -> bool:
+    def enable(self, embedding_model: Optional[str] = None) -> bool:
         """
         Enable the Knowledge Base.
         
         Returns:
             True if successful
         """
-        response = self._client._request("POST", "/v1/rag/enable")
-        return response.get("enabled", False)
+        payload = {"embedding_model": embedding_model} if embedding_model is not None else None
+        response = self._client._request("POST", "/v1/rag/enable", payload, retry=False)
+        return response.get("success", response.get("enabled", False)) is True
     
     def disable(self) -> bool:
         """
@@ -75,34 +96,77 @@ class KnowledgeBase:
         
         Example:
             >>> client.kb.add("notes.md")
-            {'id': 'notes.md', 'chunks': 5, 'status': 'indexed'}
+            {'success': True, 'document': {'id': '...', 'index_status': 'ready'}}
             
             >>> client.kb.add("meeting", content="Meeting notes: ...")
         """
-        # Auto-enable if disabled
-        if not self.enabled:
-            self.enable()
-        
+        from .knowledge_files import upload
+        if content is None and urlsplit(os.fspath(source)).scheme not in ("http", "https"):
+            return upload(self._client, source, name)
+
         payload = {}
         
-        if content:
+        if content is not None:
             # Direct content
             payload["name"] = name or source
             payload["content"] = content
-        elif os.path.exists(source):
-            # Read file
-            with open(source, "r", encoding="utf-8") as f:
-                file_content = f.read()
-            
-            payload["name"] = name or os.path.basename(source)
-            payload["content"] = file_content
         else:
             # Treat as URL or name
             payload["url"] = source
             if name:
                 payload["name"] = name
         
-        return self._client._request("POST", "/v1/documents/ingest", payload)
+        endpoint = "/v1/documents/ingest" if content is not None else "/v1/documents/ingest-url"
+        return self._client._request("POST", endpoint, payload, retry=False)
+
+    def original(self, doc_id: str) -> bytes:
+        """Download digest-verified original bytes, when retained by the service."""
+        from .knowledge_files import original
+        return original(self._client, doc_id)
+
+    def imports(self) -> List[Dict]:
+        """Read the most recent 100 imports owned by this authenticated actor."""
+        return self._client._request("GET", "/v1/documents/imports").get("imports", [])
+
+    def import_attachment(self, session: str, attachment_id: str, sha256: str) -> Dict:
+        """Explicitly copy a Chat source to a saved Knowledge import; no indexing.
+
+        Requires source access and Knowledge management permission. Call
+        retry_import with the returned ID to index; mutations are not retried.
+        """
+        import re
+        if not session or not re.fullmatch(r"file-[a-f0-9]{32}", attachment_id) or not re.fullmatch(r"[a-f0-9]{64}", sha256):
+            raise ValueError("A session, attachment ID and exact source SHA-256 are required")
+        return self._client._request("POST", "/v1/documents/imports", {
+            "attachment": {"session": session, "id": attachment_id, "sha256": sha256}
+        }, retry=False)
+
+    def ocr_languages(self) -> Dict:
+        """Read language installation and runtime readiness separately."""
+        return self._client._request("GET", "/v1/documents/ocr-languages")
+
+    def import_ocr_language(self, language: str, path: str) -> Dict:
+        """Import an explicitly selected local pack; never download or reindex."""
+        from .knowledge_files import import_ocr_language
+        return import_ocr_language(self._client, language, path)
+
+    def import_status(self, import_id: str) -> Dict:
+        return self._client._request("GET", "/v1/documents/imports?" + urlencode({"id": import_id}))
+
+    def review_import(self, import_id: str) -> Dict:
+        """Read owner-scoped partial pages without indexing or replaying work."""
+        return self._client._request("GET", "/v1/documents/imports?" + urlencode({"id": import_id, "view": "extraction"}))
+
+    def retry_import(self, import_id: str) -> Dict:
+        """Explicitly process the retained source; never upload it again."""
+        return self._client._request("POST", "/v1/documents/imports?" + urlencode({"id": import_id, "action": "retry"}), retry=False)
+
+    def cancel_import(self, import_id: str) -> Dict:
+        return self._client._request("POST", "/v1/documents/imports?" + urlencode({"id": import_id, "action": "cancel"}), retry=False)
+
+    def remove_import(self, import_id: str) -> Dict:
+        """Remove import history/pending bytes; a published document is separate."""
+        return self._client._request("DELETE", "/v1/documents/imports?" + urlencode({"id": import_id}), retry=False)
     
     def list(self) -> List[Dict]:
         """
@@ -130,7 +194,7 @@ class KnowledgeBase:
         """
         response = self._client._request(
             "DELETE", 
-            f"/v1/documents/delete?id={doc_id}"
+            "/v1/documents/delete?" + urlencode({"id": doc_id}), retry=False
         )
         return response.get("success", True)
     
@@ -188,6 +252,11 @@ class KnowledgeBase:
                 "score": r.get("score", 0),
                 "chunk_index": chunk.get("index", 0)
             }
+            # Preserve service locators rather than dropping evidence while
+            # projecting the older flattened search shape.
+            for key in ("source", "page", "section", "content_hash", "truncated"):
+                if key in chunk:
+                    result[key] = chunk[key]
             
             # Include peer info for distributed search
             if "peer_id" in r:

@@ -97,9 +97,12 @@ func writeAgentError(w http.ResponseWriter, err error) {
 
 // A persisted run may exist even when admission or execution failed. Include
 // its identity so callers inspect it rather than creating duplicate work.
-func writeAgentRunError(w http.ResponseWriter, task *agents.Task, err error) {
+func (s *Server) writeAgentRunError(w http.ResponseWriter, r *http.Request, task *agents.Task, err error) {
 	if task == nil {
 		writeAgentError(w, err)
+		return
+	}
+	if s.rejectUnavailableTask(w, r, task) {
 		return
 	}
 	status := http.StatusServiceUnavailable
@@ -318,10 +321,10 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		if err := s.browserHub.Reserve(s.agentActor(r), config.ComputerSession, task.ID); err != nil {
 			stopped, stopErr := s.agentRunner.Stop(task.ID, s.agentActor(r), "cancel", "")
 			if stopErr != nil {
-				writeAgentRunError(w, task, stopErr)
+				s.writeAgentRunError(w, r, task, stopErr)
 				return
 			}
-			writeAgentRunError(w, stopped, agents.ErrRunConflict)
+			s.writeAgentRunError(w, r, stopped, agents.ErrRunConflict)
 			return
 		}
 	}
@@ -332,11 +335,14 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		if task == nil {
 			task, _ = s.agentManager.GetTask(createdID)
 		}
-		writeAgentRunError(w, task, err)
+		s.writeAgentRunError(w, r, task, err)
 		return
 	}
 	if req.Stream {
 		s.streamAgentTask(w, r, task.ID)
+		return
+	}
+	if s.rejectUnavailableTask(w, r, task) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -351,6 +357,7 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 // All state changes refer to an existing run; no action accepts a new prompt or
 // replacement tool arguments. Reloads and double clicks cannot replay old work.
 func (s *Server) handleAgentTaskAction(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if s.agentRunner == nil {
 		writeError(w, "Agent runtime unavailable", 503)
 		return
@@ -389,6 +396,9 @@ func (s *Server) handleAgentTaskAction(w http.ResponseWriter, r *http.Request) {
 			writeAgentError(w, agents.ErrTaskNotFound)
 			return
 		}
+		if s.rejectUnavailableTask(w, r, task) {
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(taskResponse(task))
 		return
@@ -411,6 +421,16 @@ func (s *Server) handleAgentTaskAction(w http.ResponseWriter, r *http.Request) {
 	}
 	var task *agents.Task
 	var err error
+	if parts[1] != "cancel" && parts[1] != "deny" {
+		candidate, ok := s.agentManager.GetTask(id)
+		if !ok || candidate.Actor != actor {
+			writeAgentError(w, agents.ErrTaskNotFound)
+			return
+		}
+		if s.rejectUnavailableTask(w, r, candidate) {
+			return
+		}
+	}
 	switch parts[1] {
 	case "approve", "resume":
 		task, err = s.agentRunner.Continue(s.agentContext(r, req.Async), id, actor, parts[1], req.ApprovalID, req.Async)
@@ -423,7 +443,11 @@ func (s *Server) handleAgentTaskAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeAgentRunError(w, task, err)
+		s.writeAgentRunError(w, r, task, err)
+		return
+	}
+	if !s.taskKnowledgeAllowed(actor, task) {
+		writeJSON(w, 202, map[string]any{"id": task.ID, "status": task.Status})
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -461,9 +485,15 @@ func (s *Server) streamAgentTask(w http.ResponseWriter, r *http.Request, id stri
 		if !ok || task.Actor != s.agentActor(r) {
 			return
 		}
+		if !s.taskKnowledgeAllowed(s.agentActor(r), task) {
+			return
+		}
 		data := taskResponse(task)
 		data["type"] = "status"
 		for ; steps < len(task.Steps); steps++ {
+			if !s.taskKnowledgeAllowed(s.agentActor(r), task) {
+				return
+			}
 			step := task.Steps[steps]
 			payload, _ := json.Marshal(map[string]any{"type": "step", "step_type": step.Type, "content": step.Content, "tool_name": step.ToolName, "tool_result": step.ToolResult})
 			if _, err := fmt.Fprintf(w, "data: %s\n\n", payload); err != nil {
@@ -482,6 +512,9 @@ func (s *Server) streamAgentTask(w http.ResponseWriter, r *http.Request, id stri
 		}
 		payload, _ := json.Marshal(data)
 		if string(payload) != lastPayload {
+			if !s.taskKnowledgeAllowed(s.agentActor(r), task) {
+				return
+			}
 			if _, err := fmt.Fprintf(w, "data: %s\n\n", payload); err != nil {
 				return
 			}

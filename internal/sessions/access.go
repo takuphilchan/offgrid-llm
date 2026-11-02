@@ -3,6 +3,8 @@ package sessions
 import (
 	"errors"
 	"fmt"
+
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 // Access is supplied by a trusted caller, never decoded from a client body.
@@ -11,6 +13,8 @@ import (
 type Access struct {
 	UserID string
 	All    bool
+	// Knowledge is a trusted, live policy check, never a persisted grant.
+	Knowledge func([]string) bool
 }
 
 func (a Access) allows(session *Session) bool {
@@ -40,7 +44,7 @@ func (s *ScopedManager) List() ([]Session, error) {
 	}
 	visible := make([]Session, 0, len(all))
 	for _, session := range all {
-		if s.access.allows(&session) {
+		if s.access.allows(&session) && s.validateKnowledge(&session) == nil {
 			visible = append(visible, session)
 		}
 	}
@@ -48,6 +52,17 @@ func (s *ScopedManager) List() ([]Session, error) {
 }
 
 func (s *ScopedManager) Load(name string) (*Session, error) {
+	session, err := s.loadOwned(name)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.validateKnowledge(session); err != nil {
+		return nil, err
+	}
+	return session, nil
+}
+
+func (s *ScopedManager) loadOwned(name string) (*Session, error) {
 	session, err := s.manager.Load(name)
 	if err != nil {
 		return nil, err
@@ -60,8 +75,18 @@ func (s *ScopedManager) Load(name string) (*Session, error) {
 }
 
 func (s *ScopedManager) Create(name, modelID string) (*Session, error) {
+	return s.CreateWithHistory(name, modelID, nil)
+}
+
+// CreateWithHistory atomically preserves a local conversation when its user
+// first attaches a service-owned file. It neither appends to an existing session
+// nor admits inference. The caller's original session remains untouched.
+func (s *ScopedManager) CreateWithHistory(name, modelID string, history []Message) (*Session, error) {
 	if !s.access.All && s.access.UserID == "" {
 		return nil, ErrAccessDenied
+	}
+	if err := ValidateSeedHistory(history); err != nil {
+		return nil, err
 	}
 	s.manager.mutationMu.Lock()
 	defer s.manager.mutationMu.Unlock()
@@ -72,6 +97,10 @@ func (s *ScopedManager) Create(name, modelID string) (*Session, error) {
 	}
 	session := NewSession(name, modelID)
 	session.OwnerID = s.access.UserID
+	for _, m := range history {
+		m.Images = append([]api.SessionImage(nil), m.Images...)
+		session.Messages = append(session.Messages, m)
+	}
 	if err := s.manager.save(session); err != nil {
 		return nil, err
 	}
@@ -91,7 +120,7 @@ func (s *ScopedManager) DeleteRetainingJobs(name string) error {
 func (s *ScopedManager) deleteWithJobs(name string, retain bool) error {
 	s.manager.mutationMu.Lock()
 	defer s.manager.mutationMu.Unlock()
-	session, err := s.Load(name)
+	session, err := s.loadOwned(name)
 	if err != nil {
 		return err
 	}
@@ -135,6 +164,9 @@ func (s *ScopedManager) AppendExchange(name, modelID, userContent, assistantCont
 	session.AddMessage("assistant", assistantContent)
 	if len(sources) > 0 {
 		session.Messages[len(session.Messages)-1].KnowledgeSources = sources[0]
+	}
+	if err := s.validateKnowledge(session); err != nil {
+		return nil, err
 	}
 	if err := s.manager.save(session); err != nil {
 		return nil, err

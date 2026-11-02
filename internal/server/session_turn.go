@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -13,7 +14,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
-func (h *SessionHandlers) generateDurable(w http.ResponseWriter, r *http.Request, name, id, prompt, model string, knowledge bool, profile string, tokens int, documents []string, images []api.SessionImage) {
+func (h *SessionHandlers) generateDurable(w http.ResponseWriter, r *http.Request, name, id, prompt, model string, knowledge bool, profile string, tokens int, documents []string, images []api.SessionImage, attachments []sessions.AttachmentReference) {
 	if !isSafeModelID(id) || len(id) > 128 || h.streamer == nil {
 		writeError(w, "A valid request_id and streaming runtime are required", 400)
 		return
@@ -34,6 +35,7 @@ func (h *SessionHandlers) generateDurable(w http.ResponseWriter, r *http.Request
 	turn := &sessions.Turn{ID: id, Prompt: prompt, Model: model, Knowledge: knowledge, Profile: profile, MaxTokens: tokens, Status: "pending", Phase: "queued"}
 	turn.KnowledgeDocuments = documents
 	turn.Images = images
+	turn.Attachments = attachments
 	encoded, _ := json.Marshal(turn)
 	hash := sha256.Sum256(encoded)
 	turn.RequestHash = hex.EncodeToString(hash[:])
@@ -87,11 +89,7 @@ func (h *SessionHandlers) executeTurn(ctx context.Context, scoped *sessions.Scop
 		session, loadErr := scoped.Load(name)
 		err = loadErr
 		if err == nil {
-			messages := make([]api.ChatMessage, 0, len(session.Messages)+1)
-			for _, msg := range session.Messages {
-				messages = append(messages, api.ChatMessage{Role: msg.Role, Content: api.SessionContent(msg.Content, msg.Images)})
-			}
-			messages = append(messages, api.ChatMessage{Role: "user", Content: api.SessionContent(turn.Prompt, turn.Images)})
+			messages, messageErr := attachmentMessages(scoped, name, session, turn)
 			lastSave := time.Time{}
 			emit := func(event ChatStreamEvent) error {
 				if ctx.Err() != nil {
@@ -117,7 +115,11 @@ func (h *SessionHandlers) executeTurn(ctx context.Context, scoped *sessions.Scop
 			}
 			var result ChatStreamResult
 			ctx = withKnowledgeScope(ctx, turn.KnowledgeDocuments, &turn.KnowledgeSources)
-			result, err = h.streamer(ctx, &api.ChatCompletionRequest{Model: turn.Model, Messages: messages, UseKnowledgeBase: &turn.Knowledge, MaxTokens: &turn.MaxTokens, Stream: true}, turn.Profile, emit)
+			if messageErr != nil {
+				err = messageErr
+			} else {
+				result, err = h.streamer(ctx, &api.ChatCompletionRequest{Model: turn.Model, Messages: messages, UseKnowledgeBase: &turn.Knowledge, MaxTokens: &turn.MaxTokens, Stream: true}, turn.Profile, emit)
+			}
 			if err == nil {
 				err = ctx.Err()
 			}
@@ -151,6 +153,9 @@ func (h *SessionHandlers) executeTurn(ctx context.Context, scoped *sessions.Scop
 		}
 	}
 	if saveErr := scoped.SaveTurn(name, turn); saveErr != nil {
+		if errors.Is(saveErr, sessions.ErrKnowledgeUnavailable) {
+			_ = scoped.BlockKnowledgeTurn(name, turn.ID)
+		}
 		// Never publish success if the final durable write failed.
 		// A subsequent read with no live worker reports the persisted turn interrupted.
 		return
@@ -180,7 +185,13 @@ func (h *SessionHandlers) currentTurn(r *http.Request, name string) (*sessions.S
 }
 
 func (h *SessionHandlers) handleTurn(w http.ResponseWriter, r *http.Request, name, action string) {
-	session, err := h.currentTurn(r, name)
+	var session *sessions.Session
+	var err error
+	if action == "turn/cancel" && r.Method == "POST" {
+		session, err = h.scoped(r).ControlState(name)
+	} else {
+		session, err = h.currentTurn(r, name)
+	}
 	if err != nil {
 		writeSessionError(w, err)
 		return
@@ -209,7 +220,7 @@ func (h *SessionHandlers) handleTurn(w http.ResponseWriter, r *http.Request, nam
 		// Re-read under the same lock used by admission. Without this check a
 		// delayed cancel for turn A could stop a newly admitted turn B.
 		h.turnMu.Lock()
-		current, loadErr := h.scoped(r).Load(name)
+		current, loadErr := h.scoped(r).ControlState(name)
 		cancel := h.turnCancels[name]
 		if loadErr != nil || current.Turn == nil || current.Turn.ID != req.ID || !current.Turn.Active() || cancel == nil {
 			h.turnMu.Unlock()

@@ -23,6 +23,9 @@ func (s *Server) handleAgentTasks(w http.ResponseWriter, r *http.Request) {
 	}
 	tasks := []any{}
 	for _, task := range s.agentManager.ListTasks() {
+		if !s.taskKnowledgeAllowed(s.agentActor(r), task) {
+			continue
+		}
 		if !s.profileAdmin(r) && (task.Config.Profile == nil || task.Actor != s.agentActor(r)) {
 			continue
 		}
