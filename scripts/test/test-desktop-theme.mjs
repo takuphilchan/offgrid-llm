@@ -33,6 +33,7 @@ const server = createServer(async (request, response) => {
       '/health': {status:'healthy'}, '/v1/users/me': {authenticated:false,auth_required:false,user:null},
       '/v1/models': {data:[{id:'theme-fixture',type:'chat'}]}, '/v1/sessions': {sessions:[]},
       '/v1/catalog': {models:[]}, '/v1/models/download/progress': {},
+      '/v1/rag/status': {enabled:false,stats:{}}, '/v1/documents': {documents:[],count:0},
       '/api/v2/models': {models:[]}, '/api/v2/models/packages': {packages:[]},
       '/v1/agents/tasks': [], '/v1/agents/tools': {tools:[],enabled_count:0},
       '/api/v2/jobs': [],
@@ -144,7 +145,7 @@ try {
     // not a second composer. Keep both routes in packaged zoom coverage.
     if (route.startsWith('agents')) await expect(page.getByRole('textbox',{name:'Task',exact:true})).toHaveCount(0);
     if (route === 'models') await expect(page.getByRole('alert')).toHaveCount(0);
-    const target = route === 'chat' ? page.locator('.composer textarea') : route === 'agents' ? page.getByRole('searchbox',{name:'Search agents',exact:true}) : route === 'agents/workspace' ? page.getByRole('region',{name:'Recent tasks',exact:true}).getByRole('link',{name:'Chat',exact:true}) : route === 'models' ? page.getByRole('button',{name:'Language',exact:true}) : route === 'knowledge' ? page.getByRole('button',{name:'Open model manager',exact:true}) : route === 'activity' ? page.locator('.activity-diagnostics > summary') : page.locator('.page-content button').last();
+    const target = route === 'chat' ? page.locator('.composer textarea') : route === 'agents' ? page.locator('.profile-library-header > button') : route === 'agents/workspace' ? page.getByRole('region',{name:'Recent tasks',exact:true}).getByRole('link',{name:'Chat',exact:true}) : route === 'models' ? page.getByRole('button',{name:'Language',exact:true}) : route === 'knowledge' ? page.getByRole('button',{name:'Open model manager',exact:true}) : route === 'activity' ? page.locator('.activity-diagnostics > summary') : page.locator('.page-content button').last();
     await expect(target).toBeVisible(); await expect(target).toBeEnabled(); await target.focus(); await target.scrollIntoViewIfNeeded();
     await expect(target).toBeFocused();
     await page.evaluate(() => document.fonts.ready);
