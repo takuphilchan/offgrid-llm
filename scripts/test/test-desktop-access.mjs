@@ -43,6 +43,7 @@ try{
  const page=await app.firstWindow();page.setDefaultTimeout(10000);
  await page.waitForURL(/\/ui\//);await page.evaluate(()=>localStorage.setItem('offgrid.onboarding.complete','true'));
  await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/chat`);await page.reload();
+ await page.locator('.composer-context-menu > button').click();
  await page.getByRole('button',{name:'Agent',exact:true}).click();
  await page.getByRole('radio',{name:/Access fixture/}).check();
  await page.keyboard.press('Escape');

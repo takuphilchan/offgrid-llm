@@ -102,3 +102,10 @@ release-context and CI-gate fixtures passed; asset/finalizer/container shell
 fixtures remain subject to the Linux CI run. No failed local invocation is
 counted as a pass. Logs: `build/release-parser-portable.log`,
 `build/release-repair-portable.log`, `build/release-automation-gitbash.log`.
+
+The next CI run passed the corrected Go/parser checkpoints, Linux release-shell
+fixtures and both macOS packaged startup checks. Windows then exposed an old
+access-test selector: Agent selection now lives inside Response settings. The
+packaged test opens that menu before choosing its fixture profile. The local
+packaged access check then passed at 100% and 200% zoom, with zero writes and
+without granting native consent (`build/release-packaged-access-final.log`).
