@@ -47,6 +47,9 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 		fmt.Fprintf(env.Stdout, "    %s--load%s <name>      Load and continue existing session\n", brandPrimary, colorReset)
 		fmt.Fprintf(env.Stdout, "    %s--image%s <path>     Attach PNG/JPEG (2 MiB each; repeat for up to four)\n", brandPrimary, colorReset)
 		fmt.Fprintln(env.Stdout, "                       In chat: /image PATH, /images, /remove-image [N|all]")
+		fmt.Fprintln(env.Stdout, "    --file PATH        Attach a document through the connected service (repeat up to eight)")
+		fmt.Fprintln(env.Stdout, "    --prompt QUESTION  Answer once with --file; otherwise open file chat")
+		fmt.Fprintln(env.Stdout, "                       File chat: /attach PATH, /attachments, /remove-attachment N")
 		fmt.Fprintf(env.Stdout, "    %s--rag%s              Enable knowledge base (RAG)\n", brandPrimary, colorReset)
 		fmt.Fprintf(env.Stdout, "    %s--allow-embedding-chat%s  Force chat with an embedding-like model\n", brandPrimary, colorReset)
 		fmt.Fprintln(env.Stdout)
@@ -527,6 +530,7 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 	}
 
 	chatRuntime := &InteractiveTUIState{
+		StartFiles:       newFileConversationStarter(env),
 		ModelName:        resolvedModelName,
 		ResolvedModel:    resolvedModelName,
 		ServerPort:       cfg.ServerPort,
@@ -555,6 +559,10 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 	}
 
 	if !usedTUI {
+		if chatRuntime.Files != nil {
+			files := chatRuntime.Files
+			return conversationChatLoop(ctx, files.Client, files.Saved, files.Draft, images, resolvedModelName, useKnowledgeBase, env.Stdin, env.Stdout)
+		}
 		if err := runPlainChat(ctx, env, cfg, client, resolvedModelName, useKnowledgeBase, images, messages, currentSession, sessionMgr); err != nil {
 			return err
 		}

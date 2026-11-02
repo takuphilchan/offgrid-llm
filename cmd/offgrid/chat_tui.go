@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -23,6 +24,10 @@ import (
 )
 
 type ChatRuntime struct {
+	Context          context.Context
+	StartFiles       cli.FileConversationStarter
+	fileWork         sync.WaitGroup
+	Files            *cli.ServiceFileConversation
 	ModelName        string
 	ResolvedModel    string
 	ServerPort       int
@@ -36,19 +41,32 @@ type ChatRuntime struct {
 
 func (rt *ChatRuntime) Stream(input string) <-chan chatStreamMsg {
 	ch := make(chan chatStreamMsg)
+	if rt.Files != nil {
+		rt.fileWork.Add(1)
+	}
 	go func() {
+		if rt.Files != nil {
+			defer rt.fileWork.Done()
+		}
 		defer close(ch)
-
-		if err := rt.stream(input, ch); err != nil {
-			ch <- chatStreamMsg{err: err}
+		err := rt.stream(input, ch)
+		message := chatStreamMsg{done: err == nil, err: err}
+		if rt.Files != nil {
+			select {
+			case ch <- message:
+			case <-rt.Files.Context.Done():
+			}
 			return
 		}
-		ch <- chatStreamMsg{done: true}
+		ch <- message
 	}()
 	return ch
 }
 
 func (rt *ChatRuntime) stream(input string, ch chan<- chatStreamMsg) error {
+	if rt.Files != nil {
+		return rt.streamFiles(input, ch)
+	}
 	if err := cli.ValidateChatImageBudget(rt.Messages, rt.Images); err != nil {
 		return err
 	}
@@ -150,6 +168,9 @@ func (rt *ChatRuntime) stream(input string, ch chan<- chatStreamMsg) error {
 }
 
 func (rt *ChatRuntime) Clear() error {
+	if rt.Files != nil {
+		return fmt.Errorf("this conversation has retained sources; use /exit and start a new file conversation to keep its history intact")
+	}
 	rt.Messages = []ChatMessage{}
 	rt.Images = nil
 	if rt.CurrentSession != nil {
@@ -200,6 +221,7 @@ type chatTUIModel struct {
 	streamCh        <-chan chatStreamMsg
 	streamLineIndex int
 	streamText      string
+	pendingInput    string
 	history         []string
 	historyIndex    int
 }
@@ -291,7 +313,7 @@ func (m chatTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			input := strings.TrimSpace(m.input.Value())
 			m.input.SetValue("")
-			if input == "" && len(m.rt.Images) == 0 {
+			if input == "" && len(m.rt.Images) == 0 && (m.rt.Files == nil || len(m.rt.Files.Draft.Files) == 0) {
 				return m, nil
 			}
 			m.addHistory(input)
@@ -300,6 +322,7 @@ func (m chatTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.handleCommand(cmd)
 			}
 			m.appendUser(input)
+			m.pendingInput = input
 			m.streamText = ""
 			m.streamLineIndex = m.appendAssistantStream()
 			m.streamCh = m.rt.Stream(input)
@@ -329,6 +352,9 @@ func (m chatTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusText = "Ready"
 			m.removeEmptyAssistantStream()
 			m.appendError(msg.err.Error())
+			if m.input.Value() == "" {
+				m.input.SetValue(m.pendingInput)
+			}
 			return m, nil
 		}
 		if msg.token != "" {
@@ -341,9 +367,27 @@ func (m chatTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.streamCh = nil
 			m.streamLineIndex = -1
 			m.streamText = ""
+			m.pendingInput = ""
 			return m, nil
 		}
 		return m, waitForStream(m.streamCh)
+	case chatFileCommandMsg:
+		m.busy = false
+		m.statusText = "Ready"
+		if msg.files != nil {
+			if m.rt.Files == nil {
+				m.appendSystem("Conversation preserved. Resume: offgrid session chat " + cli.TerminalSafe(msg.files.Name))
+				m.rt.CurrentSession = msg.files.Saved
+			}
+			m.rt.Files = msg.files
+			m.rt.Files.Draft = msg.draft
+		}
+		if msg.err != nil {
+			m.appendError(msg.err.Error())
+		} else {
+			m.appendSystem(msg.message)
+		}
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -372,6 +416,11 @@ func (m chatTUIModel) View() string {
 }
 
 func (m chatTUIModel) handleCommand(cmd string) (tea.Model, tea.Cmd) {
+	if isFileChatCommand(cmd) {
+		m.busy = true
+		m.statusText = "Preparing files..."
+		return m, tea.Batch(m.spinner.Tick, m.rt.fileCommand(cmd))
+	}
 	if handled, message, err := cli.ChatImageCommand(cmd, &m.rt.Images); handled {
 		if err != nil {
 			m.appendError(err.Error())
@@ -385,6 +434,9 @@ func (m chatTUIModel) handleCommand(cmd string) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "help", "?":
 		m.appendSystem("Commands: /help, /status, /clear, /rag, /image PATH, /images, /remove-image [N|all], /exit")
+		if m.rt.Files != nil || m.rt.StartFiles != nil {
+			m.appendSystem("Files: /attach PATH, /attachments, /remove-attachment N|all, /retry-attachment N, /use-attachment ID")
+		}
 	case "status":
 		m.appendSystem(m.rt.StatusText())
 	case "clear":
@@ -506,6 +558,12 @@ func waitForStream(ch <-chan chatStreamMsg) tea.Cmd {
 }
 
 func runChatTUI(ctx context.Context, rt *ChatRuntime) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer func() { cancel(); rt.fileWork.Wait() }()
+	rt.Context = ctx
+	if rt.Files != nil {
+		rt.Files.Context = ctx
+	}
 	program := tea.NewProgram(newChatTUIModel(rt), tea.WithAltScreen(), tea.WithContext(ctx))
 	_, err := program.Run()
 	return err

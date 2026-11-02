@@ -23,6 +23,7 @@ func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, clie
 	colorBold, colorReset, colorYellow := s.Bold, s.Reset, s.Accent
 	presenter := Presenter{Stdout: env.Stdout, Stderr: env.Stderr, Style: s}
 	reader := bufio.NewReader(env.Stdin)
+	startFiles := newFileConversationStarter(env)
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -41,6 +42,30 @@ func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, clie
 		}
 
 		if strings.HasPrefix(input, "/") {
+			if IsConversationFileCommand(input) {
+				needed, message, err := FileCommandNeedsSession(input)
+				if err != nil {
+					presenter.Error(err.Error())
+					continue
+				}
+				if !needed {
+					fmt.Fprintln(env.Stdout, message)
+					continue
+				}
+				files, err := startFiles(ctx, resolvedModelName, messages)
+				if err != nil {
+					presenter.Error(err.Error())
+					continue
+				}
+				fmt.Fprintf(env.Stdout, "Conversation preserved. Resume: offgrid session chat %s\n", TerminalSafe(files.Name))
+				_, message, err = files.Draft.Command(ctx, files.Client, files.Name, input)
+				if err != nil {
+					presenter.Error(err.Error())
+				} else {
+					fmt.Fprintln(env.Stdout, message)
+				}
+				return conversationChatLoop(ctx, files.Client, files.Saved, files.Draft, images, resolvedModelName, useKnowledgeBase, reader, env.Stdout)
+			}
 			if handled, message, err := ChatImageCommand(input, &images); handled {
 				if err != nil {
 					presenter.Error(err.Error())
@@ -73,6 +98,7 @@ func runPlainChat(ctx context.Context, env Environment, cfg *config.Config, clie
 			fmt.Fprintf(env.Stdout, "    %s/exit%s     Exit the chat\n", colorBold, colorReset)
 			fmt.Fprintln(env.Stdout)
 			fmt.Fprintln(env.Stdout, "    /image PATH  /images  /remove-image [N|all] (PNG/JPEG, 2 MiB each)")
+			fmt.Fprintln(env.Stdout, "    /attach PATH  /attachments  /remove-attachment N|all")
 			fmt.Fprintf(env.Stdout, "  %sAliases:%s exit, quit, q, help, status, clear, rag\n", brandMuted, colorReset)
 			continue
 		}

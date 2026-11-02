@@ -89,6 +89,8 @@ type ChatCompletionChunk struct {
 // The adapter copies mutations back after TUI exit; it does not create another
 // session or service-side executor.
 type InteractiveTUIState struct {
+	StartFiles       FileConversationStarter
+	Files            *ServiceFileConversation
 	ModelName        string
 	ResolvedModel    string
 	ServerPort       int

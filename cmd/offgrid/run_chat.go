@@ -35,6 +35,8 @@ func osInteractiveDependencies() cli.InteractiveDependencies {
 		ShouldUseTUI: shouldUseChatTUI,
 		RunTUI: func(ctx context.Context, state *cli.InteractiveTUIState) error {
 			runtime := &ChatRuntime{
+				StartFiles:       state.StartFiles,
+				Files:            state.Files,
 				ModelName:        state.ModelName,
 				ResolvedModel:    state.ResolvedModel,
 				ServerPort:       state.ServerPort,
@@ -46,6 +48,7 @@ func osInteractiveDependencies() cli.InteractiveDependencies {
 				CurrentSession:   state.CurrentSession,
 			}
 			defer func() {
+				state.Files = runtime.Files
 				state.Messages = runtime.Messages
 				state.Images = runtime.Images
 				state.UseKnowledgeBase = runtime.UseKnowledgeBase

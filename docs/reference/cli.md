@@ -53,6 +53,35 @@ The service checks projector availability. Real vision-model qualification is
 separate from the CLI's transport/persistence tests; see the
 [image verification record](../quality/evidence/workspace-experience-2026-10-30.md).
 
+### Documents in ordinary Chat
+
+```sh
+offgrid run MODEL --file "./notes.txt" --prompt "Summarize this"
+offgrid run MODEL --file "./notes.txt" --save document-review
+offgrid session chat document-review
+```
+
+You can also start `offgrid run MODEL` normally and use `/attach PATH` later in
+either terminal presentation. Earlier text and images are preserved in a new
+service-owned conversation; the CLI prints its resume command. The original
+local session stays unchanged. No workspace grant or Knowledge setup is needed
+for small supported files, and attaching never grants tools or publishes a file.
+
+Use `/attachments` to inspect pending sources, `/remove-attachment N|all` to
+remove draft selections, and `/retry-attachment N` to retry retained extraction.
+Unconfirmed uploads and incomplete extraction block sending until resolved or
+explicitly removed. A failed answer retains pending files and images. The TUI
+restores failed text to the input (without overwriting a newer draft); plain chat
+offers `/retry`. Retrying an unchanged request preserves its durable identity.
+Saved
+source bytes remain available after draft removal. `/clear` does not erase a
+service conversation's source history; start a new conversation explicitly.
+
+`--json` file runs require `--prompt`; diagnostic/resume messages go to stderr.
+File paths with spaces may be quoted. PNG/JPEG images still use `/image` and
+`--image`. Agent document execution remains gated. See the
+[file API](api.md#files-in-saved-chat) for limits and readiness requirements.
+
 ### External agent lifecycle
 
 ```bash
@@ -427,8 +456,37 @@ offgrid kb enable YOUR_EMBEDDING_MODEL_ID
 offgrid kb list
 offgrid kb add ./notes.txt
 offgrid kb search "What are the main decisions?"
+offgrid kb original DOCUMENT_ID --output ./source-copy.pdf
+offgrid kb imports
+offgrid kb import-status IMPORT_ID
+offgrid kb review-import IMPORT_ID
+offgrid kb import-attachment SESSION FILE_ID SHA256
+offgrid kb retry-import IMPORT_ID
+offgrid kb cancel-import IMPORT_ID
+offgrid kb remove-import IMPORT_ID
 offgrid kb disable
 ```
+
+`kb original` downloads the retained upload through the authenticated service,
+checks its size and digest, and creates a new file without overwriting an existing
+path. Legacy documents may retain only extracted text; they report an unavailable
+original instead of reconstructing one.
+
+Failed multipart uploads remain saved for explicit recovery. `kb imports` lists
+your most recent 100 import records; `retry-import` processes the saved bytes
+without uploading again. `cancel-import` stops that attempt and keeps the source.
+`remove-import` deletes its pending bytes/history, not a published Knowledge
+document. These commands require your current Knowledge management permission;
+another user's import IDs do not grant access. A lost response requires status
+inspection, not an automatic retry. JSON output is supported as for other `kb`
+commands.
+
+`kb import-attachment` explicitly copies an existing conversation attachment into
+a pending Knowledge import without uploading it again. Supply its exact saved
+source digest and inspect the returned state before using `retry-import` to
+index it. Both conversation access and Knowledge management permission apply.
+The original stays in Chat; the published copy uses the workspace's Knowledge
+access policy. Ordinary Chat attachments are never automatically published.
 
 Install the embedding model first. `kb remove DOCUMENT_ID` deletes that indexed
 document; `kb clear --yes` removes all documents available to the operation.

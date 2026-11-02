@@ -18,8 +18,13 @@ const SessionHelp = `Saved conversations on the connected OffGrid service:
   offgrid session list
   offgrid session show NAME
   offgrid session create NAME --model MODEL
+  offgrid session attach NAME FILE
+  offgrid session attachments NAME
+  offgrid session remove-attachment NAME ID
+  offgrid session send NAME [--file FILE] [--attachment ID] [--image PATH] [--model MODEL] MESSAGE
   offgrid session send NAME --profile ID --profile-revision N [--request-id ID] [--wait] MESSAGE
   offgrid session chat NAME --profile ID --profile-revision N
+  offgrid session chat NAME                  Ordinary chat with /attach PATH
   offgrid session turn NAME
   offgrid session recover NAME REQUEST_ID
   offgrid session delete NAME [--work retain|stop]
@@ -59,7 +64,15 @@ func RunSessionServiceWithFiles(ctx context.Context, client *serviceclient.Clien
 		return Usage("session command required")
 	}
 	switch args[0] {
+	case "attach", "attachments", "remove-attachment":
+		return RunSessionFiles(ctx, client, args, stdout, jsonMode)
 	case "send", "turn", "recover":
+		if len(args) < 2 {
+			return Usage("session send|turn|recover requires NAME")
+		}
+		if args[0] == "send" && plainConversationArgs(args[2:]) {
+			return RunPlainConversationTurn(ctx, client, args, stdout, jsonMode)
+		}
 		return RunConversationService(ctx, client, args, stdout, jsonMode, renderStream)
 	case "create":
 		if len(args) != 4 || args[2] != "--model" || !ValidProfileID(args[1]) || args[3] == "" {

@@ -30,6 +30,9 @@ type InteractiveDependencies struct {
 }
 
 func runInteractiveCommand(ctx context.Context, args []string, env Environment) error {
+	if hasRunFiles(args) {
+		return runWithFiles(ctx, args, env)
+	}
 	if env.Interactive.DownloadHF == nil || env.Interactive.EnsureServer == nil || env.Interactive.StartServer == nil || env.Interactive.EnsureLlama == nil || env.Interactive.StartLlama == nil || env.Interactive.ReadLlamaPort == nil || env.Interactive.WaitModelReady == nil || env.Interactive.Wait == nil || env.Interactive.ReadDir == nil || env.Interactive.ShouldUseTUI == nil || env.Interactive.RunTUI == nil || env.Interactive.IsEmbeddingModel == nil || env.Interactive.EmbeddingChatError == nil || env.Interactive.DetectResources == nil || env.ReadFile == nil {
 		return fmt.Errorf("interactive run adapter unavailable")
 	}
