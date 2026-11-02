@@ -9,6 +9,10 @@ export type VoicePreferences = { asr: string; tts: string; voice: string };
 export type SpeechSelection = { model?: string; voice?: string };
 export const defaultVoicePreferences: VoicePreferences = { asr: '', tts: '', voice: '' };
 
+// Readiness failure is different from microphone denial or transcription failure.
+// Callers can offer setup without guessing from an English server message.
+export class SpeechSetupRequired extends Error {}
+
 // Only model identifiers are persisted, scoped like existing composer preferences.
 // Neither microphone consent nor automatic playback is persisted here.
 export function useVoicePreferences() {
@@ -32,9 +36,9 @@ export function selectSpeech(status: AudioStatus, preferences: VoicePreferences,
   const requested = preferences[kind];
   const candidates = (status.profiles ?? []).filter(profile => profile.capabilities.includes(capability));
   const profile = requested ? candidates.find(profile => `${profile.id}@${profile.revision}` === requested) : candidates.find(profile => profile.available);
-  if (requested && !profile) throw new Error(copy.removed);
-  if (profile && !profile.available) throw new Error(profile.issue || copy.runtime);
-  if (!profile && !status[kind]?.available) throw new Error(status[kind]?.issue || copy.notReady);
+  if (requested && !profile) throw new SpeechSetupRequired(copy.removed);
+  if (profile && !profile.available) throw new SpeechSetupRequired(profile.issue || copy.runtime);
+  if (!profile && !status[kind]?.available) throw new SpeechSetupRequired(status[kind]?.issue || copy.notReady);
   const voice = kind === 'tts' ? preferences.voice : '';
   if (voice && profile && !profile.voices?.some(item => item.id === voice)) throw new Error(copy.voiceUnavailable);
   return { model: profile ? `${profile.id}@${profile.revision}` : undefined, ...(voice ? { voice } : {}) };

@@ -49,12 +49,13 @@ test('embedding selection distinguishes installed and catalog data without start
   await page.route('**/v1/models',r=>r.fulfill({json:{data:[{id:'chat',type:'chat'},{id:'embed-installed',type:'embedding',loaded:true}]}}));
   await page.route('**/v1/catalog',r=>r.fulfill({json:{models:[{id:'embed-catalog',name:'Embedding catalog choice',type:'embedding',size_bytes:2048,license:'MIT'}]}}));
   await page.goto('/ui/#/knowledge');
-  await page.getByRole('button',{name:'Embedding model',exact:true}).click();
-  const group=page.getByRole('radiogroup',{name:'Embedding model'});
+  await page.getByText('Change search model', { exact: true }).click();
+  await page.getByRole('button',{name:'Search model',exact:true}).click();
+  const group=page.getByRole('radiogroup',{name:'Search model'});
   await expect(group.getByRole('radio')).toHaveCount(2);
   await expect(group).toContainText('Installed');await expect(group).toContainText('Loaded');
   await expect(group).toContainText('Curated catalog');await expect(group).toContainText('MIT');
-  await chooseModel(page,'Embedding model','embed-catalog');
+  await chooseModel(page,'Search model','embed-catalog');
   await expect(page.getByRole('button',{name:'Install and enable',exact:true})).toBeEnabled();
   expect(state.writes).toEqual([]);
 });

@@ -1,0 +1,18 @@
+import type { LocaleCode } from './index';
+
+const labels: Record<LocaleCode, string[]> = {
+  en: ['Read scanned documents', 'Import an OCR language file', 'Language installed. OCR remains experimental; review extracted text.', 'Use a supported local language pack, up to 32 MiB. Nothing is downloaded automatically.', 'Check setup status', 'Installing language…', 'The language file is too large.', 'Language setup was not confirmed. Check its status before retrying.'],
+  fr: ['Lire les documents numérisés', 'Importer un fichier de langue OCR', 'Langue installée. OCR expérimental ; vérifiez le texte extrait.', 'Utilisez un fichier de langue local compatible, jusqu’à 32 Mio. Aucun téléchargement automatique.', 'Vérifier la configuration', 'Installation de la langue…', 'Le fichier de langue est trop volumineux.', 'Installation non confirmée. Vérifiez son état avant de réessayer.'],
+  de: ['Gescannte Dokumente lesen', 'OCR-Sprachdatei importieren', 'Sprache installiert. OCR bleibt experimentell; prüfen Sie den erkannten Text.', 'Verwenden Sie ein unterstütztes lokales Sprachpaket bis 32 MiB. Kein automatischer Download.', 'Einrichtung prüfen', 'Sprache wird installiert…', 'Die Sprachdatei ist zu groß.', 'Installation nicht bestätigt. Prüfen Sie den Status vor einem neuen Versuch.'],
+  es: ['Leer documentos escaneados', 'Importar archivo de idioma OCR', 'Idioma instalado. OCR experimental; revisa el texto extraído.', 'Usa un paquete local compatible de hasta 32 MiB. No se descarga nada automáticamente.', 'Comprobar configuración', 'Instalando idioma…', 'El archivo de idioma es demasiado grande.', 'Instalación no confirmada. Comprueba su estado antes de reintentar.'],
+  ar: ['قراءة المستندات الممسوحة', 'استيراد ملف لغة OCR', 'تم تثبيت اللغة. OCR تجريبي؛ راجع النص المستخرج.', 'استخدم حزمة لغة محلية مدعومة حتى 32 ميبيبايت. لا تنزيل تلقائي.', 'تحقق من الإعداد', 'جارٍ تثبيت اللغة…', 'ملف اللغة كبير جدًا.', 'لم يتأكد التثبيت. تحقق من حالته قبل المحاولة مجددًا.'],
+  sw: ['Soma hati zilizochanganuliwa', 'Ingiza faili la lugha ya OCR', 'Lugha imesakinishwa. OCR bado ni ya majaribio; kagua maandishi.', 'Tumia kifurushi cha lugha kinachokubalika, hadi 32 MiB. Hakuna upakuaji wa kiotomatiki.', 'Kagua usanidi', 'Inasakinisha lugha…', 'Faili la lugha ni kubwa mno.', 'Usakinishaji haujathibitishwa. Kagua hali kabla ya kujaribu tena.'],
+  sn: ['Verenga magwaro akasikeniwa', 'Pinza faera remutauro weOCR', 'Mutauro waiswa. OCR ichiri kuyedzwa; ongorora mashoko aburitswa.', 'Shandisa faera remutauro rinotsigirwa, kusvika 32 MiB. Hapana chinotorwa choga.', 'Tarisa kuiswa', 'Kuisa mutauro…', 'Faera remutauro rakakura zvakanyanya.', 'Kuiswa hakuna kusimbiswa. Tarisa mamiriro usati waedza zvakare.'],
+  nd: ['Bala imibhalo eskeniweyo', 'Faka ifayela lolimi lweOCR', 'Ulimi lufakiwe. I-OCR isahlolwa; hlola umbhalo okhitshiweyo.', 'Sebenzisa ifayela lolimi elisekelwayo, kuze kube 32 MiB. Akulakulanda okuzenzakalelayo.', 'Hlola ukufakwa', 'Kufakwa ulimi…', 'Ifayela lolimi likhulu kakhulu.', 'Ukufakwa akuqinisekiswanga. Hlola isimo ungakazami futhi.'],
+  zu: ['Funda imibhalo eskeniwe', 'Ngenisa ifayela lolimi lweOCR', 'Ulimi lufakiwe. I-OCR isahlolwa; hlola umbhalo okhishiwe.', 'Sebenzisa iphakheji yolimi esekelwayo, kufika ku-32 MiB. Akukho ukulanda okuzenzakalelayo.', 'Hlola ukusetha', 'Kufakwa ulimi…', 'Ifayela lolimi likhulu kakhulu.', 'Ukufakwa akuqinisekisiwe. Hlola isimo ngaphambi kokuzama futhi.'],
+};
+
+export function ocrSetup(locale: LocaleCode) {
+  const [title, importFile, installed, guidance, check, installing, tooLarge, unknown] = labels[locale];
+  return { title, importFile, installed, guidance, check, installing, tooLarge, unknown };
+}

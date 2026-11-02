@@ -55,11 +55,14 @@ export async function openAgentChat(page: Page) {
 }
 
 export async function selectTaskAgent(page: Page) {
+  const settings = page.locator('.composer-context-menu > button');
+  if (await settings.getAttribute('aria-expanded') !== 'true') await settings.click();
   const selector = page.locator('.chat-agent-selector > button');
   await selector.click();
   await page.getByRole('radio', {name:/^Task agent /}).check();
   await page.keyboard.press('Escape');
   await expect(selector).toBeFocused();
+  await page.keyboard.press('Escape');
 }
 
 export async function sendAgentMessage(page: Page, text: string) {

@@ -27,12 +27,29 @@ Embeddings are vector representations of text that capture semantic meaning. The
 ### Web UI (recommended)
 
 1. Start OffGrid and open `http://127.0.0.1:11611/ui/#/knowledge`.
-2. Select an embedding model. Use **BGE M3** for multilingual knowledge or
-   **all-MiniLM-L6-v2** for a small English-only installation.
-3. Choose **Install and enable**. The UI tracks that model's download and
-   activates retrieval when the model is ready.
-4. Add a document. The retained source can be reindexed later after parser or
-   chunking upgrades.
+2. Review the proposed local search model. OffGrid preserves the configured
+   model or prefers an installed embedding model. **Change search model** opens
+   optional choices; opening this page does not download or activate anything.
+3. Choose **Enable** for an installed model, or **Install and enable** after
+   reviewing the download size. OffGrid tracks the download and activates search
+   when the model is ready.
+4. Add up to 20 documents in one selection. Each file shows its own result;
+   unavailable formats are identified before transfer. **Document formats**
+   explains local reader availability, including missing PDF/OCR support.
+5. Inspect a source, then choose **Ask using Knowledge**, or select particular
+   ready documents and ask about those sources.
+
+Uploaded files are saved before extraction. **Unfinished imports** shows saved
+files that need attention when you return. Resolve the reported problem, then
+choose **Try again** without uploading again, or remove the saved import. Removing
+an import does not delete a document already published in Knowledge.
+
+Leaving the page stops dispatching further files; the current request may finish.
+A lost response stops the batch and shows an unknown result. Check the saved
+import and library before uploading again. Processing is request-owned: a service
+restart reports interrupted work and waits for an explicit retry. It does not
+automatically replay imports. Clearing recent results only dismisses that panel.
+Older services without durable imports retain their existing upload behavior.
 
 Knowledge foregrounds your documents, index readiness and **View source**.
 **Manage Knowledge** contains the active embedding model and disabling retrieval;
@@ -64,7 +81,79 @@ offgrid kb add ./docs/manual.pdf
 offgrid kb status
 ```
 
-### Generate Embeddings via API
+### Document extraction limits
+
+Import quality depends on extraction as well as embeddings. PDF extraction now
+requires the app-local `offgrid-document-worker`, with a 30-second deadline and
+bounded output. Missing workers report `document_parser_unavailable`; the service
+does not run a program from PATH or silently fall back to regex extraction.
+Worker packaging is still under qualification. Scans and mixed visual content
+need the local OCR worker and a verified language pack. The current worker supports
+the pinned English pack; language setup is explicit and never downloads silently.
+Missing language data and partial recognition remain actionable import states.
+See the [document format matrix](document-formats.md) for tested coverage and limits.
+Keep original documents and inspect extracted content before relying on answers.
+
+Successful new file imports save their original bytes with the document and
+index. **View source → Download original file** retrieves those bytes, verified
+against their digest. This uses the Knowledge workspace's existing read access;
+it is not a private Chat attachment. Older documents may have extracted text
+without an original, which the source viewer states explicitly. Reindexing keeps
+the original unchanged; deleting the document deletes its retained original too.
+External backups keep their own retention policy and are not erased by this action.
+
+Original files and pending uploads share a 2 GiB Knowledge storage limit, in
+addition to the per-file limit below. A failed storage transaction does not
+publish the document. Pending imports are visible only to the authenticated
+uploader with Knowledge management permission. Published documents retain the
+existing workspace access policy; private collection policies remain unfinished.
+The import list returns the most recent 100 records, with a workspace limit of
+4,096 records. Remove unneeded import records when that limit is reached.
+
+XLSX extraction follows workbook sheet order and includes sheet names and cell
+references, inline/shared text, formulas and stored cached values, up to 100,000
+populated cells per sheet. Formulas are
+not recalculated; numeric/date formatting, charts, images and macros are not
+interpreted. PPTX follows presentation slide order and extracts text, not rendered
+diagrams. Legacy binary XLS is explicitly unsupported; convert it to XLSX first.
+
+`offgrid kb status --json` (also `GET /v1/rag/status`) includes `document_formats`,
+independently of embedding setup. `available` means a built-in extractor exists;
+`installed_unchecked` means the packaged PDF worker is present, not that it has
+passed runtime or document checks. `unavailable` identifies a missing dedicated
+adapter. Qualification remains `unverified` until the applicable packaged tests
+pass. OCR availability and installed languages are reported separately; model
+vision support does not provide document OCR. Legacy DOC/XLS/PPT, ODF, email and
+image documents are not silently decoded as plain text.
+
+New extraction results retain original-file digests and parser revisions.
+Spreadsheet sheets retain their names and order, and slide units retain their
+presentation order. Flat text uses a section locator, not invented page numbers.
+New document uploads now retain these boundaries through chunking, database
+reload and explicit reindexing. Chunks do not cross units; their offsets are
+UTF-8 byte offsets into retained extracted text and permit exact read-back.
+Search locators include the source kind/index, original digest and parser
+revision. New XLSX citations also identify the actual cells intersecting each
+excerpt, including after context truncation. **View source** on a saved citation
+checks its revision, digest, byte range and content hash before displaying the
+exact passage. A stale citation cannot silently open an unrelated document prefix.
+Existing indexes are not rewritten or given invented page or cell locators.
+This establishes mechanical source fidelity, not model-answer accuracy, OCR
+quality or complete enterprise qualification.
+
+When a mixed PDF cannot be fully read, **Unfinished imports → View source** shows
+the retained pages and identifies those needing attention. This is review only:
+partial text is not presented as a complete indexed document. Import the required
+language pack or resolve the reported issue, then choose **Try again** explicitly.
+CLI users can inspect the same result with `offgrid kb review-import ID`.
+
+Document uploads are limited to 50 MiB per file, extracted text to 16 MiB, and
+expanded Office archives to 64 MiB / 10,000 entries. Invalid, encrypted or
+unsupported documents must not be treated as successfully indexed. See the
+[document evidence](../quality/evidence/document-ingestion-2026-11-01.md) for
+tested behavior and remaining enterprise-readiness work.
+
+### Generate embeddings directly
 
 ```bash
 curl -X POST http://localhost:11611/v1/embeddings \

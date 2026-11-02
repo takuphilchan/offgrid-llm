@@ -57,6 +57,7 @@ test('refresh preserves a removed selection and draft until an explicit replacem
   await input.press('Enter');
   expect(state.fixture.writes).toEqual([]);
   expect(await page.evaluate(() => localStorage.getItem('offgrid.model'))).toBe('working-model');
+  await page.locator('.composer-context-menu > button').click();
   await page.locator('.composer .model-select-trigger').click();
   await page.getByRole('option', { name: /replacement model/ }).click();
   await expect(page.locator('.setup-inline')).toHaveCount(0);

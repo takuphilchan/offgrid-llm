@@ -1,5 +1,23 @@
 # Proposal
 
+## Approved defaults-first product workflow (2026-11-01)
+
+The owner approved a deeper interaction redesign after finding the application
+overwhelming despite visual improvements. Ordinary users should complete setup
+once, then ask, add documents and return to work without repeated infrastructure
+choices. This supersedes the earlier exclusion of a guided setup flow; it does
+not authorize silent downloads, model switches or new grants. Preserve current
+selections, profiles and routes. Recommend a compatible local configuration with
+plain-language tradeoffs; advanced settings remain optional and reversible.
+
+Knowledge foregrounds Add documents, processing/readiness and Ask; embedding,
+chunking/index maintenance and diagnostic controls belong in advanced management.
+The linked `document-ingestion-reliability` change owns actual parser/OCR/import
+and organization boundaries. `desktop-integrated-terminal` owns an optional
+desktop panel; it is not a prerequisite for ordinary work. Group 22 tracks these
+new journeys separately from completed control styling. Release publication stays
+held while the reported PDF ingestion blocker is unresolved.
+
 ## Approved profile-first composer and Help (2026-11-01)
 
 The owner approved consolidating repeated Chat configuration into one Agent
@@ -133,6 +151,13 @@ Exclude new model/runtime adapters, universal native control, Talk mode, new pro
 Replace the two Chat sidebars with one 280px contextual sidebar and a navigation drawer below 1024px. Simplify header and composer controls, consolidate visual token ownership, and refine result/activity, collection, settings and trusted desktop presentation. Preserve the implemented profile/Chat architecture and current state/authority boundaries. This refinement authorizes implementation and checks only, not deployment, installation, Git publication or release. Historical checked tasks remain evidence of their earlier scope, not completion of the refinement. References below to task-first/legacy presentation describe the earlier implementation; the refinement must not restore retired task entry.
 
 ## Capabilities
+
+The user-requested conversation-file extension is owned by
+`document-ingestion-reliability` tasks 1A.1–1A.5. This UI consumes its private
+attachment contract in the composer, with the same behaviors exposed through CLI
+file flags and interactive commands. Adding a file is not automatic Knowledge
+publication. Pending uploads, extraction failures and retained drafts remain
+visible without exposing advanced parser/index settings.
 
 ### Approved composition-first follow-up
 

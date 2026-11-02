@@ -133,7 +133,7 @@ test('member UI does not call administrator endpoints or offer privileged action
   await expect(page.getByRole('button', { name: 'Start task', exact: true })).toHaveCount(0);
   await page.goto('/ui/#/settings'); await expect(page.locator('.settings-page')).toContainText('Administrator access required');
   await page.goto('/ui/#/models'); await page.getByRole('tab', { name: 'Discover models', exact: true }).click(); await expect(page.locator('.catalog-card .primary-button')).toBeDisabled();
-  await page.goto('/ui/#/knowledge'); await expect(page.getByRole('button', { name: 'Add document' })).toBeDisabled();
+  await page.goto('/ui/#/knowledge'); await expect(page.locator('.knowledge-library-toolbar')).toBeVisible(); await expect(page.getByRole('button', { name: 'Add document' })).toHaveCount(0);
   expect(state.calls.filter(path => path.startsWith('/v1/agents/') || path === '/api/v2/computer/status' || path === '/v1/models/download/progress')).toEqual([]);
 });
 
@@ -208,6 +208,7 @@ test('late provider setup cannot overwrite instructions for a newly selected mod
   await page.locator('.provider-card button').click();
   await expect.poll(() => requested).toBe(true);
   await page.locator('.sidebar a[href="#/chat"]').click();
+  await page.locator('.composer-context-menu > button').click();
   await page.getByRole('button', { name: 'Model', exact: true }).click();
   await page.getByRole('option').filter({ hasText: 'model-b' }).click();
   release();

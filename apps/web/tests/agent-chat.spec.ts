@@ -12,7 +12,7 @@ const profile = { id:'writer', revision:1, actor:'local', workspace:'chat-agent-
 test('on-demand access keeps an unused folder selector out of the composer',async({page})=>{
   const f=await fixture(page);
   await page.route('**/api/v2/system',route=>route.fulfill({json:{product:'offgrid',api_version:2,version:'fixture',workspace_id:'chat-agent-fixture',capabilities:['agent-profiles-v1','agent-conversations-v1','native-execution-preview-v1','execution-access-request-v1']}}));
-  await page.goto('/ui/#/chat');await page.getByRole('button',{name:'Agent',exact:true}).click();
+  await page.goto('/ui/#/chat');await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:'Agent',exact:true}).click();
   await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
   await expect(page.locator('.composer .chat-execution-workspace')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Agent settings',exact:true})).toBeVisible();
@@ -51,7 +51,7 @@ test('desktop folder UI invokes only an access enum, pins the native grant and s
   },resource);
   await page.route('**/api/v2/system',route=>route.fulfill({json:{product:'offgrid',api_version:2,version:'fixture',workspace_id:'chat-agent-fixture',capabilities:['agent-profiles-v1','agent-conversations-v1','native-execution-preview-v1']}}));
   await page.route('**/api/v2/execution/workspaces',async route=>route.fulfill({json:{protocol:1,workspaces:await page.evaluate(()=> (window as any).executionFixture.state==='ready')?[resource]:[]}}));
-  await page.goto('/ui/#/chat');await page.getByRole('button',{name:'Agent',exact:true}).click();await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
+  await page.goto('/ui/#/chat');await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:'Agent',exact:true}).click();await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'Workspace',exact:true}).click();
   const panel=page.locator('.execution-workspace-panel');
   await expect(panel.getByRole('combobox',{name:executionNativeText.en.access})).toBeVisible();
@@ -100,7 +100,7 @@ test('approved execution selection is observation-only and pins one canonical su
     return route.fulfill({json:{protocol:1,workspaces:connected?[{reference,backend:'local',root:'C:/disposable workspace',directory:'.',permissions:{read:true,write:true,processes:true}}]:[]}});
   });
   await page.goto('/ui/#/chat');
-  await page.getByRole('button',{name:'Agent',exact:true}).click();
+  await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:'Agent',exact:true}).click();
   await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
   const selector=page.getByRole('button',{name:'Workspace',exact:true});await selector.click();
   await page.getByRole('radio',{name:/fixture host/}).check();await page.keyboard.press('Escape');await expect(selector).toBeFocused();
@@ -117,7 +117,7 @@ test('approved execution selection is observation-only and pins one canonical su
 for(const locale of Object.keys(executionWorkspaceText) as LocaleCode[]) test(`execution controls explain unavailable authority in ${locale}`,async({page})=>{
   await fixture(page);await page.addInitScript(value=>localStorage.setItem('offgrid.locale',value),locale);
   await page.setViewportSize({width:390,height:844});await page.goto('/ui/#/chat');
-  await page.getByRole('button',{name:agentProfilesText[locale].selector,exact:true}).click();await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
+  await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:agentProfilesText[locale].selector,exact:true}).click();await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
   const copy=executionWorkspaceText[locale];await page.getByRole('button',{name:copy.label,exact:true}).click();await expect(page.getByText(copy.unsupported,{exact:true})).toBeVisible();
   await expect(page.getByRole('radio',{name:copy.none,exact:true})).toBeChecked();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
@@ -211,6 +211,7 @@ test('Chat follows growing activity without scrolling the page or stealing a man
 test('Chat pins the selected profile, steers the same job, and reload is observation-only', async ({ page }) => {
   const f = await fixture(page);
   await page.goto('/ui/#/chat');
+  await page.locator('.composer-context-menu > button').click();
   const selector = page.getByRole('button',{name:'Agent',exact:true});
   await selector.click();
   await page.getByRole('radio',{name:/Writer Write with evidence/}).check();
@@ -270,7 +271,7 @@ async function desktopFixture(page: Page, deferred = false) {
 
 const desktopInput = {requested_computer_scope:'desktop',requested_computer_approval_mode:'full_task',pending_input:{id:'desktop-input',kind:'computer',mode:'desktop'}};
 async function sendWithWriter(page: Page, prompt = 'Open an application.') {
-  await page.getByRole('button',{name:'Agent',exact:true}).click();
+  await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:'Agent',exact:true}).click();
   await page.getByRole('radio',{name:/Writer Write with evidence/}).check();
   await page.keyboard.press('Escape');
   await page.locator('.composer textarea').fill(prompt);
@@ -428,7 +429,7 @@ for (const state of ['pending','waiting_for_children','waiting_for_approval','fa
 test('an old service never silently receives a profile-enabled message as plain Chat', async ({ page }) => {
   const f = await fixture(page);
   await page.goto('/ui/#/chat');
-  await page.getByRole('button',{name:'Agent',exact:true}).click();
+  await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:'Agent',exact:true}).click();
   await page.getByRole('radio',{name:/Writer Write with evidence/}).check();
   await page.keyboard.press('Escape');
   f.unsupported();
@@ -443,7 +444,7 @@ test('agent and Tools selection preserve the draft and dismiss without submittin
   const f=await fixture(page); f.profile({tools:[{provider:'fixture',tool:'read_docs',schema_revision:'1',location:'remote',policy:'read'}]});
   await page.goto('/ui/#/chat');
   const draft=page.locator('.composer textarea'); await draft.fill('Draft — café 日本語');
-  const agent=page.getByRole('button',{name:'Agent',exact:true}); await agent.click();
+  await page.locator('.composer-context-menu > button').click();const agent=page.getByRole('button',{name:'Agent',exact:true}); await agent.click();
   await page.getByRole('radio',{name:/Writer Write with evidence/}).check();
   await page.keyboard.press('Escape'); await expect(agent).toBeFocused();
   const tools=page.getByRole('button',{name:'Agent settings',exact:true}); await tools.click();
@@ -462,13 +463,14 @@ test('agent and Tools selection preserve the draft and dismiss without submittin
 test('profile and tool choices do not leak into another workspace or actor',async({page})=>{
   const f=await fixture(page); await page.goto('/ui/#/chat');
   for(const [workspace,actor] of [['other-workspace',''],['other-workspace','second-user']]) {
-    await page.getByRole('button',{name:'Agent',exact:true}).click();
+    await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:'Agent',exact:true}).click();
     await page.getByRole('radio',{name:/Writer Write with evidence/}).check(); await page.keyboard.press('Escape');
     f.identity(workspace,actor);
     await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
     await page.getByRole('region', { name: 'Workspace options', exact: true }).getByRole('button',{name:'Refresh',exact:true}).click();
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('button',{name:'Agent',exact:true})).toContainText('No agent');
+    await page.locator('.composer-context-menu > button').click();await expect(page.getByRole('button',{name:'Agent',exact:true})).toContainText('No agent');
+    await page.keyboard.press('Escape');
     await expect(page.getByRole('button',{name:'Agent settings',exact:true})).toHaveCount(0);
   }
   expect(f.submissions).toEqual([]); expect(f.commands).toEqual([]);
@@ -484,7 +486,7 @@ test('localized agent controls fit short screens, scroll and preserve IME in bot
     const copy=agentProfilesText[locale];
     await expect(page.getByRole('region',{name:conversationWorkText[locale].activity,exact:true})).toBeVisible();
     if(locale==='ar') await expect(page.locator('html')).toHaveAttribute('dir','rtl');
-    const selector=page.getByRole('button',{name:copy.selector,exact:true}); await selector.click();
+    await page.locator('.composer-context-menu > button').click();const selector=page.getByRole('button',{name:copy.selector,exact:true}); await selector.click();
     await page.getByRole('radio',{name:/Writer Write with evidence/}).check(); await page.keyboard.press('Escape');
     await expect(selector).toBeFocused();
     const trigger=page.getByRole('button',{name:workspaceHelp[locale].settings,exact:true});
@@ -511,7 +513,7 @@ test('Chat resource popovers keep separated rows, fields and recovery actions', 
   await page.route('**/v1/documents',route=>route.fulfill({json:{documents:[{id:'brief',name:'Project brief'},{id:'notes',name:'Notes 日本語'}]}}));
   await page.route('**/v1/audio/status',route=>route.fulfill({status:503,json:{error:'Speech service unavailable'}}));
   await page.goto('/ui/#/chat');
-  await page.getByRole('button',{name:'Agent',exact:true}).click();
+  await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:'Agent',exact:true}).click();
   await page.getByRole('radio',{name:/Writer Write with evidence/}).check();
   await page.keyboard.press('Escape');
   for(const size of [{width:1280,height:800},{width:390,height:600}]) {
@@ -537,7 +539,7 @@ test('Chat resource popovers keep separated rows, fields and recovery actions', 
       await page.keyboard.press('Escape'); await expect(trigger).toBeFocused();
     }
   }
-  const voice=page.getByRole('button',{name:'Response settings',exact:true}); await voice.click();
+  const voice=page.getByRole('button',{name:'Response settings',exact:true}); if(await voice.getAttribute('aria-expanded')!=='true') await voice.click();
   const voicePanel=page.getByRole('region',{name:'Response settings',exact:true});
   await expect.poll(()=>voicePanel.evaluate(el=>el.getAnimations().every(animation=>animation.playState==='finished'))).toBe(true);
   const alert=voicePanel.getByRole('alert'); await expect(alert).toBeVisible();
@@ -609,7 +611,7 @@ test('agent activity and composer controls keep their spacing as work changes',a
   const f=await fixture(page,'waiting_for_approval');
   f.setStatus('waiting_for_approval',{pending_approval:{id:'approval',tool:'write_file',arguments:{path:'approved/notes.txt'},canonical_arguments:'reviewed write',expires_at:'2099-01-01T00:00:00Z'},profile:{name:'Writer',revision:1}});
   await page.goto('/ui/#/chat');
-  await page.getByRole('button',{name:'Agent',exact:true}).click();
+  await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:'Agent',exact:true}).click();
   await page.getByRole('radio',{name:/Writer Write with evidence/}).check();
   await page.keyboard.press('Escape');
   for(const width of [390,600,900]) {

@@ -109,8 +109,9 @@ test('search, chat agent and document controls share sizing and keyboard focus',
   const [fieldBox, buttonBox] = await Promise.all([searchField.boundingBox(), search.boundingBox()]);
   expect(Math.abs(fieldBox!.height - buttonBox!.height)).toBeLessThanOrEqual(2);
   await page.goto('/ui/#/chat');
+  await page.getByRole('button',{name:'Response settings',exact:true}).click();
   await expect(page.getByRole('button',{name:'Agent',exact:true})).toHaveCSS('min-height', '32px');
-  await expect(page.locator('.composer')).toHaveCSS('border-radius', '16px');
+  await expect(page.locator('.composer')).toHaveCSS('border-radius', '26px');
   await page.goto('/ui/#/knowledge');
   const controls = ['Add document', 'Ask using Knowledge', 'Manage Knowledge'].map(name => page.getByRole('button', { name, exact: true }));
   for (const control of controls) {
@@ -154,11 +155,12 @@ for (const theme of ['light', 'dark']) test(`workspace actions preserve secondar
     page.getByRole('link', { name: 'Set up Knowledge', exact: true }),
   ];
   for (const action of actions) {
-    await expect(action).toHaveCSS('min-height', await action.evaluate(el => el.classList.contains('voice-button') ? '40px' : '32px'));
-    await expect(action).toHaveCSS('border-radius', '8px');
+    const round = await action.evaluate(el => el.classList.contains('voice-button') || el.classList.contains('icon-button'));
+    await expect(action).toHaveCSS('min-height', round ? '40px' : '32px');
+    await expect(action).toHaveCSS('border-radius', round ? '50%' : '8px');
     await expect(action).toHaveCSS('text-decoration-line', 'none');
     const utility = await action.evaluate(el => el.classList.contains('utility-button'));
-    const quiet = utility || await action.evaluate(el => el.classList.contains('voice-button'));
+    const quiet = utility || round;
     const surface = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--surface-2').trim());
     await expect(action).toHaveCSS('background-color', quiet ? 'rgba(0, 0, 0, 0)' : await page.evaluate(value => { const el=document.createElement('span');el.style.color=value;document.body.append(el);const color=getComputedStyle(el).color;el.remove();return color; }, surface));
     await expect(action).toHaveCSS('border-top-width', '1px');

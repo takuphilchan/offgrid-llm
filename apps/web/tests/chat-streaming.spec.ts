@@ -66,7 +66,7 @@ async function streamingWorkspace(page: Page, locale = 'en') {
 
 test('chat renders text before completion, decodes split UTF-8, then shows saved result and metrics', async ({ page }, info) => {
   await streamingWorkspace(page);
-  await expect(page.locator('.composer-actions > button')).toHaveText('Stop');
+  await expect(page.locator('.composer-actions > button')).toHaveAccessibleName('Stop');
   expect(await page.evaluate(() => (window as any).generationRequest)).toMatchObject({ stream: true, profile: 'interactive', max_tokens: 1024 });
   await page.evaluate(() => (window as any).finishGeneration());
   await expect(page.locator('.message.assistant')).toContainText('Hello 世界 — finished');
@@ -101,7 +101,7 @@ test('unexpected stream closure retains the draft and labels partial text as uns
   await expect(page.getByRole('alert')).toContainText('before the conversation was confirmed saved');
   await expect(page.locator('.streaming-response')).toContainText('Partial response');
   await expect(page.locator('.composer textarea')).toHaveValue('Stream my answer');
-  await expect(page.locator('.composer-actions > button')).toHaveText('Send');
+  await expect(page.locator('.composer-actions > button')).toHaveAccessibleName('Send');
 });
 
 test('typed memory failure offers model recovery, retains the draft and stops claiming running work', async ({ page }, info) => {
@@ -231,7 +231,7 @@ test('late Stop acknowledgment for a previous conversation cannot abort the new 
   release();
   await page.evaluate(() => (window as any).emitTimedDelta(' Still running in the second conversation.'));
   await expect(page.locator('.streaming-response')).toContainText('Still running in the second conversation.');
-  await expect(page.locator('.composer-actions > button')).toHaveText('Stop');
+  await expect(page.locator('.composer-actions > button')).toHaveAccessibleName('Stop');
   await page.evaluate(() => (window as any).finishGeneration());
   await expect(page.locator('.message.assistant')).toContainText('Hello 世界 — finished');
   expect(await page.evaluate(() => (window as any).generationCount)).toBe(2);
@@ -280,7 +280,7 @@ test('stream rendering and local stop feedback meet the 250ms UI fixture budget'
   expect(p95).toBeLessThanOrEqual(250);expect(stop.milliseconds).toBeLessThanOrEqual(250);
   // The Send button returns only after saved-state reconciliation. That network
   // completion is distinct from the immediately rendered local Stop feedback.
-  await expect(page.locator('.composer-actions > button')).toHaveText('Send');
+  await expect(page.locator('.composer-actions > button')).toHaveAccessibleName('Send');
   console.log(JSON.stringify({fixture:'stream-ui-feedback',p95,stop}));
   await info.attach('stream-ui-performance.json',{body:JSON.stringify({samples,p95,stop,kind:'Synthetic deltas, not inference latency'}),contentType:'application/json'});
 });

@@ -6,14 +6,18 @@ for(const width of [390,1440]) for(const locale of ['en','ar']) test(`direct edi
  const state=await craftFixture(page,locale,locale==='ar'?'dark':'light');
  await page.goto('/ui/#/agents/profiles');
  await page.locator('.profile-library-header > button').click();
- const basics=page.locator('.profile-basics'),resources=page.locator('.profile-fields > .profile-resources');
- await expect(basics).toBeVisible(); await expect(resources).toBeVisible();
+ const basics=page.locator('.profile-basics'),optional=page.locator('.profile-resource-settings'),resources=optional.locator('.profile-resources');
+ await expect(basics).toBeVisible(); await expect(optional).toBeVisible();
+ await expect(resources).toHaveCount(0);
+ // First use stays focused on purpose/model. Optional resources are deliberate.
+ const [a,b]=await Promise.all([basics.boundingBox(),optional.boundingBox()]);
+ expect(b!.y).toBeGreaterThanOrEqual(a!.y+a!.height);
+ await optional.locator(':scope > summary').click();
+ await expect(resources).toBeVisible();
  await expect(page.locator('.profile-capability > summary')).toHaveCount(3);
  await expect(page.locator('.profile-capability[open]')).toHaveCount(0);
  await expect(page.locator('.profile-advanced .profile-context-resources')).toHaveCount(0);
- const [a,b]=await Promise.all([basics.boundingBox(),resources.boundingBox()]);
- if(width===1440)expect(Math.abs(a!.y-b!.y)).toBeLessThan(25);
- else expect(b!.y).toBeGreaterThan(a!.y+a!.height);
+ await optional.locator(':scope > summary').click();
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  const fields=await page.locator('.profile-fields').boundingBox(),actions=await page.locator('.profile-editor > .profile-actions').boundingBox();
  if(width<960) expect(actions!.y).toBeGreaterThanOrEqual(fields!.y+fields!.height);

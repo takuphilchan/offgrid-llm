@@ -10,7 +10,14 @@ The service owns saved work. Closing or reloading a page does not cancel submitt
 
 ## Have a local conversation
 
-Open **Models**, install a chat model, then select it in **Chat**. Begin with a short question. Long documents, large context windows, and several loaded models require more memory.
+If a chat model is already available, open **Chat** and begin with a short question.
+Otherwise, the setup guide opens **Models** so you can review a download or an
+offline import. Nothing is downloaded by opening the guide. Long documents,
+large context windows, and several loaded models require more memory.
+
+A missing model or unavailable runtime does not silently select a replacement.
+Chat keeps your draft and offers **Choose a chat model**. Select another model
+explicitly, or restore the original installation and refresh the workspace.
 
 Check important answers. Fluent text is not evidence of current facts, file access, or a completed computer action. A local model does not automatically browse the internet. See [history management](history-management.md) for conversation rename, export, and deletion.
 
@@ -28,13 +35,23 @@ before downloading: model weights alone do not install the speech runtime.
 
 ## Ask about documents
 
-Knowledge retrieval uses an embedding model as well as a chat model. Enable embeddings, import a supported file, wait for indexing, then ask a grounded question. Inspect the cited source.
+For a one-conversation question, use **Add files** in Chat and wait for each file
+to finish preparing. Supported small documents do not require a separate
+embedding setup. Keep the selected model's context limit in mind; inspect source
+details and any extraction warnings before relying on the answer.
+
+For a reusable document library, open **Knowledge**. Complete its one-time setup,
+then **Add documents**, wait for **Ready**, and choose **Ask**. Embedding settings
+remain available when needed; ordinary imports do not require configuring them
+each time. Inspect the cited source.
 
 Extraction failures, scanned documents, unavailable indexes, and insufficient evidence need different remedies. Follow [knowledge and embeddings](embeddings.md); do not delete sources because an old index needs rebuilding.
 
 ## Delegate a task
 
-Open **Agents**, describe the outcome, and choose **Start task**. For example:
+Create a profile in **Agents** with a name and purpose, then choose **Use in Chat**.
+Describe the outcome in Chat. Tools and context are optional profile settings;
+folder or computer access is requested separately when needed. For example:
 
 > Calculate the total of 18.50, 42.75, and 9.25. Save a small CSV showing each amount and the total.
 

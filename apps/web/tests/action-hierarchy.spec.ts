@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { craftFixture } from './helpers/craft-fixture';
 import { workspaceManagement } from '../src/i18n/workspace-management';
+import { knowledgeGuidance } from '../src/i18n/knowledge-options';
 
 for(const theme of ['light','dark']) test(`shared action weights remove redundant borders while preserving focus: ${theme}`,async({page})=>{
  const state=await craftFixture(page,'en',theme);
@@ -29,9 +30,9 @@ for(const locale of ['en','ar'] as const) for(const width of [320,1440]) test(`K
  const state=await craftFixture(page,locale,'light');await page.setViewportSize({width,height:900});await page.goto('/ui/#/knowledge');
  const copy=workspaceManagement(locale);
  const manage=page.getByRole('button',{name:copy.manageKnowledge,exact:true});
- await expect(page.locator('.workspace-section-heading')).toContainText(copy.manageKnowledge);
+ await expect(page.locator('.workspace-section-heading').getByRole('button',{name:copy.manageKnowledge,exact:true})).toBeVisible();
  const ask=page.getByRole('button',{name:copy.askKnowledge,exact:true});
- await expect(ask).toHaveAccessibleDescription(copy.retrievalScope);
+ await expect(ask).toHaveAccessibleDescription(knowledgeGuidance(locale).scope);
  const button=await ask.boundingBox(),description=await page.locator('#knowledge-retrieval-scope').boundingBox();
  expect(description!.y).toBeGreaterThanOrEqual(button!.y+button!.height);
  expect(description!.width).toBeLessThanOrEqual(720);
@@ -45,11 +46,14 @@ for(const locale of ['en','ar'] as const) for(const width of [320,1440]) test(`K
 test('composer keeps one outer boundary and usable inner selectors',async({page})=>{
  const state=await craftFixture(page,'en','light');await page.goto('/ui/#/chat');
  await expect(page.locator('.composer')).toHaveCSS('border-top-width','1px');
- for(const name of ['Agent','Model','Response settings']){
+ const settings=page.getByRole('button',{name:'Response settings',exact:true});
+ await settings.click();
+ for(const name of ['Agent','Model']){
   const control=page.getByRole('button',{name,exact:true});await expect(control).toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
   await control.focus();await control.press('Enter');await expect(control).toHaveAttribute('aria-expanded','true');
   await page.keyboard.press('Escape');await expect(control).toBeFocused();
  }
+ await page.keyboard.press('Escape');await expect(settings).toBeFocused();
  await expect(page.locator('.composer-actions .voice-button')).toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
  expect(state.writes).toEqual([]);
 });

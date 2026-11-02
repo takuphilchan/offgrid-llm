@@ -62,22 +62,22 @@ test('storage failure is visible and leaves the preview in memory',async({page})
 
 for(const locale of ['en','fr','de','es','ar','sw','sn','nd','zu'] as LocaleCode[])test(`images fit the narrow composer with keyboard removal: ${locale}`,async({page},info)=>{
  await page.setViewportSize({width:320,height:800});const {file}=await fixture(page,{locale});const copy=chatImages(locale);
- await expect(page.getByRole('button',{name:copy.add,exact:true})).toBeVisible();await page.locator('.composer input[type=file]').setInputFiles(file);
+ await page.locator('.composer-attachments-menu > button').click();await expect(page.getByRole('button',{name:copy.add,exact:true})).toBeVisible();await page.keyboard.press('Escape');await page.locator('.composer input[type=file]').setInputFiles(file);
  const remove=page.getByRole('button',{name:copy.remove+': '+file.name,exact:true});await expect(remove).toBeVisible();await remove.focus();await expect(remove).toBeFocused();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
  if(['en','ar'].includes(locale))await page.screenshot({path:info.outputPath(`images-${locale}.png`),fullPage:true});
- await remove.press('Enter');await expect(page.locator('.composer .image-attachments')).toHaveCount(0);
+ await remove.press('Enter');await expect(page.locator('.composer .image-attachments')).toHaveCount(0);await expect(page.locator('.composer-attachments-menu > button')).toBeFocused();
 });
 
 for(const fail of [false,true])test(`image-only send ${fail?'retains failed input':'saves exact bytes and reloads without replay'}`,async({page})=>{
  const {file,dataURL}=await fixture(page);await page.locator('.composer input[type=file]').setInputFiles(file);await expect(page.locator('.composer .image-attachments img')).toBeVisible();
  await page.evaluate(fail=>{const prior=window.fetch;window.fetch=async(url,init)=>{if(!String(url).endsWith('/generate'))return prior(url,init);const body=JSON.parse(String(init?.body));(window as any).imagePayload=body;
-  if(fail)return new Response(JSON.stringify({error:'Projector is unavailable'}),{status:422,headers:{'Content-Type':'application/json'}});
+  if(fail)return new Response(JSON.stringify({error:{message:'Projector is unavailable',code:'vision_projector_unavailable'}}),{status:422,headers:{'Content-Type':'application/json'}});
   const message={role:'assistant',content:'A red square.'},session={name:'Demo briefing',model_id:body.model_id,messages:[{role:'user',content:body.content,images:body.images},message]};(window as any).imageSession=session;
   return new Response(`data: ${JSON.stringify({type:'done',session,message})}\n\n`,{headers:{'Content-Type':'text/event-stream'}});
  };},fail);
  await page.getByRole('button',{name:'Send',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>(window as any).imagePayload)).toMatchObject({content:'',images:[{name:file.name,data_url:dataURL}]});
- if(fail){await expect(page.locator('.composer .image-attachments img')).toBeVisible();await expect(page.getByRole('alert')).toContainText('Projector is unavailable');}
+ if(fail){await expect(page.locator('.composer .image-attachments img')).toBeVisible();await expect(page.getByRole('alert')).toContainText('Projector is unavailable');await expect(page.getByRole('alert').getByRole('button',{name:'Models',exact:true})).toBeVisible();await expect(page.getByRole('alert').getByRole('button',{name:'Check request status'})).toHaveCount(0);}
  else{await expect(page.locator('.message.assistant')).toContainText('A red square.');await expect(page.locator('.composer .image-attachments')).toHaveCount(0);const saved=await page.evaluate(()=>(window as any).imageSession);await page.route('**/v1/sessions',r=>r.fulfill({json:{sessions:[saved]}}));await page.route('**/v1/sessions/Demo%20briefing',r=>r.fulfill({json:saved}));await page.reload();await expect(page.locator('.message.user .image-attachments img')).toHaveAttribute('src',dataURL);}
 });

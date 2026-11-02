@@ -4,6 +4,31 @@ Let people start ordinary conversations and governed tasks without navigating se
 
 ## ADDED Requirements
 
+### Requirement: Defaults-first setup and ordinary use
+The workspace SHALL offer one guided readiness flow, preserve working selections
+and expose advanced configuration on demand. Completed setup SHALL NOT recur
+on ordinary turns. Downloads, grants and model replacement SHALL remain explicit.
+
+#### Scenario: First usable local setup
+- **WHEN** a new user opens a workspace without required local capabilities
+- **THEN** one recommended compatible setup explains prerequisites and offers explicit installation or offline import
+- **AND** declining leaves the app usable for inspecting available work without repeated configuration prompts
+
+#### Scenario: Returning user asks about documents
+- **WHEN** setup is ready and a user adds supported documents then asks a question
+- **THEN** the interface shows per-file readiness and attributable results without requiring embedding, chunking or runtime choices
+- **AND** relevant errors preserve the draft and expose one next action with technical details secondary
+
+### Requirement: Progressive advanced tools
+The default workspace SHALL prioritize conversation and documents while keeping
+administration, overrides and the optional desktop terminal discoverable without
+opening them automatically or expanding authority.
+
+#### Scenario: Ordinary task with no advanced configuration
+- **WHEN** a user starts a supported conversation using saved defaults
+- **THEN** they can submit without opening settings, selecting a profile or starting a terminal
+- **AND** active source and access state remain understandable and revocable
+
 ### Requirement: Profile-first agent composition and discoverable Help
 Chat SHALL use the selected pinned profile's model, resources and limits without
 requiring repeated setup. One Agent settings disclosure SHALL show that identity

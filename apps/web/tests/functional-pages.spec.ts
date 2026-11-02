@@ -41,7 +41,7 @@ test('knowledge setup downloads one stable model and enables RAG', async ({ page
   await page.route('**/v1/rag/enable', async route => { enableRequests++; enabled = true; await route.fulfill({ json: { success: true, message: 'enabled' } }); });
 
   await page.goto('/ui/#/knowledge');
-  await expect(page.getByRole('heading', { name: 'Knowledge retrieval is not enabled.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Search your documents' })).toBeVisible();
   await page.getByRole('button', { name: 'Install and enable' }).dblclick();
   await expect.poll(() => downloadRequests).toBe(1);
   await expect.poll(() => enabled).toBe(true);

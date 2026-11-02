@@ -8,7 +8,8 @@ export function ChatFailureNotice({ error, code, action, chooseModel }: { error:
   const { messages: text, locale } = useI18n();
   const capacity = code === 'insufficient_runtime_capacity';
   const busy = code === 'inference_busy';
-  return <ScopedNotice kind="error" action={capacity ? <button className="secondary-button" onClick={chooseModel}>{text.onboarding.chooseModel}</button> : busy ? undefined : action}>
+  const vision = code === 'vision_projector_unavailable';
+  return <ScopedNotice kind="error" action={capacity || vision ? <button className="secondary-button" onClick={chooseModel}>{vision ? text.nav.models : text.onboarding.chooseModel}</button> : busy ? undefined : action}>
     {capacity || busy ? <>{capacity ? chatRecovery[locale] : chatBusyRecovery[locale]}<details><summary>{presentation[locale].details}</summary><p>{error}</p></details></> : error}
   </ScopedNotice>;
 }

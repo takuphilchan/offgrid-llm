@@ -1,4 +1,50 @@
 @layer controls {
+  /* The resting composer is a message bar. Setup lives in labelled utilities,
+     while attachments and current authority remain part of the visible draft. */
+  .chat-page .composer.composer-compact {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center; gap: 8px; padding: 10px; border-radius: 26px;
+    border-color: var(--line); box-shadow: 0 3px 16px rgb(0 0 0 / .04);
+  }
+  .composer.composer-compact > .composer-input { grid-column: 2; grid-row: 1; min-width: 0; }
+  .composer.composer-compact .composer-input textarea { display: block; width: 100%; min-height: 40px; padding: 8px 4px; font-size: var(--type-body, 16px); }
+  .composer.composer-compact .composer-footer { display: contents; }
+  .composer.composer-compact .composer-footer > .composer-utilities { grid-column: 1; grid-row: 1; flex-wrap: nowrap; gap: 2px; }
+  .composer.composer-compact .composer-footer > .composer-actions { grid-column: 3; grid-row: 1; display: flex; flex-wrap: nowrap; gap: 4px; margin: 0; }
+  .composer.composer-compact .composer-utilities > .utility-popover { flex: none; }
+  .composer.composer-compact .composer-utilities > .utility-popover > button,
+  .composer.composer-compact .composer-actions > button,
+  .composer.composer-compact .voice-input-compact > button,
+  .composer.composer-compact .composer-voice-recovery > button { width: 40px; height: 40px; min-height: 40px; padding: 0; border-radius: 50%; flex: none; }
+  .composer.composer-compact .composer-utilities > .utility-popover > button { border-color: transparent; background: transparent; color: var(--muted); }
+  .composer.composer-compact .composer-utilities > .utility-popover > button:hover { background: var(--surface-2); color: var(--text); }
+  .composer.composer-compact .composer-attachments-menu .utility-popover-content { display: grid; gap: 4px; }
+  .composer.composer-compact .composer-attachments-menu .utility-popover-content > button,
+  .composer.composer-compact .saved-file-picker > button { justify-content: start; width: 100%; text-align: start; }
+  .composer.composer-compact .composer-context { display: grid; gap: 10px; }
+  .composer.composer-compact .composer-context .model-select { max-width: 100%; }
+  .composer.composer-compact > .composer-active-context { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; padding-inline: 8px; color: var(--muted); font-size: var(--type-meta); }
+  .composer.composer-compact > .chat-speech-controls { grid-column: 1 / -1; padding-inline: 8px; }
+  .composer-active-agent { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow-wrap: anywhere; }
+  .composer.composer-compact .voice-input-compact { position: relative; }
+  .composer.composer-compact .voice-input-compact > small { position: absolute; inset-inline-end: 0; bottom: calc(100% + 8px); width: max-content; max-width: min(240px, 65vw); padding: 8px 12px; border-radius: var(--radius-md); background: var(--surface-2); color: var(--text); }
+  .composer-voice-recovery .utility-popover-content { display: grid; gap: 12px; }
+  .composer.composer-compact .voice-button.recording { background: var(--surface-2); color: var(--text); }
+  .composer.composer-compact .voice-button.recording svg { animation: recording-pulse 1.4s ease-in-out infinite; }
+  @keyframes recording-pulse { 50% { opacity: .45; } }
+  @media (prefers-reduced-motion: reduce) { .composer.composer-compact .voice-button.recording svg { animation: none; } }
+  @media (max-width: 600px) {
+    .chat-page .composer.composer-compact { grid-template-columns: minmax(0, 1fr) auto; border-radius: 22px; }
+    .composer.composer-compact > .composer-input { grid-column: 1 / -1; grid-row: 1; padding-inline: 6px; }
+    .composer.composer-compact .composer-footer > .composer-utilities { grid-row: 2; }
+    .composer.composer-compact .composer-footer > .composer-actions { grid-column: 2; grid-row: 2; }
+  }
+  @media (pointer: coarse) {
+    .composer.composer-compact .composer-utilities > .utility-popover > button,
+    .composer.composer-compact .composer-actions > button,
+    .composer.composer-compact .voice-input-compact > button,
+    .composer.composer-compact .composer-voice-recovery > button { width: 44px; height: 44px; min-height: 44px; }
+  }
   .composer .composer-context { gap: 6px 10px; }
   /* One editor boundary; nested selectors use labels and hover/focus rather
      than permanent boxes. Popover contents keep their own control roles. */

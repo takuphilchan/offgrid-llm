@@ -8,7 +8,7 @@ test('response tuning is disclosed without changing defaults or the draft', asyn
   await page.goto('/ui/#/chat');
   const draft=page.locator('.composer textarea');await draft.fill('Keep my draft');
   const trigger=page.getByRole('button',{name:'Response settings',exact:true});await trigger.click();
-  const panel=page.locator('.composer-context-menu .utility-popover-panel');
+  const panel=page.locator('.composer-context-menu > .utility-popover-panel');
   await expect(panel.getByRole('combobox',{name:'Context profile',exact:true})).not.toBeVisible();
   await panel.locator('.response-advanced > summary').click();
   const context=panel.getByRole('combobox',{name:'Context profile',exact:true});
@@ -29,6 +29,7 @@ for (const locale of ['en', 'ar'] as const) for (const width of [320, 768, 1280]
   await page.goto('/ui/#/chat');
   const editor = page.locator('.composer textarea');
   await editor.fill('Keep this exact draft — café 日本語');
+  await page.locator('.composer-context-menu > button').click();
   await page.getByRole('button', { name: agentProfilesText[locale].selector, exact: true }).click();
   await page.getByRole('radio', { name: /Writer/ }).check(); await page.keyboard.press('Escape');
   const trigger = page.getByRole('button',{name:workspaceHelp[locale].settings,exact:true});
@@ -39,17 +40,14 @@ for (const locale of ['en', 'ar'] as const) for (const width of [320, 768, 1280]
   await expect(page.locator('.agent-settings-summary input, .agent-settings-summary select')).toHaveCount(0);
   await page.keyboard.press('Escape'); await expect(trigger).toBeFocused();
   await expect(editor).toHaveValue('Keep this exact draft — café 日本語');
-  await expect(page.locator('.composer-context .chat-execution-workspace')).toBeVisible();
+  await expect(page.locator('.composer-active-context .chat-execution-workspace')).toBeVisible();
   await expect(page.locator('.composer-context .chat-agent-tools')).toBeVisible();
   await expect(page.locator('.composer-footer .voice-settings > button')).toHaveCount(0);
-  const preferences=page.locator('.composer-context-menu > button');await preferences.click();
+  const preferences=page.locator('.composer-context-menu > button');
   await expect(page.locator('.voice-settings-inline')).toBeVisible();
   await page.keyboard.press('Escape');await expect(preferences).toBeFocused();
   await expect(page.locator('.composer-context .composer-context-menu')).toHaveCount(0);
   await expect(page.locator('.composer-footer .composer-utilities .composer-context-menu > button')).toBeVisible();
-  const identity=await page.locator('.composer-context').boundingBox(),utilities=await page.locator('.composer-utilities').boundingBox(),actions=await page.locator('.composer-actions').boundingBox();
-  expect(utilities!.y).toBeGreaterThanOrEqual(identity!.y+identity!.height);
-  expect(actions!.y).toBeGreaterThanOrEqual(identity!.y+identity!.height);
   await expect(page.locator('.composer-actions > button:last-child')).toBeEnabled();
   const problems = await page.locator('.composer').evaluate(composer => {
     const boundary = composer.getBoundingClientRect();

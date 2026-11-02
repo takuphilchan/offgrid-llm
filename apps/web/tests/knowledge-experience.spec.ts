@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { chooseModel } from './helpers/model-choice';
 
 async function fixture(page: Page) {
   const state = { enabled: true, failStatus: false, revokeSource: false, removed: false, writes: [] as string[] };
@@ -85,4 +86,71 @@ test('document removal stays explicit and manageable while retrieval is disabled
   await page.getByRole('dialog').getByRole('button', { name: 'Confirm delete', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Project guide.txt' })).toHaveCount(0);
   expect(state.writes).toEqual(['/v1/documents/delete']);
+});
+
+test('a ready local library does not depend on catalog or download administration', async ({ page }) => {
+  const state = await fixture(page);
+  let catalogReads = 0, transferReads = 0;
+  await page.route('**/v1/catalog', route => { catalogReads++; return route.fulfill({ status: 503, json: { error: 'Catalog unavailable' } }); });
+  await page.route('**/v1/models/download/progress', route => { transferReads++; return route.fulfill({ status: 503, json: { error: 'Transfers unavailable' } }); });
+  await page.goto('/ui/#/knowledge');
+  await expect(page.getByRole('button', { name: 'Ask using Knowledge', exact: true })).toBeEnabled();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(catalogReads).toBe(0); expect(transferReads).toBe(0); expect(state.writes).toEqual([]);
+});
+
+test('installed search model remains the one-step default when the optional catalog fails', async ({ page }) => {
+  const state = await fixture(page); state.enabled = false;
+  await page.route('**/v1/catalog', route => route.fulfill({ status: 503, json: { error: 'Catalog unavailable' } }));
+  await page.route('**/v1/models/download/progress', route => route.fulfill({ status: 503, json: { error: 'Transfers unavailable' } }));
+  const enabled: unknown[] = [];
+  await page.route('**/v1/models/download', route => {
+    enabled.push(route.request().postDataJSON()); state.enabled = true;
+    return route.fulfill({ json: { exists: true } });
+  });
+  await page.goto('/ui/#/knowledge');
+  await expect(page.getByRole('heading', { name: 'Search your documents' })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.locator('.knowledge-search-options')).not.toHaveAttribute('open', '');
+  await page.getByRole('button', { name: 'Enable knowledge', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Add document', exact: true })).toBeEnabled();
+  expect(enabled).toHaveLength(1);
+  expect(enabled[0]).toMatchObject({ model_id: 'embedding-fixture', enable_knowledge: true });
+});
+
+test('first setup without any search model keeps catalog failure actionable', async ({ page }) => {
+  const state = await fixture(page); state.enabled = false;
+  await page.route('**/v1/models', route => route.fulfill({ json: { data: [{ id: 'chat-fixture', type: 'chat' }] } }));
+  await page.route('**/v1/catalog', route => route.fulfill({ status: 503, json: { error: 'Catalog unavailable' } }));
+  await page.goto('/ui/#/knowledge');
+  await expect(page.getByRole('alert')).toContainText('Catalog unavailable');
+  await expect(page.getByRole('button', { name: 'Install and enable', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open model manager', exact: true }).first()).toBeEnabled();
+  expect(state.writes).toEqual([]);
+});
+
+test('a slow optional catalog cannot block enabling an installed search model', async ({ page }) => {
+  const state = await fixture(page); state.enabled = false;
+  await page.route('**/v1/catalog', () => new Promise<void>(() => {}));
+  await page.goto('/ui/#/knowledge');
+  await expect(page.getByRole('button', { name: 'Enable knowledge', exact: true })).toBeEnabled();
+  await expect(page.locator('.knowledge-setup')).toContainText('embedding fixture');
+  expect(state.writes).toEqual([]);
+});
+
+test('late setup metadata does not overwrite an explicit installed-model choice', async ({ page }) => {
+  await fixture(page);
+  await page.route('**/v1/rag/status', route => route.fulfill({ json: { enabled: false, stats: {} } }));
+  await page.route('**/v1/models', route => route.fulfill({ json: { data: [{ id: 'search-first', type: 'embedding' }, { id: 'search-second', type: 'embedding' }] } }));
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/v1/catalog', async route => { await gate; return route.fulfill({ json: { models: [{ id: 'search-catalog', name: 'Catalog search', type: 'embedding' }] } }); });
+  await page.goto('/ui/#/knowledge');
+  await page.getByText('Change search model', { exact: true }).click();
+  await chooseModel(page, 'Search model', 'search-second');
+  release();
+  await page.getByRole('button', { name: 'Search model', exact: true }).click();
+  const options = page.getByRole('radiogroup', { name: 'Search model' });
+  await expect(options.getByRole('radio')).toHaveCount(3);
+  await expect(options.locator('input[value="search-second"]')).toBeChecked();
 });

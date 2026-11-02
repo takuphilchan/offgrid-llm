@@ -57,7 +57,7 @@ for (const fail of [false, true]) test(`scoped Chat sends exact IDs and ${fail ?
       const body = JSON.parse(String(init?.body));
       (window as any).scopedPayload = body;
       if (fail) return new Response(JSON.stringify({ error: { message: 'Selected document unavailable. No broader search was performed.' } }), { status: 422 });
-      const message = { role: 'assistant', content: 'Answer [1]', knowledge_sources: [{ document_id: 'a', chunk_id: 'chunk-a', name: 'Alpha 日本語.txt', content: '<script>window.sourceExecuted = true</script>\ncafé 日本語', content_hash: 'a'.repeat(64) }] };
+      const message = { role: 'assistant', content: 'Answer [1]', knowledge_sources: [{ document_id: 'a', chunk_id: 'chunk-a', name: 'Alpha 日本語.txt', content: '<script>window.sourceExecuted = true</script>\ncafé 日本語', content_hash: 'a'.repeat(64), source: { kind: 'page', index: 3, start_byte: 12, end_byte: 80, source_sha256: 'b'.repeat(64), extractor_revision: 'fixture' } }] };
       const session = { name: decodeURIComponent(String(url).split('/')[3]), model_id: body.model_id, messages: [{ role: 'user', content: body.content }, message] };
       return new Response(`data: ${JSON.stringify({ type: 'done', session, message, finish_reason: 'stop' })}\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
     };
@@ -73,6 +73,7 @@ for (const fail of [false, true]) test(`scoped Chat sends exact IDs and ${fail ?
     await expect(page.locator('.knowledge-passages blockquote')).toContainText('<script>window.sourceExecuted = true</script>');
     expect(await page.evaluate(() => (window as any).sourceExecuted)).toBeUndefined();
     await expect(page.locator('.knowledge-passages')).toContainText('Alpha 日本語.txt');
+    await expect(page.locator('.knowledge-passages')).toContainText('Page 3');
     await expect(page.locator('.composer textarea')).toHaveValue('');
     await page.screenshot({ path: info.outputPath('knowledge-passages.png'), fullPage: true });
   }

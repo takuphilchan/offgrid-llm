@@ -1,5 +1,11 @@
 import type { ChatMessage, ChatSession } from '../../api/client';
 import { readPreference } from '../../lib/preferences';
+import { copyText } from '../../lib/clipboard';
+
+export async function copyChatMessage(key:string,content:string,copied:(key:string)=>void,failed:(message:string)=>void,fallback:string){
+  try { await copyText(content); copied(key); }
+  catch(reason){ failed(reason instanceof Error?reason.message:fallback); }
+}
 
 export function readPreferences(key: string): { profile: string; maxTokens: number } {
   try {

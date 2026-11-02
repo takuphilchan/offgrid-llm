@@ -8,5 +8,5 @@ export function useChatCapabilities(scope:string){
   void api.systemIdentity().then(identity=>{if(active)setCapabilities(identity.capabilities??[]);}).catch(()=>{});
   return()=>{active=false;};
  },[scope]);
- return {executionRequestable:capabilities.includes('execution-access-request-v1'),scopedReady:capabilities.includes('scoped-knowledge-chat-v1'),imageServiceReady:capabilities.includes('session-images-v1')};
+ return {executionRequestable:capabilities.includes('execution-access-request-v1'),scopedReady:capabilities.includes('scoped-knowledge-chat-v1'),imageServiceReady:capabilities.includes('session-images-v1'),fileServiceReady:capabilities.includes('session-files-v1')};
 }

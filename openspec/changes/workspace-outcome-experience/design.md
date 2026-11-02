@@ -1,5 +1,45 @@
 # Design
 
+## Approved defaults-first interaction redesign (2026-11-01)
+
+The default product journey is open, ask or add documents, receive a useful
+answer with sources, and resume later. Existing advanced functionality remains
+available, but ordinary users should not configure infrastructure each turn.
+
+- First use checks service, hardware, installed chat/embedding capabilities and
+  available offline packs. Recommend one compatible setup with size/time/privacy
+  explanation and explicit install approval where needed. Keep selected working
+  models and profiles unchanged; recommendations never authorize replacement.
+- Return directly to saved work once ready. Do not show completed setup again.
+  Missing capabilities produce one relevant action beside the attempted task,
+  with drafts retained and no repeated detours through Models/Settings.
+- Keep Chat and the document library primary. Group administrative destinations
+  and optional tools while preserving all existing routes and keyboard access.
+  Use consistent page headings and concise next actions, not another dashboard
+  of status cards. No charts are introduced in this redesign.
+- Composer prioritizes text/attachments, Send/Stop and active context. A compact
+  settings entry owns overrides; model/agent details are disclosed on demand.
+  Active permissions remain visible and revocable. Default profiles do not grant
+  file, desktop, network or terminal authority.
+- Knowledge uses Add documents -> per-file processing -> Ready/needs attention
+  -> Ask. Source selection is a plain user decision. Embedding models, chunking,
+  thresholds and reindexing are advanced administration with safe defaults and
+  explicit index migration. New imports consume the linked ingestion contract.
+- Agent creation starts with purpose/name and recommended existing model/tools;
+  detailed budgets, routing, collaborators and qualification appear progressively.
+  Saved revisions remain pinned and current authority restrictions are preserved.
+- Terminal is an optional desktop tool governed by its own linked change. It
+  must not become the workaround ordinary users need for broken document import.
+- Freeze first-use, returning-user, offline/low-memory, failed-import and recovery
+  journeys before implementation. Measure actions, exposed decisions, time to
+  first useful answer, errors and assistance. Require ordinary chat without
+  opening settings and a document answer without selecting an embedding model
+  once setup is complete. Automated fixtures do not replace the pending human
+  usability, screen-reader or language reviews.
+
+This section supersedes prior no-setup-wizard wording only within the approved
+scope; installation remains explicit and no existing data is silently migrated.
+
 ## Profile-first composer and contextual Help
 
 Supersede the earlier always-visible pinned-model and Tools controls with one

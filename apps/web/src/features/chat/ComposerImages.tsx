@@ -14,6 +14,7 @@ export function useComposerImages(scope:string,id:string,disabled:boolean,availa
  const draft=useDraft(scope,'chat-images',id),images=useMemo(()=>readImages(draft.value),[draft.value]);
  const {locale}=useI18n(),copy=chatImages(locale);
  const blocker=!(images.length||availability.history)?'':availability.agent?copy.agent:!availability.service?copy.service:!['unknown','tested'].includes(availability.model?.capability_status?.vision??'')?copy.model:'';
+ const blockerCode=blocker===copy.model?'vision_projector_unavailable':'';
  const [error,setError]=useState(''),[processing,setProcessing]=useState(false);
  const current=useRef(draft.key);current.current=draft.key;
  const input=useRef<HTMLInputElement>(null),pending=useRef(false);
@@ -38,7 +39,7 @@ export function useComposerImages(scope:string,id:string,disabled:boolean,availa
   }catch{if(current.current===key)setError(copy.limits);}
   finally{pending.current=false;setProcessing(false);}
  };
- return {...draft,images,error,processing,copy,blocker,
+ return {...draft,images,error,processing,copy,blocker,blockerCode,
   paste:(event:ClipboardEvent)=>{const files=[...event.clipboardData.files];if(files.length){event.preventDefault();void add(files);}},
   dragOver:(event:DragEvent)=>{if(event.dataTransfer.types.includes('Files')){event.preventDefault();event.dataTransfer.dropEffect=disabled?'none':'copy';}},
   drop:(event:DragEvent)=>{if(event.dataTransfer.types.includes('Files')){event.preventDefault();void add([...event.dataTransfer.files]);}},
@@ -48,5 +49,5 @@ export function useComposerImages(scope:string,id:string,disabled:boolean,availa
 }
 export function ImageAttachments({images,remove,disabled}:{images?:SessionImage[];remove?:(index:number)=>void;disabled?:boolean}){
  const {locale}=useI18n(),copy=chatImages(locale);if(!images?.length)return null;
- return <div className="image-attachments" aria-label={copy.images}>{images.map((image,index)=><figure key={index}><img src={/^data:image\/(png|jpeg);base64,/.test(image.data_url)?image.data_url:undefined} alt={image.name}/><figcaption title={image.name}>{image.name}</figcaption>{remove&&<button type="button" className="icon-button" disabled={disabled} aria-label={`${copy.remove}: ${image.name}`} onClick={event=>{const composer=event.currentTarget.closest('.composer');remove(index);requestAnimationFrame(()=>{const next=composer?.querySelectorAll<HTMLButtonElement>('.image-attachments button');(next?.[Math.min(index,next.length-1)]??composer?.querySelector<HTMLButtonElement>('.composer-image-add'))?.focus();});}}><Icon name="close" size={16}/></button>}</figure>)}</div>;
+ return <div className="image-attachments" aria-label={copy.images}>{images.map((image,index)=><figure key={index}><img src={/^data:image\/(png|jpeg);base64,/.test(image.data_url)?image.data_url:undefined} alt={image.name}/><figcaption title={image.name}>{image.name}</figcaption>{remove&&<button type="button" className="icon-button" disabled={disabled} aria-label={`${copy.remove}: ${image.name}`} onClick={event=>{const composer=event.currentTarget.closest('.composer');remove(index);requestAnimationFrame(()=>{const next=composer?.querySelectorAll<HTMLButtonElement>('.image-attachments button');(next?.[Math.min(index,next.length-1)]??composer?.querySelector<HTMLButtonElement>('.composer-attachments-menu > button'))?.focus();});}}><Icon name="close" size={16}/></button>}</figure>)}</div>;
 }

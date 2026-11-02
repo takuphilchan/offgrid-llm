@@ -5,7 +5,10 @@ import { useI18n } from '../i18n';
 import { voiceText } from '../i18n/voice';
 import { operationFeedback } from '../i18n/operation-feedback';
 import { spokenProse, stopSpeechEvent } from '../lib/response-speech';
-import { selectSpeech, useVoicePreferences } from '../lib/voice-preferences';
+import { selectSpeech, SpeechSetupRequired, useVoicePreferences } from '../lib/voice-preferences';
+import { VoiceSettings } from './VoiceSettings';
+import { UtilityPopover } from './UtilityPopover';
+import { voiceSettingsText } from '../i18n/voice-settings';
 
 async function toWav(blob: Blob): Promise<Blob> {
   const AudioContextCtor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -35,13 +38,14 @@ async function toWav(blob: Blob): Promise<Blob> {
 type RecordingWork = { controller: AbortController; stream?: MediaStream; recorder?: MediaRecorder; timer?: number };
 type CapturePhase = 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing';
 
-export function VoiceInputButton({ onTranscript, contextKey, disabled = false }: { onTranscript: (text: string) => void; contextKey: string; disabled?: boolean }) {
+export function VoiceInputButton({ onTranscript, contextKey, disabled = false, compact = false }: { onTranscript: (text: string) => void; contextKey: string; disabled?: boolean; compact?: boolean }) {
   const { preferences } = useVoicePreferences();
   const { locale } = useI18n();
   const copy = voiceText(locale);
   const feedback = operationFeedback(locale);
   const [phase, setPhase] = useState<CapturePhase>('idle');
   const [error, setError] = useState('');
+  const [setupRequired, setSetupRequired] = useState(false);
   const current = useRef<RecordingWork | null>(null);
   // Use the current draft callback, but never deliver a result to another composer.
   const target = useRef({ contextKey, onTranscript });
@@ -56,7 +60,7 @@ export function VoiceInputButton({ onTranscript, contextKey, disabled = false }:
     work.stream?.getTracks().forEach(track => track.stop());
   };
   useEffect(() => {
-    setPhase('idle'); setError('');
+    setPhase('idle'); setError(''); setSetupRequired(false);
     return cancel;
   }, [contextKey]);
   const stop = () => {
@@ -72,6 +76,7 @@ export function VoiceInputButton({ onTranscript, contextKey, disabled = false }:
   const start = async () => {
     if (current.current || disabled) return;
     setError('');
+    setSetupRequired(false);
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       setError(copy.unsupported);
       return;
@@ -124,6 +129,7 @@ export function VoiceInputButton({ onTranscript, contextKey, disabled = false }:
     } catch (reason) {
       if (!active()) return;
       cancel(); setPhase('idle');
+      setSetupRequired(reason instanceof SpeechSetupRequired);
       if ((reason as DOMException)?.name === 'NotAllowedError') setError(copy.permission);
       else setError(reason instanceof Error ? reason.message : copy.failed);
     }
@@ -131,13 +137,21 @@ export function VoiceInputButton({ onTranscript, contextKey, disabled = false }:
 
   const label = phase === 'recording' ? copy.stop : phase === 'transcribing' ? feedback.cancelTranscription : phase === 'idle' ? copy.record : feedback.cancelVoice;
   const status = phase === 'checking' ? feedback.checkingVoice : phase === 'permission' ? feedback.permissionPending : phase === 'transcribing' ? copy.transcribing : '';
-  return <span className="voice-input-control" data-capture-phase={phase}>
+  if (compact && error) return <span className="voice-input-control voice-input-compact" data-capture-phase={phase}>
+    <UtilityPopover defaultOpen label={voiceSettingsText(locale).title} trigger={<Icon name="mic" size={18} />} triggerClassName="icon-button voice-needs-setup" className="composer-voice-recovery" align="end">
+      <p className="voice-error" role="status">{error}</p>
+      {setupRequired && <VoiceSettings inline />}
+      <button type="button" className="secondary-button" disabled={disabled} onClick={() => void start()}>{copy.record}</button>
+    </UtilityPopover>
+  </span>;
+  return <span className={`voice-input-control${compact ? ' voice-input-compact' : ''}`} data-capture-phase={phase}>
     <button type="button" className={phase === 'recording' ? 'voice-button recording' : 'voice-button'} disabled={disabled && !current.current} onClick={current.current ? stop : () => void start()} aria-label={label} aria-pressed={phase === 'recording'} title={label}>
       <Icon name="mic" size={18} />
-      <span>{phase === 'recording' ? copy.recording : label}</span>
+      <span className={compact ? 'sr-only' : undefined}>{phase === 'recording' ? copy.recording : label}</span>
     </button>
     {status && <small role="status">{status}</small>}
     {error && <small className="voice-error" role="status">{error}</small>}
+    {setupRequired && <VoiceSettings subtle />}
   </span>;
 }
 

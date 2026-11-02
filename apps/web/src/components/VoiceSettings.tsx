@@ -6,6 +6,7 @@ import { useI18n } from '../i18n';
 import { voiceSettingsText } from '../i18n/voice-settings';
 import { Icon } from './Icon';
 import { SpeechModelChoice } from './SpeechModelChoice';
+import { voiceSetupText } from '../i18n/voice-setup';
 
 export function VoiceSettings({ children, compact = false, subtle = false, inline = false }: { children?: ReactNode; compact?: boolean; subtle?: boolean; inline?: boolean }) {
   const id = useId();
@@ -30,6 +31,7 @@ export function VoiceSettings({ children, compact = false, subtle = false, inlin
   const tts = status?.profiles?.find(p => preferences.tts ? `${p.id}@${p.revision}` === preferences.tts : p.available && p.capabilities.includes('speech_synthesis'));
   const content = <>
       {children}
+      {status?.profiles?.some(profile => !profile.available) && <p className="model-search-hint">{voiceSetupText(locale)}</p>}
       {(['asr', 'tts'] as const).map(kind => {
         const profiles = status?.profiles?.filter(p => p.capabilities.includes(kind === 'asr' ? 'transcription' : 'speech_synthesis')) ?? [];
         return <SpeechModelChoice key={kind} label={kind === 'asr' ? copy.recognition : copy.synthesis} profiles={profiles} value={preferences[kind]} disabled={loading || !!error}

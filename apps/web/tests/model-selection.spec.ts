@@ -5,11 +5,12 @@ for (const locale of ['en', 'ar']) for (const width of [320, 390, 768, 1440]) te
   const state = await craftFixture(page, locale, 'light');
   await page.setViewportSize({ width, height: 900 });
   await page.goto('/ui/#/chat');
+  await page.locator('.composer-context-menu > button').click();
   const trigger = page.locator('.model-select-trigger');
   await expect(trigger).toBeVisible();
-  const errors = await page.locator('.composer').evaluate(composer => {
+  const errors = await page.locator('.composer-context-menu > .utility-popover-panel').evaluate(composer => {
     const box = composer.getBoundingClientRect();
-    const controls = [...composer.querySelectorAll<HTMLButtonElement>('.composer-context > .utility-popover > button, .model-select-trigger, .composer-footer button')].filter(node => node.getClientRects().length);
+    const controls = [...composer.querySelectorAll<HTMLButtonElement>('.composer-context > .utility-popover > button, .model-select-trigger')].filter(node => node.getClientRects().length);
     const problems: string[] = [];
     for (const [index, control] of controls.entries()) {
       const rect = control.getBoundingClientRect();
@@ -36,23 +37,24 @@ test('model picker searches exact identifiers, shows actual readiness and preser
   ];
   await page.route('**/v1/models', r => r.fulfill({ json: { data: models } }));
   await page.goto('/ui/#/chat');
+  await page.locator('.composer-context-menu > button').click();
   const picker = page.getByRole('button', { name: 'Model', exact: true });
   await picker.click();
   await expect(page.getByRole('searchbox', { name: 'Filter installed models' })).toBeFocused();
-  await expect(page.getByRole('option')).toHaveCount(2);
-  await expect(page.getByRole('option').first()).toContainText('Loaded');
-  await expect(page.getByRole('option').last()).toContainText('Runtime ready: No');
+  await expect(page.locator('.model-select-panel').getByRole('option')).toHaveCount(2);
+  await expect(page.locator('.model-select-panel').getByRole('option').first()).toContainText('Loaded');
+  await expect(page.locator('.model-select-panel').getByRole('option').last()).toContainText('Runtime ready: No');
   await page.getByRole('searchbox', { name: 'Filter installed models' }).fill('f1e3673a9589');
-  await expect(page.getByRole('option')).toHaveCount(1);
+  await expect(page.locator('.model-select-panel').getByRole('option')).toHaveCount(1);
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('option')).toBeFocused();
+  await expect(page.locator('.model-select-panel').getByRole('option')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(picker).toContainText('Meta Llama 3.1 8B Instruct');
   await expect(picker).toBeFocused();
   await expect(picker).toHaveAttribute('aria-expanded', 'false');
   expect(state.writes).toEqual([]);
   await picker.click();
-  await expect(page.getByRole('option', { selected: true })).toContainText(models[1].id);
+  await expect(page.locator('.model-select-panel').getByRole('option', { selected: true })).toContainText(models[1].id);
   await page.keyboard.press('Escape');
   await expect(picker).toBeFocused();
 });
@@ -63,6 +65,7 @@ for(const locale of ['en','ar']) for(const theme of ['light','dark']) test(`mode
   await page.route('**/v1/models',r=>r.fulfill({json:{data:models}}));
   await page.setViewportSize({width:locale==='ar'?390:1280,height:640});
   await page.goto('/ui/#/chat');
+  await page.locator('.composer-context-menu > button').click();
   const trigger=page.locator('.model-select-trigger');await trigger.click();
   const panel=page.locator('.model-select-panel'),search=panel.getByRole('searchbox'),list=panel.getByRole('listbox');
   await expect(search).toBeFocused();
@@ -93,13 +96,14 @@ for (const locale of ['en', 'ar']) test(`model picker fits narrow ${locale} and 
   await page.route('**/v1/models', r => r.fulfill({ json: { data: ['Q4_K_M', 'Q8_0'].map(quant => ({ id: `Qwen2.5-7B-Instruct-${quant}`, type: 'chat' })) } }));
   await page.setViewportSize({ width: 390, height: 640 });
   await page.goto('/ui/#/chat');
+  await page.locator('.composer-context-menu > button').click();
   await page.locator('.model-select-trigger').click();
-  await expect(page.getByRole('option')).toHaveCount(2);
-  await expect(page.getByRole('option').first()).toContainText('Q4_K_M');
-  await expect(page.getByRole('option').last()).toContainText('Q8_0');
-  await expect(page.getByRole('option').first().locator('strong')).toBeVisible();
+  await expect(page.locator('.model-select-panel').getByRole('option')).toHaveCount(2);
+  await expect(page.locator('.model-select-panel').getByRole('option').first()).toContainText('Q4_K_M');
+  await expect(page.locator('.model-select-panel').getByRole('option').last()).toContainText('Q8_0');
+  await expect(page.locator('.model-select-panel').getByRole('option').first().locator('strong')).toBeVisible();
   await expect(page.locator('.model-select-trigger > span')).toBeVisible();
-  expect(await page.getByRole('option').first().evaluate(node => getComputedStyle(node).display)).toBe('grid');
+  expect(await page.locator('.model-select-panel').getByRole('option').first().evaluate(node => getComputedStyle(node).display)).toBe('grid');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.screenshot({ path: info.outputPath(`model-picker-${locale}.png`), fullPage: true, animations: 'disabled' });
   expect(state.writes).toEqual([]);

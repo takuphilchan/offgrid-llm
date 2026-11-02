@@ -9,6 +9,7 @@ export function ComposerSpeech({ enabled, checking, busy, state, error, toggle, 
   presentation?: 'all' | 'settings' | 'status';
 }) {
   const { locale, messages } = useI18n(), copy = voiceText(locale);
+  if (presentation === 'status' && !enabled && state === 'idle' && !error) return null;
   return <div className="composer-voice-toolbar chat-speech-controls">
     {presentation !== 'status' && <VoiceSettings subtle inline={presentation === 'settings'}><label className="switch"><input type="checkbox" checked={enabled} disabled={checking || (busy && !enabled)} onChange={event => void toggle(event.target.checked)} /><span />{copy.speakResponses}</label></VoiceSettings>}
     {presentation !== 'settings' && <>{enabled && <small>{copy.speakResponses}</small>}

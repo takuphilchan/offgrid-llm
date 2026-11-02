@@ -5,6 +5,9 @@ const embedding = {id:'bge-m3',name:'BGE M3',type:'embedding',description:'Fixtu
 async function workspace(page:Page, override:(path:string,route:Route)=>Promise<unknown>|unknown=()=>undefined, onboarding=false){
  await page.addInitScript(({onboarding})=>{localStorage.setItem('offgrid.locale','en');if(!onboarding)localStorage.setItem('offgrid.onboarding.complete','true');},{onboarding});
  await page.route('**/health',r=>r.fulfill({json:{status:'healthy'}}));
+ // Pin the legacy service contract. CI also runs a real v2 service behind Vite;
+ // a fixture must not inherit its capabilities and silently test another path.
+ await page.route('**/api/v2/**',r=>r.fulfill({json:{}}));
  await page.route('**/v1/**',async r=>{const path=new URL(r.request().url()).pathname;const custom=await override(path,r);if(custom!==undefined)return r.fulfill({json:custom});return r.fulfill({json: path==='/v1/users/me'?{authenticated:false,user:null}:path==='/v1/models'?{data:[{id:'chat-model',type:'chat'}]}:path==='/v1/catalog'?{models:[embedding]}:path==='/v1/documents'?{documents:[],count:0}:path==='/v1/rag/status'?{enabled:false,stats:{}}:path==='/v1/sessions'?{sessions:[]}:path.endsWith('/turn')?{turn:null}:{} });});
 }
 

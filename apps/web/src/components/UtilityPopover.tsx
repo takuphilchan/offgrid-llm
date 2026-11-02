@@ -1,19 +1,21 @@
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 /** Nonmodal utilities only. Consequential confirmations keep their dialog contract. */
-export function UtilityPopover({ label, trigger, children, className = '', triggerClassName = 'text-button', panelClassName = '', align = 'start', compact = false, panelTabIndex = 0, preferredHeight, onOpenChange }: {
+export function UtilityPopover({ label, trigger, children, className = '', triggerClassName = 'text-button', panelClassName = '', align = 'start', compact = false, panelTabIndex = 0, preferredHeight, onOpenChange, defaultOpen = false }: {
   label: string; trigger?: ReactNode; children: ReactNode; className?: string;
   triggerClassName?: string; panelClassName?: string; align?: 'start' | 'end';
   onOpenChange?: (open: boolean) => void;
   compact?: boolean;
   panelTabIndex?: 0 | -1;
   preferredHeight?: number;
+  defaultOpen?: boolean;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { if (defaultOpen) panel.current?.showPopover(); }, [defaultOpen]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -71,6 +73,10 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
     const dismiss = () => panel.current?.hidePopover();
     window.addEventListener('hashchange', dismiss);
     const escape = (event: KeyboardEvent) => {
+      // A dialog opened from this popover owns Escape. Closing its ancestor
+      // popover first hides the still-open modal and strands keyboard focus.
+      const modal = document.querySelector('dialog:modal');
+      if (modal && !modal.contains(panel.current)) return;
       if (event.key !== 'Escape' || event.defaultPrevented || !panel.current?.matches(':popover-open') || panel.current.querySelector(':popover-open')) return;
       event.preventDefault(); panel.current.hidePopover(); button.current?.focus();
     };

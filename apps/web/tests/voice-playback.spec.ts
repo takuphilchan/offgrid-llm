@@ -114,7 +114,7 @@ test('speech starts during text streaming and flushes the committed tail without
   await expect.poll(() => page.evaluate(() => (window as any).speechRequests.map((r: any) => r.input))).toEqual(['Hello there.']);
   await page.evaluate(() => (window as any).finishSpeech(false));
   await expect(page.locator('.chat-speech-controls')).toContainText('Speaking the draft');
-  await expect(page.locator('.composer-actions > button')).toHaveText('Stop');
+  await expect(page.locator('.composer-actions > button')).toHaveAccessibleName('Stop');
   await page.evaluate(() => { (window as any).player.onended(); (window as any).emitText(' sentence'); });
   expect(await page.evaluate(() => (window as any).speechRequests.length)).toBe(1);
   await page.evaluate(() => (window as any).finishText());
@@ -160,7 +160,7 @@ test('streamed reasoning and unfinished code are not spoken; overloaded audio st
   expect(await page.evaluate(() => (window as any).speechRequests[0].input)).not.toMatch(/Private|secret|think/);
   await page.evaluate(() => (window as any).emitText(' Many sentences. '.repeat(200)));
   await expect(page.getByRole('alert')).toContainText('cannot keep up');
-  await expect(page.locator('.composer-actions > button')).toHaveText('Stop');
+  await expect(page.locator('.composer-actions > button')).toHaveAccessibleName('Stop');
   await expect.poll(() => page.evaluate(() => (window as any).speechAborts)).toBe(1);
 });
 
@@ -173,9 +173,9 @@ test('streamed speech prefetches at most one chunk and Stop reading leaves gener
   await page.evaluate(() => (window as any).finishSpeech(false));
   expect(await page.evaluate(() => (window as any).speechRequests.length)).toBe(2);
   await page.locator('.chat-speech-controls').getByRole('button', { name: 'Stop reading' }).click();
-  await expect(page.locator('.composer-actions > button')).toHaveText('Stop');
+  await expect(page.locator('.composer-actions > button')).toHaveAccessibleName('Stop');
   await page.evaluate(() => { (window as any).emitText(' More text. '); (window as any).finishText(); });
-  await expect(page.locator('.composer-actions > button')).toHaveText('Send');
+  await expect(page.locator('.composer-actions > button')).toHaveAccessibleName('Send');
   expect(await page.evaluate(() => (window as any).speechRequests.length)).toBe(2);
 });
 
@@ -222,6 +222,26 @@ async function microphoneFixture(page: Page) {
     { id: 'tts-b', revision: 'r2', name: 'Speech B', capabilities: ['speech_synthesis'], available: true }
   ] } }));
 }
+
+test('missing speech runtime offers settings without capture or a model download', async ({ page }) => {
+  await microphoneFixture(page);
+  let downloads = 0;
+  await page.route('**/v1/audio/status', route => route.fulfill({ json: {
+    asr: { available: false, issue: 'Install the matching qwen3-asr speech runtime for this model.' },
+    tts: { available: false }, profiles: [{ id: 'qwen-asr', revision: 'r1', name: 'Qwen ASR', capabilities: ['transcription'], available: false, issue: 'Runtime missing' }]
+  } }));
+  await page.route('**/download**', route => { downloads++; return route.abort(); });
+  await page.goto('/ui/#/chat');
+  const mic = page.locator('.voice-input-control[data-capture-phase]');
+  await mic.getByRole('button', { name: 'Use microphone', exact: true }).click();
+  await expect(mic).toContainText('qwen3-asr');
+  await expect(mic.locator('.composer-voice-recovery > .utility-popover-panel')).toBeVisible();
+  await expect(page.locator('.voice-settings-panel:visible')).toContainText('Re-downloading a model will not fix a missing runtime');
+  await expect(page.locator('.voice-settings-panel:visible').getByRole('link', { name: 'Manage speech models' })).toHaveAttribute('href', '#/models');
+  expect(downloads).toBe(0);
+  expect(await page.evaluate(() => (window as any).micTest.permissions)).toBe(0);
+  expect(await page.evaluate(() => (window as any).micTest.requests)).toBe(0);
+});
 
 test('microphone readiness and permission waiting have distinct cancellable feedback', async ({ page }) => {
   await microphoneFixture(page);
@@ -296,7 +316,7 @@ test('Stop recording remains usable while a text response is generating', async 
   await page.evaluate(() => (window as any).micTest.allow());
   await expect.poll(() => page.evaluate(() => (window as any).micTest.starts)).toBe(1);
   await page.locator('.composer-actions > button').click();
-  await expect(page.locator('.composer-actions > button')).toHaveText('Stop');
+  await expect(page.locator('.composer-actions > button')).toHaveAccessibleName('Stop');
   await expect(page.getByRole('button', { name: 'Stop recording', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as any).micTest.stops)).toBeGreaterThan(0);
@@ -388,26 +408,27 @@ test('dismissed voice metadata is cancelled and cannot replace a reopened panel'
   await fixture(page);
   await page.evaluate(() => {
     const original = window.fetch.bind(window);
-    const pending = (window as any).metadata = { aborted: 0, replies: [] as ((name: string) => void)[] };
+    const pending = (window as any).metadata = { replies: [] as { signal: AbortSignal; reply: (name: string) => void }[] };
     window.fetch = (input, init) => {
       if (!String(input).endsWith('/v1/audio/status')) return original(input, init);
       // Deliberately allow a late response after abort to exercise the stale guard.
-      init?.signal?.addEventListener('abort', () => pending.aborted++, { once: true });
-      return new Promise(resolve => pending.replies.push((name: string) => resolve(new Response(JSON.stringify({ profiles: [
+      return new Promise(resolve => pending.replies.push({ signal: init!.signal!, reply: (name: string) => resolve(new Response(JSON.stringify({ profiles: [
         { id: name, revision: 'r1', name, available: true, capabilities: ['transcription'] },
-      ] }), { headers: { 'Content-Type': 'application/json' } }))));
+      ] }), { headers: { 'Content-Type': 'application/json' } })) }));
     };
   });
   const trigger = page.getByRole('button', { name: 'Response settings', exact: true });
   await trigger.click();
-  await expect.poll(() => page.evaluate(() => (window as any).metadata.replies.length)).toBe(1);
+  // Development StrictMode mounts effects twice; assert the live operation,
+  // not the total number of correctly cancelled development-only requests.
+  await expect.poll(() => page.evaluate(() => (window as any).metadata.replies.filter((item: any) => !item.signal.aborted).length)).toBe(1);
   await page.keyboard.press('Escape');
-  await expect.poll(() => page.evaluate(() => (window as any).metadata.aborted)).toBe(1);
+  await expect.poll(() => page.evaluate(() => (window as any).metadata.replies.every((item: any) => item.signal.aborted))).toBe(true);
   await trigger.click();
-  await expect.poll(() => page.evaluate(() => (window as any).metadata.replies.length)).toBe(2);
-  await page.evaluate(() => (window as any).metadata.replies[1]('Current profile'));
+  await expect.poll(() => page.evaluate(() => (window as any).metadata.replies.filter((item: any) => !item.signal.aborted).length)).toBe(1);
+  await page.evaluate(() => (window as any).metadata.replies.find((item: any) => !item.signal.aborted).reply('Current profile'));
   await expect(page.getByLabel('Recognition model', { exact: true })).toContainText('Current profile');
-  await page.evaluate(() => (window as any).metadata.replies[0]('Stale profile'));
+  await page.evaluate(() => (window as any).metadata.replies.filter((item: any) => item.signal.aborted).forEach((item: any) => item.reply('Stale profile')));
   await expect(page.getByLabel('Recognition model', { exact: true })).not.toContainText('Stale profile');
 });
 

@@ -1,5 +1,15 @@
 # Tasks
 
+## 22. Approved defaults-first workflow redesign
+
+- [ ] 22.1 Freeze ordinary first-use, returning-user, document import/answer, offline/low-memory and error-recovery journeys with current action/configuration counts; capture isolated real-state screenshots and retain existing human gates.
+- [ ] 22.2 Implement a single guided readiness flow using installed capabilities and explicit recommended setup/offline import; preserve working selections and verify no silent downloads, model switches or grants across reload/failure.
+- [ ] 22.3 Simplify primary navigation and composer to ordinary work with advanced destinations/settings progressively disclosed; preserve all routes, active context/access, drafts and keyboard navigation. Pass localized normal/narrow/RTL/200% tests.
+- [ ] 22.4 Integrate Add documents -> processing -> ready/needs attention -> Ask from document-ingestion-reliability; prove ordinary document questions require no embedding/chunk/index choices after setup, with real-service source/citation checks.
+- [x] 22.5 Simplify profile creation around purpose and recommended existing capabilities, with advanced budgets/resources optional; test saved revision/permission compatibility and easy later overrides. Evidence: `docs/quality/evidence/profile-defaults-2026-11-02.md` (66 browser checks; human/platform gates remain open).
+- [ ] 22.6 Integrate the optional desktop-integrated-terminal entry without adding it to ordinary setup; test native capability absence, focus restoration and no automatic shell startup.
+- [ ] 22.7 Compare the frozen journeys for actions, exposed decisions, errors, retained drafts and first useful result; run full CI and installed-platform checks, document known gaps, and retain unperformed human/assistive-technology evaluations as unverified.
+
 ## 20. Corrective interaction and lifecycle review (2026-11-01)
 
 - [x] 20.1 Replace oversized history utilities with compact action rows; simplify ordinary chat deletion while retaining typed active-work conflict choices, confirmation, exact snapshots and partial retry. Verify `history-controls.spec.ts`, `agent-chat.spec.ts` and narrow/RTL keyboard captures.

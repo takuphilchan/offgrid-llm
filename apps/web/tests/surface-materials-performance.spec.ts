@@ -21,7 +21,7 @@ test('floating surfaces remain responsive over a streaming answer at 4x and 6x C
         document.querySelector<HTMLButtonElement>('.composer-context-menu > button')!.click();
         await new Promise(requestAnimationFrame); return performance.now() - start;
       });
-      const panel = page.locator('.composer-context-menu .utility-popover-panel');
+      const panel = page.locator('.composer-context-menu > .utility-popover-panel');
       await expect(panel).toHaveCSS('opacity', '1');
       await expect(panel).toHaveCSS('backdrop-filter', mode === 'on' ? 'blur(12px)' : 'none');
       const events: { name: string; dur?: number }[] = [];

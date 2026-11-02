@@ -1,0 +1,38 @@
+import { test, expect } from '@playwright/test';
+import { craftFixture } from './helpers/craft-fixture';
+
+for (const width of [390, 1440]) for (const locale of ['en', 'ar']) test(`message-first composer ${width} ${locale}`, async ({ page }, info) => {
+  await page.setViewportSize({ width, height: 900 });
+  const state = await craftFixture(page, locale, width === 390 ? 'dark' : 'light');
+  await page.goto('/ui/#/chat');
+  const composer = page.locator('.composer'), editor = composer.locator('textarea');
+  await expect(editor).toBeVisible();
+  const box = await composer.boundingBox();
+  expect(box!.height).toBeLessThan(width === 390 ? 145 : 100);
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+  await expect(composer.locator('.chat-agent-selector > button')).not.toBeVisible();
+  await expect(composer.locator('.composer-image-add')).not.toBeVisible();
+  await page.screenshot({ path: info.outputPath('composer.png') });
+  const attach = composer.locator('.composer-attachments-menu > button');
+  await attach.focus(); await page.keyboard.press('Enter');
+  await expect(composer.locator('.composer-image-add')).toBeVisible();
+  const chooser = page.waitForEvent('filechooser');
+  await composer.locator('.composer-image-add').click();
+  expect((await chooser).isMultiple()).toBe(true);
+  await page.keyboard.press('Escape'); await expect(attach).toBeFocused();
+  const settings = composer.locator('.composer-context-menu > button');
+  await settings.click();
+  const agent = composer.locator('.chat-agent-selector > button');
+  await expect(agent).toBeVisible();
+  await agent.click();
+  await expect(composer.locator('.chat-agent-selector > .utility-popover-panel')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(agent).toBeFocused();
+  await expect(composer.locator('.composer-context-menu > .utility-popover-panel')).toBeVisible();
+  await page.keyboard.press('Escape'); await expect(settings).toBeFocused();
+  await editor.fill('A draft stays here while I change settings.');
+  await settings.click(); await page.keyboard.press('Escape');
+  await expect(editor).toHaveValue('A draft stays here while I change settings.');
+  expect(state.writes).toEqual([]);
+});

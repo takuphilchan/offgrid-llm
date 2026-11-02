@@ -1,0 +1,8 @@
+.document-retention-dialog { inline-size: min(32rem, calc(100vw - 2rem)); max-block-size: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface-1); color: var(--text); }
+.document-retention-dialog header p { overflow-wrap: anywhere; }
+.document-retention-dialog fieldset { border: 0; padding: 0; margin: 1.5rem 0; display: grid; gap: 1rem; min-inline-size: 0; }
+.document-retention-dialog .retention-check { display: flex; align-items: center; gap: .65rem; }
+.document-retention-dialog .retention-check input { inline-size: 1rem; flex: 0 0 auto; }
+.document-retention-dialog footer { display: flex; justify-content: flex-end; gap: .75rem; margin-block-start: 1.5rem; }
+
+.document-retention-dialog::backdrop { background: rgb(0 0 0 / .6); }
