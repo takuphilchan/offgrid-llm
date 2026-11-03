@@ -264,11 +264,24 @@ jobs:
       - name: Test first-party OpenClaw provider controls
         run: node --test scripts/test/test-openclaw-provider.mjs scripts/test/test-verification-hooks.mjs
 
+      - name: Retrieve verified OCR build assets
+        uses: actions/download-artifact@v7
+        with:
+          name: ocr-runtime
+          path: runtimes/ocr/worker/assets/
+
+      - name: Prepare pinned service and desktop document assets
+        run: |
+          node scripts/build/prepare-document-runtime.mjs
+          python scripts/build/prepare-ocr-runtime.py --assets runtimes/ocr/worker/assets
+
       - name: Build runtime for integration and desktop packaging
         run: |
           mkdir -p build/linux
           version=$(node -p "require('./apps/desktop/package.json').version")
           go build -trimpath -ldflags "-X main.Version=v$version" -o build/linux/offgrid ./cmd/offgrid
+          go -C runtimes/pdfium build -mod=readonly -trimpath -o ../../build/linux/offgrid-document-worker .
+          go -C runtimes/ocr/worker build -mod=readonly -trimpath -o ../../../build/linux/offgrid-ocr-worker .
 
       - name: Run browser integration tests
         id: browser-tests
@@ -314,15 +327,6 @@ jobs:
             /tmp/offgrid-ci/server.log
           if-no-files-found: warn
           retention-days: 7
-
-      - name: Retrieve verified OCR build assets
-        uses: actions/download-artifact@v7
-        with:
-          name: ocr-runtime
-          path: runtimes/ocr/worker/assets/
-
-      - name: Prepare pinned desktop document assets
-        run: node scripts/build/prepare-document-runtime.mjs
 
       - name: Validate Electron package
         working-directory: apps/desktop

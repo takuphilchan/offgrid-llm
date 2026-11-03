@@ -52,7 +52,8 @@ test('real service privately prepares PDF and Office attachments and retains ori
   const bytes=readFileSync(resolve('../../internal/rag/testdata/documents/corpus',name));
   const prepared=page.waitForResponse(response=>response.request().method()==='POST'&&response.url().endsWith('/attachments'),{timeout:35_000});
   await page.locator('input[data-attachment=files]').setInputFiles({name,mimeType:'application/octet-stream',buffer:bytes});
-  expect((await prepared).ok()).toBeTruthy();
+  const response=await prepared;
+  expect(response.ok(),await response.text()).toBeTruthy();
   await expect(page.locator('.file-attachments')).toContainText(name);
   await expect(page.locator('.file-attachments li').filter({hasText:name})).toContainText(chatFiles('en').ready);
   const inventory=await request.get('/v1/sessions/Demo%20briefing/attachments');expect(inventory.ok()).toBeTruthy();

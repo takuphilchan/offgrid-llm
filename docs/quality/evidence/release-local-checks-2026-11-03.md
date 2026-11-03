@@ -109,3 +109,20 @@ access-test selector: Agent selection now lives inside Response settings. The
 packaged test opens that menu before choosing its fixture profile. The local
 packaged access check then passed at 100% and 200% zoom, with zero writes and
 without granting native consent (`build/release-packaged-access-final.log`).
+
+That run's Linux browser suite reported 943 passed, 29 skipped and one failure:
+the service used for attachment tests lacked the app-local PDF worker. Its
+captured UI explicitly reported a missing document reader. CI now prepares the
+pinned assets and builds both document workers next to the service before the
+browser suite, rather than preparing them only for later desktop packaging.
+The attachment assertion also reports the HTTP error body for diagnosis.
+All 27 attachment checks passed against the disposable packaged Windows service;
+the targeted real PDF/Office attachment test was repeated with exit code zero
+after removing a conflicting terminal-color environment warning from the local
+PowerShell invocation. Workflow syntax validation passed. Logs:
+`build/release-attachment-followup.log`, `build/release-attachment-real-service.log`.
+
+The corrected local Windows preview was installed after the user quit OffGrid.
+Verification matched all 786 payload files and preserved all 485 inventoried
+workspace files. The previous app and workspace backup remains retained. This
+installation is a local build, not evidence of a published GitHub release.
