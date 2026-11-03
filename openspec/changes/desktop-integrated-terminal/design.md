@@ -27,6 +27,12 @@ terminal text, agent-to-shell shortcut, implicit WSL or elevated execution.
   user action. The working directory is not a sandbox. The OffGrid CLI action
   uses the matching installed binary and selected service without putting tokens
   into argv or model messages. Command input remains user-controlled.
+- Keep terminal entry modes distinct. OffGrid CLI uses the native shell with the
+  bundled CLI directory on PATH so `offgrid --help` and all other commands work
+  at the prompt; it must not automatically enter `offgrid agent`. Agent launches
+  the bundled CLI with the fixed `agent` argument so its normal profile chooser
+  runs. Both modes use the same explicitly chosen folder, service endpoint,
+  process supervision and trusted renderer boundary; no model-selected argv.
 - Main owns each PTY, generation and renderer attachment. Bound buffered output
   and scrollback, apply backpressure, validate resize/input/frame lengths and
   preserve Ctrl+C semantics. Treat escape sequences/links/clipboard as untrusted;

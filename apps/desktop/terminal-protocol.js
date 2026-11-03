@@ -44,7 +44,7 @@ function createTerminalProtocol({ trustedURL, contents, operations, available })
       ready();
       if (request.action === 'create') {
         keys(request,[...base,'kind','cols','rows']); dimensions(request);
-        if (!['shell','offgrid'].includes(request.kind)) throw Error('terminal_invalid_kind');
+        if (!['shell','cli','agent','offgrid'].includes(request.kind)) throw Error('terminal_invalid_kind');
         if (owned.size >= 4) throw Error('terminal_session_limit');
         // Reserve before the folder dialog/spawn await to prevent oversubscription.
         const reservation = randomUUID(); owned.add(reservation);

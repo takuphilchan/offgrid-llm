@@ -5,6 +5,23 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { StringDecoder } = require('node:string_decoder');
 
+const shellArgs=['-NoLogo','-NoProfile','-NoExit','-Command','[Console]::InputEncoding = [Text.UTF8Encoding]::new($false); [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding'];
+function launchCommand(kind,cli,systemRoot=process.env.SystemRoot) {
+  if(kind==='agent'||kind==='offgrid')return {file:cli,args:['agent']};
+  if(kind==='shell'||kind==='cli')return {file:path.join(systemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),args:shellArgs};
+  throw Error('terminal_invalid_kind');
+}
+function launchEnvironment(base,cli,service) {
+  const env={...base};
+  delete env.ELECTRON_RUN_AS_NODE;
+  const pathValue=Object.entries(env).find(([key])=>key.toLowerCase()==='path')?.[1]||'';
+  for(const key of Object.keys(env))if(key.toLowerCase()==='path')delete env[key];
+  env.Path=path.dirname(cli)+path.delimiter+pathValue;
+  env.TERM='xterm-256color';
+  env.OFFGRID_SERVER_URL=service;
+  return env;
+}
+
 class TerminalSessions {
   constructor({host,runner,worker,choose,confirm,send,cli,service,spawnProcess=spawn}) { Object.assign(this,{host,runner,worker,choose,confirm,send,cli,service,spawnProcess}); this.sessions=new Map(); this.closing=false; this.generation=0; }
   available() {return process.platform==='win32' && fs.existsSync(this.host) && fs.existsSync(this.worker);}
@@ -12,9 +29,9 @@ class TerminalSessions {
     if(this.closing)throw Error('terminal_stopping');
     const generation=this.generation;const cwd=await this.choose();if(!cwd)return null;
     if(this.closing||generation!==this.generation)throw Error('terminal_stopping');
-    const file=kind==='offgrid'?this.cli:path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe');
+    const {file,args}=launchCommand(kind,this.cli);
     if(!fs.existsSync(file))throw Error('The matching local executable is unavailable.');
-    const id=randomUUID(), record={id,cwd,kind,cols,rows,title:kind==='offgrid'?'OffGrid CLI':'PowerShell',state:'starting',confirmed:false,attached:false,frames:[]};
+    const id=randomUUID(), record={id,cwd,kind,cols,rows,title:kind==='agent'||kind==='offgrid'?'Agent':kind==='cli'?'OffGrid CLI':'PowerShell',state:'starting',confirmed:false,attached:false,frames:[]};
     const child=this.spawnProcess(this.host,[this.runner,this.worker],{stdio:['pipe','pipe','pipe'],windowsHide:true,env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}});
     record.child=child; this.sessions.set(id,record);
     record.stopped=new Promise(resolve=>{record.resolveStop=resolve;});
@@ -40,14 +57,11 @@ class TerminalSessions {
         if(record.pid===undefined)settled(Error('Terminal worker exited before becoming ready.'));
       });
     });
-    const env={...process.env}; delete env.ELECTRON_RUN_AS_NODE;
-    // Describe the terminal we actually provide. Inheriting TERM=dumb from a
-    // launcher disables raw input, animations and /clear inside a real PTY.
-    env.TERM='xterm-256color';
-    env.PATH=path.dirname(this.cli)+path.delimiter+(env.PATH||env.Path||''); env.OFFGRID_SERVER_URL=this.service();
+    // Use exactly one Windows PATH key. Mixed Path/PATH keys can make the CLI
+    // disappear from the PTY even though the packaged executable exists.
+    const env=launchEnvironment(process.env,this.cli,this.service());
     child.stdin.on('error',()=>{});
-    const shellArgs=['-NoLogo','-NoProfile','-NoExit','-Command','[Console]::InputEncoding = [Text.UTF8Encoding]::new($false); [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding'];
-    child.stdin.write(JSON.stringify({action:'start',file,args:kind==='offgrid'?['agent']:shellArgs,cwd,cols,rows,env})+'\n');
+    child.stdin.write(JSON.stringify({action:'start',file,args,cwd,cols,rows,env})+'\n');
     return result;
   }
   closeInBackground(id){void this.close(id,false).catch(()=>this.send({id,type:'error',message:'Terminal stopping could not be confirmed. Close the terminal again to inspect its state.'}));}
@@ -67,4 +81,4 @@ class TerminalSessions {
   }
   async stop(){this.closing=true;this.generation++;const results=await Promise.allSettled([...this.sessions.keys()].map(id=>this.close(id,false)));this.closing=false;if(results.some(r=>r.status==='rejected'))throw Error('terminal_stop_unconfirmed');}
 }
-module.exports={TerminalSessions};
+module.exports={TerminalSessions,launchCommand,launchEnvironment};

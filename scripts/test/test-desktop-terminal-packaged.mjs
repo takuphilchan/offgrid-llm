@@ -98,13 +98,18 @@ try {
  await expect.poll(()=>app.context().pages().some(x=>x.url().endsWith('/terminal.html'))).toBe(true);
  const terminal=app.context().pages().find(x=>x.url().endsWith('/terminal.html'));
  terminal.on('pageerror',error=>console.error('TERMINAL PAGE ERROR',error));
- await terminal.getByRole('button',{name:'Choose folder and open terminal'}).click();
- await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(1);
+ await terminal.getByRole('button',{name:'Open OffGrid CLI'}).click();
+ await expect(terminal.getByRole('tab',{name:'OffGrid CLI',exact:true})).toHaveCount(1);
  const input=terminal.locator('.pane:not([hidden]) .xterm-helper-textarea');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');
+ await input.pressSequentially('offgrid --help');await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('agent');
+ await terminal.getByRole('button',{name:'Close OffGrid CLI',exact:true}).click();
+ await terminal.getByTitle('New PowerShell terminal',{exact:true}).click();
+ await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(1);
  await input.pressSequentially("[Console]::WriteLine(('CHECK_' + [char]0x65e5 + [char]0x672c + [char]0x8a9e))");await input.press('Enter');
  await expect(terminal.locator('.xterm-accessibility-tree')).toContainText('CHECK_\u65e5\u672c\u8a9e');
- await terminal.getByTitle('New terminal',{exact:true}).click();
+ await terminal.getByTitle('New PowerShell terminal',{exact:true}).click();
  await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(2);
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');
  await input.pressSequentially("[Console]::WriteLine(('SECOND_' + 'TAB'))");await input.press('Enter');
@@ -142,10 +147,10 @@ try {
  await input.pressSequentially("$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 300' -WindowStyle Hidden -PassThru; [Console]::WriteLine(('RELOAD' + 'PID:' + $p.Id))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText(/RELOADPID:[0-9]+/);
  const reloadOutput=await terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree').innerText(),reloadPID=Number(reloadOutput.match(/RELOADPID:([0-9]+)/)[1]);
- await terminal.reload();await expect(terminal.getByRole('button',{name:'Choose folder and open terminal'})).toBeEnabled();
+ await terminal.reload();await expect(terminal.getByRole('button',{name:'Open OffGrid CLI'})).toBeEnabled();
  assert.equal(execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`if(Get-Process -Id ${reloadPID} -ErrorAction SilentlyContinue){'alive'}else{'gone'}`],{encoding:'utf8',windowsHide:true}).trim(),'gone');
  await expect(terminal.getByRole('tab')).toHaveCount(0);
- await terminal.getByRole('button',{name:'Choose folder and open terminal'}).click();
+ await terminal.getByTitle('New PowerShell terminal',{exact:true}).click();
  await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(1);
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');
 
@@ -186,13 +191,13 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('MENU_EXACT');
  await input.pressSequentially("[Console]::WriteLine(('SERVICE:' + $env:OFFGRID_SERVER_URL))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('SERVICE:http://127.0.0.1:'+server.address().port);
- await terminal.getByTitle('Run OffGrid CLI').click();
- await expect(terminal.getByRole('tab',{name:'OffGrid CLI',exact:true})).toHaveCount(1);
+ await terminal.getByTitle('Open OffGrid Agent and choose a profile').click();
+ await expect(terminal.getByRole('tab',{name:'Agent',exact:true})).toHaveCount(1);
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Profile number:',{timeout:15000});
  await input.pressSequentially('0');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Choose a listed profile number');
- await terminal.getByRole('button',{name:'Close OffGrid CLI',exact:true}).click();
- await terminal.getByTitle('Run OffGrid CLI').click();
+ await terminal.getByRole('button',{name:'Close Agent',exact:true}).click();
+ await terminal.getByTitle('Open OffGrid Agent and choose a profile').click();
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Profile number:');
  await input.pressSequentially('1');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Agent chat');
@@ -201,13 +206,13 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Terminal fixture 1');
  await input.pressSequentially('/ses');
  await terminal.getByRole('tab',{name:'PowerShell',exact:true}).click();
- await terminal.getByRole('tab',{name:'OffGrid CLI',exact:true}).click();
+ await terminal.getByRole('tab',{name:'Agent',exact:true}).click();
  await expect(input).toBeFocused();await input.pressSequentially('sion');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Current session');
  assert.equal(savedSessions.size,1);assert.equal(submittedTurns,0);
  await input.pressSequentially('/exit');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Conversation saved');
- await terminal.getByRole('button',{name:'Close OffGrid CLI',exact:true}).click();
+ await terminal.getByRole('button',{name:'Close Agent',exact:true}).click();
 
  await input.pressSequentially("$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 300' -WindowStyle Hidden -PassThru; [Console]::WriteLine(('QUIT' + 'PID:' + $p.Id))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText(/QUITPID:[0-9]+/);

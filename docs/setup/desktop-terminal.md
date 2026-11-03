@@ -1,13 +1,17 @@
 # Desktop terminal
 
 On the Windows desktop, open **Terminal** from the toolbar or **View → Terminal**
-(`Ctrl+\``). Choose a local folder to open PowerShell. Chat and Knowledge do not
+(`Ctrl+\``). Choose a local folder to open the OffGrid CLI terminal. Chat and Knowledge do not
 start a shell automatically. The browser application does not expose a terminal.
 
-- **+** opens another terminal, up to four tabs.
-- **OffGrid CLI** starts the matching bundled `offgrid agent` in a selected folder,
-  using the same service address as the desktop. Existing CLI authentication and
+- **OffGrid CLI** opens a local PowerShell prompt with the matching bundled
+  `offgrid` command ready. Run `offgrid --help`, `offgrid models`, or any other
+  supported command; it does not enter Agent automatically.
+- **Agent** starts the matching bundled `offgrid agent` in the selected folder
+  and opens its existing profile chooser. Existing CLI authentication and
   workspace approval rules still apply.
+- **+** opens a plain PowerShell tab, up to four tabs total. All tabs use the
+  same configured service address without exposing credentials in command lines.
 - Terminal replaces the main Chat area while keeping the sidebar available.
   Switch back with **Chat**; your shell and unfinished command stay in their tab.
   Resize the app window to change the terminal dimensions.

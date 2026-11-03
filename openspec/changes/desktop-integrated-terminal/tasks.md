@@ -14,6 +14,8 @@
 
 - [x] 2.4 Replace the bottom dock with interchangeable main-workspace Chat/Terminal views; retain sidebar navigation and test tab switching with unfinished input, unchanged resize suppression, focus restoration, narrow/zoom layouts and existing process cleanup. Add agent CLI `/clear` with display-only semantics and plain-output regression checks. User-requested refinement, 2026-11-03; earlier dock evidence remains historical.
 
+- [x] 2.5 Split the terminal entry into OffGrid CLI (native shell with bundled CLI ready) and Agent (bundled `offgrid agent` profile selection). Keep chosen-folder, service and process-lifecycle boundaries; test both launch argv and interactive UI actions in a packaged Windows build.
+
 ## 3. Lifecycle and qualification
 
 - [x] 3.1 Integrate tab close, hide, reload and app quit with owned process-tree termination and truthful stop states; test long-running descendants, shell crash, rapid reopen and no command replay.

@@ -13,6 +13,9 @@ required setup surface would worsen the ordinary-user experience.
   without requiring WSL, and native shells on macOS/Linux.
 - Resolve the matching bundled OffGrid CLI for an explicit launch action, sharing
   the configured service through existing authenticated contracts.
+- Offer separate terminal entries: OffGrid CLI starts an interactive local shell
+  with the matching `offgrid` command ready, while Agent starts the matching
+  interactive agent CLI and its existing profile selection.
 - Own terminal child processes through close/reload/quit and surface unconfirmed
   shutdown instead of abandoning processes. Hiding a panel does not kill a job.
 - Use a trusted desktop-only IPC boundary and bounded output/backpressure;

@@ -1,5 +1,19 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const {TerminalSessions}=require('../terminal-sessions');
+const {TerminalSessions,launchCommand,launchEnvironment}=require('../terminal-sessions');
+test('OffGrid CLI opens a shell with commands ready; Agent opens profile selection',()=>{
+ const cli='C:\\OffGrid\\offgrid.exe',root='C:\\Windows';
+ const ordinary=launchCommand('cli',cli,root),agent=launchCommand('agent',cli,root);
+ assert.match(ordinary.file,/powershell\.exe$/i);
+ assert.equal(ordinary.args.includes('agent'),false);
+ assert.equal(agent.file,cli);
+ assert.deepEqual(agent.args,['agent']);
+ assert.throws(()=>launchCommand('arbitrary-command',cli,root),/invalid_kind/);
+ const env=launchEnvironment({PATH:'old-path',Path:'older-path',ELECTRON_RUN_AS_NODE:'1'},cli,'http://127.0.0.1:11611');
+ assert.equal(Object.keys(env).filter(key=>key.toLowerCase()==='path').length,1);
+ assert.ok(env.Path.startsWith('C:\\OffGrid'));
+ assert.equal(env.OFFGRID_SERVER_URL,'http://127.0.0.1:11611');
+ assert.equal(env.ELECTRON_RUN_AS_NODE,undefined);
+});
 test('returning to an unchanged terminal does not trigger a PTY redraw',()=>{
  const frames=[],manager=new TerminalSessions({});
  manager.sessions.set('owned',{state:'running',cols:80,rows:24,child:{stdin:{writableLength:0,write:line=>frames.push(JSON.parse(line))}}});

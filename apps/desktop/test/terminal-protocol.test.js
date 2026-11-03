@@ -32,6 +32,13 @@ test('unavailable runtime, malformed create and arbitrary executable never spawn
   }
   assert.deepEqual(f.calls,[]);
 });
+test('only reviewed terminal entry modes reach the supervisor',async()=>{
+  for(const kind of ['shell','cli','agent']){
+    const f=fixture(),base=await connect(f);
+    await f.bridge.dispatch(f.event,{...base,action:'create',kind,cols:80,rows:24});
+    assert.deepEqual(f.calls,[['create',{kind,cols:80,rows:24}]]);
+  }
+});
 test('input, resize, ACK and close stay scoped and bounded; Ctrl+C is input',async()=>{
   const f=fixture(),base=await connect(f);
   await f.bridge.dispatch(f.event,{...base,action:'create',kind:'shell',cols:80,rows:24});

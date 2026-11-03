@@ -31,7 +31,13 @@ Ctrl+C, selection/copy, bounded scrollback and accessible focus navigation.
 
 #### Scenario: Run the installed OffGrid CLI
 - **WHEN** the user explicitly launches the matching OffGrid CLI from the terminal
-- **THEN** interactive prompts and streaming work against the configured service without a second executor or fabricated command results
+- **THEN** a native shell opens with the matching `offgrid` command ready, including `offgrid --help`
+- **AND** interactive prompts and streaming work against the configured service without a second executor or fabricated command results
+
+#### Scenario: Open an agent terminal
+- **WHEN** the user explicitly selects Agent in the terminal
+- **THEN** the matching `offgrid agent` CLI starts its existing profile-selection flow
+- **AND** ordinary OffGrid CLI terminals remain at the shell prompt rather than entering Agent automatically
 
 ### Requirement: Desktop-only authority boundary
 Terminal input/output SHALL use a trusted desktop-owned surface. Remote pages,

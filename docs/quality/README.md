@@ -10,4 +10,8 @@ The [workspace completion audit](evidence/workspace-completion-audit-2026-11-01.
 records the latest presentation follow-up, v0.4.23 candidate and downloaded-package
 checks, retained failures, and the remaining human/native qualification gates.
 
+The [Talk and terminal entry record](evidence/talk-and-terminal-2026-11-04.md)
+separates source and packaged Windows checks from physical microphone and
+other-platform qualification.
+
 For opt-in, disposable-folder real-model checks, see the [native-agent workflow fixtures](native-agent-workflows.md) and their [dated results](evidence/native-agent-execution-2026-10-25.md).

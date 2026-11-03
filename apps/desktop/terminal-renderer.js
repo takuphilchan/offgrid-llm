@@ -14,9 +14,10 @@ function fit(tab){
 }
 function activate(focus=true){focusPending=focusPending||focus;cancelAnimationFrame(fitFrame);fitFrame=requestAnimationFrame(()=>{const focusNow=focusPending;focusPending=false;const tab=tabs.get(current);fit(tab);if(visible&&focusNow){if(tab){tab.term.refresh(0,tab.term.rows-1);tab.term.focus();}else $('start').focus();}});}
 function select(id){current=id;for(const tab of tabs.values()){tab.term.blur();tab.term.options.disableStdin=tab.id!==id;tab.pane.hidden=tab.id!==id;tab.select.setAttribute('aria-selected',String(tab.id===id));tab.select.tabIndex=tab.id===id?0:-1;}const tab=tabs.get(id);$('empty').hidden=!!tab;$('identity').textContent=tab?`${tab.title} · ${tab.cwd} · ${tab.state}`:'Local terminal · not sandboxed';if(tab)activate();}
-async function close(id){const tab=tabs.get(id);if(!tab)return;try{await request('close',{id});tab.term.dispose();tab.pane.remove();tab.button.remove();tabs.delete(id);$('new').disabled=$('agent').disabled=!ready;select([...tabs.keys()].at(-1)||'');notice('');}catch(error){if(!String(error.message).includes('terminal_close_cancelled'))showError(error);}}
+function setLaunchDisabled(disabled){for(const id of ['new','cli','agent','start'])$(id).disabled=disabled;}
+async function close(id){const tab=tabs.get(id);if(!tab)return;try{await request('close',{id});tab.term.dispose();tab.pane.remove();tab.button.remove();tabs.delete(id);setLaunchDisabled(!ready||tabs.size>=4);select([...tabs.keys()].at(-1)||'');notice('');}catch(error){if(!String(error.message).includes('terminal_close_cancelled'))showError(error);}}
 async function create(kind){
- if(creating||!ready)return;creating=true;$('new').disabled=$('agent').disabled=true;notice('Choose a local folder…');
+ if(creating||!ready)return;creating=true;setLaunchDisabled(true);notice('Choose a local folder…');
  try{
   const session=await request('create',{kind,cols:90,rows:24});if(!session){notice('');return;}
   const pane=document.createElement('div');pane.className='pane';pane.id=`pane-${session.id}`;pane.setAttribute('role','tabpanel');pane.setAttribute('aria-label',session.title);$('panes').append(pane);
@@ -36,14 +37,14 @@ async function create(kind){
    return true;
   });
   select(tab.id);await request('attach',{id:tab.id});notice('');
- }catch(error){showError(error);}finally{creating=false;$('new').disabled=$('agent').disabled=!ready||tabs.size>=4;}
+ }catch(error){showError(error);}finally{creating=false;setLaunchDisabled(!ready||tabs.size>=4);}
 }
 function openSearch(){$('find').hidden=false;$('query').focus();fit(tabs.get(current));}
 const find=previous=>{const tab=tabs.get(current);if(tab&&$('query').value)tab.search[previous?'findPrevious':'findNext']($('query').value);};
 $('query').oninput=()=>find(false);$('next').onclick=()=>find(false);$('previous').onclick=()=>find(true);
 $('query').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();find(e.shiftKey);}if(e.key==='Escape')$('find-close').click();};
 $('find-close').onclick=()=>{$('find').hidden=true;fit(tabs.get(current));tabs.get(current)?.term.focus();};
-$('search').onclick=openSearch;$('new').onclick=$('start').onclick=()=>void create('shell');$('agent').onclick=()=>void create('offgrid');
+$('search').onclick=openSearch;$('new').onclick=()=>void create('shell');$('start').onclick=$('cli').onclick=()=>void create('cli');$('agent').onclick=()=>void create('agent');
 $('hide').onclick=$('chat').onclick=()=>void request('hide').catch(showError);
 $('tabs').onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;const ids=[...tabs.keys()],index=ids.indexOf(current);const next=e.key==='Home'?0:e.key==='End'?ids.length-1:(index+(e.key==='ArrowRight'?1:-1)+ids.length)%ids.length;if(ids[next]){e.preventDefault();select(ids[next]);tabs.get(ids[next]).select.focus();}};
 new ResizeObserver(()=>activate(false)).observe($('panes'));
@@ -55,7 +56,7 @@ bridge.onEvent(event=>{
  else if(event.type==='error'){if(tab)tab.state='uncertain';notice(event.message);}
  else if(event.type==='layout'){activate(false);}
  else if(event.type==='appearance')appearance(event);
- else if(event.type==='availability'){ready=event.available;$('new').disabled=$('agent').disabled=$('start').disabled=!ready;if(ready)notice('');}
+ else if(event.type==='availability'){ready=event.available;setLaunchDisabled(!ready||tabs.size>=4);if(ready)notice('');}
  else if(event.type==='visibility'){visible=event.visible;for(const item of tabs.values()){item.term.options.disableStdin=!visible||item.id!==current;if(!visible)item.term.blur();}if(visible)activate(event.focus!==false);}
 });
-void bridge.request({protocol:1,action:'handshake'}).then(value=>{generation=value.generation;ready=value.available;visible=value.presentation?.visible===true;appearance(value.presentation||{});activate();$('new').disabled=$('agent').disabled=$('start').disabled=!ready;if(!ready)notice('The native terminal runtime is unavailable on this build. Chat and Knowledge are still available.');}).catch(showError);
+void bridge.request({protocol:1,action:'handshake'}).then(value=>{generation=value.generation;ready=value.available;visible=value.presentation?.visible===true;appearance(value.presentation||{});activate();setLaunchDisabled(!ready);if(!ready)notice('The native terminal runtime is unavailable on this build. Chat and Knowledge are still available.');}).catch(showError);
