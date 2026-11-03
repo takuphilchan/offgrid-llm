@@ -55,6 +55,15 @@ passed against disposable SQLite stores and real workspace ZIP archives.
 These checks do not establish retention of external archives, saved answers or
 rebuild staging, and do not justify closing the whole enterprise retention gate.
 
+The follow-up deletion audit exercised text, original-file and preview requests
+after expiry. It initially failed because retention-policy errors lacked
+`Cache-Control: no-store`. The handler now sets it before every response,
+including missing/revoked sources and stale-policy errors. The regression passes.
+Additional staged-index tests verify that publication cannot resurrect a deleted
+source or replace current private access and legal holds with staging defaults.
+They do not erase historical staging bytes; automatic staging retention remains
+unfinished.
+
 Windows race tests, manual language review and other-platform qualification were
 not run. The preview packaging includes these changes; installation is recorded
 separately from this source/test evidence.

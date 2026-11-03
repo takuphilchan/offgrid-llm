@@ -107,9 +107,12 @@ func TestDocumentRetentionRoutesAuthorityHoldAndExpiry(t *testing.T) {
 	if n, err := e.ExpireDocuments(time.Now(), 100); err != nil || n != 1 {
 		t.Fatal(n, err)
 	}
-	for _, path := range []string{path, "/v1/documents/source?id=retained"} {
+	for _, path := range []string{path, "/v1/documents/source?id=retained", "/v1/documents/source?id=retained&format=original", "/v1/documents/source?id=retained&format=preview", "/v1/documents/source?id=retained&format=preview&page=1"} {
 		if w = do("owner", "GET", path, ""); w.Code != 404 {
 			t.Fatal("expired source exposed", w.Code, w.Body.String())
+		}
+		if w.Header().Get("Cache-Control") != "no-store" || strings.Contains(w.Body.String(), doc.RawContent) {
+			t.Fatal("expired source denial leaked content or allowed caching", path)
 		}
 	}
 }

@@ -23,6 +23,9 @@ func writeRetentionError(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) handleDocumentRetention(w http.ResponseWriter, r *http.Request) {
+	// Denials and stale-policy responses are actor-specific too. In particular,
+	// a cached 404 must not outlive an explicit access or retention change.
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodGet && r.Method != http.MethodPut {
 		writeError(w, "Method not allowed", 405)
 		return
@@ -60,6 +63,5 @@ func (s *Server) handleDocumentRetention(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(policy)
 }

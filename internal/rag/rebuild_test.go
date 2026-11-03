@@ -86,3 +86,55 @@ func TestOfflineRebuildRefusesActiveWorkspace(t *testing.T) {
 		t.Fatalf("active workspace accepted: %v", err)
 	}
 }
+
+func TestRebuildCannotResurrectDeletedSources(t *testing.T) {
+	live := seedRebuildStore(t, filepath.Join(t.TempDir(), "live"), "removed source", []float32{1, 0})
+	stage := seedRebuildStore(t, filepath.Join(t.TempDir(), "stage"), "removed source", []float32{0, 1})
+	if err := live.DeleteDocument("one"); err != nil {
+		t.Fatal(err)
+	}
+	if err := live.publishStagedIndex(context.Background(), stage.dbPath); err == nil {
+		t.Fatal("staging resurrected a deleted document")
+	}
+	if doc, err := live.GetDocument("one"); err != nil || doc != nil {
+		t.Fatal("deleted source returned", doc, err)
+	}
+	if results, err := live.Search([]float32{0, 1}, 10, 0); err != nil || len(results) != 0 {
+		t.Fatal("staged vectors became searchable", results, err)
+	}
+}
+
+func TestRebuildPreservesCurrentAccessAndRetention(t *testing.T) {
+	live := seedRebuildStore(t, filepath.Join(t.TempDir(), "live"), "private source", []float32{1, 0})
+	stage := seedRebuildStore(t, filepath.Join(t.TempDir(), "stage"), "private source", []float32{0, 1})
+	policy, err := live.CreateCollection("owner", "Private records", []string{"reader"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := live.AssignDocumentCollection("owner", "one", policy.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := live.SetDocumentRetention("owner", "one", 1, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := live.UpdateCollection("owner", policy.ID, policy.Revision, policy.Name, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	// Staging has default shared policy and no hold. Publishing its derived
+	// index must never restore those obsolete authority/retention defaults.
+	if err := live.publishStagedIndex(context.Background(), stage.dbPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := live.DocumentAccess("reader", "one", false); !errors.Is(err, ErrCollectionUnavailable) {
+		t.Fatal("rebuild restored revoked access", err)
+	}
+	if err := live.DocumentAccess("owner", "one", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := live.DeleteDocument("one"); !errors.Is(err, ErrDocumentHeld) {
+		t.Fatal("rebuild discarded legal hold", err)
+	}
+	if n, err := live.expireDocuments(time.Now(), 100); err != nil || n != 0 {
+		t.Fatal("rebuild made held source eligible for expiry", n, err)
+	}
+}
