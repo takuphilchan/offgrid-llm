@@ -72,6 +72,21 @@ pending. Backup/restore do not upgrade schemas or change your active installatio
 The explicit rebuild command replaces only derived knowledge-index data and its
 schema metadata; it is not the transactional workspace migration.
 
+## Document retention and backups
+
+Document expiry and deletion apply to the live Knowledge library. They do not
+rewrite an earlier workspace backup or remove excerpts already saved in an
+answer. Keep a separate retention policy for private backup archives and saved
+conversations; source deletion is not secure erasure.
+
+An offline backup preserves the document retention revisions and legal holds
+present when it was taken. Restore into a new directory, never over an existing
+workspace. Review the snapshot's policies before using it: later policy changes
+are not in that older archive. When the restored service runs retention
+maintenance, expired sources without a hold are eligible for removal again;
+held sources remain protected. A restore does not merge newer holds or deletion
+decisions from the original workspace.
+
 ## Model download recovery
 
 `downloads.json` is one schema-1 snapshot containing the legacy single-file

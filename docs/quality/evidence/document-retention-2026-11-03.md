@@ -40,6 +40,21 @@ No installed user documents were deleted or assigned a new policy during tests.
   remains. This does not establish real document-answer quality or enterprise
   qualification. Broader OpenSpec collection/resource/acceptance tasks remain open.
 
+## Offline backup and concurrent deletion checks
+
+`go test ./internal/rag -run='TestRetentionAcrossOfflineBackupAndRestore|TestConcurrentRetentionAndManualDeletionFencePublication' -count=1`
+passed against disposable SQLite stores and real workspace ZIP archives.
+
+- Live expiry leaves an earlier archive byte-for-byte unchanged. Restore refuses
+  an existing workspace, preserves the snapshot's hold, and reapplies the saved
+  expiry when maintenance runs in the separate restored workspace.
+- Concurrent manual deletion and expiry remove source bytes, text chunks,
+  vectors and policy bindings. A pending duplicate import cannot republish the
+  deleted source through its stale publication lease.
+
+These checks do not establish retention of external archives, saved answers or
+rebuild staging, and do not justify closing the whole enterprise retention gate.
+
 Windows race tests, manual language review and other-platform qualification were
 not run. The preview packaging includes these changes; installation is recorded
 separately from this source/test evidence.
