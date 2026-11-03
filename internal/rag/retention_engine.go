@@ -59,13 +59,26 @@ func (v *KnowledgeView) SetRetention(id string, revision int, deleteAfter int64,
 // ExpireDocuments is service-owned maintenance, never a model tool. Only
 // explicitly saved expiry policies are eligible; migrated documents retain zero.
 func (e *Engine) ExpireDocuments(now time.Time, limit int) (int, error) {
+	return e.expireDocuments(context.Background(), now, limit)
+}
+
+func (e *Engine) expireDocuments(ctx context.Context, now time.Time, limit int) (int, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	s, ok := e.store.(*SQLiteStore)
 	if !ok || e.storageErr != nil {
 		return 0, ErrRetentionUnavailable
 	}
-	return s.expireDocuments(now, limit)
+	n, err := s.expireDocuments(now, limit)
+	if err != nil {
+		return n, err
+	}
+	cleanup, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return n, e.cleanRebuildStaging(cleanup, s)
 }
 
 // StartRetention is called by application composition, not by test constructors.
@@ -88,7 +101,7 @@ func (e *Engine) StartRetention() {
 				return
 			}
 			// Failed deletion remains stored and is retried by a later sweep.
-			n, err := e.ExpireDocuments(time.Now(), 100)
+			n, err := e.expireDocuments(ctx, time.Now(), 100)
 			status := RetentionStatus{CheckedAt: time.Now().Unix(), Deleted: n}
 			if err != nil {
 				status.ErrorCode = "document_retention_unavailable"

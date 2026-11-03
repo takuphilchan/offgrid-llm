@@ -15,6 +15,8 @@ import (
 
 // Engine is the main RAG engine that coordinates document ingestion and search
 type Engine struct {
+	rebuildRetentionCursor string // Protected by mu; restart safely rescans caches.
+
 	retention         retentionRunner
 	imports           importExecution
 	mu                sync.RWMutex

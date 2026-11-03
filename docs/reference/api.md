@@ -1091,6 +1091,13 @@ documents per sweep. An eligible source is removed transactionally with its
 original, extracted text, index and related import payloads; stale workers cannot
 republish it. A legal hold overrides expiry. Failed sweeps retry on the next tick;
 RAG status exposes `stats.retention.error_code` without private document details.
+The same maintenance pass reconciles OffGrid's offline-rebuild caches against
+the live library. It removes cached sources that were deleted or replaced, while
+preserving current sources and legal holds. Each pass visits at most eight
+pipeline caches and deletes at most 100 sources per cache; subsequent passes and
+restart continue cleanup. Invalid paths, unknown policies and failed writes
+report maintenance failure rather than bypassing protection. Independent backup
+archives are not rebuild caches and are never modified by this maintenance.
 This is logical source deletion, not secure disk erasure. Backups and saved
 answers have separate retention; deleting a source does not erase their bytes.
 

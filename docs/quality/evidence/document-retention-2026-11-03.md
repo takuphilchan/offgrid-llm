@@ -67,3 +67,32 @@ unfinished.
 Windows race tests, manual language review and other-platform qualification were
 not run. The preview packaging includes these changes; installation is recorded
 separately from this source/test evidence.
+
+## Rebuild-cache reconciliation follow-up
+
+The service maintenance worker now reconciles offline-rebuild staging with the
+live library. Deleted sources and obsolete text versions are removed using the
+same transactional deletion path, including originals, chunks, vectors and
+related import payloads. Current source versions and legal holds are retained.
+Only OffGrid's pipeline-digest cache directories are examined; redirected paths,
+unknown policies and unknown schemas fail closed. No filesystem tree is deleted
+and no independent backup is edited. Cleanup is cooperative and bounded to eight
+cache databases and 100 sources per database per sweep; restart safely rescans.
+
+Executed on disposable Windows workspaces:
+
+- `go test ./internal/rag -run 'TestRetentionRebuildStaging' -count=1 -v`
+  passed: current/held/replaced/deleted sources, vector removal, 101-source
+  batching, nine-cache rotation, restart, cancellation, unknown policy/schema,
+  and rollback/retry after injected write failure. Initial fixture construction
+  failed because it assigned names as digest-bound source IDs; using the actual
+  original-source identity corrected the fixture without relaxing validation.
+- Three symlink cases were **skipped**: this Windows account lacks symlink
+  creation privilege. They remain in the suite for capable CI hosts.
+- `go test ./internal/rag ./internal/server ./internal/sessions ./internal/storage -count=1`
+  passed in 10.468s / 57.100s / 4.979s / 3.666s respectively.
+
+This follow-up closes the automatic rebuild-cache cleanup gap recorded above,
+not the entire enterprise or document-answer qualification gate. It provides
+logical deletion, not forensic erasure. No installed user source, policy,
+backup or model was changed during these checks.

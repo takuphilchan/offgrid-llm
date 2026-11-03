@@ -2,6 +2,7 @@ package rag
 
 import (
 	"container/heap"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -361,7 +362,12 @@ func (s *SQLiteStore) DeleteDocument(id string) error {
 }
 
 func (s *SQLiteStore) deleteDocument(id string) error {
-	tx, err := s.db.Begin()
+	return s.deleteDocumentContext(context.Background(), id)
+}
+
+// Callers own the store lock or an exclusively opened maintenance store.
+func (s *SQLiteStore) deleteDocumentContext(ctx context.Context, id string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -371,14 +377,14 @@ func (s *SQLiteStore) deleteDocument(id string) error {
 	}
 	// Invalidate pending duplicates before deletion, so old extraction cannot
 	// recreate the source after deletion commits.
-	_, err = tx.Exec(`UPDATE document_imports SET state='deleted',content=NULL,extraction_json='',attempt=attempt+1,updated_at=? WHERE document_id=? OR (source_sha256 IN (SELECT source_sha256 FROM document_originals WHERE document_id=?) AND id IN (SELECT i.import_id FROM import_collections i JOIN document_collections d ON i.collection_id=d.source_namespace WHERE d.document_id=?))`, time.Now().UTC(), id, id, id)
+	_, err = tx.ExecContext(ctx, `UPDATE document_imports SET state='deleted',content=NULL,extraction_json='',attempt=attempt+1,updated_at=? WHERE document_id=? OR (source_sha256 IN (SELECT source_sha256 FROM document_originals WHERE document_id=?) AND id IN (SELECT i.import_id FROM import_collections i JOIN document_collections d ON i.collection_id=d.source_namespace WHERE d.document_id=?))`, time.Now().UTC(), id, id, id)
 	if err != nil {
 		return err
 	}
-	if _, err = tx.Exec("DELETE FROM documents WHERE id = ?", id); err != nil {
+	if _, err = tx.ExecContext(ctx, "DELETE FROM documents WHERE id = ?", id); err != nil {
 		return err
 	}
-	if _, err = tx.Exec("DELETE FROM document_retention WHERE document_id = ?", id); err != nil {
+	if _, err = tx.ExecContext(ctx, "DELETE FROM document_retention WHERE document_id = ?", id); err != nil {
 		return err
 	}
 	return tx.Commit()
