@@ -8,6 +8,24 @@ or integrity with runtime compatibility or qualification.
 
 ## ADDED Requirements
 
+### Requirement: Packaged native speech setup
+Native desktop releases SHALL include pinned Whisper/Piper runtime assets and
+licenses, verified during packaging. Runtime discovery SHALL work independently
+of the current directory, PATH and model storage. Speech models SHALL remain
+separate, and unavailable explicit selections MUST NOT silently fall back.
+
+#### Scenario: Installed model without user PATH configuration
+- **WHEN** a compatible recognition or voice model is installed and the matching desktop runtime is present
+- **THEN** the service discovers the application-owned runtime without terminal setup or Linux
+
+#### Scenario: Missing speech model or runtime
+- **WHEN** a required speech component is absent
+- **THEN** the UI identifies the missing component and provides relevant setup guidance without claiming speech is ready
+
+#### Scenario: Speech release verification
+- **WHEN** a platform is advertised as supporting desktop speech
+- **THEN** isolated known-recording transcription, valid generated audio and browser playback/cancellation evidence are required in addition to packaging tests
+
 ### Requirement: Explicit package capabilities
 The model service SHALL validate versioned data-only manifests declaring immutable
 identity, architecture, runtime requirement, capabilities, languages, licenses,
@@ -311,6 +329,26 @@ permission or opt into playback.
 #### Scenario: Concurrent typing and generation
 - **WHEN** a user edits the draft while transcription runs or sends a typed request while recording
 - **THEN** dictation preserves current draft edits and recording can still be stopped
+
+#### Scenario: End dictation after a pause
+- **WHEN** a user speaks and then pauses while recording
+- **THEN** capture stops, the pinned recognition model transcribes once, and the editable draft receives the text without submitting it
+- **AND** manual Stop and a bounded recording limit remain available if speech is not reliably detected
+
+### Requirement: Explicit interruptible Talk session
+Talk in ordinary Chat SHALL require a visible user start action and ready local
+ASR and TTS. A completed utterance SHALL create at most one Chat request. Only a
+committed answer SHALL be spoken as final and natural playback completion MAY
+restart listening. Agent work and external effects SHALL NOT silently enter Talk.
+
+#### Scenario: Continue after a spoken reply
+- **WHEN** a Talk utterance is transcribed, its Chat turn commits, and response playback naturally ends
+- **THEN** the next listening cycle starts without another click and without replaying the prior request
+
+#### Scenario: Interrupt or fail at any phase
+- **WHEN** the user stops Talk, selects Speak again during playback, changes conversation, or a capture/transcription/request/playback fails
+- **THEN** owned work is stopped or fenced, no uncertain request is resent, and any transcript remains available for review
+- **AND** microphone capture is inactive during speaker playback so the system cannot submit its own voice
 
 ### Requirement: Inline acquisition without arbitrary variant selection
 Speech repository review SHALL show download conditions in the selected result

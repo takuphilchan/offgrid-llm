@@ -9,6 +9,12 @@ the bundled Windows service, macOS its bundled macOS service, and Linux its Linu
 service. Ubuntu, WSL and Docker are not desktop prerequisites. They apply only
 when you deliberately connect to a separately managed service running there.
 
+The updated native desktop also packages Whisper/Piper speech executables and
+their dependencies. Speech model weights are separate, explicit downloads.
+Other speech architectures require their own supported runtime; see
+[voice setup](../guides/voice.md). A connected external service uses its own
+runtimes, not binaries installed on the desktop client's machine.
+
 The native inference worker must also have its platform dependencies. Windows
 runtime bundles keep the required Microsoft C++ and OpenMP DLLs beside
 `llama-server.exe`; users do not need Visual Studio or Linux to run that bundle.

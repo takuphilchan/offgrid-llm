@@ -1,0 +1,20 @@
+OffGrid native speech runtime distribution
+
+Whisper.cpp v1.7.5 (MIT), source revision:
+https://github.com/ggml-org/whisper.cpp/tree/51c6961c7b64b406833f4b6a4a20e67142f69225
+Includes ggml and the vendored CLI audio decoder; source notices remain in that archive.
+
+Piper 2023.11.14-2 (MIT), unmodified upstream binary distribution:
+https://github.com/rhasspy/piper/releases/tag/2023.11.14-2
+Source: https://github.com/rhasspy/piper/tree/38917ffd8c0e219c6581d73e07b30ef1d572fce1
+Piper phonemize (MIT):
+https://github.com/rhasspy/piper-phonemize/tree/fccd4f335aa68ac0b72600822f34d84363daa2bf
+eSpeak NG (GPL version 3 or later):
+https://github.com/rhasspy/espeak-ng/tree/0f65aa301e0d6bae5e172cc74197d32a6182200f
+ONNX Runtime 1.14.1 (MIT): https://github.com/microsoft/onnxruntime/tree/v1.14.1
+fmt 10.0.0: https://github.com/fmtlib/fmt/tree/10.0.0
+spdlog 1.12.0: https://github.com/gabime/spdlog/tree/v1.12.0
+
+The licenses directory contains the upstream license texts. Runtime archives
+are pinned in engine.lock.json. No speech model weights are included; each
+downloaded voice/model has its own package license and source identity.

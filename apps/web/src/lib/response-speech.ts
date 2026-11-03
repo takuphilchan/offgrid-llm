@@ -30,12 +30,13 @@ export class ResponseSpeech {
   private consumed = 0;
   private busy = false;
   private finished = false;
+  private completionEmitted = false;
   private timer: ReturnType<typeof setTimeout>;
   private first = true;
   private ready = false;
   private selection?: SpeechSelection;
   private pending?: Promise<{ blob?: Blob; error?: unknown }>;
-  constructor(private state: (state: SpeechState) => void, private error: (message: string) => void, private preferences: VoicePreferences = defaultVoicePreferences, private locale: LocaleCode = 'en') {
+  constructor(private state: (state: SpeechState) => void, private error: (message: string) => void, private preferences: VoicePreferences = defaultVoicePreferences, private locale: LocaleCode = 'en', private completed?: () => void) {
     this.timer = setTimeout(() => this.fail(speechFeedback(this.locale).timeout), 300_000);
     this.state('waiting');
   }
@@ -92,7 +93,14 @@ export class ResponseSpeech {
     try {
       while (!this.controller.signal.aborted) {
         this.prepareNext();
-        if (!this.pending) { this.state(this.finished ? 'idle' : 'waiting'); if (this.finished) clearTimeout(this.timer); break; }
+        if (!this.pending) {
+          this.state(this.finished ? 'idle' : 'waiting');
+          if (this.finished) {
+            clearTimeout(this.timer);
+            if (!this.completionEmitted) { this.completionEmitted = true; this.completed?.(); }
+          }
+          break;
+        }
         this.state('preparing');
         const result = await this.pending;
         this.pending = undefined;

@@ -392,6 +392,7 @@ func (s *Server) handleAudioStatus(w http.ResponseWriter, r *http.Request) {
 				entry := status[kind].(map[string]interface{})
 				if profile.Available && entry["available"] != true {
 					entry["available"] = true
+					entry["runtime"] = true
 					entry["model"] = profile.ID
 					entry["adapter"] = profile.Adapter
 					delete(entry, "issue")

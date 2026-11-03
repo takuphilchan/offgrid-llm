@@ -9,6 +9,7 @@ import { selectSpeech, SpeechSetupRequired, useVoicePreferences } from '../lib/v
 import { VoiceSettings } from './VoiceSettings';
 import { UtilityPopover } from './UtilityPopover';
 import { voiceSettingsText } from '../i18n/voice-settings';
+import { observeSpeechPause } from '../lib/speech-pause';
 
 async function toWav(blob: Blob): Promise<Blob> {
   const AudioContextCtor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -35,27 +36,30 @@ async function toWav(blob: Blob): Promise<Blob> {
   } finally { await context.close(); }
 }
 
-type RecordingWork = { controller: AbortController; stream?: MediaStream; recorder?: MediaRecorder; timer?: number };
+type RecordingWork = { controller: AbortController; stream?: MediaStream; recorder?: MediaRecorder; timer?: number; stopPause?: () => void };
 type CapturePhase = 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing';
 
-export function VoiceInputButton({ onTranscript, contextKey, disabled = false, compact = false }: { onTranscript: (text: string) => void; contextKey: string; disabled?: boolean; compact?: boolean }) {
+export function VoiceInputButton({ onTranscript, onFailure, onPhaseChange, autoStart = false, contextKey, disabled = false, compact = false }: { onTranscript: (text: string) => void; onFailure?: (message: string) => void; onPhaseChange?: (phase: 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing') => void; autoStart?: boolean; contextKey: string; disabled?: boolean; compact?: boolean }) {
   const { preferences } = useVoicePreferences();
   const { locale } = useI18n();
   const copy = voiceText(locale);
   const feedback = operationFeedback(locale);
   const [phase, setPhase] = useState<CapturePhase>('idle');
+  useEffect(() => onPhaseChange?.(phase), [phase, onPhaseChange]);
   const [error, setError] = useState('');
   const [setupRequired, setSetupRequired] = useState(false);
   const current = useRef<RecordingWork | null>(null);
   // Use the current draft callback, but never deliver a result to another composer.
-  const target = useRef({ contextKey, onTranscript });
-  target.current = { contextKey, onTranscript };
+  const target = useRef({ contextKey, onTranscript, onFailure });
+  target.current = { contextKey, onTranscript, onFailure };
+  const fail = (message: string) => { setError(message); target.current.onFailure?.(message); };
   const cancel = () => {
     const work = current.current;
     current.current = null;
     if (!work) return;
     work.controller.abort();
     clearTimeout(work.timer);
+    work.stopPause?.();
     if (work.recorder?.state === 'recording') work.recorder.stop();
     work.stream?.getTracks().forEach(track => track.stop());
   };
@@ -67,6 +71,7 @@ export function VoiceInputButton({ onTranscript, contextKey, disabled = false, c
     const work = current.current;
     if (work?.recorder?.state === 'recording') {
       clearTimeout(work.timer);
+      work.stopPause?.();
       setPhase('transcribing');
       work.recorder.stop();
       work.stream?.getTracks().forEach(track => track.stop());
@@ -78,7 +83,7 @@ export function VoiceInputButton({ onTranscript, contextKey, disabled = false, c
     setError('');
     setSetupRequired(false);
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      setError(copy.unsupported);
+      fail(copy.unsupported);
       return;
     }
     const work: RecordingWork = { controller: new AbortController() };
@@ -103,37 +108,41 @@ export function VoiceInputButton({ onTranscript, contextKey, disabled = false, c
       next.ondataavailable = event => {
         if (!active() || !event.data.size) return;
         bytes += event.data.size;
-        if (bytes > 12 * 1024 * 1024) { cancel(); setPhase('idle'); setError(copy.failed); return; }
+        if (bytes > 12 * 1024 * 1024) { cancel(); setPhase('idle'); fail(copy.failed); return; }
         chunks.push(event.data);
       };
-      next.onerror = () => { if (active()) { cancel(); setError(copy.failed); setPhase('idle'); } };
+      next.onerror = () => { if (active()) { cancel(); fail(copy.failed); setPhase('idle'); } };
       next.onstop = async () => {
         clearTimeout(work.timer);
+        work.stopPause?.();
         work.stream?.getTracks().forEach(track => track.stop());
         if (!active()) return;
         setPhase('transcribing');
         try {
           const blob = new Blob(chunks, { type: next.mimeType || 'audio/webm' });
-          if (!blob.size) return;
+          if (!blob.size) { if (autoStart) fail(copy.failed); return; }
           const wav = await toWav(blob);
           if (!active()) return;
           const result = await api.transcribeAudio(wav, 'offgrid-recording.wav', work.controller.signal, selection);
           if (active() && result.text.trim()) target.current.onTranscript(result.text.trim());
+          else if (active() && autoStart) fail(copy.failed);
         } catch (reason) {
-          if (active()) setError(reason instanceof Error ? reason.message : copy.failed);
+          if (active()) fail(reason instanceof Error ? reason.message : copy.failed);
         } finally { if (active()) { current.current = null; setPhase('idle'); } }
       };
       next.start(1000);
+      work.stopPause = observeSpeechPause(input, () => { if (active()) stop(); });
       work.timer = window.setTimeout(() => { if (active()) stop(); }, 120_000);
       setPhase('recording');
     } catch (reason) {
       if (!active()) return;
       cancel(); setPhase('idle');
       setSetupRequired(reason instanceof SpeechSetupRequired);
-      if ((reason as DOMException)?.name === 'NotAllowedError') setError(copy.permission);
-      else setError(reason instanceof Error ? reason.message : copy.failed);
+      if ((reason as DOMException)?.name === 'NotAllowedError') fail(copy.permission);
+      else fail(reason instanceof Error ? reason.message : copy.failed);
     }
   };
+  useEffect(() => { if (autoStart) void start(); }, [autoStart, contextKey]);
 
   const label = phase === 'recording' ? copy.stop : phase === 'transcribing' ? feedback.cancelTranscription : phase === 'idle' ? copy.record : feedback.cancelVoice;
   const status = phase === 'checking' ? feedback.checkingVoice : phase === 'permission' ? feedback.permissionPending : phase === 'transcribing' ? copy.transcribing : '';

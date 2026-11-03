@@ -9,7 +9,8 @@ model below the Chat/Agents prompt. **Speak responses** stays beside Chat's
 microphone and Send/Stop controls; changing voice settings does not start capture
 or playback. This placement requires a matching rebuilt renderer, not merely a
 service restart. Released builds may retain the earlier composer layout.
-This guide does not describe the planned hands-free Talk mode.
+The optional Talk control supports a spoken Chat exchange; ordinary dictation
+still leaves text in the editor for review.
 
 ## Before you start
 
@@ -24,6 +25,12 @@ Three model roles are independent:
 Dictation needs ASR; playback needs TTS. A speech model does not replace the
 language model and should not appear in its selector. You can use dictation
 without playback, or playback without a microphone.
+
+On Windows, a microphone permission error can come from the device-wide privacy
+setting even when desktop-app access is enabled. In **Settings → Privacy &
+security → Microphone**, check both **Microphone access** and **Let desktop apps
+access your microphone**, then retry. OffGrid does not change these settings for
+you. Downloading a different speech model cannot resolve an OS permission denial.
 
 Check which service owns your workspace before installing anything. A model in
 your Windows profile is not automatically installed in a Docker volume. See
@@ -50,15 +57,19 @@ There is no need to collect individual files for a supported online package.
 Folder import is an advanced offline option. See [download recovery](model-discovery.md#speech-models-from-hugging-face)
 for cancellation, resume, repair and removal.
 
-**A model download does not install its executable runtime.** Standard release
-packages do not yet bundle every speech dependency. If the runtime is missing,
-re-downloading the weights will not fix it. Check the installed package/profile
-and the connected service's runtime before retrying.
+**A model download does not install its executable runtime.** The updated native
+desktop build packages Whisper and Piper runtimes; recognition and voice model
+weights remain separate downloads. Older installations and external services may
+still lack those runtimes. Re-downloading weights will not fix a missing runtime:
+update the matching desktop/service build. Qwen and other architectures have
+different runtime requirements; a Hugging Face listing alone does not establish
+support. Voice settings shows missing components and opens the matching model
+category through **Set up recognition** or **Set up spoken responses**.
 
 | Model family | Execution in this implementation |
 | --- | --- |
-| Whisper | Requires compatible whisper.cpp runtime and weights |
-| Piper | Requires compatible Piper runtime, ONNX weights and configuration |
+| Whisper | Native desktop runtime packaged; requires compatible Whisper weights |
+| Piper | Native desktop runtime packaged; requires ONNX voice weights and configuration |
 | Qwen3-ASR | Requires the reviewed local Qwen ASR runtime and complete package |
 | Qwen3-TTS CustomVoice | Supported read-aloud adapter; requires its local runtime; real synthesis is not qualified by the recorded local checks |
 | Qwen3-TTS Base / VoiceDesign | Not supported for response read-aloud; Base requires reference audio, and OffGrid does not introduce voice cloning |
@@ -82,8 +93,9 @@ selections. Escape restores keyboard focus to **Voice settings**.
 1. Open a Chat conversation or a new Agent task.
 2. Choose **Use microphone**. OffGrid checks ASR availability before requesting
    microphone permission. Allow the browser/OS permission when prompted.
-3. Speak a short message, then choose **Stop recording**. Capture automatically
-   stops after two minutes; use shorter recordings while testing.
+3. Speak a short message and pause. OffGrid ends capture after it detects speech
+   followed by silence. Choose **Stop recording** if pause detection cannot
+   distinguish speech from background noise. Capture also ends after two minutes.
 4. Wait for transcription. The text is appended to your current draft, preserving
    typed edits made while recognition was running.
 5. Review names, numbers and intent. Edit the draft, then choose **Send** in Chat
@@ -102,6 +114,26 @@ labels are localized in all nine interface languages.
 Changing composer context or leaving the page cancels pending
 capture/transcription and releases microphone tracks, including late permission
 results. This does not cancel an already-submitted agent task.
+
+## Talk in Chat
+
+Choose **Talk** in an ordinary Chat conversation with an empty draft. OffGrid
+checks the selected local recognition and speech models, then starts listening.
+When you finish speaking and pause, it transcribes and sends that utterance once.
+The answer is shown in Chat and spoken after the turn commits. When playback
+finishes, listening resumes. The microphone does not capture while the speaker
+is playing, preventing the answer from becoming another request.
+
+Choose **Speak again** to interrupt playback and return to listening.
+**Stop Talk** ends the voice session; if a Chat turn is in progress, it also
+requests cancellation. Typing in the composer or switching the Chat model ends
+Talk without discarding your draft. A failed or uncertain turn pauses the loop
+for review and is never sent again automatically. Talk is session-only and does
+not grant agent, computer or network authority.
+
+Noise, microphone gain and browser audio restrictions can prevent pause detection
+or playback. Manual Stop and ordinary text Chat remain available. Isolated
+browser checks do not qualify every physical microphone, speaker or language.
 
 ## Listen to Chat answers
 

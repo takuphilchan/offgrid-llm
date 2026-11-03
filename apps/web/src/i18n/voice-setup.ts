@@ -12,3 +12,19 @@ const copy: Record<LocaleCode, string> = {
   zu: 'Amafayela emodeli nenjini yezwi kwehlukene. Ukulanda imodeli futhi akulungisi injini engekho. Khetha imodeli etholakalayo noma ucele umphathi wesevisi alungise injini yayo.',
 };
 export const voiceSetupText = (locale: LocaleCode) => copy[locale];
+
+const actions: Record<LocaleCode, readonly [string, string, string]> = {
+  en: ['No model is installed for this speech feature.', 'Set up recognition', 'Set up spoken responses'],
+  fr: ['Aucun modèle installé pour cette fonction vocale.', 'Configurer la reconnaissance', 'Configurer les réponses vocales'],
+  es: ['No hay un modelo instalado para esta función de voz.', 'Configurar reconocimiento', 'Configurar respuestas habladas'],
+  de: ['Für diese Sprachfunktion ist kein Modell installiert.', 'Spracherkennung einrichten', 'Gesprochene Antworten einrichten'],
+  ar: ['لا يوجد نموذج مثبت لهذه الميزة الصوتية.', 'إعداد التعرف على الكلام', 'إعداد الردود الصوتية'],
+  sw: ['Hakuna modeli iliyosakinishwa kwa kipengele hiki cha sauti.', 'Sanidi utambuzi wa sauti', 'Sanidi majibu ya sauti'],
+  sn: ['Hapana modhi yakaiswa yechinhu ichi chezwi.', 'Gadzira kuziva mazwi', 'Gadzira mhinduro dzinotaurwa'],
+  nd: ['Akulamodeli efakelwe lo msebenzi wezwi.', 'Lungisa ukubona amazwi', 'Lungisa izimpendulo ezikhulunywayo'],
+  zu: ['Ayikho imodeli efakelwe lo msebenzi wezwi.', 'Lungisa ukubona amazwi', 'Lungisa izimpendulo ezikhulunywayo'],
+};
+export function voiceSetupActions(locale: LocaleCode) {
+  const [missing, recognition, synthesis] = actions[locale];
+  return { missing, recognition, synthesis };
+}

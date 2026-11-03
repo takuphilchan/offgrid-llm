@@ -10,7 +10,7 @@ export function SpeechModelChoice({ label, profiles, value, disabled, onChange }
   const { locale } = useI18n(), copy = voiceSettingsText(locale), runtime = speechRuntimeText(locale);
   const automatic = profiles.find(profile => profile.available);
   const selected = value ? profiles.find(profile => `${profile.id}@${profile.revision}` === value) : automatic;
-  const readiness = selected ? selected.available ? runtime[selected.smoke_tested ? 'tested' : 'available'] : selected.issue || copy.unavailable : value ? undefined : copy.notReady;
+  const readiness = selected ? selected.available ? runtime[selected.smoke_tested ? 'tested' : 'available'] : selected.issue || copy.unavailable : value ? undefined : profiles.find(profile => profile.issue)?.issue || copy.notReady;
   return <ModelChoice label={label} value={value} disabled={disabled} onChange={onChange} placeholder={copy.automatic} missing={copy.selectedUnavailable}
     summary={readiness}
     options={[

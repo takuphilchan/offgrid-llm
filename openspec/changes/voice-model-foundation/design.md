@@ -213,6 +213,22 @@ not implement their execution, activate a microphone, or mark them qualified.
 
 ## Migration Plan
 
+### Native desktop runtime setup (authorized 2026-11-03)
+
+The desktop installer must carry platform-specific pinned Whisper/Piper runtime
+assets, including dependent libraries and license notices. Build preparation and
+packaged verification reject missing or altered required assets. Model packages
+remain data-only; no model repository supplies executable code. App-local runtime
+discovery is independent of the service data directory and current working folder.
+Explicit paths and established legacy installs remain compatible. Runtime files
+are not copied into or confused with model packages.
+
+The UI distinguishes missing runtime from missing speech model and offers the
+existing model-management path for model setup. An unavailable explicit selection
+never falls back silently. No microphone capture, new weights or automatic playback
+is implied by setup. Tests use isolated known audio and owned processes; actual
+platform speech evidence is recorded separately from packaging/fixture checks.
+
 ### Authorized corrective runtime increment (2026-10-05)
 
 The user requested fixes to response playback and architecture-independent speech
@@ -248,7 +264,25 @@ text backlog; overload stops speech visibly without blocking text generation.
 Generation failure, cancellation, selection changes, navigation and manual Stop
 discard pending audio immediately. Provisional speech is labelled, not announced
 as verified task completion. This is chunked response speech, not native audio
-token streaming or complete Talk mode.
+token streaming. The later approved Talk extension uses it for spoken replies.
+
+### Approved Talk interaction
+
+Keep normal dictation and Talk separate. A local level detector observes the
+current microphone stream and ends capture after speech followed by a bounded
+pause; it never sends normal dictation. Manual Stop and the recording deadline
+remain available when level detection cannot establish an utterance.
+
+Talk is explicit and session-only in ordinary Chat. Preflight the selected ASR
+and TTS packages before opening the microphone. Capture one utterance, pin its
+transcript and send one request through the existing Chat path and request ID.
+Speak the committed answer through ResponseSpeech; only natural playback
+completion starts another capture. Do not listen while the speaker is active,
+to avoid echo loops. The visible Speak again action can interrupt playback and
+return to listening. Errors, unavailable runtimes, changed context and unknown
+request outcomes stop the loop with the draft/evidence retained. Stop aborts the
+owned capture, transcription, generation and audio without replay. No new
+background audio permission or automatic voice setting is persisted.
 
 ### Acquisition migration
 

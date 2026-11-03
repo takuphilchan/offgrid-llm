@@ -5,6 +5,7 @@ const {spawn}=require('node:child_process');
 const {createManifest,runtimeFiles}=require('../computer/pack.cjs');
 
 module.exports=async function prepareComputer(context) {
+  await require('./speech-pack.cjs').prepare(context);
   await require('./terminal-pack.cjs').prepare(context);
   await require('./document-pack.cjs').prepare(context);
   await require('./execution-pack.cjs').prepare(context);

@@ -160,63 +160,6 @@ func NewEngine(cfg Config) (*Engine, error) {
 	return e, nil
 }
 
-// findWhisper looks for whisper binary
-func (e *Engine) findWhisper() string {
-	names := []string{"whisper", "whisper-cli", "whisper-cpp", "main"}
-	if runtime.GOOS == "windows" {
-		names = []string{"whisper.exe", "whisper-cli.exe", "whisper-cpp.exe", "main.exe"}
-	}
-
-	// Check in whisper directory
-	for _, name := range names {
-		path := filepath.Join(e.whisperDir, name)
-		if _, err := os.Stat(path); err == nil {
-			return path
-		}
-	}
-
-	// Check in PATH
-	for _, name := range names {
-		if path, err := exec.LookPath(name); err == nil {
-			return path
-		}
-	}
-
-	return ""
-}
-
-// findPiper looks for piper binary
-func (e *Engine) findPiper() string {
-	names := []string{"piper", "piper-tts"}
-	if runtime.GOOS == "windows" {
-		names = []string{"piper.exe", "piper-tts.exe"}
-	}
-
-	// Check in piper directory and subdirectory (release extracts to piper/)
-	searchDirs := []string{
-		e.piperDir,
-		filepath.Join(e.piperDir, "piper"),
-	}
-
-	for _, dir := range searchDirs {
-		for _, name := range names {
-			path := filepath.Join(dir, name)
-			if info, err := os.Stat(path); err == nil && !info.IsDir() {
-				return path
-			}
-		}
-	}
-
-	// Check in PATH
-	for _, name := range names {
-		if path, err := exec.LookPath(name); err == nil {
-			return path
-		}
-	}
-
-	return ""
-}
-
 // HasWhisperBinary checks if whisper binary is available
 func (e *Engine) HasWhisperBinary() bool {
 	return e.whisperPath != ""
@@ -671,14 +614,14 @@ func (e *Engine) Status() map[string]interface{} {
 			"available":    e.IsASRAvailable(),
 			"whisper_path": e.whisperPath,
 			"models":       whisperModels,
-			"runtime":      e.runtime.ASRModelDir != "" && e.worker != nil,
+			"runtime":      e.HasWhisperBinary() || (e.runtime.ASRModelDir != "" && e.worker != nil),
 			"model_dir":    e.runtime.ASRModelDir,
 		},
 		"tts": map[string]interface{}{
 			"available":  e.IsTTSAvailable(),
 			"piper_path": e.piperPath,
 			"voices":     len(voices),
-			"runtime":    e.runtime.TTSModelDir != "" && e.worker != nil,
+			"runtime":    e.HasPiperBinary() || (e.runtime.TTSModelDir != "" && e.worker != nil),
 			"model_dir":  e.runtime.TTSModelDir,
 		},
 		"data_dir": e.dataDir,

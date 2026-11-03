@@ -94,8 +94,10 @@ test('voice controls and recovery messages have a complete locale-specific copy 
 test('unavailable automatic speech is explained without expanding a model chooser',async({page})=>{
  const {state,audio}=await fixture(page);audio.profiles=[];
  await page.getByRole('button',{name:'Response settings',exact:true}).click();
- await expect(page.locator('.model-choice-summary')).toHaveCount(2);
- await expect(page.locator('.model-choice-summary').first()).toContainText('No compatible speech model is ready');
+ await expect(page.locator('.voice-settings-panel section')).toHaveCount(2);
+ await expect(page.locator('.voice-settings-panel')).toContainText('No model is installed for this speech feature.');
+ await expect(page.locator('.voice-settings-panel').getByRole('link',{name:'Set up recognition'})).toHaveAttribute('href','#/models');
+ await expect(page.locator('.voice-settings-panel').getByRole('link',{name:'Set up spoken responses'})).toHaveAttribute('href','#/models');
  await expect(page.getByRole('radiogroup')).toHaveCount(0);
  expect(state.writes).toEqual([]);
 });

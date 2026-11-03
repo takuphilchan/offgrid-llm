@@ -23,10 +23,13 @@ import { clearSubmittedDraft, draftKey, readDraft, useDraft, writeDraft } from '
 import { SessionResponseError, type ChatMetrics, type ChatPhase } from '../../api/session-stream';
 import { writePreference } from '../../lib/preferences';
 import { ReadAloudButton, VoiceInputButton } from '../../components/VoiceInputButton';
-import { ResponseSpeech, stopSpeechEvent, type SpeechState } from '../../lib/response-speech';
+import { ResponseSpeech, stopSpeechEvent } from '../../lib/response-speech';
 import { voiceText } from '../../i18n/voice';
+import { talkText } from '../../i18n/talk';
+import { useTalkIdentity, useTalkMode } from './useTalkMode';
+import { useChatSpeech } from './useChatSpeech';
 import { ComposerSpeech } from './ComposerSpeech';
-import { selectSpeech, useVoicePreferences } from '../../lib/voice-preferences';
+import { useVoicePreferences } from '../../lib/voice-preferences';
 import { operationFeedback } from '../../i18n/operation-feedback';
 import { ScopedNotice } from '../../components/WorkspacePresentation';
 import { UtilityPopover } from '../../components/UtilityPopover';
@@ -70,37 +73,16 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   const refinement = workspaceRefinement[locale];
   const [showLatest, setShowLatest] = useState(false);
   const voiceCopy = voiceText(locale);
+  const talkCopy = talkText(locale);
   const feedback = operationFeedback(locale);
   const handoff = useSetupHandoff();
   const draftScope = useDraftScope();
   const work = useWorkActions();
   const { preferences: voicePreferences } = useVoicePreferences();
-  const [speakResponses, setSpeakResponses] = useState(false);
-  const [speechState, setSpeechState] = useState<SpeechState>('idle');
-  const [speechError, setSpeechError] = useState('');
-  const [checkingSpeech, setCheckingSpeech] = useState(false);
+  const talk = useTalkMode();
+  const { state: talkState, setState: setTalkState, cycle: talkCycle, active: talkActive, revision: talkRevision } = talk;
+  const { speakResponses, speechState, setSpeechState, speechError, setSpeechError, checkingSpeech, speech, stopSpeech, toggleSpeech } = useChatSpeech(voicePreferences, locale);
   const [responseSettingsOpen, setResponseSettingsOpen] = useState(false);
-  const speechCheck = useRef<AbortController | null>(null);
-  const speech = useRef<ResponseSpeech | null>(null);
-  const stopSpeech = () => { speech.current?.stop(); speech.current = null; };
-  useEffect(() => {
-    window.addEventListener(stopSpeechEvent, stopSpeech);
-    return () => { window.removeEventListener(stopSpeechEvent, stopSpeech); speechCheck.current?.abort(); stopSpeech(); };
-  }, []);
-  const toggleSpeech = async (enabled: boolean) => {
-    speechCheck.current?.abort();
-    setSpeechError('');
-    if (!enabled) { setSpeakResponses(false); stopSpeech(); return; }
-    const check = new AbortController(); speechCheck.current = check;
-    setCheckingSpeech(true);
-    try {
-      const status = await api.audioStatus(check.signal);
-      if (check.signal.aborted) return;
-      selectSpeech(status, voicePreferences, 'tts', locale);
-      setSpeakResponses(true);
-    } catch (reason) { if (!check.signal.aborted) setSpeechError(reason instanceof Error ? reason.message : voiceCopy.speechUnavailable); }
-    finally { if (!check.signal.aborted) setCheckingSpeech(false); }
-  };
   const sessionKey = draftKey(draftScope, 'active-chat');
   const preferencesKey = `offgrid.chat.preferences:${encodeURIComponent(scope)}`;
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -260,6 +242,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     } finally { if (controller.current === watch) { controller.current = null; if (mounted.current) setBusy(false); } }
   };
   const activate = (session?: ChatSession) => {
+    talk.reset();
     stopSpeech(); setSpeechError('');
     followOutput.current = true;
     const revision = ++selectionRevision.current;
@@ -372,15 +355,17 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     const revision=selectionRevision.current;
     return createFileConversation({scope:draftScope,prompt:draft.trim(),model:effectiveModel,draft:composerDraftKey,images:imageDraft,valid:()=>mounted.current&&revision===selectionRevision.current,accept:created=>{select(created.name);setActiveName(created.name);transferSources(created.name);writeDraft(sessionKey,created.name);setSessions(current=>[created,...current]);}});
   });
-  const send = async () => {
+  const send = async (voicePrompt?: string, fromTalk = false): Promise<boolean> => {
     setErrorAction('request');
-    const prompt = draft.trim();
-    if ((!prompt&&!imageDraft.images.length&&!fileDraft.files.length) || !effectiveModel || unavailableModel || busy || checkingTurn || missingSession || controller.current || deleteItems || imageDraft.processing || fileDraft.processing) return;
-    if(fileDraft.blocker){setError(fileDraft.blocker);return;}
-    if(imageDraft.blocker){setError(imageDraft.blocker,imageDraft.blockerCode);return;}
-    if (selectedSources.length && (!scopedReady || linkedUnsettled)) { setError(linkedUnsettled ? scopeCopy.active : scopeCopy.unsupported); return; }
+    if (!fromTalk && talkActive.current) { talkActive.current = false; talkRevision.current++; setTalkState('off'); }
+    const prompt = (voicePrompt ?? draft).trim();
+    if (fromTalk && !talkActive.current) return false;
+    if ((!prompt&&!imageDraft.images.length&&!fileDraft.files.length) || !effectiveModel || unavailableModel || busy || checkingTurn || missingSession || controller.current || deleteItems || imageDraft.processing || fileDraft.processing) return false;
+    if(fileDraft.blocker){setError(fileDraft.blocker);return false;}
+    if(imageDraft.blocker){setError(imageDraft.blocker,imageDraft.blockerCode);return false;}
+    if (selectedSources.length && (!scopedReady || linkedUnsettled)) { setError(linkedUnsettled ? scopeCopy.active : scopeCopy.unsupported); return false; }
     if (linkedUnsettled) {
-      if (!linkedRun || !canSendInstruction) { reviewLinkedWork(); return; }
+      if (!linkedRun || !canSendInstruction) { reviewLinkedWork(); return false; }
       setBusy(true); setError('');
       const submitted = draft, key = draftKey(draftScope, 'chat-agent-instruction', linkedRun.run_id);
       const revision = selectionRevision.current;
@@ -395,19 +380,30 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         if (sameView()) refreshJob();
       } catch (reason) { if (sameView()) { setError(reason instanceof Error ? reason.message : text.common.error); refreshJob(); } }
       finally { if (sameView()) setBusy(false); }
-      return;
+      return false;
     }
-    if (agent && executionWorkspace && !executionReady) { setError(executionWorkspaceText[locale].unavailable); return; }
+    if (agent && executionWorkspace && !executionReady) { setError(executionWorkspaceText[locale].unavailable); return false; }
     const revision = selectionRevision.current;
     const currentView = () => mounted.current && revision === selectionRevision.current;
     const requestController = new AbortController();
     const requestID = crypto.randomUUID();
     window.dispatchEvent(new Event(stopSpeechEvent));
     setSpeechError('');
-    if (speakResponses && !agent) speech.current = new ResponseSpeech(setSpeechState, setSpeechError, voicePreferences, locale);
+    const talkTurnRevision = talkRevision.current;
+    if ((speakResponses || fromTalk) && !agent) speech.current = new ResponseSpeech(state => {
+      setSpeechState(state);
+      if (fromTalk && talkActive.current && talkRevision.current === talkTurnRevision && (state === 'preparing' || state === 'playing')) setTalkState('speaking');
+    }, message => {
+      setSpeechError(message);
+      if (fromTalk && talkActive.current && talkRevision.current === talkTurnRevision) { talkActive.current = false; setTalkState('needs_attention'); }
+    }, voicePreferences, locale, fromTalk ? () => {
+      window.setTimeout(() => {
+        if (talkActive.current && talkRevision.current === talkTurnRevision && mounted.current) { setTalkState('listening'); talk.nextCycle(); }
+      }, 0);
+    } : undefined);
     const responseSpeech = speech.current;
     controller.current = requestController;
-    const submitted = draft;
+    const submitted = voicePrompt ?? draft;
     const submittedImages=imageDraft.value;
     const images=imageDraft.images;
     const submittedFiles=fileDraft.value,attachments=fileDraft.references;
@@ -421,7 +417,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     try {
       if (!sessionName) {
         const created = await api.createSession(newSessionName(prompt||images[0]?.name||imageDraft.copy.images), effectiveModel, requestController.signal);
-        if (!currentView()) return;
+        if (!currentView()) return false;
         sessionName = created.name;
         writeDraft(draftKey(draftScope, 'chat', sessionName), readDraft(composerDraftKey));
         writeDraft(composerDraftKey, '');
@@ -442,14 +438,14 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         activeTurn.current = { name: sessionName, id: intent.request_id };
         work.rememberChat(sessionName, 'pending');
         const accepted = await api.submitAgentTurn(sessionName, { ...intent.payload, request_id: intent.request_id }, requestController.signal);
-        if (!currentView()) return;
+        if (!currentView()) return false;
         clearSubmittedDraft(intentKey, JSON.stringify(intent));
         clearSubmittedDraft(draftKey(draftScope, 'chat', sessionName), submitted);
         setConversation(current => [...current, { role: 'user', content: prompt }]);
         setLinkedTurn(accepted.turn); setRecoveryNeeded(false); setStreamed('');
         submittedJob.current = accepted.job.run_id;
         spokenJob.current = accepted.job.run_id;
-        return;
+        return false;
       }
       setLinkedTurn(null); setRecoveryNeeded(false);
       setConversation(current => [...current, { role: 'user', content: prompt,images,attachments }]);
@@ -460,13 +456,15 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         if (event.type === 'phase') setPhase(event.phase);
         else {
           partial += event.delta;
-          responseSpeech?.append(event.delta);
+          // Talk reads only the committed answer; provisional stream text can
+          // still change or fail and must not become a spoken final answer.
+          if (!fromTalk) responseSpeech?.append(event.delta);
           // Bound React/Markdown updates during fast GPU decoding.
           if (!flush) flush = setTimeout(() => { if (currentView()) setStreamed(partial); flush = undefined; }, 40);
         }
       }, requestController.signal, requestID, selectedSources.length ? selectedSources.map(source => source.id) : undefined, images.length?images:undefined, attachments.length?attachments:undefined);
       clearTimeout(flush); flush = undefined;
-      if (!currentView()) return;
+      if (!currentView()) return false;
       setStreamed(''); setMetrics(result.metrics); setLimited(result.finish_reason === 'length');
       clearSubmittedDraft(draftKey(draftScope, 'chat', sessionName), submitted);
       clearSubmittedDraft(draftKey(draftScope,'chat-images',sessionName),submittedImages);
@@ -476,21 +474,24 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       responseSpeech?.finish(messageText(result.message.content));
       setSessions(current => [result.session, ...current.filter(item => item.name !== result.session.name)]);
       if (onboardingPending && result.message.role === 'assistant' && messageText(result.message.content).trim()) onFirstResponse();
+      return true;
     } catch (reason) {
       responseSpeech?.stop();
+      if (fromTalk && talkRevision.current === talkTurnRevision) { talkActive.current = false; setTalkState('needs_attention'); }
       clearTimeout(flush); flush = undefined;
-      if (!currentView()) return;
+      if (!currentView()) return false;
       setStreamed(partial); setInterrupted(true);
       setError(requestController.signal.aborted ? text.chatStreaming.cancelled : reason instanceof Error ? reason.message : text.common.error, reason instanceof SessionResponseError ? reason.code : reason instanceof APIError ? reason.data?.error?.code : '');
       if (sessionName) {
         try {
           const stored = await api.session(sessionName);
-          if (!currentView()) return;
+          if (!currentView()) return false;
           setConversation(stored.messages);
           if (stored.turn) work.rememberChat(sessionName, stored.turn.status);
           setSessions(current => [stored, ...current.filter(item => item.name !== stored.name)]);
         } catch { /* The primary error is more useful. */ }
       }
+      return false;
     } finally {
       clearTimeout(flush);
       if (currentView()) setBusy(false);
@@ -505,6 +506,15 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     try { await api.cancelTurn(target.name, target.id); watch?.abort(); }
     catch (reason) { if (mounted.current && revision === selectionRevision.current) setError(reason instanceof Error ? reason.message : text.common.error); }
   };
+  const stopTalk = (cancelTurn = false) => {
+    talk.reset();
+    stopSpeech();
+    if (cancelTurn && controller.current) void stop();
+  };
+  const startTalk = () => talk.start({ eligible: !agent && !!effectiveModel && !unavailableModel && !busy && !loading && !checkingTurn && !linkedUnsettled && !missingSession, hasDraft: !!(draft.trim() || imageDraft.images.length || fileDraft.files.length), preferences: voicePreferences, locale, unavailable: voiceCopy.speechUnavailable, draftError: talkCopy.draft, setError: setSpeechError });
+  const onTalkTranscript = (value: string) => talk.acceptTranscript(value, composerDraftKey, transcript => send(transcript, true));
+  const speakAgain = () => talk.speakAgain(busy, stopSpeech);
+  useTalkIdentity(`${effectiveModel}:${agentKey}`, () => { if (talkActive.current || talkState === 'checking') stopTalk(true); });
   const copyMessage = async (key: string, content: string) => {
     setErrorAction(null);
     await copyChatMessage(key,content,setCopiedMessage,setError,text.common.error);
@@ -554,7 +564,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       {showLatest && <button type="button" className="secondary-button chat-latest" onClick={() => { userScrollUntil.current = 0; followOutput.current = true; const pane = conversationPane.current; pane?.focus({ preventScroll: true }); setShowLatest(false); requestAnimationFrame(() => { pane?.scrollTo({ top: pane.scrollHeight, behavior: 'instant' }); }); }}>{refinement.latest}</button>}
       {workBlocked && <ChatWorkBlocker run={linkedRun} review={reviewLinkedWork} refresh={refreshJob} startNew={startNew} />}
       <div className="composer composer-compact" onPaste={imageDraft.paste} onDragOver={imageDraft.dragOver} onDrop={event=>{const files=[...event.dataTransfer.files];if(fileServiceReady&&files.some(file=>!file.type.startsWith('image/'))){event.preventDefault();void fileDraft.add(files);}else imageDraft.drop(event);}}>
-        <div className="composer-input">{fileDraft.preview}{imageDraft.preview}<textarea ref={composerInput} value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => submitComposerInput(event, send)} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} disabled={loading || checkingTurn} /><small className="sr-only">{text.chat.enterHint}</small>{fileDraft.recovery}{imageDraft.blocker&&<p className="image-input-notice" role="status">{imageDraft.blocker}{imageDraft.blockerCode==='vision_projector_unavailable'&&<button type="button" className="text-button" onClick={()=>{handoff.begin({origin:'#/chat',destination:'models',draft:{kind:'chat',id:activeName}});onOpenModels();}}>{text.onboarding.chooseModel}</button>}</p>}</div>
+        <div className="composer-input">{fileDraft.preview}{imageDraft.preview}<textarea ref={composerInput} value={draft} onChange={event => { if (talkActive.current) stopTalk(false); setDraft(event.target.value); }} onKeyDown={event => submitComposerInput(event, async () => { await send(); })} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} disabled={loading || checkingTurn} /><small className="sr-only">{text.chat.enterHint}</small>{fileDraft.recovery}{imageDraft.blocker&&<p className="image-input-notice" role="status">{imageDraft.blocker}{imageDraft.blockerCode==='vision_projector_unavailable'&&<button type="button" className="text-button" onClick={()=>{handoff.begin({origin:'#/chat',destination:'models',draft:{kind:'chat',id:activeName}});onOpenModels();}}>{text.onboarding.chooseModel}</button>}</p>}</div>
         {!agent && knowledge && knowledgeState !== 'ready' && <ScopedNotice action={<button className="secondary-button" onClick={() => void refreshKnowledge()}>{feedback.retryKnowledge}</button>}>{knowledgeState === 'checking' ? feedback.checkingKnowledge : knowledgeState === 'failed' ? feedback.knowledgeCheckFailed : interaction[locale].knowledgeUnavailable}</ScopedNotice>}
         {selectedSources.length > 0 ? <div className="composer-source-scope"><strong>{scopeCopy.selected}</strong><span>{selectedSources.map(source => source.name).join(' · ')}</span><button type="button" className="icon-button" disabled={busy} onClick={clearSources} aria-label={scopeCopy.clear} title={scopeCopy.clear}><Icon name="close" size={16} /></button>{!scopedReady && <p role="status">{scopeCopy.unsupported}</p>}</div> : !agent && knowledge && <p className="composer-retrieval-scope">{workspaceManagement(locale).retrievalScope}</p>}
         <div className="composer-footer">
@@ -571,9 +581,14 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
             {responseSettingsOpen && <ComposerSpeech presentation="settings" enabled={speakResponses} checking={checkingSpeech} busy={busy} state={speechState} error={speechError} toggle={toggleSpeech} stop={stopSpeech} />}
           </UtilityPopover>
           </div>
-      <div className="composer-actions"><VoiceInputButton compact contextKey={composerDraftKey} disabled={loading || checkingTurn || busy} onTranscript={value => setDraft(draft ? `${draft} ${value}` : value)} /><button aria-label={busy ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} disabled={busy ? false : loading || checkingTurn || missingSession || (!draft.trim()&&!imageDraft.images.length&&!fileDraft.files.length) || fileDraft.processing || !!fileDraft.blocker || imageDraft.processing || !!imageDraft.blocker || !effectiveModel || unavailableModel || (linkedUnsettled && !canSendInstruction)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Icon name="close" size={18} /> : <><span className="sr-only">{canSendInstruction ? jobCopy.update : text.chat.send}</span><Icon name="send" size={18} /></>}</button></div>
+      <div className="composer-actions">
+        {talkState === 'listening' || talkState === 'transcribing' ? <VoiceInputButton key={`talk-${talkCycle}`} compact autoStart contextKey={composerDraftKey} disabled={loading || checkingTurn || busy} onTranscript={onTalkTranscript} onFailure={message => talk.fail(message, setSpeechError)} onPhaseChange={talk.capturePhase} /> : talkState === 'off' || talkState === 'needs_attention' ? <VoiceInputButton compact contextKey={composerDraftKey} disabled={loading || checkingTurn || busy} onTranscript={value => { const previous = readDraft(composerDraftKey); setDraft(previous ? `${previous} ${value}` : value); }} /> : null}
+        {!agent && <span className="talk-controls"><button type="button" className="talk-control" aria-pressed={talkState !== 'off' && talkState !== 'needs_attention'} disabled={talkState === 'off' && (loading || checkingTurn || busy || !effectiveModel || unavailableModel || linkedUnsettled)} onClick={talkState === 'off' || talkState === 'needs_attention' ? () => void startTalk() : () => stopTalk(true)}>{talkState === 'off' || talkState === 'needs_attention' ? talkCopy.start : talkCopy.stop}</button>{talkState === 'speaking' && !busy && <button type="button" className="talk-control" onClick={speakAgain}>{talkCopy.again}</button>}</span>}
+        <button aria-label={busy ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} disabled={busy ? false : loading || checkingTurn || missingSession || (!draft.trim()&&!imageDraft.images.length&&!fileDraft.files.length) || fileDraft.processing || !!fileDraft.blocker || imageDraft.processing || !!imageDraft.blocker || !effectiveModel || unavailableModel || (linkedUnsettled && !canSendInstruction)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Icon name="close" size={18} /> : <><span className="sr-only">{canSendInstruction ? jobCopy.update : text.chat.send}</span><Icon name="send" size={18} /></>}</button>
+      </div>
         </div>
         <ComposerSpeech presentation="status" enabled={speakResponses} checking={checkingSpeech} busy={busy} state={speechState} error={speechError} toggle={toggleSpeech} stop={stopSpeech} />
+        {talkState !== 'off' && <div className="talk-status" role="status">{talkState === 'checking' ? talkCopy.checking : talkState === 'listening' ? talkCopy.listening : talkState === 'transcribing' ? talkCopy.transcribing : talkState === 'thinking' ? talkCopy.thinking : talkState === 'speaking' ? talkCopy.speaking : talkCopy.attention}</div>}
         {agent && <div className="composer-active-context"><span className="composer-active-agent"><Icon name="agents" size={15}/>{agent.settings.name}</span>
           {(!executionRequestable || executionWorkspace) && <ExecutionWorkspace value={executionWorkspace} onChange={setExecutionWorkspace} disabled={busy || linkedUnsettled} onReady={setExecutionReady} ceiling={restrictions.execution??agent.settings.execution} />}
           {agent.settings.computer && restrictions.computer !== false && <TaskAccessPolicy value={computerPolicy} onChange={setComputerPolicy} disabled={busy} scope="desktop" workspace={permissions.workspace} />}

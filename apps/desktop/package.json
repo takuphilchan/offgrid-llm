@@ -79,6 +79,10 @@
     ],
     "extraResources": [
       {
+        "from": "../../build/speech-runtime/${os}-${arch}",
+        "to": "speech-runtime"
+      },
+      {
         "from": "../../build/document-runtime/${os}-${arch}",
         "to": "bin",
         "filter": [

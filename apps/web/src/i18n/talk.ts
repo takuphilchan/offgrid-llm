@@ -1,0 +1,16 @@
+import type { LocaleCode } from './index';
+
+type TalkCopy = { start: string; stop: string; checking: string; listening: string; transcribing: string; thinking: string; speaking: string; again: string; attention: string; draft: string };
+
+const copy: Record<LocaleCode, TalkCopy> = {
+  en: { start: 'Talk', stop: 'Stop Talk', checking: 'Checking voice', listening: 'Listening', transcribing: 'Transcribing', thinking: 'Working on your reply', speaking: 'Speaking', again: 'Speak again', attention: 'Talk paused. Review your draft and the latest turn.', draft: 'Send or clear your current draft before starting Talk.' },
+  fr: { start: 'Parler', stop: 'Arrêter', checking: 'Vérification de la voix', listening: 'Écoute', transcribing: 'Transcription', thinking: 'Préparation de la réponse', speaking: 'Lecture', again: 'Parler à nouveau', attention: 'Conversation en pause. Vérifiez le brouillon et le dernier échange.', draft: 'Envoyez ou effacez le brouillon avant de commencer.' },
+  es: { start: 'Hablar', stop: 'Detener', checking: 'Comprobando voz', listening: 'Escuchando', transcribing: 'Transcribiendo', thinking: 'Preparando respuesta', speaking: 'Hablando', again: 'Hablar de nuevo', attention: 'Conversación pausada. Revisa el borrador y el último turno.', draft: 'Envía o borra el borrador antes de empezar.' },
+  de: { start: 'Sprechen', stop: 'Beenden', checking: 'Sprache prüfen', listening: 'Hört zu', transcribing: 'Transkribieren', thinking: 'Antwort wird vorbereitet', speaking: 'Spricht', again: 'Erneut sprechen', attention: 'Gespräch pausiert. Entwurf und letzten Austausch prüfen.', draft: 'Entwurf vor dem Start senden oder löschen.' },
+  ar: { start: 'تحدث', stop: 'إيقاف الحديث', checking: 'فحص الصوت', listening: 'استماع', transcribing: 'نسخ الكلام', thinking: 'إعداد الرد', speaking: 'تحدث', again: 'تحدث مجددًا', attention: 'توقف الحديث. راجع المسودة وآخر رد.', draft: 'أرسل المسودة أو امسحها قبل البدء.' },
+  sw: { start: 'Zungumza', stop: 'Simamisha', checking: 'Kukagua sauti', listening: 'Kusikiliza', transcribing: 'Kunakili', thinking: 'Kuandaa jibu', speaking: 'Kuzungumza', again: 'Zungumza tena', attention: 'Mazungumzo yamesimama. Kagua rasimu na jibu la mwisho.', draft: 'Tuma au futa rasimu kabla ya kuanza.' },
+  sn: { start: 'Taura', stop: 'Misa kutaura', checking: 'Kuongorora izwi', listening: 'Kuteerera', transcribing: 'Kunyora izwi', thinking: 'Kugadzira mhinduro', speaking: 'Kutaura', again: 'Taura zvakare', attention: 'Hurukuro yamira. Tarisa gwaro nemhinduro yekupedzisira.', draft: 'Tumira kana bvisa gwaro usati watanga.' },
+  nd: { start: 'Khuluma', stop: 'Misa ukukhuluma', checking: 'Ukuhlola ilizwi', listening: 'Ukulalela', transcribing: 'Ukubhala ilizwi', thinking: 'Ukulungisa impendulo', speaking: 'Ukukhuluma', again: 'Khuluma futhi', attention: 'Ingxoxo imisiwe. Hlola umbhalo lempendulo yokucina.', draft: 'Thumela kumbe sula umbhalo ungaqalisi.' },
+  zu: { start: 'Khuluma', stop: 'Misa ukukhuluma', checking: 'Ukuhlola izwi', listening: 'Ukulalela', transcribing: 'Ukubhala izwi', thinking: 'Ukulungisa impendulo', speaking: 'Ukukhuluma', again: 'Khuluma futhi', attention: 'Ingxoxo imisiwe. Hlola okusalungiswa nempendulo yakamuva.', draft: 'Thumela noma sula okusalungiswa ngaphambi kokuqala.' },
+};
+export const talkText = (locale: LocaleCode) => copy[locale];

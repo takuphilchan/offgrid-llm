@@ -32,6 +32,18 @@ the intended model-management experience and does not complete this change.
 
 ## User-visible acceptance
 
+### Approved Talk-mode extension (2026-11-03)
+
+- Dictation detects a spoken utterance followed by a pause, stops capture and
+  leaves the transcription editable in the current draft. Manual Stop remains.
+- A separately started Talk session transcribes each completed utterance, sends
+  it once, speaks a committed reply and then listens for the next turn. Stop and
+  a visible Speak again action interrupt capture, generation or playback.
+- A failed or uncertain turn pauses Talk with the draft intact; no background
+  retry, hidden microphone permission, echo-triggered send or model change.
+- Verify capture cleanup, silence fallback, Stop during every phase and no replay
+  in isolated browser tests. Physical microphone quality remains unqualified.
+
 - A user can find a supported speech model through Models, review its variant,
   complete download size, license, and readiness, then choose Download without
   leaving OffGrid, collecting local files, or using a terminal.
@@ -46,10 +58,12 @@ the intended model-management experience and does not complete this change.
 
 ## Boundaries and subsequent stages
 
-This change completes model acquisition and package management, not runtime pack
+The original acquisition stage did not include runtime pack
 installation, real ASR/TTS execution, dictation/read-aloud, Talk, agent voice,
 recording/Knowledge workflows, or language/hardware qualification. Those remain
 required, ordered stages of the approved Voice program, not waived requirements.
+The authorized Talk extension above adds Chat interaction on top of the later
+speech-runtime work; it does not waive acquisition or qualification gates.
 Offline pack distribution and legacy speech-runtime migration also remain in that
 program; compatible local-folder import is retained here as an advanced fallback.
 
@@ -84,6 +98,17 @@ authorized, never implied by specs.
 None; this repository has no pre-existing OpenSpec capability artifacts.
 
 ## Impact
+
+### Native desktop speech setup (authorized 2026-11-03)
+
+Extend the earlier runtime correction to package pinned Whisper/Piper executables
+and their dependencies with native desktop builds. Discover these application-owned
+runtimes without requiring PATH edits or Linux. Keep model weights separate and
+explain missing recognition/voice models in the shared UI. Preserve explicit model
+selections and installed data; recover existing assets before requesting any new
+model download. Verify known-recording transcription, generated audio and browser
+playback/cancellation in isolated state. This supersedes the runtime-pack exclusion
+above only for this bounded Whisper/Piper increment, not all speech architectures.
 
 Model registry and package service, Hugging Face discovery, shared download state
 and recovery, API/client contracts, React Models and selectors, CLI/Python clients,

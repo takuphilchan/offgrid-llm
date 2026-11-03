@@ -85,3 +85,21 @@ synthesis is not claimed as tested. See the reliability plan for measurements.
 - [x] 11.2 Add shared browser-scoped ASR/TTS and declared-voice selectors beside the composer; pin the selection per recording/answer, reject unavailable explicit profiles, and forward validated managed Piper speaker IDs. Verify browser selection/chunk tests and Linux executable adapter fixtures, without claiming model quality.
 - [x] 11.3 Remove duplicate package-review markup, show download conditions inline, retain meaningful multi-variant selection, query Hub keyword results instead of Qwen shortcuts, and stop interpreting parameter counts as bytes. Update acquisition regressions and documentation; verify Go and isolated acquisition tests.
 - [x] 11.4 Complete integrated regression checks, document release blockers and unrun installed-platform tests in the reliability plan. Do not treat this correction as full Voice qualification or deploy/commit without a separate request.
+
+## 12. Native desktop speech setup (authorized 2026-11-03)
+
+- [x] 12.1 Package pinned Whisper/Piper runtime assets and notices, verify complete payloads during desktop preparation/verification, and add app-local discovery without changing explicit selections or legacy storage. Run audio/server, desktop packaging and source checks.
+- [x] 12.2 Explain missing runtime versus missing recognition/voice models in shared voice setup and link to the existing model-management flow. Cover empty, unavailable, explicit and ready selections with UI checks and browser tests.
+- [x] 12.3 Recover existing speech assets where available, then verify known-recording recognition, valid synthesized audio, playback and cancellation in isolated state. Record platform evidence and limitations before release; new model downloads require separate approval, and no user microphone recording is authorized.
+
+Section 12 Windows fixture and packaged-service evidence is recorded in
+[native speech setup](../../../docs/quality/evidence/native-speech-2026-11-03.md).
+Physical microphone capture remains unverified: the user's machine-wide Windows
+microphone setting denies access. This is separate from the passing known-recording
+test and does not close the broader voice qualification tasks.
+
+## 13. Seamless dictation and explicit Talk (authorized 2026-11-03)
+
+- [x] 13.1 Add bounded pause detection to existing microphone capture with editable dictation, manual Stop and honest no-speech/unsupported-device fallback. Test delayed permission, context change, concurrent typing, silence and cancellation.
+- [x] 13.2 Add session-only Talk state in ordinary Chat: ready-package preflight, one transcribed utterance per request, committed response speech, natural-completion relisten, visible Speak again/Stop and no echo capture. Verify drafts and request IDs remain stable under errors and interruptions.
+- [x] 13.3 Run focused web/desktop checks, isolated browser ASR/TTS fixtures and OpenSpec validation. Record physical microphone and hardware qualification separately; do not present fixture behavior as release-wide speech readiness.

@@ -1,6 +1,18 @@
 import { chooseModel } from './helpers/model-choice';
 import { expect, test, type Page } from '@playwright/test';
 import { installChatJob, openAgentChat } from './fixtures/chat-job';
+import { SpeechPauseGate } from '../src/lib/speech-pause';
+
+test('pause detector ignores silence and a short spike, then ends a spoken utterance', () => {
+  const gate = new SpeechPauseGate();
+  const ended = [
+    gate.sample(0.004, 10), gate.sample(0.004, 1500),
+    gate.sample(0.07, 1600), gate.sample(0.004, 1700),
+    gate.sample(0.07, 2000), gate.sample(0.07, 2250),
+    gate.sample(0.003, 2800), gate.sample(0.003, 3400)
+  ];
+  expect(ended).toEqual([false, false, false, false, false, false, false, true]);
+});
 
 async function fixture(page: Page, content = 'Hello. This is a saved response.') {
   await page.addInitScript(() => {
@@ -19,7 +31,7 @@ async function fixture(page: Page, content = 'Hello. This is a saved response.')
           (window as any).finishText = (fail = false) => {
             if (!fail) {
               const message = { role: 'assistant', content: output };
-              emit({ type: 'done', message, session: { name: 'Speech test', messages: [message] }, metrics: { first_text_ms: 100, context_window: 8192 } });
+              emit({ type: 'done', message, session: { name: (window as any).voiceSessionName || 'Speech test', messages: [message] }, metrics: { first_text_ms: 100, context_window: 8192 } });
             }
             controller.close();
           };
@@ -243,6 +255,22 @@ test('missing speech runtime offers settings without capture or a model download
   expect(await page.evaluate(() => (window as any).micTest.requests)).toBe(0);
 });
 
+test('empty voice setup identifies missing models and opens the matching discovery category', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.route('**/api/v2/models**', route => route.fulfill({ json: { models: [], repositories: [], operations: [] } }));
+  await page.route('**/v1/catalog', route => route.fulfill({ json: { models: [] } }));
+  await page.route('**/v1/audio/status', route => route.fulfill({ json: { asr: { available: false }, tts: { available: false }, profiles: [] } }));
+  await page.goto('/ui/#/chat');
+  const mic = page.locator('.voice-input-control[data-capture-phase]');
+  await mic.getByRole('button', { name: 'Use microphone', exact: true }).click();
+  const panel = page.locator('.voice-settings-panel:visible');
+  await expect(panel.getByText('No model is installed for this speech feature.')).toHaveCount(2);
+  await expect(panel.getByRole('link', { name: 'Set up recognition', exact: true })).toBeVisible();
+  await panel.getByRole('link', { name: 'Set up spoken responses', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Speech generation', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => (window as any).micTest.permissions)).toBe(0);
+});
+
 test('microphone readiness and permission waiting have distinct cancellable feedback', async ({ page }) => {
   await microphoneFixture(page);
   let release!: () => void;
@@ -306,6 +334,130 @@ test('dictation retains concurrent draft edits and sends the selected recognitio
   await page.evaluate(() => (window as any).micTest.finish());
   await expect(page.locator('.composer textarea')).toHaveValue('original plus typed edits spoken text');
   expect(await page.evaluate(() => (window as any).micTest.model)).toBe('asr-b@r2');
+});
+
+test('dictation ends after speech and a pause without sending the editable draft', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.evaluate(() => {
+    (window as any).micLevel = 0.06;
+    (window as any).AudioContext = class {
+      createMediaStreamSource() { return { connect() {} }; }
+      createAnalyser() { return { fftSize: 1024, getFloatTimeDomainData(samples: Float32Array) { samples.fill((window as any).micLevel); } }; }
+      close() { return Promise.resolve(); }
+    };
+  });
+  await page.getByRole('button', { name: 'Use microphone', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.starts)).toBe(1);
+  await page.waitForTimeout(350);
+  await page.evaluate(() => { (window as any).micLevel = 0; });
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.requests), { timeout: 4000 }).toBe(1);
+  await page.evaluate(() => (window as any).micTest.finish());
+  await expect(page.locator('.composer textarea')).toHaveValue('spoken text');
+  await expect(page.locator('.message.user')).toHaveCount(0);
+});
+
+test('Talk sends one completed utterance, does not capture speaker output, and relistens after playback', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.getByRole('button', { name: 'Talk', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.starts)).toBe(1);
+  await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.finish());
+  await expect.poll(() => page.evaluate(() => typeof (window as any).emitText)).toBe('function');
+  await page.evaluate(() => { (window as any).emitText('Hello there.'); (window as any).finishText(); });
+  await expect.poll(() => page.evaluate(() => (window as any).speechRequests.length)).toBe(1);
+  expect(await page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).finishSpeech(false));
+  await expect.poll(() => page.evaluate(() => Boolean((window as any).player?.onended))).toBe(true);
+  await page.evaluate(() => (window as any).player.onended());
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(2);
+  await page.getByRole('button', { name: 'Stop Talk', exact: true }).click();
+  await page.evaluate(() => (window as any).micTest.allow());
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.stops)).toBeGreaterThanOrEqual(2);
+  expect(await page.evaluate(() => (window as any).micTest.starts)).toBe(1);
+});
+
+test('Talk creates one new conversation and keeps the transcribed turn in it', async ({ page }) => {
+  await microphoneFixture(page);
+  let createdName = '';
+  let creates = 0;
+  await page.route('**/v1/sessions', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    creates++;
+    const request = route.request().postDataJSON();
+    createdName = request.name;
+    await route.fulfill({ json: { name: createdName, model_id: request.model_id, messages: [], updated_at: new Date().toISOString() } });
+  });
+  await page.getByRole('button', { name: 'New chat', exact: true }).click();
+  await page.getByRole('button', { name: 'Talk', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.finish());
+  await expect.poll(() => createdName).not.toBe('');
+  await expect.poll(() => page.evaluate(() => typeof (window as any).finishText)).toBe('function');
+  await page.evaluate(name => { (window as any).voiceSessionName = name; (window as any).emitText('A saved reply.'); (window as any).finishText(); }, createdName);
+  await expect.poll(() => page.evaluate(() => (window as any).speechRequests.length)).toBe(1);
+  expect(creates).toBe(1);
+  await expect(page.locator('.composer textarea')).toHaveValue('');
+  await page.getByRole('button', { name: 'Stop Talk', exact: true }).click();
+});
+
+test('Stop Talk during generation aborts the turn and never starts speech or another capture', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.getByRole('button', { name: 'Talk', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.finish());
+  await expect.poll(() => page.evaluate(() => typeof (window as any).finishText)).toBe('function');
+  await page.getByRole('button', { name: 'Stop Talk', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Talk', exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  expect(await page.evaluate(() => (window as any).speechRequests.length)).toBe(0);
+  await expect(page.locator('.composer textarea')).toHaveValue('spoken text');
+});
+
+test('Talk failure preserves its transcript and does not submit another request', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.getByRole('button', { name: 'Talk', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.finish());
+  await expect.poll(() => page.evaluate(() => typeof (window as any).finishText)).toBe('function');
+  await page.evaluate(() => (window as any).finishText(true));
+  await expect(page.locator('.talk-status')).toContainText('Talk paused');
+  await expect(page.locator('.composer textarea')).toHaveValue('spoken text');
+  expect(await page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+});
+
+test('typing exits Talk without losing text or submitting microphone audio', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.getByRole('button', { name: 'Talk', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.starts)).toBe(1);
+  await page.locator('.composer textarea').fill('Typed instead');
+  await expect(page.locator('.composer textarea')).toHaveValue('Typed instead');
+  await expect(page.getByRole('button', { name: 'Talk', exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.stops)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => (window as any).micTest.requests)).toBe(0);
+});
+
+test('Talk control remains usable in a narrow Chat composer', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.setViewportSize({ width: 390, height: 740 });
+  await expect(page.getByRole('button', { name: 'Talk', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use microphone', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('Stop recording remains usable while a text response is generating', async ({ page }) => {

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "whisper_revision": "51c6961c7b64b406833f4b6a4a20e67142f69225",
+  "whisper_sha256": "37d66f2a4dd6d3d13d9ffcebd376b9e865a1737df61d3618ba79de7a9ac0f81e",
+  "piper_revision": "2023.11.14-2",
+  "targets": {
+    "win32-x64": {"archive":"piper_windows_amd64.zip","sha256":"f3c58906402b24f3a96d92145f58acba6d86c9b5db896d207f78dc80811efcea"},
+    "linux-x64": {"archive":"piper_linux_x86_64.tar.gz","sha256":"a50cb45f355b7af1f6d758c1b360717877ba0a398cc8cbe6d2a7a3a26e225992"},
+    "darwin-x64": {"archive":"piper_macos_x64.tar.gz","sha256":"ced85c0a3df13945b1e623b878a48fdc2854d5c485b4b67f62857cf551deaf8b"},
+    "darwin-arm64": {"archive":"piper_macos_aarch64.tar.gz","sha256":"6b1eb03b3735946cb35216e063e7eebcc33a6bbf5dd96ec0217959bf1cdcb0cc"}
+  }
+}

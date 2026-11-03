@@ -11,6 +11,10 @@
   .composer.composer-compact .composer-footer { display: contents; }
   .composer.composer-compact .composer-footer > .composer-utilities { grid-column: 1; grid-row: 1; flex-wrap: nowrap; gap: 2px; }
   .composer.composer-compact .composer-footer > .composer-actions { grid-column: 3; grid-row: 1; display: flex; flex-wrap: nowrap; gap: 4px; margin: 0; }
+  .composer.composer-compact .composer-actions > .talk-controls { display: flex; gap: 4px; }
+  .composer.composer-compact .composer-actions .talk-control { width: auto; min-width: 56px; min-height: 40px; border-radius: 999px; padding-inline: 12px; background: var(--surface-2); color: var(--text); font-size: var(--type-meta); white-space: nowrap; }
+  .composer.composer-compact .composer-actions .talk-control[aria-pressed=true] { color: var(--text); }
+  .composer.composer-compact > .talk-status { grid-column: 1 / -1; padding-inline: 8px; color: var(--muted); font-size: var(--type-meta); }
   /* Files need a full-width reading area, not the narrow single-line input slot. */
   .composer.composer-compact:has(.file-attachments, .document-scan) > .composer-input { grid-column: 1 / -1; grid-row: 1; padding-inline: 6px; }
   .composer.composer-compact:has(.file-attachments, .document-scan) .composer-footer > .composer-utilities,
@@ -48,6 +52,7 @@
     .composer.composer-compact .composer-actions > button,
     .composer.composer-compact .voice-input-compact > button,
     .composer.composer-compact .composer-voice-recovery > button { width: 44px; height: 44px; min-height: 44px; }
+    .composer.composer-compact .composer-actions .talk-control { min-height: 44px; }
   }
   .composer .composer-context { gap: 6px 10px; }
   /* One editor boundary; nested selectors use labels and hover/focus rather
