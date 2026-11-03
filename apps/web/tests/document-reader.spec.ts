@@ -35,6 +35,21 @@ for(const width of [390,1280]) test(`ready attachment never collapses into a ver
  await page.screenshot({path:test.info().outputPath(`attachment-${width}.png`)});
 });
 
+test('active attachment announcement stays accessible without floating beside the file',async({page})=>{
+ await page.setViewportSize({width:700,height:1000});
+ await setup(page,'en','dark',{...file,status:'ready',error_code:'',coverage:'native_text_only'} as typeof file);
+ await page.locator('.composer-actions').getByRole('button',{name:'Send',exact:true}).click();
+ const attachment=page.locator('.saved-file-attachments');
+ const announcement=attachment.getByRole('status');
+ await expect(announcement).toHaveText(documentReader('en').attached);
+ await expect(announcement).toHaveCSS('clip-path','inset(50%)');
+ const bounds=await announcement.boundingBox();
+ expect(bounds!.width).toBeLessThanOrEqual(1);expect(bounds!.height).toBeLessThanOrEqual(1);
+ await expect(attachment.getByRole('button',{name:file.name})).toBeVisible();
+ await expect(attachment).toContainText('Images and figures have not been interpreted');
+ await page.screenshot({path:test.info().outputPath('active-document-attachment.png')});
+});
+
 test('context recovery opens response settings without another submission',async({page})=>{
  await setup(page,'en','dark',{...file,status:'ready',error_code:''});
  await page.evaluate(()=>{
