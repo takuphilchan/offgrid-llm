@@ -74,9 +74,14 @@ async function launch() {
   app.context().setDefaultTimeout(15000);
   app.context().setDefaultNavigationTimeout(15000);
   const page = await app.firstWindow();
-  // Electron's process handshake can finish before its first BrowserWindow.
-  // Wait for that window before sizing it, including after a saved-state restart.
-  if (process.argv.includes('--narrow')) await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].setSize(960,720));
+  // The runner's virtual display may start below the navigation breakpoint.
+  // Exercise the expanded-sidebar case at an explicit size, independently of
+  // that display. The narrow/200% terminal case is checked separately below.
+  await app.evaluate(({BrowserWindow}) => {
+    const win=BrowserWindow.getAllWindows()[0];
+    win.unmaximize();win.setContentSize(1280,900);win.webContents.setZoomFactor(1);
+  });
+  await expect.poll(()=>page.evaluate(()=>innerWidth)).toBeGreaterThan(1023);
   await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete','true'));
 
   console.log('Packaged theme fixture connected');

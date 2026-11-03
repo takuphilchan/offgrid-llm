@@ -126,3 +126,13 @@ The corrected local Windows preview was installed after the user quit OffGrid.
 Verification matched all 786 payload files and preserved all 485 inventoried
 workspace files. The previous app and workspace backup remains retained. This
 installation is a local build, not evidence of a published GitHub release.
+
+CI run 41565841741 passed the Linux job, including 944 browser tests (29 skips),
+seven separate acquisition/restart tests and packaged Linux startup/theme checks.
+Its Windows access check passed, but the new terminal check assumed the runner's
+initial window was wide enough for expanded navigation. On the CI virtual
+display the sidebar was hidden by the responsive layout. That desktop-sidebar
+scenario now explicitly sets a 1280-by-900 content area and checks the viewport;
+the later narrow/200% terminal scenario remains. The complete terminal check
+passed against the installed executable with that size, including menu bounds,
+cursor retention and child cleanup (`build/terminal-overlay-sized-check.log`).
