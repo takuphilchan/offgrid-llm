@@ -16,6 +16,7 @@ import (
 )
 
 const pdfRasterRevision = pdfWorkerRevision + "-raster2"
+const pdfPreviewRevision = pdfWorkerRevision + "-preview1"
 
 type pdfNativeRegion struct {
 	Text   string `json:"text"`
@@ -38,6 +39,10 @@ type pdfPageRaster struct {
 // selected page, source digest and dimensions are independently checked before
 // another local worker may consume the pixels.
 func (p *DocumentParser) rasterPDFPage(ctx context.Context, source []byte, page int) (*pdfPageRaster, error) {
+	return p.renderPDFPageMode(ctx, source, page, false)
+}
+
+func (p *DocumentParser) renderPDFPageMode(ctx context.Context, source []byte, page int, preview bool) (*pdfPageRaster, error) {
 	if len(source) > 50<<20 || page < 1 || page > 1000 {
 		return nil, &ParseError{Code: "document_limit", Message: "PDF page exceeds the local rendering limits."}
 	}
@@ -55,15 +60,23 @@ func (p *DocumentParser) rasterPDFPage(ctx context.Context, source []byte, page 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	cmd := exec.CommandContext(ctx, p.pdfWorker, "--raster-page", strconv.Itoa(page))
+	operation, revision := "--raster-page", pdfRasterRevision
+	if preview {
+		operation, revision = "--preview-page", pdfPreviewRevision
+	}
+	cmd := exec.CommandContext(ctx, p.pdfWorker, operation, strconv.Itoa(page))
 	output, err := p.runPDFWorkerOutput(ctx, cmd, source, 34<<20)
 	if err != nil {
 		return nil, err
 	}
-	return decodePDFRaster([]byte(output), source, page)
+	return decodePDFRasterRevision([]byte(output), source, page, revision)
 }
 
 func decodePDFRaster(output, source []byte, page int) (*pdfPageRaster, error) {
+	return decodePDFRasterRevision(output, source, page, pdfRasterRevision)
+}
+
+func decodePDFRasterRevision(output, source []byte, page int, revision string) (*pdfPageRaster, error) {
 	invalid := func() (*pdfPageRaster, error) {
 		return nil, &ParseError{Code: "document_parser_protocol", Message: "The PDF reader returned invalid page pixels. No OCR input was accepted."}
 	}
@@ -81,7 +94,7 @@ func decodePDFRaster(output, source []byte, page int) (*pdfPageRaster, error) {
 		return invalid()
 	}
 	digest := sha256.Sum256(source)
-	if r.Protocol != 1 || r.Revision != pdfRasterRevision || r.Page != page || page < 1 || page > 1000 || r.SHA256 != hex.EncodeToString(digest[:]) {
+	if r.Protocol != 1 || r.Revision != revision || r.Page != page || page < 1 || page > 1000 || r.SHA256 != hex.EncodeToString(digest[:]) {
 		return invalid()
 	}
 	if r.Error != "" {

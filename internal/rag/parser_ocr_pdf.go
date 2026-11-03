@@ -2,6 +2,7 @@ package rag
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -18,6 +19,14 @@ var ocrExtractionRevision = "offgrid-ocr-v1-" + ocrDigest([]byte(pdfRasterRevisi
 // Native/scanned pages use source coordinates to reconcile overlapping words.
 // Ambiguous geometry remains partial instead of losing or duplicating content.
 func (p *DocumentParser) extractScannedPDFPages(ctx context.Context, source []byte, result *ParseResult) (*ParseResult, error) {
+	return p.extractPDFPagesWithOCR(ctx, source, result, p.rasterPDFPage, p.recognizePDFRaster)
+}
+
+func (p *DocumentParser) extractPDFPagesWithOCR(parent context.Context, source []byte, result *ParseResult,
+	render func(context.Context, []byte, int) (*pdfPageRaster, error),
+	recognize func(context.Context, *pdfPageRaster) (*ocrPageResult, error),
+) (*ParseResult, error) {
+	ctx := parent
 	ctx, cancel := context.WithTimeout(ctx, documentOCRBudget)
 	defer cancel()
 	completed := map[int]bool{}
@@ -26,16 +35,31 @@ func (p *DocumentParser) extractScannedPDFPages(ctx context.Context, source []by
 		if unit.State != "ocr_required" {
 			continue
 		}
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+		if parent.Err() != nil {
+			return nil, parent.Err()
 		}
-		raster, err := p.rasterPDFPage(ctx, source, unit.Index)
-		if err != nil {
-			return nil, err
+		raster, err := render(ctx, source, unit.Index)
+		var page *ocrPageResult
+		if err == nil {
+			page, err = recognize(ctx, raster)
 		}
-		page, err := p.recognizePDFRaster(ctx, raster)
 		if err != nil {
-			return nil, err
+			if parent.Err() != nil {
+				return nil, parent.Err()
+			}
+			var problem *ParseError
+			recoverable := errors.Is(err, context.DeadlineExceeded)
+			if errors.As(err, &problem) {
+				recoverable = problem.Code == "document_timeout" || problem.Code == "document_ocr_failed" || problem.Code == "document_ocr_unavailable"
+			}
+			if !recoverable {
+				return nil, err
+			}
+			// A bounded OCR failure must not discard verified native text or
+			// earlier page receipts. Stop expensive work; explicit partial-use
+			// remains necessary before this text can be used for an answer.
+			result.Warnings = append(result.Warnings, ExtractionWarning{Code: "document_ocr_incomplete", SourceIndex: unit.Index, Message: "Text recognition could not finish this page. Available text is retained; inspect the original or explicitly use native text only."})
+			break
 		}
 		text := page.Text
 		if strings.TrimSpace(unit.Text) != "" {

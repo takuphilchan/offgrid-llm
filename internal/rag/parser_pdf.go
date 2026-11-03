@@ -31,7 +31,7 @@ func (p *DocumentParser) parsePDF(ctx context.Context, content []byte) (*ParseRe
 			return result, p.ocrSetupErr
 		}
 		if len(p.ocrLanguage) == 0 {
-			return result, &ParseError{Code: "document_ocr_language_missing", Message: "Import a supported OCR language pack to read the scanned pages. Your original document is retained."}
+			return result, &ParseError{Code: "document_ocr_language_missing", Message: "Some image content needs text recognition or review. Import a supported OCR language pack, or inspect the available native text. Your original document is retained."}
 		}
 		return p.extractScannedPDFPages(ctx, content, result)
 	}

@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const pdfWorkerRevision = "pdfium-8057-0001cb839e62425b-offgrid1"
+const pdfWorkerRevision = "pdfium-8057-0001cb839e62425b-offgrid4"
 
 // SourceUnit retains an actual engine-reported position and extraction state.
 // A locator without its digest/revision is not a citation to a stable source.
@@ -175,13 +175,13 @@ func (p *DocumentParser) decodePDFWorker(output, source []byte) (*ParseResult, e
 	var text strings.Builder
 	partial := false
 	for i, page := range receipt.Pages {
-		if page.Page != i+1 || (page.State != "ready" && page.State != "empty" && page.State != "ocr_required") {
+		if page.Page != i+1 || (page.State != "ready" && page.State != "empty" && page.State != "ocr_required" && page.State != "native_text_with_visuals") {
 			return invalid()
 		}
 		if page.State == "empty" && strings.TrimSpace(page.Text) != "" {
 			return invalid()
 		}
-		if page.State == "ready" && strings.TrimSpace(page.Text) == "" {
+		if (page.State == "ready" || page.State == "native_text_with_visuals") && strings.TrimSpace(page.Text) == "" {
 			return invalid()
 		}
 		if int64(text.Len()+len(page.Text)+1) > p.maxExtractedSize {
@@ -191,7 +191,10 @@ func (p *DocumentParser) decodePDFWorker(output, source []byte) (*ParseResult, e
 			text.WriteByte('\n')
 		}
 		text.WriteString(page.Text)
-		partial = partial || page.State == "ocr_required"
+		partial = partial || page.State == "ocr_required" || page.State == "native_text_with_visuals"
+		if page.State == "native_text_with_visuals" {
+			result.Warnings = append(result.Warnings, ExtractionWarning{Code: "document_visual_content_unread", SourceIndex: page.Page, Message: "Native text is available. Images and figures have not been interpreted."})
+		}
 		if page.State == "ocr_required" {
 			result.Warnings = append(result.Warnings, ExtractionWarning{Code: "document_ocr_required", SourceIndex: page.Page, Message: "This page contains visual content that needs local OCR; native text alone may be incomplete."})
 		}

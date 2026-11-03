@@ -25,6 +25,24 @@ func validRasterReceipt(t *testing.T, source []byte) pdfPageRaster {
 	return pdfPageRaster{Protocol: 1, Revision: pdfRasterRevision, SHA256: hex.EncodeToString(digest[:]), Page: 1, Width: 2, Height: 3, PNG: pixels.Bytes()}
 }
 
+func TestPreviewPixelsCannotBecomeOCRGeometry(t *testing.T) {
+	source := []byte("source")
+	r := validRasterReceipt(t, source)
+	r.Revision = pdfPreviewRevision
+	raw, _ := json.Marshal(r)
+	if got, err := decodePDFRaster(raw, source, 1); err == nil || got != nil {
+		t.Fatal("preview accepted for OCR")
+	}
+	if got, err := decodePDFRasterRevision(raw, source, 1, pdfPreviewRevision); err != nil || got == nil {
+		t.Fatal("preview rejected", err)
+	}
+	r.Revision = pdfRasterRevision
+	raw, _ = json.Marshal(r)
+	if got, err := decodePDFRasterRevision(raw, source, 1, pdfPreviewRevision); err == nil || got != nil {
+		t.Fatal("OCR receipt accepted as preview")
+	}
+}
+
 func TestParserRasterReceiptBoundaries(t *testing.T) {
 	source := []byte("source PDF")
 	for _, name := range []string{"valid", "protocol", "revision", "digest", "page", "width", "height", "dimension-limit", "pixel-limit", "png-limit", "missing-pixels", "truncated-png", "crc", "unknown-field", "trailing", "truncated-json", "error-with-pixels", "unknown-error"} {

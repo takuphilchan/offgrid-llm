@@ -33,3 +33,16 @@ func TestNativeRegionsUseRasterCoordinates(t *testing.T) {
 		t.Fatal(words)
 	}
 }
+
+func TestPreviewDoesNotRequireOCRTextGeometry(t *testing.T) {
+	t.Setenv("OFFGRID_DOCUMENT_CODE_CACHE", t.TempDir())
+	source := formPDF(false, false, "BT /F1 14 Tf -10 100 Td (Clipped text) Tj ET /Fm Do")
+	var regions []nativeRegion
+	if _, _, _, code := renderPDFPage(context.Background(), source, 1, &regions); code != "document_invalid" {
+		t.Fatal("fixture must have geometry unsuitable for OCR reconciliation", code)
+	}
+	pixels, w, h, code := renderPDFPage(context.Background(), source, 1)
+	if code != "" || len(pixels) == 0 || w == 0 || h == 0 {
+		t.Fatal("valid display was coupled to OCR geometry", code)
+	}
+}
