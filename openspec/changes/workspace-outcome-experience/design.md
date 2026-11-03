@@ -509,3 +509,21 @@ Inspect the actual Docker/WSL context and existing OffGrid service before choosi
 Check active work before the maintenance window. If users have in-flight work or downloads that cannot safely settle, request coordination rather than silently cancelling them. Use the existing documented stop/backup/verify flow for a consistent workspace backup, preserve the old image/configuration for rollback, stop the previous service before starting its replacement, and never let two services write the same volumes. Keep any rollback container stopped; do not delete installed data or model stores.
 
 Verify health, system identity/UI build, served asset hashes and read-only access to existing model/history inventory. Inspect the new UI without submitting user tasks or recording audio. On failure, stop the replacement before restoring the compatible former service; do not run an old binary against changed storage. Record the backup location, image/build and count of running OffGrid services. A matching desktop installation is a separate action: report any build mismatch and never weaken its compatibility checks to attach it.
+## Document workspace
+
+Opening an attachment or citation reveals a right-hand reader beside Chat;
+closing restores the reading width and trigger focus. Keep the composer in Chat,
+with independent bounded scrolling. On narrow/zoomed layouts use Chat/Document
+tabs. Never squeeze two unreadable columns. PDF controls include page navigation,
+zoom, search of extracted text and a visible extraction-coverage notice. Other
+formats show structured source text with original download available; do not
+fabricate Office page fidelity. Citation navigation verifies revision and opens
+the relevant source unit, with exact passage highlighting where supported.
+
+Preparation uses a subtle scan sweep on the file preview while an actual request
+is active. Uploading, preparing, ready, partial and failed states are distinct;
+no invented percentage or perpetual success animation. Source use during an
+answer must reflect attached/retrieved sources, not imply the model read every
+page. Reduced motion uses static status, opaque readable text and accessible
+announcements. All nine locales, keyboard focus, 200% zoom, RTL, offline and
+permission-loss paths are acceptance requirements.

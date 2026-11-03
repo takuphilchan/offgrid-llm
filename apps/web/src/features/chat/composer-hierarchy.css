@@ -11,6 +11,10 @@
   .composer.composer-compact .composer-footer { display: contents; }
   .composer.composer-compact .composer-footer > .composer-utilities { grid-column: 1; grid-row: 1; flex-wrap: nowrap; gap: 2px; }
   .composer.composer-compact .composer-footer > .composer-actions { grid-column: 3; grid-row: 1; display: flex; flex-wrap: nowrap; gap: 4px; margin: 0; }
+  /* Files need a full-width reading area, not the narrow single-line input slot. */
+  .composer.composer-compact:has(.file-attachments, .document-scan) > .composer-input { grid-column: 1 / -1; grid-row: 1; padding-inline: 6px; }
+  .composer.composer-compact:has(.file-attachments, .document-scan) .composer-footer > .composer-utilities,
+  .composer.composer-compact:has(.file-attachments, .document-scan) .composer-footer > .composer-actions { grid-row: 2; }
   .composer.composer-compact .composer-utilities > .utility-popover { flex: none; }
   .composer.composer-compact .composer-utilities > .utility-popover > button,
   .composer.composer-compact .composer-actions > button,

@@ -22,6 +22,7 @@ export type DocumentCitation = components['schemas']['KnowledgeSourceLocator'] &
 export type SessionImage = components['schemas']['SessionImage'];
 export type SessionAttachment = components['schemas']['SessionAttachment'];
 export type SessionAttachmentReference = components['schemas']['SessionAttachmentReference'];
+export type DocumentPreview = components['schemas']['DocumentPreview'];
 export type SessionTurn = components['schemas']['SessionTurn'];
 export type ChatSession = components['schemas']['ChatSession'];
 export type CatalogModel = components['schemas']['CatalogModel'];
@@ -176,7 +177,9 @@ export const api = {
     const form = new FormData(); form.append('file', file, file.name);
     return request<components['schemas']['SessionAttachmentResult']>(`/v1/sessions/${encodeURIComponent(name)}/attachments`, { method: 'POST', body: form, signal }, 120_000);
   },
-  prepareSessionAttachment: (name: string, id: string, signal?: AbortSignal) => request<components['schemas']['SessionAttachmentResult']>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}/prepare`, { method: 'POST', signal }, 120_000),
+  prepareSessionAttachment: (name: string, id: string, signal?: AbortSignal, textOnly = false) => request<components['schemas']['SessionAttachmentResult']>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}/prepare${textOnly ? '?text_only=true' : ''}`, { method: 'POST', signal }, 120_000),
+  documentPreview: (path: string, signal: AbortSignal) => request<DocumentPreview>(path, { signal }, 120_000),
+  documentPage: (path: string, signal: AbortSignal) => request<Blob>(path, { signal }, 120_000, response => response.blob()),
   deleteSessionAttachment: (name: string, id: string) => request<{ removed: boolean }>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   sessionAttachmentOriginal: (name: string, id: string, signal?: AbortSignal) => request<Blob>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}/original`, { signal }, 120_000, response => response.blob()),
   createSession: (name: string, modelID: string, signal?: AbortSignal) => request<ChatSession>('/v1/sessions', {
@@ -379,10 +382,10 @@ export const api = {
   deleteDocument: (id: string) => request<{ success: boolean }>(`/v1/documents/delete?id=${encodeURIComponent(id)}`, { method:'DELETE' }),
   documentRetention: async (id: string) => validateRetention(await request<unknown>(`/v1/documents/retention?id=${encodeURIComponent(id)}`)),
   setDocumentRetention: async (id: string, policy: components['schemas']['DocumentRetention']) => validateRetention(await request<unknown>(`/v1/documents/retention?id=${encodeURIComponent(id)}`, {method:'PUT',body:JSON.stringify(policy)}), policy),
-  documentSource: (id: string, citation?: DocumentCitation) => {
+  documentSource: (id: string, citation?: DocumentCitation, signal?: AbortSignal) => {
     const query = new URLSearchParams({ id });
     if (citation) for (const key of ['start_byte', 'end_byte', 'source_sha256', 'extractor_revision', 'content_hash'] as const) query.set(key, String(citation[key]));
-    return request<{ document: Document; content: string; truncated: boolean; citation_verified?: boolean }>(`/v1/documents/source?${query}`);
+    return request<{ document: Document; content: string; truncated: boolean; citation_verified?: boolean }>(`/v1/documents/source?${query}`, { signal });
   },
   documentOriginal: (id: string, signal?: AbortSignal) => request<Blob>(`/v1/documents/source?id=${encodeURIComponent(id)}&format=original`, { signal }, 120_000, response => response.blob()),
   documentImports: (signal?: AbortSignal) => request<{ imports: DocumentImport[] }>('/v1/documents/imports', { signal }),

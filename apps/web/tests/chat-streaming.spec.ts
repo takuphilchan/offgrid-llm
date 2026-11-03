@@ -267,12 +267,12 @@ test('stream rendering and local stop feedback meet the 250ms UI fixture budget'
     const start=performance.now();
     return new Promise<{milliseconds:number;feedback:string}>((resolve,reject)=>{
       const observer=new MutationObserver(()=>{
-        const feedback=document.querySelector('.conversation [role="alert"]')?.textContent??'';
+        const feedback=document.querySelector('.chat-recovery [role="alert"]')?.textContent??'';
         if(!feedback.includes('Stopped.'))return;
         observer.disconnect();clearTimeout(timer);resolve({milliseconds:performance.now()-start,feedback});
       });
       const timer=setTimeout(()=>{observer.disconnect();reject(Error('Stop feedback did not render'));},2000);
-      observer.observe(document.querySelector('.conversation')!,{childList:true,subtree:true,characterData:true});
+      observer.observe(document.querySelector('.chat-recovery')!,{childList:true,subtree:true,characterData:true});
       (button as HTMLButtonElement).click();
     });
   });

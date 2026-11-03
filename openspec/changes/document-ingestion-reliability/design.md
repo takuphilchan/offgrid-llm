@@ -84,6 +84,25 @@ be supplied as explicitly untrusted document context; larger sources need bounde
 retrieval/source units and must not be silently truncated or overflow the model
 context. No mandatory embedding setup for ordinary supported small attachments.
 
+Conversation source selection validates retained revisions and deduplicates sources
+across turns before allocating context. Small sources remain complete. Larger
+sources use deterministic local lexical retrieval with opening/distributed passages.
+Production llama streams select excerpts under the same loaded-model lease as
+generation, after Knowledge enrichment. The runtime tokenizer measures the full
+template, history and candidate sources. Serialized UTF-8 bytes only bound candidate
+selection; they are not counted as history tokens. At most six read-only candidate
+counts may shrink excerpts without dropping any selected source. Providers lacking
+token counting retain conservative byte admission. Cancellation and operational
+count failures do not trigger generation, model switches or replay. Explicit answer
+limits remain unchanged; genuine exhaustion offers a lower answer limit or a
+supported larger context. Runtime generation admission remains authoritative. Exact extracted-text byte
+ranges and immutable source revisions are persisted with the answer; they are not
+invented page coordinates. Every selected source receives space or the request
+fails with actionable recovery. History and original files are never truncated.
+Web and CLI disclose excerpt coverage independently of model prose. This is a
+limited view, not whole-document summarization or visual interpretation; source
+selection evidence cannot be imported through client-seeded history.
+
 Web and desktop share an Add files control alongside text, image and voice inputs.
 CLI one-shot file flags and interactive `/attach`, `/attachments` and
 `/remove-attachment` commands call the same service. Existing image commands remain
@@ -123,3 +142,31 @@ Record parser/index versions and rebuild only through approved durable operation
 Qualify source, packaged binaries and hardware separately. v0.4.24 publication is
 held for the PDF blocker; implementing this plan does not itself authorize a new
 data migration or certify every platform/model.
+## Document reader and PDF classification correction
+
+Boundedly recurse PDF form objects rather than classifying every form as a scan.
+Native text and vector content do not require OCR by themselves. Raster images
+remain explicitly unexamined unless qualified OCR succeeds. Preserve all partial
+source units, and distinguish text-only use from complete extraction. Existing
+failed records require explicit retry; existing citations retain their revisions.
+
+Serve previews through authenticated source access: original digest, ordered
+source units, extraction warning and page count. Render PDF pages with the pinned
+isolated worker, bounded queue/time/output and cancellation; no document scripts,
+external resources or arbitrary paths. Recheck access on every request, use
+no-store responses, and discard client caches on scope changes. Preview is a read,
+not permission to publish, index or submit. Office previews show extracted
+sections/sheets/slides and are labeled as structured text, not original layout.
+
+### Readable-text admission correction
+
+For conversation attachments, first inspect native PDF units. A bounded worker
+classification distinguishes substantial native text with bounded visual regions
+from sparse/header-only or predominantly scanned pages. Only when every nonempty
+unit is ready or native-text-with-visuals can the attachment be admitted without
+OCR. Persist `native_text_only` coverage, retain exact native text, show visual
+coverage notices and page navigation, and propagate the restriction into model
+context. The overall extraction remains partial. Unknown geometry and large
+scanned surfaces stay on the OCR path. Explicit text-only recovery remains for
+other partial documents. This replaces mandatory extra approval for the qualified
+native-text case only; it does not claim figures have been read.

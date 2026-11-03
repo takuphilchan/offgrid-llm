@@ -231,3 +231,11 @@ This group records the user's subsequent request. Execute only after implementat
 - [x] 21.2 Add persistent Help and Quick actions access with local first-use examples, returning-work/recovery guidance and configuration explanations. Verify keyboard dismissal/focus restoration, draft preservation, navigation and zero implicit writes in all nine locales.
 - [x] 21.3 Run API/type/build, the full isolated renderer suite and packaged Windows presentation checks; inspect realistic light/dark, narrow/RTL screenshots and update user/evidence docs. Retain the ten outstanding manual/platform gates; package/install only under the owner's separate authorization.
 - [x] 21.4 Audit computed text sizes across the six primary pages and affected controls, replace confirmed undersized legacy declarations with semantic typography tokens, and verify normal/200% zoom and localized layout. Record fixture versus manual coverage separately.
+## 23. Approved document reading workspace
+
+- [x] 23.1 Add shared document reader with PDF pages, search/zoom/navigation, structured-format labels, source coverage and verified citation opening; integrate draft and saved attachments in Chat without automatic submission or Knowledge publication.
+- [x] 23.2 Implement responsive Chat/document layout, focus/reading-position preservation and truthful preparation/source-use motion with reduced-motion and nine-locale copy. Verify text/voice/image and terminal switching remain intact.
+- [x] 23.3 Run API/type/build and isolated document-reader/attachment/Knowledge/Chat suites; inspect light/dark, narrow/RTL/200% screenshots and record performance, failures and unavailable human checks.
+- [x] 23.4 Correct attachment metadata collapse in narrow and split views, separate saved coverage notes, replace the conversation-wide focus box with a restrained keyboard indicator, and place actionable context recovery beside the composer. Verify retained drafts, response-settings opening, reload coverage and streaming/Stop feedback within the existing fixture budget.
+
+Evidence for this increment: [document workspace verification](../../../docs/quality/evidence/document-workspace-2026-11-03.md). Source and automated checks only; installed/native, model-answer and human qualification remain separate.

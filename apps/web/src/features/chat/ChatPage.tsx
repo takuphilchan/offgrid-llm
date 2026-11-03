@@ -2,6 +2,7 @@ import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
 import { SidebarContext, SidebarSlot } from '../../components/shell/SidebarSlot';
 import { interaction } from '../../i18n/interaction';
 import { ChatFailureNotice } from './ChatFailureNotice';
+import { documentExcerptCoverage } from '../../i18n/document-coverage';
 import { chatAvailable } from '../../api/model-capabilities';
 import { chatReadiness } from '../../i18n/chat-readiness';
 import { ChatWorkBlocker } from './ChatWorkBlocker';
@@ -54,7 +55,7 @@ import { messageText, newSessionName, readPreferences, copyChatMessage } from '.
 import { ConversationHistory } from './ConversationHistory';
 import './composer-hierarchy.css';
 import { ComposerKnowledgeReadiness, ComposerResponseLimits } from './ComposerOptions';
-
+import { DocumentWorkspace } from './DocumentWorkspace';
 export function ChatPage({ scope, models, model, setModel, onboardingPending, onFirstResponse, onOpenModels }: {
   scope: string;
   models: Model[];
@@ -183,7 +184,6 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   };
   useEffect(() => { void refreshKnowledge(); return () => knowledgeCheck.current?.abort(); }, [permissions.knowledge]);
   useWorkspaceRefresh(refreshKnowledge);
-
   const acceptLinkedTurn = (session: ChatSession, turn: SessionTurn, revision: number) => {
     if (!mounted.current || revision !== selectionRevision.current) return;
     activeTurn.current = { name: session.name, id: turn.id };
@@ -192,7 +192,6 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     setConversation(saved ? session.messages : [...session.messages, { role: 'user', content: turn.prompt }]);
     work.rememberChat(session.name, turn.status);
   };
-
   const refreshLinkedConversation = async (turn: SessionTurn, explicitRecovery = false) => {
     const revision = selectionRevision.current, name = activeName;
     if (explicitRecovery) await api.recoverAgentTurn(name, turn.id);
@@ -225,7 +224,6 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       }
     }
   }, [linkedRun?.run_id, linkedRun?.status, linkedRun?.event_cursor]);
-
   const recoverTurn = async (session: ChatSession, turn: SessionTurn, revision: number) => {
     if (!mounted.current || revision !== selectionRevision.current) return;
     if (turn.agent || turn.job_id) { acceptLinkedTurn(session, turn, revision); return; }
@@ -261,7 +259,6 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       }
     } finally { if (controller.current === watch) { controller.current = null; if (mounted.current) setBusy(false); } }
   };
-
   const activate = (session?: ChatSession) => {
     stopSpeech(); setSpeechError('');
     followOutput.current = true;
@@ -294,7 +291,6 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       }
     }).finally(() => { if (mounted.current && revision === selectionRevision.current) setCheckingTurn(false); });
   };
-
   const loadSessions = async (preferred = activeName) => {
     const request = ++historyRevision.current;
     const selection = selectionRevision.current;
@@ -323,7 +319,6 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       if (mounted.current && request === historyRevision.current) setLoading(false);
     }
   };
-
   useEffect(() => { void loadSessions(); }, []);
   useEffect(() => {
     const selectKnown = (event: Event) => {
@@ -359,23 +354,19 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     composerInput.current.style.height = '0';
     composerInput.current.style.height = `${Math.min(composerInput.current.scrollHeight, 160)}px`;
   }, [draft]);
-
   const startNew = () => {
     if (deleteItems) return;
     activate(undefined);
     setError('');
     setCopiedMessage('');
   };
-
   const historyDeleted = (names: string[]) => {
     setSessions(current => current.filter(item => !names.includes(item.name)));
     names.forEach(name => { writeDraft(draftKey(draftScope, 'chat', name), ''); writeDraft(draftKey(draftScope,'chat-images',name),''); writeDraft(draftKey(draftScope,'chat-files',name),''); work.forgetChat(name); });
     if (names.includes(activeName)) activate(undefined);
     if (names.length) setHistoryNotice(text.history.removed.replace('{count}', String(names.length)));
   };
-
   const reviewLinkedWork = () => reviewConversationWork(conversationContent.current, followOutput, refreshJob);
-
   const fileDraft=useComposerFiles(draftScope,activeName,loading||busy||checkingTurn||missingSession,fileServiceReady,!!agent,async select=>{
     if(activeName)return activeName;
     const revision=selectionRevision.current;
@@ -506,7 +497,6 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       if (controller.current === requestController) controller.current = null;
     }
   };
-
   const stop = async () => {
     stopSpeech();
     setErrorAction('cancel');
@@ -515,17 +505,15 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     try { await api.cancelTurn(target.name, target.id); watch?.abort(); }
     catch (reason) { if (mounted.current && revision === selectionRevision.current) setError(reason instanceof Error ? reason.message : text.common.error); }
   };
-
   const copyMessage = async (key: string, content: string) => {
     setErrorAction(null);
     await copyChatMessage(key,content,setCopiedMessage,setError,text.common.error);
   };
-
   // Metrics describe the just-committed turn, never an older answer or a new
   // in-flight response. They are cleared when starting/selecting a conversation.
   const lastAssistant = conversation.reduce((last, message, index) => message.role === 'assistant' ? index : last, -1);
   const linkedOutputSaved = !!linkedTurn && conversation.some(message => 'turn_id' in message && message.turn_id === linkedTurn.id && message.role === 'assistant');
-  return <div className="chat-workspace">
+  return <DocumentWorkspace scope={`${draftScope}:${activeName}`}><div className="chat-workspace">
     {deleteItems && <ChatHistoryDelete items={deleteItems} onDeleted={historyDeleted} onClose={() => setDeleteItems(null)} />}
     <SidebarSlot action><button className="new-chat-button" title={text.chat.newChat} aria-label={text.chat.newChat} disabled={!!deleteItems} onClick={() => { sidebar.close(); startNew(); }}><Icon name="plus" size={18} /><span>{text.chat.newChat}</span></button></SidebarSlot>
     <SidebarSlot><ConversationHistory sessions={sessions} activeName={activeName} busy={busy} loading={loading} locked={!!deleteItems} notice={historyNotice} select={activate} remove={setDeleteItems} refresh={() => void loadSessions()} /></SidebarSlot>
@@ -533,7 +521,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       {!agent && (!model || unavailableModel || onboardingPending) && <div className="setup-inline" role="status"><span>{unavailableModel ? chatReadiness[locale].unavailable : model ? text.onboarding.firstReplyHint : chatReadiness[locale].setup}</span>{(!model || unavailableModel) && <button className="secondary-button" onClick={() => { handoff.begin({ origin: '#/chat', destination: 'models', draft: { kind: 'chat', id: activeName } }); onOpenModels(); }}>{text.onboarding.chooseModel}</button>}</div>}
 <div ref={conversationPane} className="conversation" tabIndex={0} onWheel={event => { userScrollUntil.current = performance.now() + 1200; if (event.deltaY < 0) followOutput.current = false; }} onTouchStart={() => { userScrollUntil.current = performance.now() + 1200; }} onKeyDown={event => { if (['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) userScrollUntil.current = performance.now() + 1200; }} onScroll={event => { const el = event.currentTarget; const distance = el.scrollHeight - el.scrollTop - el.clientHeight; const atBottom = distance < 100; if (performance.now() <= userScrollUntil.current) followOutput.current = atBottom; else if (followOutput.current && distance > 1) followConversation(); setShowLatest(!atBottom && !followOutput.current); }}>
         <div ref={conversationContent} className="conversation-content">
-        {conversation.length === 0 && !loading && <div className="empty-chat"><div className="orb"><Icon name="models" size={28} /></div><h2>{text.chat.emptyTitle}</h2><p>{text.chat.emptyBody}</p></div>}
+        {conversation.length === 0 && !loading && !error && <div className="empty-chat"><div className="orb"><Icon name="models" size={28} /></div><h2>{text.chat.emptyTitle}</h2><p>{text.chat.emptyBody}</p></div>}
         {conversation.map((message, index) => {
           const content = messageText(message.content);
           const messageKey = `${index}-${'timestamp' in message ? message.timestamp : content.slice(0, 24)}`;
@@ -541,8 +529,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
             <div className="message-heading"><div className="message-label">{message.role === 'user' ? text.chat.you : message.role === 'assistant' ? text.chat.assistant : message.role}</div></div>
             <div className="message-body">{message.role === 'assistant' ? <MarkdownMessage content={content} /> : content}</div>
             <ImageAttachments images={message.images}/>
-            <FileAttachments name={activeName} references={message.attachments}/>
+            <FileAttachments name={activeName} references={message.attachments} active={busy && index === conversation.length-1}/>
             {message.role === 'assistant' && <KnowledgePassages passages={message.knowledge_sources} />}
+            {message.role === 'assistant' && 'attachment_selections' in message && Array.isArray(message.attachment_selections) && message.attachment_selections.some(source => source.mode === 'excerpts') && <p className="document-answer-coverage">{documentExcerptCoverage(locale)}</p>}
             {message.role === 'assistant' && <footer className="message-actions">
               <button type="button" className="message-copy" onClick={() => void copyMessage(messageKey, content)} aria-label={copiedMessage === messageKey ? text.chat.copied : text.chat.copyResponse}><Icon name={copiedMessage === messageKey ? 'check' : 'copy'} size={14} />{copiedMessage === messageKey ? text.chat.copied : text.chat.copy}</button>
               <ReadAloudButton text={content} />
@@ -558,10 +547,10 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
           <div className="generation-status" role="status">{interrupted ? text.chatStreaming.unsaved : text.chatStreaming[phase]}{!interrupted && phase === 'loading' && <p>{text.guidance.coldStart}</p>}</div>
         </article>}
         {limited && <div className="generation-status" role="status">{text.chatStreaming.limitReached}</div>}
-        {error && <ChatFailureNotice error={error} code={errorCode} chooseModel={() => { handoff.begin({ origin: '#/chat', destination: 'models', draft: { kind: 'chat', id: activeName } }); onOpenModels(); }} action={errorAction && <button className="secondary-button" onClick={() => void (errorAction === 'cancel' ? stop() : loadSessions())}>{errorAction === 'cancel' ? text.chat.stop : errorAction === 'history' ? interaction[locale].refreshHistory : interaction[locale].checkRequest}</button>} />}
         {unsaved && <div className="inline-error" role="alert">{text.recovery.draftWarning}</div>}
         </div>
       </div>
+      <div className="chat-recovery">{error && <ChatFailureNotice error={error} code={errorCode} openSettings={() => setResponseSettingsOpen(true)} chooseModel={() => { handoff.begin({ origin: '#/chat', destination: 'models', draft: { kind: 'chat', id: activeName } }); onOpenModels(); }} action={errorAction && <button className="secondary-button" onClick={() => void (errorAction === 'cancel' ? stop() : loadSessions())}>{errorAction === 'cancel' ? text.chat.stop : errorAction === 'history' ? interaction[locale].refreshHistory : interaction[locale].checkRequest}</button>} />}</div>
       {showLatest && <button type="button" className="secondary-button chat-latest" onClick={() => { userScrollUntil.current = 0; followOutput.current = true; const pane = conversationPane.current; pane?.focus({ preventScroll: true }); setShowLatest(false); requestAnimationFrame(() => { pane?.scrollTo({ top: pane.scrollHeight, behavior: 'instant' }); }); }}>{refinement.latest}</button>}
       {workBlocked && <ChatWorkBlocker run={linkedRun} review={reviewLinkedWork} refresh={refreshJob} startNew={startNew} />}
       <div className="composer composer-compact" onPaste={imageDraft.paste} onDragOver={imageDraft.dragOver} onDrop={event=>{const files=[...event.dataTransfer.files];if(fileServiceReady&&files.some(file=>!file.type.startsWith('image/'))){event.preventDefault();void fileDraft.add(files);}else imageDraft.drop(event);}}>
@@ -571,18 +560,16 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         <div className="composer-footer">
           <div className="composer-utilities">
           <UtilityPopover label={composerAttachmentLabel(locale)} trigger={<Icon name="plus" size={20}/>} triggerClassName="icon-button" className="composer-attachments-menu">{fileDraft.control}{imageDraft.control}{fileDraft.saved}</UtilityPopover>
-          <UtilityPopover label={text.chatStreaming.options} trigger={<Icon name="sliders" size={18} />} triggerClassName="icon-button" className="composer-context-menu" onOpenChange={setResponseSettingsOpen}>
+          <UtilityPopover label={text.chatStreaming.options} trigger={<Icon name="sliders" size={18} />} triggerClassName="icon-button" className="composer-context-menu" defaultOpen={responseSettingsOpen} onOpenChange={setResponseSettingsOpen}>
         <div className="composer-context">
           <AgentSelector value={agent} onChange={value => { setAgent(value); setAgentResources({ profile: value ? `${value.id}:${value.revision}` : '', restrictions: {} }); }} disabled={busy} />
           {agent ? <><AgentTools profile={agent} restrictions={restrictions} onChange={value => setAgentResources({ profile: agentKey, restrictions: value })} disabled={busy} /></> : <ModelSelect models={models} value={model} onChange={setModel} />}
         </div>
-
             {!agent && <label className="switch"><input type="checkbox" checked={knowledge || selectedSources.length > 0} disabled={busy || selectedSources.length > 0 || (!knowledge && knowledgeState !== 'ready')} onChange={event => setKnowledge(event.target.checked)} /><span />{text.chat.knowledge}</label>}
             {!agent && permissions.knowledge && knowledgeState !== 'ready' && <ComposerKnowledgeReadiness state={knowledgeState} conversation={activeName} refresh={refreshKnowledge} />}
             <ComposerResponseLimits preferences={preferences} busy={busy} update={updatePreferences} />
             {responseSettingsOpen && <ComposerSpeech presentation="settings" enabled={speakResponses} checking={checkingSpeech} busy={busy} state={speechState} error={speechError} toggle={toggleSpeech} stop={stopSpeech} />}
           </UtilityPopover>
-
           </div>
       <div className="composer-actions"><VoiceInputButton compact contextKey={composerDraftKey} disabled={loading || checkingTurn || busy} onTranscript={value => setDraft(draft ? `${draft} ${value}` : value)} /><button aria-label={busy ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} disabled={busy ? false : loading || checkingTurn || missingSession || (!draft.trim()&&!imageDraft.images.length&&!fileDraft.files.length) || fileDraft.processing || !!fileDraft.blocker || imageDraft.processing || !!imageDraft.blocker || !effectiveModel || unavailableModel || (linkedUnsettled && !canSendInstruction)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Icon name="close" size={18} /> : <><span className="sr-only">{canSendInstruction ? jobCopy.update : text.chat.send}</span><Icon name="send" size={18} /></>}</button></div>
         </div>
@@ -593,5 +580,5 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         </div>}
       </div>
     </div>
-  </div>;
+  </div></DocumentWorkspace>;
 }

@@ -40,3 +40,19 @@
 
 - [ ] 5.1 Integrate the defaults-first Knowledge workflow with batch import, partial/failed states, source preview and Ask; pass real-service renderer tests for first use, returning work, failed/retried import, scope and nine locales.
 - [ ] 5.2 Run Go/race, API/web, desktop, CLI/Python and packaged parser checks from current CI; publish per-format/platform corpus results and retrieval/citation quality evidence. Retain all failures and unavailable manual/hardware checks.
+## 6. Approved document workspace correction
+
+- [x] 6.1 Correct PDF form traversal with bounded nested-form, raster, empty, malformed and cancellation regressions; run the PDF worker suite and inspect the reported 37-page PDF privately. Preserve scan protections and record actual extracted/partial states.
+- [x] 6.2 Expose scoped digest-bound preview units and bounded PDF page rendering for attachments and Knowledge; retain partial text, explicit text-only recovery and CLI state/source parity. Run sessions/server/rag tests covering access, cancellation, stale revisions and no implicit publication.
+- [x] 6.3 Update API/client/document guidance and validate contracts plus same-source UI/CLI fixtures. Preserve earlier failed evidence and unverified enterprise/hardware gates.
+
+Evidence for this increment: [document workspace verification](../../../docs/quality/evidence/document-workspace-2026-11-03.md). Source and automated checks only; installed/native, model-answer and human qualification remain separate.
+
+- [x] 6.4 Admit substantial native PDF text with explicit persisted visual limits, without automatic OCR or a repeating retry gate; retain scan/header/geometry protections, page-level visual links, CLI warnings and context restrictions. Verify real supplied PDF upload/retry plus scan and mixed-document regressions.
+
+- [x] 6.5 Implement bounded exact source selection for oversized ordinary-Chat attachments, deduplicate historical references, persist immutable excerpt ranges and disclose limited coverage in web/CLI. Verify late evidence/Unicode, history preservation, source budget failures, forged seed rejection and the supplied PDF with a real local model at the unchanged 8,192-token allocation. This is a focused context regression, not full document-answer qualification.
+
+Follow-up regression for 6.5: tokenizer-measured selection under the generation
+lease now passes six real-model PDF questions at 8,192 context / 4,096 maximum
+response tokens, plus eight deterministic turns without source re-upload or
+history changes. See the evidence above; this does not close 1A.5 or 5.2.

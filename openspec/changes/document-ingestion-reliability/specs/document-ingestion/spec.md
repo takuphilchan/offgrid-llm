@@ -5,6 +5,28 @@ preserving source fidelity, privacy, bounded execution and recovery.
 
 ## ADDED Requirements
 
+### Requirement: Context-bounded conversation source evidence
+Conversation attachments SHALL preserve complete original files and history while
+selecting bounded exact source excerpts when full extraction exceeds the current
+model allocation. Each answer SHALL retain source revisions and selected ranges,
+and clients SHALL disclose incomplete document coverage independently of model output.
+
+#### Scenario: Large readable PDF in an ordinary context
+- **WHEN** a prepared PDF exceeds the current context and its question can admit source excerpts
+- **THEN** the service selects exact bounded passages, deduplicates repeated references and reserves answer space
+- **AND** the model and clients disclose excerpt and visual limitations without changing models or context settings
+
+#### Scenario: Repeated document questions fit the measured context
+- **WHEN** completed history exceeds a byte-based estimate but the loaded model's complete prompt and explicit response limit fit its context
+- **THEN** follow-up questions reuse the saved source without another upload and use tokenizer-measured excerpt admission under the generation lease
+- **AND** all history, source revisions and response settings remain unchanged
+- **AND** unavailable counting uses conservative admission while operational counting failures retain the draft without dispatching generation
+
+#### Scenario: Insufficient space for all selected sources
+- **WHEN** history, protocol, answer reserve and the selected sources cannot fit
+- **THEN** the request retains its draft and files and offers a lower response limit, a supported larger context or fewer selected files
+- **AND** it does not silently omit a source, delete history or replay a prior turn
+
 ### Requirement: Conversation-private attachments across clients
 Web, desktop and CLI SHALL support explicit file attachment through the same
 authenticated service contract. Ordinary attachment SHALL NOT automatically
@@ -107,3 +129,34 @@ and citations. Mock providers SHALL NOT establish native parser qualification.
 #### Scenario: Extension accepted but content extraction fails
 - **WHEN** a format passes upload validation but fails its real fixture corpus
 - **THEN** it is not advertised as qualified and the failed evidence remains recorded
+### Requirement: Inspectable document previews and honest partial use
+Authorized clients SHALL inspect retained document units and PDF pages without
+publishing, indexing or submitting them. Rendering SHALL be bounded, local and
+subject to current source access. Partial native text SHALL remain inspectable;
+using it for answers SHALL preserve and disclose unread content. Substantial
+native text on every nonempty page may be admitted with native-text-only coverage;
+other incomplete extraction requires explicit partial-use acknowledgment.
+
+#### Scenario: Native research PDF with figures
+- **WHEN** every nonempty page has usable native text and the bounded classifier excludes large scanned surfaces and sparse text
+- **THEN** Chat accepts that text without a repeating OCR/retry gate
+- **AND** the attachment, source pages and answer context disclose uninterpreted visual content without claiming complete extraction
+
+#### Scenario: Scanned page with a native header
+- **WHEN** a page contains only sparse native text or a large scanned surface
+- **THEN** it still requires OCR or explicit partial-use recovery
+- **AND** successful classification of other pages cannot make the missing page complete
+
+#### Scenario: Native text inside a PDF form
+- **WHEN** a page contains native text or vector-only nested forms
+- **THEN** form presence alone does not require OCR
+- **AND** bounded inspection still flags actual raster content or uncertain structure
+
+#### Scenario: Preview a partially extracted PDF
+- **WHEN** an authorized user opens a source whose OCR is unavailable
+- **THEN** original pages and available text remain inspectable with missing coverage identified
+- **AND** previewing alone does not make it ready for complete-document answers
+
+#### Scenario: Source access or revision changes
+- **WHEN** a preview request references an inaccessible or changed source
+- **THEN** it fails without exposing another source or a stale citation as current

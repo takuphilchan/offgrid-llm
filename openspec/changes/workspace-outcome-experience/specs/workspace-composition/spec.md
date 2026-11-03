@@ -202,3 +202,24 @@ New persisted drafts and active-chat selections SHALL be scoped to actor and wor
 - **WHEN** the actor or workspace identity changes
 - **THEN** only that scope's drafts and active-chat selection are available
 - **AND** the previous scope's restoration decision does not authorize restoration in the new scope
+### Requirement: Document reading beside conversation
+Opening a supported attachment or verified citation SHALL show a source reader
+beside Chat on wide screens and a reversible Chat/Document view on narrow screens.
+The reader SHALL provide PDF page navigation, zoom and text search; other formats
+SHALL identify structured text as distinct from original layout. Drafts and source
+identity SHALL survive view switching without sending or changing permissions.
+
+#### Scenario: Read and ask about a paper
+- **WHEN** the user opens an attached PDF
+- **THEN** Chat remains usable alongside its original pages and extraction-coverage status
+- **AND** opening a citation navigates only to its verified matching source
+
+#### Scenario: Preparing or blocked document
+- **WHEN** preparation is active, finishes or fails
+- **THEN** motion and status follow the actual operation and stop when it ends
+- **AND** reduced-motion users receive equivalent static feedback without fake percentages
+
+#### Scenario: Narrow screen or keyboard navigation
+- **WHEN** the split layout cannot provide readable columns
+- **THEN** accessible view switching preserves draft and reading position
+- **AND** closing the reader restores focus without submitting work

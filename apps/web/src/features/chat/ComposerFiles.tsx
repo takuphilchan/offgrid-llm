@@ -9,6 +9,9 @@ import { Icon } from '../../components/Icon';
 import { documentRecovery } from '../../i18n/document-recovery';
 import { FileDraftList } from './FileDraftList';
 import './composer-files.css';
+import { useDocumentReader } from './DocumentWorkspace';
+import { documentReader } from '../../i18n/document-reader';
+import { documentCoverage } from '../../i18n/document-coverage';
 
 const accepted = '.txt,.md,.csv,.json,.xml,.html,.htm,.rtf,.pdf,.docx,.xlsx,.pptx';
 export async function createFileConversation(options:{scope:string;prompt:string;model:string;draft:string;images:{key:string;value:string};valid:()=>boolean;accept:(session:ChatSession)=>void}){
@@ -29,7 +32,7 @@ export function clearCompletedFileDraft(scope:string,name:string,refs?:SessionAt
 export function useComposerFiles(scope:string,name:string,disabled:boolean,service:boolean,agent:boolean,ensureSession:(select:(name:string)=>void)=>Promise<string>){
  const draft=useDraft(scope,'chat-files',name),files=useMemo(()=>readFileDraft(draft.value),[draft.value]);
  const {locale}=useI18n(),copy=chatFiles(locale),recovery=fileRecovery(locale);
- const [processing,setProcessing]=useState(false),[error,setError]=useState('');
+ const [processing,setProcessing]=useState(false),[error,setError]=useState(''),[pendingName,setPendingName]=useState('');
  const failureMessage=(reason:unknown)=>{
   const code=reason instanceof APIError?reason.data?.error_code??reason.data?.error?.code:undefined;
   // A retained source owns its inline recovery message. Avoid a second error card.
@@ -54,16 +57,18 @@ export function useComposerFiles(scope:string,name:string,disabled:boolean,servi
    const session=await ensureSession(session=>{target.current=session;});target.current=session;
    for(const file of incoming){
     if(controller.signal.aborted)break;
+    setPendingName(file.name);
     try {const result=await api.uploadSessionAttachment(session,file,controller.signal);if(result.attachment)save(session,result.attachment);else throw Error(copy.blocked);}
     catch(reason){if(reason instanceof APIError&&reason.data?.attachment)save(session,reason.data.attachment);throw reason;}
    }
   }catch(reason){if(!controller.signal.aborted)setError(failureMessage(reason));}
   finally{if(operation.current===controller){operation.current=null;setProcessing(false);}}
  };
- const retry=async(item:SessionAttachment)=>{
+ const retry=async(item:SessionAttachment,textOnly=false)=>{
   if(disabled||operation.current||!name)return;
   const controller=new AbortController();operation.current=controller;target.current=name;setProcessing(true);setError('');
-  try {const result=await api.prepareSessionAttachment(name,item.id,controller.signal);if(result.attachment)save(name,result.attachment);}
+  setPendingName(item.name);
+  try {const result=await api.prepareSessionAttachment(name,item.id,controller.signal,textOnly);if(result.attachment)save(name,result.attachment);}
   catch(reason){if(reason instanceof APIError&&reason.data?.attachment)save(name,reason.data.attachment);if(!controller.signal.aborted)setError(failureMessage(reason));}
   finally{if(operation.current===controller){operation.current=null;setProcessing(false);}}
  };
@@ -73,15 +78,16 @@ export function useComposerFiles(scope:string,name:string,disabled:boolean,servi
   recovery:service&&draft.unsaved&&<p role="alert" className="file-input-notice">{recovery.unsaved}</p>,
   references:files.map(a=>({id:a.id,revision:a.revision??''})),
   control:service&&<><input hidden ref={input} data-attachment="files" type="file" accept={accepted} multiple onChange={event=>{void add([...event.target.files??[]]);event.target.value='';}}/><button type="button" className="utility-button" disabled={disabled||processing||files.length>=8} onClick={()=>input.current?.click()}><Icon name="upload" size={17}/><span>{copy.add}</span></button></>,
-  preview:<><FileDraftList files={files} disabled={disabled||processing} retry={item=>void retry(item)} remove={item=>{draft.setValue(JSON.stringify(files.filter(a=>a.id!==item.id)));requestAnimationFrame(()=>{input.current?.closest('.composer')?.querySelector<HTMLButtonElement>('.composer-attachments-menu > button')?.focus();});}}/>{processing&&<p role="status" className="file-input-notice">{copy.preparing}</p>}{(error||((agent||!service)&&blocker))&&<p role="alert" className="file-input-notice">{error||blocker}</p>}</>,
+  preview:<><FileDraftList session={name} files={files} disabled={disabled||processing} retry={item=>void retry(item)} textOnly={item=>void retry(item,true)} remove={item=>{draft.setValue(JSON.stringify(files.filter(a=>a.id!==item.id)));requestAnimationFrame(()=>{input.current?.closest('.composer')?.querySelector<HTMLButtonElement>('.composer-attachments-menu > button')?.focus();});}}/>{processing&&<div role="status" className="document-scan file-input-notice"><Icon name="file" size={20}/> <bdi>{pendingName}</bdi><p>{copy.preparing}</p></div>}{(error||((agent||!service)&&blocker))&&<p role="alert" className="file-input-notice">{error||blocker}</p>}</>,
  };
 }
 
-export function FileAttachments({name,references}:{name:string;references?:SessionAttachmentReference[]}){
+export function FileAttachments({name,references,active=false}:{name:string;references?:SessionAttachmentReference[];active?:boolean}){
+ const open=useDocumentReader();
  const {locale}=useI18n(),copy=chatFiles(locale),[files,setFiles]=useState<SessionAttachment[]>([]),[error,setError]=useState('');
  const ids=(references??[]).map(r=>r.id).join(',');
  useEffect(()=>{const abort=new AbortController();setFiles([]);setError('');if(name&&ids)void api.sessionAttachments(name,abort.signal).then(result=>{if(!abort.signal.aborted)setFiles(result.attachments);}).catch(reason=>{if(!abort.signal.aborted)setError(reason instanceof Error?reason.message:copy.blocked);});return()=>abort.abort();},[name,ids]);
  if(!references?.length)return null;
  const download=async(item:SessionAttachment)=>{try{const blob=await api.sessionAttachmentOriginal(name,item.id),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=item.name;link.click();setTimeout(()=>URL.revokeObjectURL(url),30_000);}catch(reason){setError(reason instanceof Error?reason.message:copy.blocked);}};
- return <div className="saved-file-attachments" aria-label={copy.files}>{references.map(ref=>{const item=files.find(a=>a.id===ref.id);return <button key={ref.id} type="button" className="secondary-button" disabled={!item} title={copy.download} onClick={()=>item&&void download(item)}><Icon name="file" size={16}/>{item?.name??copy.files}</button>;})}{error&&<p role="alert">{error}</p>}</div>;
+ return <div className={`saved-file-attachments ${active?'document-source-active':''}`} aria-label={copy.files}>{references.map(ref=>{const item=files.find(a=>a.id===ref.id);return <span key={ref.id}><button type="button" className="secondary-button" disabled={!item} title={open?documentReader(locale).open:copy.download} onClick={()=>item&&(open?open({name:item.name,sha256:item.sha256,path:`/v1/sessions/${encodeURIComponent(name)}/attachments/${item.id}/preview`,original:()=>api.sessionAttachmentOriginal(name,item.id)}):void download(item))}><Icon name="file" size={16}/>{item?.name??copy.files}</button>{item?.coverage==='native_text_only'&&<small>{documentCoverage(locale)}</small>}</span>;})}{active&&<small role="status">{documentReader(locale).attached}</small>}{error&&<p role="alert">{error}</p>}</div>;
 }

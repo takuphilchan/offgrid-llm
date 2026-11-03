@@ -1,5 +1,30 @@
 # Document formats and recovery
 
+## Read beside Chat
+
+Use **Open document** on a Chat attachment to keep the conversation on the left
+and a source reader on the right. On smaller screens, switch between **Chat** and
+**Document** without losing the draft. PDFs show locally rendered original pages,
+page controls, zoom and search of extracted text. Search does not search unread
+pixels. Other supported formats show labeled structured text, not a promise of
+original Office layout. Original files remain downloadable.
+
+Preparation animation runs only while a request is active and stops on success,
+failure or cancellation. Reduced-motion preferences use static status. An attached
+source indicator during a reply does not mean the model examined every page.
+
+PDF forms are containers and are inspected recursively; their presence alone no
+longer means a scan. Raster images or bounded/uncertain structures still need OCR
+or review. **Use available text only** explicitly accepts native text for Chat,
+with unread content disclosed to the model. It does not certify figure understanding,
+complete extraction or publish the file to Knowledge. A fully scanned document
+with no native text still needs OCR. Existing failed files need an explicit retry.
+
+CLI conversations offer `/preview-attachment N [unit]` to inspect a selected
+source unit and `/attachment-text-only N` to explicitly accept available native
+text. `/attachments` shows coverage and failure codes. These commands use the same
+authenticated source and preparation APIs; preview never submits a model request.
+
 For a question about a small file, use **Add files** in Chat. You do not need to
 configure an embedding model first. To search a reusable document library, open
 **Knowledge**, enable the proposed local search model once, and add your files.
@@ -93,6 +118,23 @@ private collection policy and broader organization retention work are unfinished
 
 ## What has actually been tested
 
+If OCR times out or its worker cannot finish a page, OffGrid retains verified
+native text and any completed page results as partial evidence. It does not
+automatically send that partial extraction to a model. Open the document to
+inspect it, then explicitly choose **Use available text only** for text-based
+questions, or retry preparation. Native-text-only answers exclude unread image
+content. OCR can recover image text; it does not establish the meaning of charts
+or diagrams, even when their labels are readable.
+
+In Chat, PDFs with substantial native text on every nonempty page and bounded
+visual regions are usable immediately as **text only**. The attachment says
+that images and figures have not been interpreted; the reader links to affected
+pages, and that coverage limit accompanies the model's source context. This does
+not establish complete visual understanding. Sparse headers, large scanned
+surfaces and unreadable pages still use OCR or explicit partial-use recovery.
+For a saved attachment that failed in an older build, choose **Retry preparation**
+once after updating. Existing ready source revisions remain unchanged.
+
 The [November 2 score report](../quality/evidence/document-format-score-2026-11-02.json)
 uses the frozen 37-file public corpus with the actual pinned Windows PDF worker,
 no PATH extractor and no OCR language pack:
@@ -116,3 +158,36 @@ client and packaging results are recorded in the
 These results do not establish model-answer accuracy, all-language OCR, clean
 installation on every platform, enterprise isolation or compliance. Those remain
 separate release gates. The original failed baseline remains in the evidence.
+
+### Large attachments and context
+
+Chat keeps the original file and complete extracted text. When they cannot fit in
+the selected context alongside the conversation and response reserve, it supplies
+selected exact passages relevant to the question, with introductory/distributed
+passages for orientation. The answer records source revisions and extracted-text
+byte ranges; these are not PDF page numbers. Web and CLI label this as selected
+document passages, **not a complete review**. Uninterpreted figures remain marked.
+
+This local passage selection requires no embedding download or model switch.
+For exhaustive reviews, inspect the source and ask focused questions about its
+sections; passage selection alone cannot establish complete coverage. If even
+bounded passages cannot fit, the draft stays available and Response settings
+offers the existing context controls. History and files are not discarded.
+
+### Follow-up questions and context
+
+A file stays attached to its saved conversation; you do not need to upload it
+again for each question. OffGrid selects relevant exact excerpts for the current
+question. On the llama runtime, it measures the complete prompt with the loaded
+model's tokenizer before generation. This includes prior messages and any selected
+Knowledge context. It does not count UTF-8 bytes as history tokens.
+
+**Maximum response tokens** limits one answer; it is not the conversation's context
+size or a limit on the number of questions. The answer allowance, history and
+source excerpts share the context. The default answer allowance is 1,024 tokens;
+a manually selected 4,096-token allowance reserves more space. If a conversation
+really fills its allocation, lower the answer allowance or select **Extended**
+when the model and available memory support it. History is never silently removed,
+and the service does not automatically switch models or enlarge the allocation.
+Providers without token-counting support retain conservative budgeting. Selected
+excerpts are still a limited view of the document, not full visual understanding.

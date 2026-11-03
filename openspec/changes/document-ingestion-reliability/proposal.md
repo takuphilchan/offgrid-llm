@@ -54,3 +54,20 @@ Dependencies must be pinned with redistribution notices and verified provenance.
 Installed user documents are not re-imported, deleted or reindexed automatically.
 SSO/directory provisioning and legal compliance certification are separate work;
 this change cannot claim enterprise readiness from parser unit tests.
+## Approved document workspace extension (2026-11-03)
+
+Expose authorized original-page previews and structured extracted units for Chat and
+Knowledge. Correct the reported PDF form/image classification without treating
+unread figures as understood. Retain partial native text for inspection and
+text-only use; never silently promote partial extraction to complete.
+UI and CLI share preparation states, source identity and recovery. No cloud
+viewer, automatic OCR download or automatic reindexing is introduced.
+
+### Approved readable-text correction (2026-11-03)
+
+Conversation PDFs with substantial native text on every nonempty page may be
+used immediately with persisted native-text-only coverage and visible unexamined
+visual-content notices. Large scanned surfaces, sparse native text, and unreadable
+pages still require OCR or explicit partial-use recovery. This is text readiness,
+not full visual interpretation. Existing failed imports recover through retry;
+saved ready sources and historical citations are not rewritten.

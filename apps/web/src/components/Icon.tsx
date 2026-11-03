@@ -1,8 +1,13 @@
 import type { ReactNode } from 'react';
 
-export type IconName = 'file' | 'sliders' | 'help' | 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings' | 'send' | 'upload' | 'refresh' | 'plus' | 'trash' | 'check' | 'copy' | 'search' | 'menu' | 'close' | 'mic' | 'speaker' | 'more' | 'sidebar';
+export type IconName = 'arrow-up' | 'arrow-down' | 'download' | 'chevron-left' | 'chevron-right' | 'file' | 'sliders' | 'help' | 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings' | 'send' | 'upload' | 'refresh' | 'plus' | 'trash' | 'check' | 'copy' | 'search' | 'menu' | 'close' | 'mic' | 'speaker' | 'more' | 'sidebar';
 
 const paths: Record<IconName, string[]> = {
+  'arrow-up': ['M12 20V4m-6 6 6-6 6 6'],
+  'arrow-down': ['M12 4v16m-6-6 6 6 6-6'],
+  download: ['M12 3v12m-5-5 5 5 5-5', 'M5 16v5h14v-5'],
+  'chevron-left': ['M15 5 8 12l7 7'],
+  'chevron-right': ['M9 5 16 12l-7 7'],
   file: ['M14 2H5v20h14V7l-5-5z', 'M14 2v5h5', 'M8 12h8M8 16h6'],
   sliders: ['M4 7h3m6 0h7M4 17h9m6 0h1', 'M7 4h6v6H7zM13 14h6v6h-6z'],
   help: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20', 'M9 9a3 3 0 0 1 6 0c0 2-3 2-3 5', 'M12 18h.01'],

@@ -2,6 +2,7 @@ import { useI18n } from '../../i18n';
 import { agentProfilesText } from '../../i18n/agent-profiles';
 import { operationFeedback } from '../../i18n/operation-feedback';
 import { SetupLink } from '../../lib/setup-handoff';
+import { responseBudgetHint } from '../../i18n/response-budget';
 
 type Preferences = { profile: string; maxTokens: number };
 
@@ -11,13 +12,14 @@ export function ComposerResponseLimits({ preferences, busy, update }: {
   const { locale, messages: text } = useI18n();
   const { profile, maxTokens } = preferences;
   return <details className="response-advanced">
-    <summary>{agentProfilesText[locale].advanced}<small>{profile === 'extended' ? text.chatStreaming.extended : text.chatStreaming.interactive} · {maxTokens.toLocaleString(locale)}</small></summary>
+    <summary>{agentProfilesText[locale].advanced}<small>{profile === 'extended' ? text.chatStreaming.extended : text.chatStreaming.interactive}</small></summary>
     <label className="field">{text.chatStreaming.profile}<select value={profile} disabled={busy} onChange={event => update({ ...preferences, profile: event.target.value })}>
       <option value="interactive">{text.chatStreaming.interactive}</option><option value="extended">{text.chatStreaming.extended}</option>
     </select></label>
     <label className="field">{text.chatStreaming.responseLimit}<select value={maxTokens} disabled={busy} onChange={event => update({ ...preferences, maxTokens: Number(event.target.value) })}>
       {[256, 1024, 4096].map(count => <option value={count} key={count}>{count.toLocaleString(locale)}</option>)}
     </select></label>
+    <p>{responseBudgetHint[locale]}</p>
     <p>{text.chatStreaming.profileHint}</p>
   </details>;
 }

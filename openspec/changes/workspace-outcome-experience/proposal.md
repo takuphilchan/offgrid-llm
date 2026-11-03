@@ -214,3 +214,12 @@ Evidence continues in `docs/advanced/product-reliability-plan.md`; `docs/advance
 ### Subsequent deployment request (2026-10-08)
 
 The user separately requested container replacement after the improvements. Record a post-implementation testing deployment: inspect and preserve the actual container configuration, back up consistently, replace the existing service with exactly one running OffGrid container, and verify or roll back. This is not authorization to publish a release, replace the desktop app, bypass compatibility checks or claim the unfinished usability/platform gates passed. Planning alone does not execute this request.
+## Approved document reading workspace (2026-11-03)
+
+Add Chat-left/document-right reading, with local PDF pages, search, zoom and
+citation navigation. Use labeled structured previews for other supported formats.
+Show restrained scanning/preparation animation only during actual preparation,
+and a distinct source-use state during answers. Narrow screens switch between
+Chat and Document without losing drafts or reading position. Preserve text,
+voice, images, terminal switching and current access. This extends the approved
+scope; it does not declare enterprise or document-answer qualification complete.
