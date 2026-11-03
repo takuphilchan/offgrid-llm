@@ -68,5 +68,12 @@ func (rt *ChatRuntime) streamFiles(input string, ch chan<- chatStreamMsg) error 
 	rt.CurrentSession = saved
 	rt.Messages = cli.SavedChatMessages(saved)
 	rt.Images = nil
+	if notice := cli.DocumentCoverageNotice(saved); notice != "" {
+		select {
+		case ch <- chatStreamMsg{token: "\n\n" + notice}:
+		case <-rt.Files.Context.Done():
+			return rt.Files.Context.Err()
+		}
+	}
 	return nil
 }

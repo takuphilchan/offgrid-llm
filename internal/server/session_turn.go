@@ -89,7 +89,7 @@ func (h *SessionHandlers) executeTurn(ctx context.Context, scoped *sessions.Scop
 		session, loadErr := scoped.Load(name)
 		err = loadErr
 		if err == nil {
-			messages, messageErr := attachmentMessages(scoped, name, session, turn)
+			messages, sources, messageErr := collectAttachmentMessages(scoped, name, session, turn)
 			lastSave := time.Time{}
 			emit := func(event ChatStreamEvent) error {
 				if ctx.Err() != nil {
@@ -118,7 +118,15 @@ func (h *SessionHandlers) executeTurn(ctx context.Context, scoped *sessions.Scop
 			if messageErr != nil {
 				err = messageErr
 			} else {
-				result, err = h.streamer(ctx, &api.ChatCompletionRequest{Model: turn.Model, Messages: messages, UseKnowledgeBase: &turn.Knowledge, MaxTokens: &turn.MaxTokens, Stream: true}, turn.Profile, emit)
+				request := &api.ChatCompletionRequest{Model: turn.Model, Messages: messages, UseKnowledgeBase: &turn.Knowledge, MaxTokens: &turn.MaxTokens, Stream: true}
+				ctx = withChatSources(ctx, sources, turn)
+				if !h.runtimeSourceBudget {
+					// Custom streamers without a model tokenizer retain conservative admission.
+					err = prepareChatSources(ctx, request, h.agentServer.chatContextWindowForModel(turn.Profile, turn.Model), nil)
+				}
+				if err == nil {
+					result, err = h.streamer(ctx, request, turn.Profile, emit)
+				}
 			}
 			if err == nil {
 				err = ctx.Err()

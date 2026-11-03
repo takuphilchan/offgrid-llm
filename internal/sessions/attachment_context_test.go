@@ -68,7 +68,7 @@ func TestAttachmentInventoryDoesNotHideUnsafeNamespace(t *testing.T) {
 	}
 }
 
-func TestAttachmentAdmissionIncludesHistoryWithoutConsumingRequest(t *testing.T) {
+func TestAttachmentAdmissionDeduplicatesHistoryForRetrieval(t *testing.T) {
 	manager := NewSessionManager(t.TempDir())
 	scope := manager.WithAccess(Access{UserID: "alice"})
 	_, _ = scope.Create("chat", "model")
@@ -81,12 +81,12 @@ func TestAttachmentAdmissionIncludesHistoryWithoutConsumingRequest(t *testing.T)
 		t.Fatal(err)
 	}
 	_, _, err := scope.BeginTurn("chat", &Turn{ID: "next", Status: "pending", Attachments: []AttachmentReference{ref}})
-	if !errors.Is(err, ErrAttachmentContextLimit) {
-		t.Fatalf("history omitted from admission: %v", err)
+	if err != nil {
+		t.Fatalf("same source should be admitted once for bounded retrieval: %v", err)
 	}
 	current, _ := scope.Load("chat")
-	if current.Turn != nil || current.TurnRequests["next"] {
-		t.Fatal("rejected context consumed turn identity")
+	if current.Turn == nil || !current.TurnRequests["next"] {
+		t.Fatal("valid request not durably admitted")
 	}
 }
 

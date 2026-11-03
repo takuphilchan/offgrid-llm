@@ -61,6 +61,9 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 		return result, err
 	}
 	if native {
+		if err := prepareChatSources(ctx, &prepared, s.chatContextWindowForModel(profile, request.Model), nil); err != nil {
+			return result, err
+		}
 		return s.streamNativeSessionChat(ctx, &prepared, nativeDescriptor, started, emit)
 	}
 	result.Metrics.ContextWindow = s.chatContextWindowForModel(profile, request.Model)
@@ -97,6 +100,10 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 		return emit(ChatStreamEvent{Type: "delta", Delta: text})
 	}
 	err = lease.Run(ctx, func(ctx context.Context) error {
+		counter, _ := s.engine.(inference.PromptTokenCounter)
+		if err := prepareChatSources(ctx, &prepared, result.Metrics.ContextWindow, counter); err != nil {
+			return err
+		}
 		if s.providerScheduler != nil && s.llamaProcess != nil && len(prepared.Tools) == 0 {
 			// The shared scheduler/model lease above owns admission and the GGUF
 			// process. Production text streams use the provider's terminal/identity
@@ -150,8 +157,11 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 		}
 	})
 	if err != nil {
+		if typed, ok := err.(*serviceError); ok {
+			return result, typed
+		}
 		if typed := inference.AsEngineError(err); typed != nil {
-			return result, newServiceError(http.StatusBadRequest, typed.Message, err)
+			return result, newCodedServiceError(http.StatusBadRequest, typed.Code, typed.Message, err)
 		}
 		return result, newServiceError(http.StatusBadGateway, "Generation interrupted. Partial text was not saved; retry or use a smaller model/context.", err)
 	}

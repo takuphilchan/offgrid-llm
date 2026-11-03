@@ -104,6 +104,15 @@ func (c *Client) RemoveSessionFile(ctx context.Context, name, id string) error {
 // PrepareSessionFile retries extraction of a retained original, never its upload.
 // The response must preserve the source identity inspected by this caller.
 func (c *Client) PrepareSessionFile(ctx context.Context, name string, source sessions.Attachment) (sessions.Attachment, error) {
+	return c.prepareSessionFile(ctx, name, source, false)
+}
+
+// Explicit caller choice; never silently accepts partial extraction on retry.
+func (c *Client) PrepareSessionFileTextOnly(ctx context.Context, name string, source sessions.Attachment) (sessions.Attachment, error) {
+	return c.prepareSessionFile(ctx, name, source, true)
+}
+
+func (c *Client) prepareSessionFile(ctx context.Context, name string, source sessions.Attachment, textOnly bool) (sessions.Attachment, error) {
 	if name == "" || !validAttachmentID(source.ID) {
 		return sessions.Attachment{}, fmt.Errorf("invalid attachment identity")
 	}
@@ -116,7 +125,11 @@ func (c *Client) PrepareSessionFile(ctx context.Context, name string, source ses
 	transport := *c.http
 	transport.Timeout = 2 * time.Minute
 	client.http = &transport
-	if err := client.JSON(bounded, http.MethodPost, sessionFilesPath(name)+"/"+source.ID+"/prepare", struct{}{}, &result); err != nil {
+	path := sessionFilesPath(name) + "/" + source.ID + "/prepare"
+	if textOnly {
+		path += "?text_only=true"
+	}
+	if err := client.JSON(bounded, http.MethodPost, path, struct{}{}, &result); err != nil {
 		return sessions.Attachment{}, err
 	}
 	a := result.Attachment

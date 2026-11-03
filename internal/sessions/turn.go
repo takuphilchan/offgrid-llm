@@ -13,27 +13,28 @@ var ErrImageCapacity = errors.New("conversation image capacity reached; start a 
 // Turn is a recoverable generation snapshot, separate from completed context.
 // A final answer and its completed status are committed in the SAME session file.
 type Turn struct {
-	Attachments        []AttachmentReference `json:"attachments,omitempty"`
-	Images             []api.SessionImage    `json:"images,omitempty"`
-	Agent              *AgentSelection       `json:"agent,omitempty"`
-	JobID              string                `json:"job_id,omitempty"`
-	JobAdmission       string                `json:"job_admission,omitempty"`
-	ID                 string                `json:"id"`
-	RequestHash        string                `json:"request_hash"`
-	Prompt             string                `json:"prompt"`
-	Model              string                `json:"model"`
-	Profile            string                `json:"profile"`
-	Knowledge          bool                  `json:"knowledge"`
-	KnowledgeDocuments []string              `json:"knowledge_documents,omitempty"`
-	KnowledgeSources   []KnowledgePassage    `json:"knowledge_sources,omitempty"`
-	MaxTokens          int                   `json:"max_tokens"`
-	Status             string                `json:"status"`
-	Phase              string                `json:"phase"`
-	Output             string                `json:"output"`
-	Error              string                `json:"error,omitempty"`
-	ErrorCode          string                `json:"error_code,omitempty"`
-	FinishReason       string                `json:"finish_reason,omitempty"`
-	Metrics            json.RawMessage       `json:"metrics,omitempty"`
+	AttachmentSelections []AttachmentSelection `json:"attachment_selections,omitempty"`
+	Attachments          []AttachmentReference `json:"attachments,omitempty"`
+	Images               []api.SessionImage    `json:"images,omitempty"`
+	Agent                *AgentSelection       `json:"agent,omitempty"`
+	JobID                string                `json:"job_id,omitempty"`
+	JobAdmission         string                `json:"job_admission,omitempty"`
+	ID                   string                `json:"id"`
+	RequestHash          string                `json:"request_hash"`
+	Prompt               string                `json:"prompt"`
+	Model                string                `json:"model"`
+	Profile              string                `json:"profile"`
+	Knowledge            bool                  `json:"knowledge"`
+	KnowledgeDocuments   []string              `json:"knowledge_documents,omitempty"`
+	KnowledgeSources     []KnowledgePassage    `json:"knowledge_sources,omitempty"`
+	MaxTokens            int                   `json:"max_tokens"`
+	Status               string                `json:"status"`
+	Phase                string                `json:"phase"`
+	Output               string                `json:"output"`
+	Error                string                `json:"error,omitempty"`
+	ErrorCode            string                `json:"error_code,omitempty"`
+	FinishReason         string                `json:"finish_reason,omitempty"`
+	Metrics              json.RawMessage       `json:"metrics,omitempty"`
 }
 
 func (t *Turn) Active() bool {
@@ -125,6 +126,7 @@ func (s *ScopedManager) SaveTurn(name string, turn *Turn) error {
 		turn.Attachments = nil
 		turn.Images = nil // Completed bytes live once, in the saved user message.
 		session.AddMessage("assistant", turn.Output)
+		session.Messages[len(session.Messages)-1].AttachmentSelections = turn.AttachmentSelections
 		session.Messages[len(session.Messages)-1].KnowledgeSources = turn.KnowledgeSources
 		session.Messages[len(session.Messages)-1].KnowledgeDocuments = append([]string(nil), turn.KnowledgeDocuments...)
 	}

@@ -195,7 +195,7 @@ func (s *Server) chatContextWindowForModel(profile, modelID string) int {
 		return limit
 	}
 	chat := 8192
-	if s.config != nil && s.config.ChatContextSize > 0 {
+	if s != nil && s.config != nil && s.config.ChatContextSize > 0 {
 		chat = s.config.ChatContextSize
 	}
 	return min(chat, limit)

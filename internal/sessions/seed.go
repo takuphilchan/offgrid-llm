@@ -18,7 +18,7 @@ func ValidateSeedHistory(messages []Message) error {
 	textBytes, imageBytes := 0, 0
 	for _, m := range messages {
 		if (m.Role != "user" && m.Role != "assistant") || !utf8.ValidString(m.Content) ||
-			m.JobID != "" || m.TurnID != "" || len(m.Attachments)+len(m.KnowledgeSources)+len(m.KnowledgeDocuments) != 0 ||
+			m.JobID != "" || m.TurnID != "" || len(m.Attachments)+len(m.AttachmentSelections)+len(m.KnowledgeSources)+len(m.KnowledgeDocuments) != 0 ||
 			(m.Role != "user" && len(m.Images) != 0) {
 			return ErrInvalidSeedHistory
 		}

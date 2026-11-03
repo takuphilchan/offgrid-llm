@@ -24,15 +24,16 @@ var (
 
 // Message represents a single chat message
 type Message struct {
-	Attachments        []AttachmentReference `json:"attachments,omitempty"`
-	Images             []api.SessionImage    `json:"images,omitempty"`
-	KnowledgeSources   []KnowledgePassage    `json:"knowledge_sources,omitempty"`
-	KnowledgeDocuments []string              `json:"knowledge_documents,omitempty"`
-	JobID              string                `json:"job_id,omitempty"`
-	TurnID             string                `json:"turn_id,omitempty"`
-	Role               string                `json:"role"` // "user" or "assistant"
-	Content            string                `json:"content"`
-	Timestamp          time.Time             `json:"timestamp"`
+	AttachmentSelections []AttachmentSelection `json:"attachment_selections,omitempty"`
+	Attachments          []AttachmentReference `json:"attachments,omitempty"`
+	Images               []api.SessionImage    `json:"images,omitempty"`
+	KnowledgeSources     []KnowledgePassage    `json:"knowledge_sources,omitempty"`
+	KnowledgeDocuments   []string              `json:"knowledge_documents,omitempty"`
+	JobID                string                `json:"job_id,omitempty"`
+	TurnID               string                `json:"turn_id,omitempty"`
+	Role                 string                `json:"role"` // "user" or "assistant"
+	Content              string                `json:"content"`
+	Timestamp            time.Time             `json:"timestamp"`
 }
 
 // Session represents a conversation session

@@ -69,6 +69,18 @@ func (s *Server) handleDocumentSource(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(source.Bytes)
 		return
 	}
+	if query.Get("format") == "preview" {
+		source, err := view.Original(doc.ID)
+		if err != nil {
+			writeErrorWithCode(w, "Original file is unavailable.", 410, "document_original_unavailable")
+			return
+		}
+		serveDocumentPreview(w, r, s.ragEngine.DocumentParser(), source.Name, source.Bytes, func() bool {
+			current, err := view.Original(doc.ID)
+			return err == nil && current.SHA256 == source.SHA256 && view.CanReadDocument(doc.ID)
+		})
+		return
+	}
 	if format := r.URL.Query().Get("format"); format != "" && format != "text" {
 		writeError(w, "Unknown source format", 400)
 		return

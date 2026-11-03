@@ -137,5 +137,10 @@ func sendPlainConversation(ctx context.Context, client *serviceclient.Client, na
 		return json.NewEncoder(out).Encode(result)
 	}
 	_, err = fmt.Fprintln(out)
+	if err == nil {
+		if notice := DocumentCoverageNotice(result.Session); notice != "" {
+			_, err = fmt.Fprintln(out, notice)
+		}
+	}
 	return err
 }

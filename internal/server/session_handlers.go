@@ -20,20 +20,22 @@ type SessionCompleter func(context.Context, string, []api.ChatMessage, bool) (st
 type SessionHandlers struct {
 	agentServer *Server
 	// Fault hook configured only by isolated admission tests, never by clients.
-	admissionFault  func(string) error
-	manager         *sessions.SessionManager
-	completer       SessionCompleter
-	streamer        SessionStreamer
-	imageReady      func(string) error
-	knowledgeAccess func(string, []string) bool
-	requireAuth     bool
-	locksMu         sync.Mutex
-	sessionLocks    map[string]*sessionLock
-	turnMu          sync.Mutex
-	turnCancels     map[string]context.CancelFunc
-	turnWorkers     sync.WaitGroup
-	turnClosed      bool
-	runtimeContext  context.Context
+	admissionFault func(string) error
+	manager        *sessions.SessionManager
+	completer      SessionCompleter
+	streamer       SessionStreamer
+	// Production streams budget sources under the loaded model lease.
+	runtimeSourceBudget bool
+	imageReady          func(string) error
+	knowledgeAccess     func(string, []string) bool
+	requireAuth         bool
+	locksMu             sync.Mutex
+	sessionLocks        map[string]*sessionLock
+	turnMu              sync.Mutex
+	turnCancels         map[string]context.CancelFunc
+	turnWorkers         sync.WaitGroup
+	turnClosed          bool
+	runtimeContext      context.Context
 }
 
 type sessionLock struct {

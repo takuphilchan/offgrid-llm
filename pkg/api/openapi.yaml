@@ -712,6 +712,8 @@ paths:
       - { name: attachment_id, in: path, required: true, schema: { type: string } }
     post:
       operationId: prepareSessionAttachment
+      parameters:
+        - { name: text_only, in: query, schema: { type: boolean, default: false }, description: Explicitly accept available native text with unread image content disclosed. Does not certify full extraction. }
       description: Retry extraction from the retained digest-verified original. Ready revisions are immutable. Does not generate an answer.
       responses:
         '200':
@@ -731,6 +733,28 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SessionAttachmentResult' }
+  /v1/sessions/{name}/attachments/{attachment_id}/preview:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+      - { name: attachment_id, in: path, required: true, schema: { type: string } }
+      - { name: sha256, in: query, schema: { type: string }, description: Expected original digest; mismatch rejects delivery. }
+      - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000 }, description: Render this PDF page as PNG; omit for structured native source units. }
+    get:
+      operationId: getSessionAttachmentPreview
+      description: Read-only owner-scoped local preview, including partial native text. Never indexes, downloads language data or generates an answer.
+      responses:
+        '200':
+          description: Source units or bounded PDF page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentPreview' }
+            image/png:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
   /v1/sessions/{name}/attachments/{attachment_id}/original:
     parameters:
       - $ref: '#/components/parameters/SessionName'
@@ -999,7 +1023,9 @@ paths:
       description: Requires knowledge read permission. Defaults to retained extracted text. format=original downloads the digest-verified uploaded bytes when retained. Available while inference is disabled. Legacy records never fabricate an original.
       parameters:
         - { name: id, in: query, required: true, schema: { type: string } }
-        - { name: format, in: query, schema: { type: string, enum: [text, original], default: text } }
+        - { name: format, in: query, schema: { type: string, enum: [text, original, preview], default: text } }
+        - { name: sha256, in: query, schema: { type: string }, description: Expected original digest for preview requests. }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000 }, description: PDF page for format=preview; omit for structured source units. }
         - { name: start_byte, in: query, description: UTF-8 byte offset of a saved citation. Supply all five citation fields together; text format only., schema: { type: integer, minimum: 0 } }
         - { name: end_byte, in: query, description: Exclusive UTF-8 byte offset. Passage size is at most 800000 bytes., schema: { type: integer, minimum: 1 } }
         - { name: source_sha256, in: query, schema: { type: string, pattern: '^[a-f0-9]{64}$' } }
@@ -1015,13 +1041,17 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [document, content, truncated]
-                properties:
-                  document: { $ref: '#/components/schemas/Document' }
-                  content: { type: string }
-                  truncated: { type: boolean }
-                  citation_verified: { type: boolean, description: Present and true only after exact passage, source digest and extractor revision validation. }
+                oneOf:
+                  - $ref: '#/components/schemas/DocumentPreview'
+                  - type: object
+                    required: [document, content, truncated]
+                    properties:
+                      document: { $ref: '#/components/schemas/Document' }
+                      content: { type: string }
+                      truncated: { type: boolean }
+                      citation_verified: { type: boolean, description: Present and true only after exact passage, source digest and extractor revision validation. }
+            image/png:
+              schema: { type: string, format: binary }
             application/octet-stream:
               schema: { type: string, format: binary }
         '404': { $ref: '#/components/responses/Error' }
@@ -2900,7 +2930,31 @@ components:
         status: { type: string, enum: [uploaded, ready, failed] }
         revision: { type: string, description: Immutable extracted-source identity when ready. }
         error_code: { type: string }
+        coverage: { type: string, enum: [native_text_only], description: Usable native text with disclosed visual limits; unread image content is not interpreted. }
         created_at: { type: string, format: date-time }
+    DocumentPreview:
+      type: object
+      required: [name, sha256, format, pages, units, state, error_code]
+      properties:
+        name: { type: string }
+        sha256: { type: string }
+        format: { type: string }
+        pages: { type: integer }
+        state: { type: string }
+        error_code: { type: string }
+        units:
+          type: array
+          items:
+            type: object
+            required: [kind, index, text, state, source_sha256, extractor_revision]
+            properties:
+              kind: { type: string }
+              index: { type: integer }
+              name: { type: string }
+              text: { type: string }
+              state: { type: string }
+              source_sha256: { type: string }
+              extractor_revision: { type: string }
     SessionAttachmentReference:
       type: object
       additionalProperties: false
@@ -2924,6 +2978,7 @@ components:
         - type: object
           required: [timestamp]
           properties:
+            attachment_selections: { type: array, items: { $ref: '#/components/schemas/AttachmentSelection' } }
             timestamp: { type: string, format: date-time }
             attachments: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/SessionAttachmentReference' } }
             images: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/SessionImage' } }
@@ -2931,6 +2986,19 @@ components:
             turn_id: { type: string }
             knowledge_sources: { type: array, items: { $ref: '#/components/schemas/KnowledgePassage' } }
             knowledge_documents: { type: array, items: { type: string }, description: 'Retained source dependencies checked against current access; not an access grant.' }
+    AttachmentSelection:
+      type: object
+      description: Exact source revision and UTF-8 extracted-text byte ranges supplied for this answer. Excerpts are not a complete document review.
+      required: [id, revision, name, mode, total_bytes, ranges]
+      properties:
+        id: { type: string }
+        revision: { type: string }
+        name: { type: string }
+        mode: { type: string, enum: [full_text, excerpts] }
+        total_bytes: { type: integer, minimum: 0 }
+        ranges:
+          type: array
+          items: { type: array, minItems: 2, maxItems: 2, items: { type: integer, minimum: 0 } }
     KnowledgePassage:
       type: object
       required: [document_id, name, chunk_id, content, content_hash]
@@ -2985,6 +3053,7 @@ components:
         id: { type: string }
         prompt: { type: string }
         attachments: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/SessionAttachmentReference' } }
+        attachment_selections: { type: array, readOnly: true, items: { $ref: '#/components/schemas/AttachmentSelection' } }
         images: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/SessionImage' }, description: Pending or interrupted images; completed images are stored in the user message. }
         model: { type: string }
         profile: { type: string }

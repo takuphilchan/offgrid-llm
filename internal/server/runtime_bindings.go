@@ -77,6 +77,7 @@ func (s *Server) BindApplicationRuntime(runner *agents.Runner) error {
 		return err
 	}
 	s.sessionHandlers.streamer = s.streamSessionChat
+	s.sessionHandlers.runtimeSourceBudget = true
 	s.sessionHandlers.imageReady = s.sessionImageReady
 	s.sessionHandlers.runtimeContext = s.runtimeCtx
 	s.browserHub.RecordReply = s.recordComputerReply

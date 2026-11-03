@@ -70,6 +70,22 @@ func (h *SessionHandlers) handleSessionAttachments(w http.ResponseWriter, r *htt
 		_, _ = w.Write(data)
 		return
 	}
+	if r.Method == http.MethodGet && id != "" && subaction == "preview" {
+		a, data, err := scope.AttachmentOriginal(name, id)
+		if err != nil {
+			writeSessionError(w, err)
+			return
+		}
+		parser := rag.NewDocumentParser()
+		if h.agentServer != nil && h.agentServer.ragEngine != nil {
+			parser = h.agentServer.ragEngine.DocumentParser()
+		}
+		serveDocumentPreview(w, r, parser, a.Name, data, func() bool {
+			current, _, err := scope.AttachmentOriginal(name, id)
+			return err == nil && current.SHA256 == a.SHA256
+		})
+		return
+	}
 	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
 		writeError(w, "Method not allowed", 405)
 		return
@@ -123,11 +139,37 @@ func (h *SessionHandlers) handleSessionAttachments(w http.ResponseWriter, r *htt
 	if h.agentServer != nil && h.agentServer.ragEngine != nil {
 		parser = h.agentServer.ragEngine.DocumentParser()
 	}
-	result, parseErr := parser.ParseContext(r.Context(), data, a.Name, filepath.Ext(a.Name))
+	textOnly := r.URL.Query().Get("text_only") == "true"
+	var result *rag.ParseResult
+	var parseErr error
+	if textOnly {
+		result, parseErr = parser.PreviewContext(r.Context(), data, a.Name, filepath.Ext(a.Name))
+		var problem *rag.ParseError
+		if result != nil && strings.TrimSpace(result.Content) != "" && errors.As(parseErr, &problem) && problem.Code == "document_ocr_required" {
+			parseErr = nil
+		}
+	} else {
+		// Inspect native PDF text first. Usable text with visual limitations does
+		// not need a full-page OCR pass, but remains explicitly text-only.
+		if strings.EqualFold(filepath.Ext(a.Name), ".pdf") {
+			result, parseErr = parser.PreviewContext(r.Context(), data, a.Name, filepath.Ext(a.Name))
+			var problem *rag.ParseError
+			if errors.As(parseErr, &problem) && problem.Code == "document_ocr_required" && rag.NativeTextUsable(result) {
+				textOnly, parseErr = true, nil
+			}
+		}
+		var problem *rag.ParseError
+		if !strings.EqualFold(filepath.Ext(a.Name), ".pdf") || errors.As(parseErr, &problem) && problem.Code == "document_ocr_required" {
+			result, parseErr = parser.ParseContext(r.Context(), data, a.Name, filepath.Ext(a.Name))
+		}
+	}
 	if parseErr == nil && (result == nil || strings.TrimSpace(result.Content) == "") {
 		parseErr = &rag.ParseError{Code: "document_invalid", Message: "This file has no readable text."}
 	}
 	text, code := "", ""
+	if result != nil {
+		text = result.Content
+	}
 	if parseErr != nil {
 		code = "document_invalid"
 		var typed *rag.ParseError
@@ -144,7 +186,11 @@ func (h *SessionHandlers) handleSessionAttachments(w http.ResponseWriter, r *htt
 	if result != nil && result.Metadata["extractor_revision"] != "" {
 		parserRevision += "/" + result.Metadata["extractor_revision"]
 	}
-	a, err = scope.PrepareAttachment(name, a.ID, text, parserRevision, code)
+	if textOnly && parseErr == nil && result.State == rag.ExtractionPartial {
+		a, err = scope.PrepareAttachmentTextOnly(name, a.ID, text, parserRevision)
+	} else {
+		a, err = scope.PrepareAttachment(name, a.ID, text, parserRevision, code)
+	}
 	if err != nil {
 		writeSessionError(w, err)
 		return
@@ -190,34 +236,39 @@ func (h *SessionHandlers) validateSessionAttachments(r *http.Request, name strin
 	return nil
 }
 
-func attachmentMessages(scope *sessions.ScopedManager, name string, session *sessions.Session, turn *sessions.Turn) ([]api.ChatMessage, error) {
+func collectAttachmentMessages(scope *sessions.ScopedManager, name string, session *sessions.Session, turn *sessions.Turn) ([]api.ChatMessage, []sessions.AttachmentText, error) {
 	messages := make([]api.ChatMessage, 0, len(session.Messages)+1)
-	total := 0
+	var allSources []sessions.AttachmentText
+	seen := map[string]string{}
 	appendMessage := func(role, text string, images []api.SessionImage, refs []sessions.AttachmentReference) error {
 		var sources []sessions.AttachmentText
 		var err error
 		if len(refs) > 0 {
-			sources, err = scope.AttachmentTexts(name, refs)
+			sources, err = scope.AttachmentSources(name, refs)
 		}
 		if err != nil {
 			return attachmentServiceError(err)
 		}
 		for _, source := range sources {
-			total += len(source.Text)
+			if revision, ok := seen[source.Attachment.ID]; ok {
+				if revision != source.Attachment.Revision {
+					return attachmentServiceError(sessions.ErrAttachmentUnavailable)
+				}
+				continue
+			}
+			seen[source.Attachment.ID] = source.Attachment.Revision
+			allSources = append(allSources, source)
 		}
-		if total > sessions.MaxAttachmentContextBytes {
-			return attachmentServiceError(sessions.ErrAttachmentContextLimit)
-		}
-		messages = append(messages, api.ChatMessage{Role: role, Content: api.SessionContent(sessions.AttachmentPrompt(text, sources), images)})
+		messages = append(messages, api.ChatMessage{Role: role, Content: api.SessionContent(text, images)})
 		return nil
 	}
 	for _, m := range session.Messages {
 		if err := appendMessage(m.Role, m.Content, m.Images, m.Attachments); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	if err := appendMessage("user", turn.Prompt, turn.Images, turn.Attachments); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return messages, nil
+	return messages, allSources, nil
 }

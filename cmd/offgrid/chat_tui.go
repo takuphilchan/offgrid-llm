@@ -435,7 +435,7 @@ func (m chatTUIModel) handleCommand(cmd string) (tea.Model, tea.Cmd) {
 	case "help", "?":
 		m.appendSystem("Commands: /help, /status, /clear, /rag, /image PATH, /images, /remove-image [N|all], /exit")
 		if m.rt.Files != nil || m.rt.StartFiles != nil {
-			m.appendSystem("Files: /attach PATH, /attachments, /remove-attachment N|all, /retry-attachment N, /use-attachment ID")
+			m.appendSystem("Files: /attach PATH, /attachments, /preview-attachment N [unit], /attachment-text-only N, /remove-attachment N|all, /retry-attachment N, /use-attachment ID")
 		}
 	case "status":
 		m.appendSystem(m.rt.StatusText())

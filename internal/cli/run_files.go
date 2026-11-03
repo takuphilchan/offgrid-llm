@@ -171,3 +171,20 @@ func (c *ServiceFileConversation) Stream(model, input string, images []api.Sessi
 	c.Saved = response.Session
 	return response.Session, nil
 }
+
+// DocumentCoverageNotice describes service-recorded evidence, not model prose.
+func DocumentCoverageNotice(saved *sessions.Session) string {
+	if saved == nil || len(saved.Messages) == 0 {
+		return ""
+	}
+	last := saved.Messages[len(saved.Messages)-1]
+	if last.Role != "assistant" {
+		return ""
+	}
+	for _, selection := range last.AttachmentSelections {
+		if selection.Mode == "excerpts" {
+			return "Source coverage: selected document passages, not a complete review. Open the source to inspect the full text."
+		}
+	}
+	return ""
+}

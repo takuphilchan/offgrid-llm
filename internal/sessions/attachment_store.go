@@ -35,6 +35,7 @@ type Attachment struct {
 	Status    string    `json:"status"`
 	Revision  string    `json:"revision,omitempty"`
 	ErrorCode string    `json:"error_code,omitempty"`
+	Coverage  string    `json:"coverage,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -178,6 +179,14 @@ func (s *ScopedManager) CreateAttachment(name, filename, mediaType string, data 
 }
 
 func (s *ScopedManager) PrepareAttachment(name, id, text, parser, errorCode string) (Attachment, error) {
+	return s.prepareAttachment(name, id, text, parser, errorCode, "")
+}
+
+func (s *ScopedManager) PrepareAttachmentTextOnly(name, id, text, parser string) (Attachment, error) {
+	return s.prepareAttachment(name, id, text, parser+"/native-text-only", "", "native_text_only")
+}
+
+func (s *ScopedManager) prepareAttachment(name, id, text, parser, errorCode, coverage string) (Attachment, error) {
 	s.manager.mutationMu.Lock()
 	defer s.manager.mutationMu.Unlock()
 	root, dir, err := s.attachmentRoot(name, false)
@@ -198,7 +207,8 @@ func (s *ScopedManager) PrepareAttachment(name, id, text, parser, errorCode stri
 	if errorCode != "" {
 		record.Status = "failed"
 		record.ErrorCode = errorCode
-		record.Text = ""
+		record.Text = text // Retain partial evidence; ReadAttachment still requires ready.
+		record.Coverage = ""
 	} else {
 		if strings.TrimSpace(text) == "" || parser == "" {
 			return Attachment{}, ErrAttachmentUnavailable
@@ -209,6 +219,7 @@ func (s *ScopedManager) PrepareAttachment(name, id, text, parser, errorCode stri
 		record.Parser = parser
 		record.Revision = hex.EncodeToString(revision[:])
 		record.ErrorCode = ""
+		record.Coverage = coverage
 	}
 	err = writeAttachmentRecord(root, dir, record)
 	return record.Attachment, err

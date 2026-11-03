@@ -578,6 +578,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{name}/attachments/{attachment_id}/preview": {
+        parameters: {
+            query?: {
+                /** @description Expected original digest; mismatch rejects delivery. */
+                sha256?: string;
+                /** @description Render this PDF page as PNG; omit for structured native source units. */
+                page?: number;
+            };
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Read-only owner-scoped local preview, including partial native text. Never indexes, downloads language data or generates an answer. */
+        get: operations["getSessionAttachmentPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{name}/attachments/{attachment_id}/original": {
         parameters: {
             query?: never;
@@ -2214,8 +2239,30 @@ export interface components {
             /** @description Immutable extracted-source identity when ready. */
             revision?: string;
             error_code?: string;
+            /**
+             * @description Usable native text with disclosed visual limits; unread image content is not interpreted.
+             * @enum {string}
+             */
+            coverage?: "native_text_only";
             /** Format: date-time */
             created_at: string;
+        };
+        DocumentPreview: {
+            name: string;
+            sha256: string;
+            format: string;
+            pages: number;
+            state: string;
+            error_code: string;
+            units: {
+                kind: string;
+                index: number;
+                name?: string;
+                text: string;
+                state: string;
+                source_sha256: string;
+                extractor_revision: string;
+            }[];
         };
         SessionAttachmentReference: {
             id: string;
@@ -2229,6 +2276,7 @@ export interface components {
             };
         };
         SessionMessage: components["schemas"]["ChatMessage"] & {
+            attachment_selections?: components["schemas"]["AttachmentSelection"][];
             /** Format: date-time */
             timestamp: string;
             attachments?: components["schemas"]["SessionAttachmentReference"][];
@@ -2238,6 +2286,16 @@ export interface components {
             knowledge_sources?: components["schemas"]["KnowledgePassage"][];
             /** @description Retained source dependencies checked against current access; not an access grant. */
             knowledge_documents?: string[];
+        };
+        /** @description Exact source revision and UTF-8 extracted-text byte ranges supplied for this answer. Excerpts are not a complete document review. */
+        AttachmentSelection: {
+            id: string;
+            revision: string;
+            name: string;
+            /** @enum {string} */
+            mode: "full_text" | "excerpts";
+            total_bytes: number;
+            ranges: number[][];
         };
         KnowledgePassage: {
             source?: components["schemas"]["KnowledgeSourceLocator"];
@@ -2288,6 +2346,7 @@ export interface components {
             id: string;
             prompt: string;
             attachments?: components["schemas"]["SessionAttachmentReference"][];
+            readonly attachment_selections?: components["schemas"]["AttachmentSelection"][];
             /** @description Pending or interrupted images; completed images are stored in the user message. */
             images?: components["schemas"]["SessionImage"][];
             model: string;
@@ -4320,7 +4379,10 @@ export interface operations {
     };
     prepareSessionAttachment: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Explicitly accept available native text with unread image content disclosed. Does not certify full extraction. */
+                text_only?: boolean;
+            };
             header?: never;
             path: {
                 name: components["parameters"]["SessionName"];
@@ -4359,6 +4421,40 @@ export interface operations {
                     "application/json": components["schemas"]["SessionAttachmentResult"];
                 };
             };
+        };
+    };
+    getSessionAttachmentPreview: {
+        parameters: {
+            query?: {
+                /** @description Expected original digest; mismatch rejects delivery. */
+                sha256?: string;
+                /** @description Render this PDF page as PNG; omit for structured native source units. */
+                page?: number;
+            };
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Source units or bounded PDF page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentPreview"];
+                    "image/png": string;
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     getSessionAttachmentOriginal: {
@@ -4774,7 +4870,11 @@ export interface operations {
         parameters: {
             query: {
                 id: string;
-                format?: "text" | "original";
+                format?: "text" | "original" | "preview";
+                /** @description Expected original digest for preview requests. */
+                sha256?: string;
+                /** @description PDF page for format=preview; omit for structured source units. */
+                page?: number;
                 /** @description UTF-8 byte offset of a saved citation. Supply all five citation fields together; text format only. */
                 start_byte?: number;
                 /** @description Exclusive UTF-8 byte offset. Passage size is at most 800000 bytes. */
@@ -4798,13 +4898,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
+                    "application/json": components["schemas"]["DocumentPreview"] | {
                         document: components["schemas"]["Document"];
                         content: string;
                         truncated: boolean;
                         /** @description Present and true only after exact passage */
                         citation_verified?: boolean;
                     };
+                    "image/png": string;
                     "application/octet-stream": string;
                 };
             };

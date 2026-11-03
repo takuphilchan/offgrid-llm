@@ -66,6 +66,9 @@ func RunSessionFiles(ctx context.Context, client *serviceclient.Client, args []s
 			return json.NewEncoder(out).Encode(item)
 		}
 		_, err = fmt.Fprintf(out, "Attached: %s\nSource: %s\nRevision: %s\n", TerminalSafe(item.Name), item.ID, item.Revision)
+		if err == nil && item.Coverage == "native_text_only" {
+			_, err = fmt.Fprintln(out, "Text ready; images and figures have not been interpreted.")
+		}
 		return err
 	case "attachments":
 		if len(args) != 2 {
@@ -85,6 +88,11 @@ func RunSessionFiles(ctx context.Context, client *serviceclient.Client, args []s
 		for _, a := range items {
 			if _, err = fmt.Fprintf(out, "%s  %s  %s  %d bytes\n", a.ID, TerminalSafe(a.Name), TerminalSafe(a.Status), a.Bytes); err != nil {
 				return err
+			}
+			if a.Coverage == "native_text_only" {
+				if _, err = fmt.Fprintln(out, "  Native text only; images and figures have not been interpreted."); err != nil {
+					return err
+				}
 			}
 		}
 		return nil

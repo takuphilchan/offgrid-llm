@@ -51,7 +51,7 @@ func conversationFilePath(arg string) string {
 func IsConversationFileCommand(input string) bool {
 	name, _, _ := strings.Cut(strings.TrimSpace(input), " ")
 	switch name {
-	case "/attach", "/attachments", "/remove-attachment", "/retry-attachment", "/use-attachment":
+	case "/attach", "/attachments", "/remove-attachment", "/retry-attachment", "/use-attachment", "/attachment-text-only", "/preview-attachment":
 		return true
 	}
 	return false
@@ -61,6 +61,37 @@ func (d *ConversationFileDraft) Command(ctx context.Context, client *serviceclie
 	command, arg, _ := strings.Cut(strings.TrimSpace(input), " ")
 	arg = strings.TrimSpace(arg)
 	switch command {
+	case "/preview-attachment":
+		fields := strings.Fields(arg)
+		if len(fields) < 1 || len(fields) > 2 {
+			return true, "", Usage("/preview-attachment N [source-unit]")
+		}
+		n, err := strconv.Atoi(fields[0])
+		if err != nil || n < 1 || n > len(d.Files) {
+			return true, "", Usage("choose an attachment number from /attachments")
+		}
+		unit := 1
+		if len(fields) == 2 {
+			unit, err = strconv.Atoi(fields[1])
+			if err != nil || unit < 1 {
+				return true, "", Usage("source-unit must be positive")
+			}
+		}
+		preview, err := client.PreviewSessionFile(ctx, name, d.Files[n-1])
+		if err != nil {
+			return true, "", err
+		}
+		if unit > len(preview.Units) {
+			return true, "", Usage("source unit is unavailable")
+		}
+		part := preview.Units[unit-1]
+		body := []rune(part.Text)
+		suffix := ""
+		if len(body) > 12000 {
+			body = body[:12000]
+			suffix = "\n[Display truncated at 12,000 characters; the stored source is unchanged.]"
+		}
+		return true, fmt.Sprintf("%s · %s %d · %s\nSource: %s\n%s%s", TerminalSafe(preview.Name), TerminalSafe(part.Kind), part.Index, TerminalSafe(part.State), preview.SHA256, TerminalSafe(string(body)), suffix), nil
 	case "/use-attachment":
 		if len(d.Files) >= 8 {
 			return true, "", Usage("remove an attachment first; at most eight files")
@@ -81,16 +112,24 @@ func (d *ConversationFileDraft) Command(ctx context.Context, client *serviceclie
 			}
 		}
 		return true, "", Usage("source not found; inspect session attachments NAME")
-	case "/retry-attachment":
+	case "/retry-attachment", "/attachment-text-only":
 		n, err := strconv.Atoi(arg)
 		if err != nil || n < 1 || n > len(d.Files) {
-			return true, "", Usage("/retry-attachment N from /attachments")
+			return true, "", Usage("%s N from /attachments", command)
 		}
-		item, err := client.PrepareSessionFile(ctx, name, d.Files[n-1])
+		var item sessions.Attachment
+		if command == "/attachment-text-only" {
+			item, err = client.PrepareSessionFileTextOnly(ctx, name, d.Files[n-1])
+		} else {
+			item, err = client.PrepareSessionFile(ctx, name, d.Files[n-1])
+		}
 		if err != nil {
 			return true, "", err
 		}
 		d.Files[n-1] = item
+		if item.Coverage == "native_text_only" {
+			return true, "Available text selected: " + TerminalSafe(item.Name) + ". Image/scanned content remains unread; answers cannot cover the whole document.", nil
+		}
 		return true, "Ready: " + TerminalSafe(item.Name), nil
 	case "/attach":
 		if arg == "" {
@@ -123,6 +162,9 @@ func (d *ConversationFileDraft) Command(ctx context.Context, client *serviceclie
 		}
 		d.Files = append(d.Files, item)
 		d.uploadResolved(conversationFilePath(arg))
+		if item.Coverage == "native_text_only" {
+			return true, "Attached: " + TerminalSafe(item.Name) + ". Text ready; images and figures have not been interpreted.", nil
+		}
 		return true, "Attached: " + TerminalSafe(item.Name), nil
 	case "/attachments":
 		if arg != "" {
@@ -137,6 +179,12 @@ func (d *ConversationFileDraft) Command(ctx context.Context, client *serviceclie
 		}
 		for i, item := range d.Files {
 			fmt.Fprintf(&text, "%d. %s · %s\n", i+1, TerminalSafe(item.Name), TerminalSafe(item.Status))
+			if item.ErrorCode != "" {
+				fmt.Fprintf(&text, "  %s\n", TerminalSafe(item.ErrorCode))
+			}
+			if item.Coverage == "native_text_only" {
+				fmt.Fprintln(&text, "  Native text only; image/scanned content remains unread.")
+			}
 		}
 		return true, strings.TrimSpace(text.String()), nil
 	case "/remove-attachment":
@@ -238,7 +286,7 @@ func conversationChatLoop(ctx context.Context, client *serviceclient.Client, sav
 			continue
 		}
 		if input == "/help" {
-			fmt.Fprintln(out, "/attach PATH · /attachments · /remove-attachment N|all · /retry-attachment N · /use-attachment ID · /image PATH · /images · /remove-image N|all · /retry · /status · /rag · /exit")
+			fmt.Fprintln(out, "/attach PATH · /attachments · /preview-attachment N [unit] · /attachment-text-only N · /remove-attachment N|all · /retry-attachment N · /use-attachment ID · /image PATH · /images · /remove-image N|all · /retry · /status · /rag · /exit")
 			continue
 		}
 		if input == "/status" {
@@ -272,6 +320,9 @@ func conversationChatLoop(ctx context.Context, client *serviceclient.Client, sav
 			continue
 		}
 		fmt.Fprintln(out)
+		if notice := DocumentCoverageNotice(files.Saved); notice != "" {
+			fmt.Fprintln(out, notice)
+		}
 		pendingText, hasPending = "", false
 		draft.Files = nil
 		images = nil
