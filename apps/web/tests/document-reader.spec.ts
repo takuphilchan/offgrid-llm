@@ -179,7 +179,8 @@ test('real service previews mixed PDF and only accepts partial text explicitly',
   await route.fulfill({response});
  });
  await page.getByRole('button',{name:'Open document',exact:true}).click();
- await expect(page.locator('.document-reader img')).toBeVisible();
+ // Real PDF rasterization may queue behind another document import in CI.
+ await expect(page.locator('.document-reader img')).toBeVisible({timeout:30_000});
  await expect(page.locator('.document-reader img')).toHaveJSProperty('naturalWidth',1700);
  await page.screenshot({path:test.info().outputPath('real-pdf-reader.png')});
  const raster=await request.get(`${base}/preview?sha256=${item.sha256}&page=1`);expect(raster.ok(),await raster.text()).toBeTruthy();expect(raster.headers()['content-type']).toBe('image/png');expect((await raster.body()).length).toBeGreaterThan(100);
