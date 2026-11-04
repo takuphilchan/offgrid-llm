@@ -83,3 +83,10 @@ Piper readiness until a complete, locally verified runtime is available.
 The Windows x64 desktop package rebuilt successfully with both speech engines.
 Cross-platform packaging remains subject to the next CI run; this note is not
 macOS speech qualification.
+
+The next CI run passed both macOS native-client jobs and built the Windows
+desktop package. Its Windows packaged-browser fixture raced the responsive
+navigation layout: the captured failure showed the navigation trigger visible
+and the Agents link hidden. The fixture now opens navigation when the link is
+actually hidden. Both normal and narrow packaged Windows browser runs pass
+locally; the exact pushed revision still requires CI confirmation.

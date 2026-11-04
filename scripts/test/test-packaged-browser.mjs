@@ -78,8 +78,10 @@ try{
  // Navigate through the hydrated application. A same-document goto/reload
  // during initial React mounting can race its initial hash selection.
  await expect(page.locator('.topbar')).toBeVisible();
- if(await page.evaluate(()=>matchMedia('(max-width: 1023px)').matches)) await page.locator('.navigation-trigger').click();
- await page.getByRole('navigation',{name:'Primary navigation',exact:true}).getByRole('link',{name:'Agents',exact:true}).click();
+ const agentsLink=page.getByRole('navigation',{name:'Primary navigation',exact:true}).getByRole('link',{name:'Agents',exact:true});
+ if(!await agentsLink.isVisible()) await page.locator('.navigation-trigger').click();
+ await expect(agentsLink).toBeVisible();
+ await agentsLink.click();
  await expect(page.getByRole('heading',{name:'Agents',exact:true})).toBeVisible();
  // Test-only native-dialog interception validates the scope before granting it.
  await app.evaluate(({dialog})=>{
