@@ -51,12 +51,6 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
   }, []);
   const [category, setCategory] = useWorkspaceState<ModelCategory>('models.category', 'language');
   const [view, setView] = useWorkspaceState<LibraryView>('models.view', 'installed');
-  useEffect(() => {
-    if (window.location.hash.startsWith('#/models/discover')) {
-      setCategory('language');
-      setView('discover');
-    }
-  }, []);
   const discover = () => { setView('discover'); document.getElementById('model-view-discover')?.focus(); };
   const [filters, setFilters] = useWorkspaceState<Partial<Record<ModelCategory, string>>>('models.installed-filters', {});
   const filter = filters[category] ?? '';
@@ -64,6 +58,13 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
   const [catalogFilters, setCatalogFilters] = useWorkspaceState<Partial<Record<ModelCategory, string>>>('models.catalog-filters', {});
   const [comparisons, setComparisons] = useWorkspaceState<Partial<Record<ModelCategory, string[]>>>('models.catalog-comparisons', {});
   const [discoverySources, setDiscoverySources] = useWorkspaceState<Partial<Record<ModelCategory, 'curated' | 'search'>>>('models.discovery-sources', {});
+  useEffect(() => {
+    if (window.location.hash.startsWith('#/models/discover')) {
+      setCategory('language');
+      setView('discover');
+      setDiscoverySources(old => ({ ...old, language: 'curated' }));
+    }
+  }, []);
   const discoverySource = discoverySources[category] ?? 'curated';
   const packageMode = category === 'speech_recognition' || category === 'speech_generation';
   const categories: ModelCategory[] = ['language', 'embeddings', 'speech_recognition', 'speech_generation'];

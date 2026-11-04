@@ -42,6 +42,7 @@ test('first-use with no usable model opens reviewed discovery without starting a
   await page.getByRole('dialog').getByRole('button', { name: 'Choose a chat model' }).click();
   await expect(page).toHaveURL(/#\/models\/discover$/);
   await expect(page.getByRole('tab', { name: 'Discover models' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('button', { name: 'Curated suggestions' })).toHaveAttribute('aria-pressed', 'true');
   expect(state.fixture.writes).toEqual([]);
 });
 
