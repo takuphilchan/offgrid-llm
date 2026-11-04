@@ -16,6 +16,12 @@ the two already tested OffGrid CLI and Agent entry modes.
 
 - `npm run check` and `npm run build` in `apps/web`: passed.
 - `npm test` in `apps/desktop`: 126 passed, one existing skip.
+- `npm run build:win -- --dir` in `apps/desktop`: packaged Windows x64 build
+  passed. `node scripts/test/test-desktop-terminal-packaged.mjs
+  "apps/desktop/dist/win-unpacked/OffGrid LLM Desktop.exe"`: passed with a
+  disposable profile and service fixture. It exercised both CLI entry modes,
+  retained cursor/draft, overlay focus, 200% zoom and descendant cleanup on the
+  candidate containing the native status bridge.
 - `node scripts/test/test-web-workspace.mjs build/offgrid-voice-release-check.exe
   tests/workspace-experience.spec.ts tests/navigation.spec.ts
   tests/navigation-overlays.spec.ts tests/terminal-entry.spec.ts
@@ -28,9 +34,8 @@ the two already tested OffGrid CLI and Agent entry modes.
   `openspec.cmd validate --all --strict --no-interactive` and
   `git diff --check`: passed.
 - The earlier [packaged Windows terminal record](desktop-terminal-polish-2026-11-03.md)
-  independently exercised focus restoration after overlays and tab/view changes,
-  exact cursor preservation and owned process cleanup. It does not qualify
-  macOS, Linux or Windows ARM64.
+  details the focus and ownership boundaries. The current candidate check does
+  not qualify macOS, Linux or Windows ARM64.
 
 The first browser-only navigation attempt failed because it expected a live
 service and received HTTP 404; the same test passed with the disposable service
