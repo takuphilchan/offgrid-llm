@@ -5,6 +5,7 @@ export type DesktopBridge = {
   bridgeProtocol?: number;
   terminalProtocol?: number;
   openTerminal?: () => Promise<{visible:boolean}>;
+  getTerminalStatus?: () => Promise<{available:boolean}>;
   startExecutionWorkspace?: (request:{access:'read'|'edit'|'trusted'}) => Promise<{state:string;resource?:import('./api/client').ExecutionWorkspace}>;
   getExecutionWorkspace?: () => Promise<{state:string;resource?:import('./api/client').ExecutionWorkspace}>;
   stopExecutionWorkspace?: () => Promise<{state:string}>;

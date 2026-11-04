@@ -360,6 +360,7 @@ handleTrustedIPC('computer-launch-app', request => applicationLauncher.launch(re
 handleTrustedIPC('computer-stop', () => computer.stop());
 handleTrustedIPC('computer-stop-access', request => computer.stopAccess(request));
 handleTrustedIPC('terminal-open', async () => {try{return await terminal.open();}catch(error){await dialog.showMessageBox(mainWindow,{type:'error',message:'Terminal could not open',detail:error.message});return {visible:false};}});
+handleTrustedIPC('terminal-status', () => ({available:terminal?.sessions.available()===true}));
 handleTrustedIPC('terminal-layout', value => terminal.setWorkspaceBounds(value));
 handleTrustedIPC('terminal-overlay', value => terminal.setOverlayActive(value));
 handleTrustedIPC('terminal-hide', () => terminal.hide());

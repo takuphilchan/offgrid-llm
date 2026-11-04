@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('electron', {
   bridgeProtocol: 1,
   terminalProtocol: 1,
   openTerminal: () => ipcRenderer.invoke('terminal-open'),
+  getTerminalStatus: () => ipcRenderer.invoke('terminal-status'),
   presentation,
   getPresentation: () => ipcRenderer.invoke('get-presentation'),
   setPresentation: preferences => ipcRenderer.invoke('set-presentation', preferences),

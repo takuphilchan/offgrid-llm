@@ -7,7 +7,7 @@
 - [ ] 22.3 Simplify primary navigation and composer to ordinary work with advanced destinations/settings progressively disclosed; preserve all routes, active context/access, drafts and keyboard navigation. Pass localized normal/narrow/RTL/200% tests.
 - [ ] 22.4 Integrate Add documents -> processing -> ready/needs attention -> Ask from document-ingestion-reliability; prove ordinary document questions require no embedding/chunk/index choices after setup, with real-service source/citation checks.
 - [x] 22.5 Simplify profile creation around purpose and recommended existing capabilities, with advanced budgets/resources optional; test saved revision/permission compatibility and easy later overrides. Evidence: `docs/quality/evidence/profile-defaults-2026-11-02.md` (66 browser checks; human/platform gates remain open).
-- [ ] 22.6 Integrate the optional desktop-integrated-terminal entry without adding it to ordinary setup; test native capability absence, focus restoration and no automatic shell startup.
+- [x] 22.6 Integrate the optional desktop-integrated-terminal entry without adding it to ordinary setup; test native capability absence, focus restoration and no automatic shell startup. Evidence: `docs/quality/evidence/workspace-readiness-2026-11-04.md` and the isolated packaged Windows terminal record; other platform qualification remains open.
 - [ ] 22.7 Compare the frozen journeys for actions, exposed decisions, errors, retained drafts and first useful result; run full CI and installed-platform checks, document known gaps, and retain unperformed human/assistive-technology evaluations as unverified.
 
 ## 20. Corrective interaction and lifecycle review (2026-11-01)
