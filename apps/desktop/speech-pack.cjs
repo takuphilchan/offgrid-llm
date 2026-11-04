@@ -71,9 +71,10 @@ async function prepare(context) {
   if (expected.piperBundled) await download(path.join(cache, expected.archive), `https://github.com/rhasspy/piper/releases/download/${lock.piper_revision}/${expected.archive}`, expected.sha256);
   // Only digest-pinned upstream archives are extracted, in a fresh owned folder.
   const work = await fs.mkdtemp(path.join(cache, 'prepare-'));
-  // A relative archive name prevents Windows tar from treating D: as a remote host.
-  await run('tar', ['-xf', 'whisper.tar.gz', '-C', work], { cwd: cache });
-  if (expected.piperBundled) await run('tar', ['-xf', expected.archive, '-C', work], { cwd: cache });
+  // Git tar on Windows misreads drive-letter paths in both -f and -C.
+  const workName = path.basename(work);
+  await run('tar', ['-xf', 'whisper.tar.gz', '-C', workName], { cwd: cache });
+  if (expected.piperBundled) await run('tar', ['-xf', expected.archive, '-C', workName], { cwd: cache });
   const source = path.join(work, `whisper.cpp-${lock.whisper_revision}`);
   const build = path.join(cache, `whisper-${platform}-${arch}`);
   const cmake = await cmakePath();

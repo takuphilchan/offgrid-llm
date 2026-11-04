@@ -74,7 +74,9 @@ packaged Windows CLI/Agent launch check passed again. The next CI run passed
 that test on both macOS runners, then found two speech-package boundaries:
 Windows `tar` treated an absolute drive-letter archive path as a remote host,
 and the pinned upstream macOS Piper archives omit `libespeak-ng.1.dylib`.
-Archive extraction now uses a relative name under the verified cache. The
+Archive extraction now uses relative archive and destination names under the
+verified cache. Git for Windows `tar` extracted the pinned Whisper source with
+those arguments in an isolated smoke check. The
 macOS package includes the pinned Whisper runtime but does not bundle or claim
 Piper readiness until a complete, locally verified runtime is available.
 The Windows x64 desktop package rebuilt successfully with both speech engines.
