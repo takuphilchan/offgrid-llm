@@ -8,7 +8,7 @@ const { StringDecoder } = require('node:string_decoder');
 const shellArgs=['-NoLogo','-NoProfile','-NoExit','-Command','[Console]::InputEncoding = [Text.UTF8Encoding]::new($false); [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding'];
 function launchCommand(kind,cli,systemRoot=process.env.SystemRoot) {
   if(kind==='agent'||kind==='offgrid')return {file:cli,args:['agent']};
-  if(kind==='shell'||kind==='cli')return {file:path.join(systemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),args:shellArgs};
+  if(kind==='shell'||kind==='cli')return {file:path.win32.join(systemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),args:shellArgs};
   throw Error('terminal_invalid_kind');
 }
 function launchEnvironment(base,cli,service) {
@@ -16,7 +16,7 @@ function launchEnvironment(base,cli,service) {
   delete env.ELECTRON_RUN_AS_NODE;
   const pathValue=Object.entries(env).find(([key])=>key.toLowerCase()==='path')?.[1]||'';
   for(const key of Object.keys(env))if(key.toLowerCase()==='path')delete env[key];
-  env.Path=path.dirname(cli)+path.delimiter+pathValue;
+  env.Path=path.win32.dirname(cli)+path.win32.delimiter+pathValue;
   env.TERM='xterm-256color';
   env.OFFGRID_SERVER_URL=service;
   return env;
