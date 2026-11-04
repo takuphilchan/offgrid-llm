@@ -136,8 +136,17 @@ func TestExecuteHelpAliasesUseInjectedOutput(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 		env := testEnvironment(&stdout, &stderr, &fakeRunner{})
 		env.Version = "0.5.0"
-		if code := Execute(context.Background(), []string{alias}, env); code != 0 || !strings.Contains(stdout.String(), "offgrid <command>") || stderr.Len() != 0 {
+		if code := Execute(context.Background(), []string{alias}, env); code != 0 || !strings.Contains(stdout.String(), "offgrid <command>") || !strings.Contains(stdout.String(), "offgrid model list") || !strings.Contains(stdout.String(), "offgrid help all") || strings.Contains(stdout.String(), "auto-downloads") || stderr.Len() != 0 {
 			t.Fatalf("alias=%q code=%d stdout=%q stderr=%q", alias, code, stdout.String(), stderr.String())
 		}
+	}
+}
+
+func TestExecuteHelpAllPreservesCommandCatalog(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	env := testEnvironment(&stdout, &stderr, &fakeRunner{})
+	env.Version = "0.5.0"
+	if code := Execute(context.Background(), []string{"help", "all"}, env); code != 0 || !strings.Contains(stdout.String(), "Model Management") || !strings.Contains(stdout.String(), "offgrid model list") || strings.Contains(stdout.String(), "auto-downloads") || stderr.Len() != 0 {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }

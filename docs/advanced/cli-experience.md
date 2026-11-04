@@ -81,6 +81,12 @@ explicitly ends the draft. Only the service's completed state earns a completion
 footer. Tool arguments and hidden reasoning are never streamed as answer text.
 Redirected output and JSON retain final-result behavior without cursor controls.
 
+Root `offgrid --help` and `offgrid help` show the first useful path: inspect
+installed models, start a conversation, and check readiness. `offgrid help all`
+keeps the complete command catalog. These help screens do not promise a fixed
+model alias or an automatic download; local inference and optional network
+operations are described separately.
+
 `offgrid agent --help` prioritizes starting, continuing and inspecting work.
 `offgrid agent help all` exposes the complete command reference grouped into
 conversation, lifecycle, recovery, evidence, configuration and workspace sections.

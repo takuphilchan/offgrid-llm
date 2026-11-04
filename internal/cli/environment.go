@@ -155,9 +155,17 @@ func versionCommand(ctx context.Context, args []string, env Environment) error {
 	return RunVersion(ctx, args, env, presenter)
 }
 
-func helpCommand(_ context.Context, _ []string, env Environment) error {
+func helpCommand(_ context.Context, args []string, env Environment) error {
 	presenter := Presenter{Stdout: env.Stdout, Stderr: env.Stderr, JSON: env.Options.JSON, Style: env.Style}
-	presenter.Help(ResolveVersion(env.Version, env.ReadFile))
+	version := ResolveVersion(env.Version, env.ReadFile)
+	if len(args) == 1 && args[0] == "all" {
+		presenter.HelpAll(version)
+		return nil
+	}
+	if len(args) != 0 {
+		return Usage("use offgrid help or offgrid help all")
+	}
+	presenter.Help(version)
 	return nil
 }
 
