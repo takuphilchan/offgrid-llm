@@ -16,6 +16,10 @@ function target(platform, arch) {
   return { ...value, suffix: platform === 'win32' ? '.exe' : '', piperBundled: platform !== 'darwin' };
 }
 
+function archiveExtractor(platform, systemRoot = process.env.SystemRoot) {
+  return platform === 'win32' ? path.win32.join(systemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
+}
+
 async function files(root, relative = '') {
   const result = [];
   for (const entry of await fs.readdir(path.join(root, relative), { withFileTypes: true })) {
@@ -71,10 +75,13 @@ async function prepare(context) {
   if (expected.piperBundled) await download(path.join(cache, expected.archive), `https://github.com/rhasspy/piper/releases/download/${lock.piper_revision}/${expected.archive}`, expected.sha256);
   // Only digest-pinned upstream archives are extracted, in a fresh owned folder.
   const work = await fs.mkdtemp(path.join(cache, 'prepare-'));
-  // Git tar on Windows misreads drive-letter paths in both -f and -C.
+  // Windows' built-in BSD tar handles both the pinned ZIP and tar.gz archives.
+  // Git Bash may put GNU tar first, which cannot read the Piper ZIP.
+  const extractor = archiveExtractor(platform);
+  // Relative arguments also avoid GNU tar interpreting drive letters as hosts.
   const workName = path.basename(work);
-  await run('tar', ['-xf', 'whisper.tar.gz', '-C', workName], { cwd: cache });
-  if (expected.piperBundled) await run('tar', ['-xf', expected.archive, '-C', workName], { cwd: cache });
+  await run(extractor, ['-xf', 'whisper.tar.gz', '-C', workName], { cwd: cache });
+  if (expected.piperBundled) await run(extractor, ['-xf', expected.archive, '-C', workName], { cwd: cache });
   const source = path.join(work, `whisper.cpp-${lock.whisper_revision}`);
   const build = path.join(cache, `whisper-${platform}-${arch}`);
   const cmake = await cmakePath();
@@ -108,4 +115,4 @@ async function prepare(context) {
   return out;
 }
 
-module.exports = { prepare, verify, target, files };
+module.exports = { prepare, verify, target, files, archiveExtractor };

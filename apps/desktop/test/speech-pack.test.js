@@ -3,13 +3,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
-const { target, verify, files } = require('../speech-pack.cjs');
+const { target, verify, files, archiveExtractor } = require('../speech-pack.cjs');
 const lock = require('../../../runtimes/speech/engine.lock.json');
 
 test('speech packaging binds supported architectures and includes the full runtime directory', () => {
   assert.equal(target('win32', 'x64').suffix, '.exe');
   assert.equal(target('darwin', 'arm64').archive, 'piper_macos_aarch64.tar.gz');
   assert.equal(target('darwin', 'arm64').piperBundled, false);
+  assert.equal(archiveExtractor('win32', 'D:\\Windows'), 'D:\\Windows\\System32\\tar.exe');
+  assert.equal(archiveExtractor('darwin'), 'tar');
   assert.throws(() => target('win32', 'arm64'), /Unsupported/);
   assert.throws(() => target('linux', '../x64'), /Unsupported/);
   const resource = require('../package.json').build.extraResources.find(item => item.to === 'speech-runtime');
