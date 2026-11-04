@@ -18,6 +18,23 @@ func originalFixture(data []byte) *Document {
 	return &Document{ID: GenerateDocumentID(data), Name: "source.pdf", RawContent: "identical extracted text", IndexStatus: "ready", CreatedAt: time.Now(), UpdatedAt: time.Now(), original: &OriginalSource{Name: "source.pdf", MediaType: "application/pdf", SHA256: hex.EncodeToString(h[:]), Bytes: data}}
 }
 
+func TestOriginalSourceStorageFailureIsNotReportedAsMissing(t *testing.T) {
+	s, err := NewSQLiteStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := originalFixture([]byte("retained original"))
+	if err := s.AddDocumentWithChunks(doc, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.original(doc.ID); err == nil || errors.Is(err, ErrOriginalUnavailable) {
+		t.Fatalf("storage failure was concealed as a missing original: %v", err)
+	}
+}
+
 func TestOriginalSourceAtomicPersistenceAndDeletion(t *testing.T) {
 	dir := t.TempDir()
 	s, err := NewSQLiteStore(dir)

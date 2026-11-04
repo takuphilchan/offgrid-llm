@@ -76,8 +76,10 @@ func (s *SQLiteStore) original(id string) (*OriginalSource, error) {
 	defer s.mu.RUnlock()
 	var source OriginalSource
 	var namespace string
-	if err := s.db.QueryRow(`SELECT source_namespace FROM document_collections WHERE document_id=? AND schema_version=1`, id).Scan(&namespace); err != nil || namespace == "" {
+	if err := s.db.QueryRow(`SELECT source_namespace FROM document_collections WHERE document_id=? AND schema_version=1`, id).Scan(&namespace); errors.Is(err, sql.ErrNoRows) || err == nil && namespace == "" {
 		return nil, ErrOriginalUnavailable
+	} else if err != nil {
+		return nil, err
 	}
 	var version, size, actual int
 	// Validate size/version before materializing a stored BLOB; unknown future
@@ -93,8 +95,11 @@ func (s *SQLiteStore) original(id string) (*OriginalSource, error) {
 		return nil, ErrOriginalUnavailable
 	}
 	err = s.db.QueryRow(`SELECT original_name,media_type,source_sha256,content FROM document_originals WHERE document_id=? AND schema_version=? AND byte_size=? AND LENGTH(content)=?`, id, originalSchema, size, size).Scan(&source.Name, &source.MediaType, &source.SHA256, &source.Bytes)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrOriginalUnavailable
+	}
 	if err != nil {
-		return nil, errors.Join(ErrOriginalUnavailable, err)
+		return nil, err
 	}
 	digest := sha256.Sum256(source.Bytes)
 	if hex.EncodeToString(digest[:]) != source.SHA256 || collectionDocumentID(namespace, source.Bytes) != id {

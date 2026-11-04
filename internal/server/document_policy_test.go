@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,6 +18,27 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/storage"
 	"github.com/takuphilchan/offgrid-llm/internal/users"
 )
+
+func TestOriginalSourceErrorDoesNotRevealRevokedCollection(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+		code int
+	}{
+		{"revoked", rag.ErrCollectionUnavailable, http.StatusNotFound},
+		{"missing_original", rag.ErrOriginalUnavailable, http.StatusGone},
+		{"wrapped_revocation", errors.Join(errors.New("read failed"), rag.ErrCollectionUnavailable), http.StatusNotFound},
+		{"storage_failure", errors.New("storage error"), http.StatusServiceUnavailable},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			writeOriginalSourceError(w, test.err, "Original file is unavailable.")
+			if w.Code != test.code || w.Header().Get("X-OffGrid-Source-SHA256") != "" || strings.Contains(w.Body.String(), "private") {
+				t.Fatalf("incorrect source denial: status=%d body=%q", w.Code, w.Body.String())
+			}
+		})
+	}
+}
 
 func TestDocumentCollectionPolicyProtectsHTTPReadsAndDeletion(t *testing.T) {
 	dir := t.TempDir()

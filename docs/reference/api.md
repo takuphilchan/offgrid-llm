@@ -1550,7 +1550,8 @@ cells remain valid and are not upgraded by guessing from extracted text.
 `application/octet-stream`, `nosniff`, `Cache-Control: no-store` and an
 `X-OffGrid-Source-SHA256` header for independent integrity checks. Both require
 the same Knowledge read permission. Missing legacy originals and unreadable or
-unknown-version records return 410; a deleted document returns 404.
+unknown-version records return 410; a deleted or newly inaccessible document
+returns 404. Operational storage failures return 503 without source details.
 
 The additive `Document.original_retained` field distinguishes original-file
 presence from `source_retained` (extracted text). New multipart imports publish

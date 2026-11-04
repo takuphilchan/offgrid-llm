@@ -2,11 +2,26 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"mime"
 	"net/http"
 	"path/filepath"
 	"strconv"
+
+	"github.com/takuphilchan/offgrid-llm/internal/rag"
 )
+
+func writeOriginalSourceError(w http.ResponseWriter, err error, unavailable string) {
+	if errors.Is(err, rag.ErrCollectionUnavailable) {
+		writeError(w, "Document not found", http.StatusNotFound)
+		return
+	}
+	if errors.Is(err, rag.ErrOriginalUnavailable) {
+		writeErrorWithCode(w, unavailable, http.StatusGone, "document_original_unavailable")
+		return
+	}
+	writeErrorWithCode(w, "Document source is temporarily unavailable. Retry after the storage issue is resolved.", http.StatusServiceUnavailable, "document_source_unavailable")
+}
 
 // The retained extraction is not represented as an original binary download.
 // This route is protected by the same knowledge-read permission as retrieval.
@@ -54,7 +69,7 @@ func (s *Server) handleDocumentSource(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("format") == "original" {
 		source, err := view.Original(doc.ID)
 		if err != nil {
-			writeErrorWithCode(w, "Original file is unavailable. Retained source text may still be viewed.", 410, "document_original_unavailable")
+			writeOriginalSourceError(w, err, "Original file is unavailable. Retained source text may still be viewed.")
 			return
 		}
 		if !view.CanReadDocument(doc.ID) {
@@ -72,7 +87,7 @@ func (s *Server) handleDocumentSource(w http.ResponseWriter, r *http.Request) {
 	if query.Get("format") == "preview" {
 		source, err := view.Original(doc.ID)
 		if err != nil {
-			writeErrorWithCode(w, "Original file is unavailable.", 410, "document_original_unavailable")
+			writeOriginalSourceError(w, err, "Original file is unavailable.")
 			return
 		}
 		serveDocumentPreview(w, r, s.ragEngine.DocumentParser(), source.Name, source.Bytes, func() bool {
