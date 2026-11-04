@@ -75,13 +75,11 @@ try{
  console.log('Packaged workspace connected');
  await page.evaluate(()=>{localStorage.setItem('offgrid.locale','en');localStorage.setItem('offgrid.onboarding.complete','true');});
  await page.reload();
- // Navigate through the hydrated application. A same-document goto/reload
- // during initial React mounting can race its initial hash selection.
+ // Exercise the packaged browser/desktop boundary after the application has
+ // mounted. Sidebar presentation has separate responsive navigation tests;
+ // this fixture must not depend on a transient drawer state at startup.
  await expect(page.locator('.topbar')).toBeVisible();
- const agentsLink=page.getByRole('navigation',{name:'Primary navigation',exact:true}).getByRole('link',{name:'Agents',exact:true});
- if(!await agentsLink.isVisible()) await page.locator('.navigation-trigger').click();
- await expect(agentsLink).toBeVisible();
- await agentsLink.click();
+ await page.evaluate(()=>{window.location.hash='#/agents';});
  await expect(page.getByRole('heading',{name:'Agents',exact:true})).toBeVisible();
  // Test-only native-dialog interception validates the scope before granting it.
  await app.evaluate(({dialog})=>{
