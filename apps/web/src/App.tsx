@@ -27,6 +27,8 @@ import { ActiveWorkProvider } from './lib/active-work';
 import { WorkspaceHelp } from './components/WorkspaceHelp';
 import { workspaceHelp } from './i18n/workspace-help';
 import { chatReadiness } from './i18n/chat-readiness';
+import { readableModelName } from './features/models/model-display';
+import { workspaceOrder } from './i18n/workspace-order';
 
 class PageBoundary extends Component<{ children: ReactNode; message: string; retry: string }, { failed: boolean }> {
   state = { failed: false };
@@ -176,13 +178,14 @@ export function App() {
     finally { refreshLock.current = false; setRefreshing(false); }
   };
 
-  const continueSetup = (target: 'chat' | 'models') => {
+  const continueSetup = (target: 'chat' | 'models' | 'models/discover') => {
     if (onboardingPending) writePreference('offgrid.onboarding.stage', 'working');
     setShowOnboarding(false);
     window.location.hash = `#/${target}`;
   };
   const chatModels = models.filter(chatAvailable);
   const chatReady = chatModels.some(item => item.id === model);
+  const suggestedModel = !chatReady && chatModels.length ? initialChatModel(chatModels) : '';
   const commandActions: CommandAction[] = [
     ...navigationGroups.flatMap(group => group.items.map(item => ({ id: `page-${item}`, label: text.nav[item], group: text.shell[group.label], icon: item, run: () => { window.location.hash = `#/${item}`; } }))),
     { id:'help',label:workspaceHelp[locale].help,group:text.shell.system,icon:'help',run:()=>setShowHelp(true) },
@@ -231,16 +234,18 @@ export function App() {
     </main>
     {showHelp && !showOnboarding && <WorkspaceHelp close={()=>setShowHelp(false)} guide={()=>{setShowHelp(false);setShowOnboarding(true);}} />}
     {showCommands && !showOnboarding && !showHelp && <CommandPalette workSearch={workSearch} actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
-    {showOnboarding && <Onboarding health={health} chatModelCount={chatModels.length} chatReady={chatReady} pending={onboardingPending} onAction={() => continueSetup(chatReady ? 'chat' : 'models')} onRetry={refreshBase} onClose={() => setShowOnboarding(false)} />}
+    {showOnboarding && <Onboarding health={health} chatModelCount={chatModels.length} chatReady={chatReady} suggestedModel={suggestedModel} pending={onboardingPending} onAction={() => continueSetup(chatReady ? 'chat' : chatModels.length ? 'models' : 'models/discover')} onSelectSuggested={() => { setModel(suggestedModel); continueSetup('chat'); }} onRetry={refreshBase} onClose={() => setShowOnboarding(false)} />}
   </div></SidebarContext.Provider></WorkSearchNavigation></ActiveWorkProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
 }
 
-function Onboarding({ health, chatModelCount, chatReady, pending, onAction, onRetry, onClose }: {
+function Onboarding({ health, chatModelCount, chatReady, suggestedModel, pending, onAction, onSelectSuggested, onRetry, onClose }: {
   health: Health;
   chatModelCount: number;
   chatReady: boolean;
+  suggestedModel: string;
   pending: boolean;
   onAction: () => void;
+  onSelectSuggested: () => void;
   onRetry: () => Promise<void>;
   onClose: () => void;
 }) {
@@ -267,7 +272,8 @@ function Onboarding({ health, chatModelCount, chatReady, pending, onAction, onRe
     <h2 id="onboarding-title">{text.onboarding.title}</h2><p>{text.onboarding.body}</p>
     <p>{text.guidance.connectionMeaning}</p>
     <div className="readiness-list"><div><i className={health === 'ready' ? 'ready' : ''} /><span>{text.onboarding.service}</span><strong>{health === 'ready' ? text.status.ready : text.status.offline}</strong></div><div><i className={chatModelCount > 0 ? 'ready' : ''} /><span>{text.onboarding.models}</span><strong>{chatModelCount}</strong></div><div><span aria-hidden="true" /><span>{text.onboarding.privacy}</span><strong>{text.onboarding.local}</strong></div></div>
-    {pending && <p className="onboarding-next">{chatReady ? text.onboarding.firstReplyHint : chatReadiness[locale].setup}</p>}
+    {pending && <p className="onboarding-next">{chatReady ? text.onboarding.firstReplyHint : suggestedModel ? chatReadiness[locale].unavailable : chatReadiness[locale].setup}</p>}
+    {pending && health === 'ready' && suggestedModel && <button className="secondary-button onboarding-suggestion" onClick={onSelectSuggested}>{workspaceOrder(locale).selectModel}: {readableModelName(suggestedModel)}</button>}
     <button autoFocus className="primary-button" onClick={!pending ? onClose : health !== 'ready' ? () => void onRetry() : onAction}>{action}</button>
   </dialog>;
 }

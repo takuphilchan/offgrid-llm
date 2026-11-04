@@ -35,11 +35,34 @@ test('first-use excludes failed runtimes and offers a setup action without downl
   expect(state.fixture.writes).toEqual([]);
 });
 
+test('first-use with no usable model opens reviewed discovery without starting a download', async ({ page }) => {
+  const state = await setup(page, '', true);
+  state.models([{ id: 'broken-runtime', type: 'chat', runtime_ready: false }]);
+  await page.goto('/ui/');
+  await page.getByRole('dialog').getByRole('button', { name: 'Choose a chat model' }).click();
+  await expect(page).toHaveURL(/#\/models\/discover$/);
+  await expect(page.getByRole('tab', { name: 'Discover models' })).toHaveAttribute('aria-selected', 'true');
+  expect(state.fixture.writes).toEqual([]);
+});
+
 test('first-use preserves an unavailable saved choice even when an alternative exists', async ({ page }) => {
   const state = await setup(page, 'saved-model', true);
   await page.goto('/ui/');
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Choose a chat model' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('offgrid.model'))).toBe('saved-model');
+  expect(state.fixture.writes).toEqual([]);
+});
+
+test('first-use offers an installed alternative only through explicit selection', async ({ page }) => {
+  const state = await setup(page, 'saved-model', true);
+  await page.goto('/ui/');
+  const guide = page.getByRole('dialog');
+  await expect(guide.getByRole('button', { name: 'Select model: working model' })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('offgrid.model'))).toBe('saved-model');
+  await guide.getByRole('button', { name: 'Select model: working model' }).click();
+  await expect(page).toHaveURL(/#\/chat$/);
+  await expect(guide).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('offgrid.model'))).toBe('working-model');
   expect(state.fixture.writes).toEqual([]);
 });
 

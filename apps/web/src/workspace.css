@@ -331,6 +331,7 @@
   .onboarding h2 { font-size: var(--type-title); font-weight: var(--weight-heading); line-height: var(--leading-ui); letter-spacing: var(--tracking-title); }
   .onboarding > p { color: var(--muted); font-size: 14px; }
   .onboarding .onboarding-next { margin: -10px 0 22px; color: var(--text); font-size: 13px; }
+  .onboarding-suggestion { display: block; max-width: 100%; margin-block-end: 12px; text-align: start; white-space: normal; overflow-wrap: anywhere; }
   .readiness-list > div { font-size: 13px; }
   .readiness-list strong { font-size: 12px; }
   .readiness-list i, .readiness-list i.ready { background: transparent; border: 1px solid var(--text); }

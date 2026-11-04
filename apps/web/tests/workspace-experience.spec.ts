@@ -90,7 +90,7 @@ test('first-run stays pending while a chat model is not available', async ({ pag
   await page.goto('/ui/#/chat');
   await expect(page.getByRole('dialog', { name: 'Your AI workspace' })).toBeVisible();
   await page.getByRole('dialog', { name: 'Your AI workspace' }).getByRole('button', { name: 'Choose a chat model' }).click();
-  await expect(page).toHaveURL(/#\/models$/);
+  await expect(page).toHaveURL(/#\/models\/discover$/);
   expect(await page.evaluate(() => localStorage.getItem('offgrid.onboarding.complete'))).toBeNull();
   await expect(page.getByText('Download a chat model to begin working.').first()).toBeVisible();
 });

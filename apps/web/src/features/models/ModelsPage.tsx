@@ -51,6 +51,12 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
   }, []);
   const [category, setCategory] = useWorkspaceState<ModelCategory>('models.category', 'language');
   const [view, setView] = useWorkspaceState<LibraryView>('models.view', 'installed');
+  useEffect(() => {
+    if (window.location.hash.startsWith('#/models/discover')) {
+      setCategory('language');
+      setView('discover');
+    }
+  }, []);
   const discover = () => { setView('discover'); document.getElementById('model-view-discover')?.focus(); };
   const [filters, setFilters] = useWorkspaceState<Partial<Record<ModelCategory, string>>>('models.installed-filters', {});
   const filter = filters[category] ?? '';
