@@ -93,6 +93,40 @@ test('a file-only reply saves references and clears only the submitted draft',as
  await page.reload();await expect(page.locator('.message.user .saved-file-attachments')).toContainText(source.name);
  await expect(page.locator('.composer .file-attachments')).toHaveCount(0);
 });
+test('a saved file supports a follow-up without reuploading or attaching it twice',async({page})=>{
+ const state=await fixture(page);
+ await page.locator('input[data-attachment=files]').setInputFiles(file);
+ await expect(page.locator('.composer .file-attachments')).toContainText('Ready');
+ await page.evaluate(()=>{
+  const prior=window.fetch;
+  const flow={requests:[] as any[],messages:[] as any[]};
+  (window as any).sameFileFlow=flow;
+  window.fetch=async(url,init)=>{
+   if(!String(url).endsWith('/generate'))return prior(url,init);
+   const body=JSON.parse(String(init?.body));flow.requests.push(body);
+   flow.messages.push({role:'user',content:body.content,...(body.attachments?.length?{attachments:body.attachments}:{})});
+   const message={role:'assistant',content:flow.requests.length===1?'First source answer.':'Follow-up source answer.'};
+   flow.messages.push(message);
+   const session={name:'Demo briefing',model_id:body.model_id,messages:[...flow.messages]};
+   return new Response(`data: ${JSON.stringify({type:'done',session,message})}\n\n`,{headers:{'Content-Type':'text/event-stream'}});
+  };
+ });
+ await page.locator('.composer textarea').fill('What is the code in this file?');
+ await page.getByRole('button',{name:'Send',exact:true}).click();
+ await expect(page.locator('.message.assistant').last()).toContainText('First source answer.');
+ await expect(page.locator('.composer .file-attachments')).toHaveCount(0);
+ await page.locator('.composer textarea').fill('Follow up on the same file.');
+ await page.getByRole('button',{name:'Send',exact:true}).click();
+ await expect(page.locator('.message.assistant').last()).toContainText('Follow-up source answer.');
+ const flow=await page.evaluate(()=>(window as any).sameFileFlow);
+ expect(flow.requests).toHaveLength(2);
+ expect(flow.requests[0].attachments).toEqual([{id:source.id,revision:source.revision}]);
+ expect(flow.requests[1].attachments??[]).toEqual([]);
+ expect(flow.messages[0].attachments).toEqual([{id:source.id,revision:source.revision}]);
+ expect(flow.messages[2].attachments??[]).toEqual([]);
+ expect(state.uploads()).toBe(1);
+ await expect(page.locator('.message.user .saved-file-attachments')).toHaveCount(1);
+});
 test('upload into a fresh conversation preserves the current question',async({page})=>{
  const state=await fixture(page);await page.route('**/v1/sessions',r=>r.request().method()==='POST'?r.fulfill({json:{...r.request().postDataJSON(),messages:[]}}):r.fulfill({json:{sessions:[]}}));
  await page.reload();await page.getByRole('button',{name:'New chat',exact:true}).click();await expect(page.locator('.composer textarea')).toBeEnabled();await page.locator('.composer textarea').fill('Read the shipment number');

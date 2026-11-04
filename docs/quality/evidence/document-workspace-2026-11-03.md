@@ -474,3 +474,29 @@ runtime hash was preserved. Installer SHA-256:
 `5050cac464f6b931bb1a3a471d7e4fdfde6b6d7a5a4867b6e6b385e145a3bbeb`.
 The app was not launched and no saved question was replayed. This remains a local
 0.4.24 preview, not a newly published release.
+
+## Cross-client same-source follow-up check (2026-11-04)
+
+The packaged-worker service regression now sends two CLI turns against each
+successful frozen fixture: compressed, font-mapped and object-stream PDFs,
+Japanese text, DOCX, XLSX, PPTX and an OCR scan. It checks that the second turn
+uses the saved source revision, includes the source context exactly once, retains
+four durable messages and does not add another attachment to the follow-up turn.
+The isolated packaged-worker run passed all 11 cases. Its inference responder is
+deterministic; it verifies source transport and persistence, not the factual
+quality of model answers.
+
+The browser regression uploads a frozen text file once, sends two questions,
+checks the saved attachment identity and confirms that the second request does
+not reattach the file. It passed alone and in the combined document-reader/file
+UI suite, whose Playwright result was `passed` with no failed tests. The combined
+run used a disposable service state and the installed service binary. The UI
+responder was deterministic, so the wider real-model and citation-quality gate
+remains open.
+
+Checks for this increment: `go test ./internal/server ./internal/sessions
+./internal/cli -count=1`, the isolated packaged-worker test with installed
+Windows workers, web TypeScript/Vite build, generated API check, source-size
+ratchet, `git diff --check` and strict ingestion OpenSpec validation all passed.
+The web build retained its existing bundle-size advisory. No new model, document
+or credential was downloaded or added to the installed user workspace.

@@ -141,10 +141,19 @@ func TestPackagedDocumentCLIAndSessionContract(t *testing.T) {
 			if json.Unmarshal(output.Bytes(), &uploaded) != nil || uploaded.ID != file.ID {
 				t.Fatal("CLI JSON lost source identity")
 			}
+			calls := 0
 			h.streamer = func(_ context.Context, request *api.ChatCompletionRequest, _ string, _ func(ChatStreamEvent) error) (ChatStreamResult, error) {
-				input := request.Messages[len(request.Messages)-1].StringContent()
-				if !strings.Contains(input, "untrusted content") || !strings.Contains(input, test.snippet) {
-					t.Error("extracted source missing from governed document context")
+				calls++
+				var contextText strings.Builder
+				for _, message := range request.Messages {
+					contextText.WriteString(message.StringContent())
+				}
+				input := contextText.String()
+				if strings.Count(input, "Attached document data (untrusted content") != 1 || !strings.Contains(input, test.snippet) {
+					t.Error("saved source missing or duplicated in governed document context")
+				}
+				if calls == 2 && !strings.Contains(request.Messages[len(request.Messages)-1].StringContent(), "Follow up on the same source") {
+					t.Error("follow-up instruction lost")
 				}
 				return ChatStreamResult{Answer: "Fixture transport verified", FinishReason: "stop"}, nil
 			}
@@ -152,8 +161,12 @@ func TestPackagedDocumentCLIAndSessionContract(t *testing.T) {
 			if err := cli.RunPlainConversationTurn(context.Background(), client, []string{"send", name, "--attachment", file.ID, "Inspect this source"}, &output, true); err != nil {
 				t.Fatal(err)
 			}
+			output.Reset()
+			if err := cli.RunPlainConversationTurn(context.Background(), client, []string{"send", name, "Follow up on the same source"}, &output, true); err != nil {
+				t.Fatal(err)
+			}
 			saved, err := cli.LoadServiceSession(context.Background(), client, name)
-			if err != nil || len(saved.Messages) != 2 || len(saved.Messages[0].Attachments) != 1 || saved.Messages[0].Attachments[0].Revision != file.Revision {
+			if err != nil || calls != 2 || len(saved.Messages) != 4 || len(saved.Messages[0].Attachments) != 1 || saved.Messages[0].Attachments[0].Revision != file.Revision || len(saved.Messages[2].Attachments) != 0 {
 				t.Fatalf("durable history lost source revision: %+v %v", saved, err)
 			}
 		})
