@@ -65,3 +65,18 @@ packages remain unverified. `go test -race ./internal/audio ./internal/server`
 could not run because this Windows Go environment has CGO disabled and no C
 compiler available. Full release CI and human accessibility/localization review
 have not been claimed by these focused checks.
+
+## Cross-platform CI follow-up
+
+The first pushed CI run exposed a Windows-only path assertion in the terminal
+test. Explicit Windows path construction corrected it; the desktop suite and
+packaged Windows CLI/Agent launch check passed again. The next CI run passed
+that test on both macOS runners, then found two speech-package boundaries:
+Windows `tar` treated an absolute drive-letter archive path as a remote host,
+and the pinned upstream macOS Piper archives omit `libespeak-ng.1.dylib`.
+Archive extraction now uses a relative name under the verified cache. The
+macOS package includes the pinned Whisper runtime but does not bundle or claim
+Piper readiness until a complete, locally verified runtime is available.
+The Windows x64 desktop package rebuilt successfully with both speech engines.
+Cross-platform packaging remains subject to the next CI run; this note is not
+macOS speech qualification.

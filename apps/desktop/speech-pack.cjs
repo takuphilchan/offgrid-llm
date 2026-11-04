@@ -11,7 +11,9 @@ const run = (file, args, options = {}) => new Promise((resolve, reject) => execF
 function target(platform, arch) {
   const value = lock.targets[`${platform}-${arch}`];
   if (!value) throw Error('Unsupported speech runtime target');
-  return { ...value, suffix: platform === 'win32' ? '.exe' : '' };
+  // The pinned upstream macOS Piper archives omit libespeak-ng.1.dylib.
+  // Shipping their executable would make a broken voice runtime look ready.
+  return { ...value, suffix: platform === 'win32' ? '.exe' : '', piperBundled: platform !== 'darwin' };
 }
 
 async function files(root, relative = '') {
@@ -29,13 +31,16 @@ async function files(root, relative = '') {
 async function verify(root, platform, arch) {
   const expected = target(platform, arch);
   const pack = JSON.parse(await fs.readFile(path.join(root, 'speech-pack.json'), 'utf8'));
-  if (pack.schema_version !== 1 || pack.platform !== platform || pack.arch !== arch || pack.whisper_revision !== lock.whisper_revision || pack.piper_sha256 !== expected.sha256) throw Error('Speech runtime identity mismatch');
+  if (pack.schema_version !== 1 || pack.platform !== platform || pack.arch !== arch || pack.whisper_revision !== lock.whisper_revision || pack.piper_sha256 !== (expected.piperBundled ? expected.sha256 : null)) throw Error('Speech runtime identity mismatch');
   const actual = (await files(root)).filter(file => file.path !== 'speech-pack.json');
   if (JSON.stringify(actual) !== JSON.stringify(pack.files)) throw Error('Speech payload digest mismatch');
-  for (const name of [`whisper/whisper-cli${expected.suffix}`, `piper/piper${expected.suffix}`, 'licenses/whisper.txt', 'licenses/piper.txt', 'licenses/espeak.txt', 'NOTICE.txt']) {
+  const required = [`whisper/whisper-cli${expected.suffix}`, 'licenses/whisper.txt', 'licenses/piper.txt', 'licenses/espeak.txt', 'NOTICE.txt'];
+  if (expected.piperBundled) required.push(`piper/piper${expected.suffix}`);
+  for (const name of required) {
     if (!actual.some(file => file.path === name)) throw Error(`Missing speech runtime file: ${name}`);
   }
-  if (!actual.some(file => file.path.startsWith('piper/espeak-ng-data/'))) throw Error('Missing Piper language data');
+  if (expected.piperBundled && !actual.some(file => file.path.startsWith('piper/espeak-ng-data/'))) throw Error('Missing Piper language data');
+  if (!expected.piperBundled && actual.some(file => file.path.startsWith('piper/'))) throw Error('Unqualified Piper runtime in speech payload');
   return pack;
 }
 
@@ -63,11 +68,12 @@ async function prepare(context) {
   const out = path.join(repo, 'build/speech-runtime', `${{ win32: 'win', darwin: 'mac', linux: 'linux' }[platform]}-${arch}`);
   await fs.mkdir(cache, { recursive: true });
   await download(path.join(cache, 'whisper.tar.gz'), `https://codeload.github.com/ggml-org/whisper.cpp/tar.gz/${lock.whisper_revision}`, lock.whisper_sha256);
-  await download(path.join(cache, expected.archive), `https://github.com/rhasspy/piper/releases/download/${lock.piper_revision}/${expected.archive}`, expected.sha256);
+  if (expected.piperBundled) await download(path.join(cache, expected.archive), `https://github.com/rhasspy/piper/releases/download/${lock.piper_revision}/${expected.archive}`, expected.sha256);
   // Only digest-pinned upstream archives are extracted, in a fresh owned folder.
   const work = await fs.mkdtemp(path.join(cache, 'prepare-'));
-  await run('tar', ['-xf', path.join(cache, 'whisper.tar.gz'), '-C', work]);
-  await run('tar', ['-xf', path.join(cache, expected.archive), '-C', work]);
+  // A relative archive name prevents Windows tar from treating D: as a remote host.
+  await run('tar', ['-xf', 'whisper.tar.gz', '-C', work], { cwd: cache });
+  if (expected.piperBundled) await run('tar', ['-xf', expected.archive, '-C', work], { cwd: cache });
   const source = path.join(work, `whisper.cpp-${lock.whisper_revision}`);
   const build = path.join(cache, `whisper-${platform}-${arch}`);
   const cmake = await cmakePath();
@@ -81,15 +87,15 @@ async function prepare(context) {
   await run(cmake, ['--build', build, '--config', 'Release', '--parallel', '2', '--target', 'whisper-cli']);
   const staged = path.join(work, 'payload');
   await fs.mkdir(path.join(staged, 'whisper'), { recursive: true });
-  await fs.cp(path.join(work, 'piper'), path.join(staged, 'piper'), { recursive: true, dereference: true });
+  if (expected.piperBundled) await fs.cp(path.join(work, 'piper'), path.join(staged, 'piper'), { recursive: true, dereference: true });
   await fs.copyFile(path.join(build, 'bin', ...(platform === 'win32' ? ['Release'] : []), `whisper-cli${expected.suffix}`), path.join(staged, 'whisper', `whisper-cli${expected.suffix}`));
   await fs.cp(path.join(repo, 'runtimes/speech/licenses'), path.join(staged, 'licenses'), { recursive: true });
   await fs.copyFile(path.join(stable, 'LICENSE'), path.join(staged, 'licenses/whisper.txt'));
   await fs.copyFile(path.join(repo, 'runtimes/speech/NOTICE.txt'), path.join(staged, 'NOTICE.txt'));
   // Help probes run with a system-only PATH, not developer-installed libraries.
   const env = { ...process.env, PATH: platform === 'win32' ? path.join(process.env.SystemRoot, 'System32') : '/usr/bin:/bin' };
-  for (const [adapter, program] of [['whisper', 'whisper-cli'], ['piper', 'piper']]) await run(path.join(staged, adapter, program + expected.suffix), ['--help'], { env, cwd: work, timeout: 15000 });
-  const pack = { schema_version: 1, platform, arch, whisper_revision: lock.whisper_revision, piper_sha256: expected.sha256, files: await files(staged) };
+  for (const [adapter, program] of [['whisper', 'whisper-cli'], ...(expected.piperBundled ? [['piper', 'piper']] : [])]) await run(path.join(staged, adapter, program + expected.suffix), ['--help'], { env, cwd: work, timeout: 15000 });
+  const pack = { schema_version: 1, platform, arch, whisper_revision: lock.whisper_revision, piper_sha256: expected.piperBundled ? expected.sha256 : null, files: await files(staged) };
   await fs.writeFile(path.join(staged, 'speech-pack.json'), JSON.stringify(pack, null, 2) + '\n');
   await verify(staged, platform, arch);
   await fs.mkdir(path.dirname(out), { recursive: true });
