@@ -1593,3 +1593,27 @@ Validation:
   acceptance, manual localization/accessibility and platform checks remain open.
 
 No deployment or installed-workspace modification was performed for this slice.
+
+## Source-retention acceptance audit — November 4
+
+Task 4.2's source-storage scope is implemented and checked. The persisted,
+revision-checked policy defaults to no expiry, supports a legal hold, and is
+enforced for manual deletion and bounded service-owned expiry. One transaction
+removes a source's original bytes, extracted text, vectors and related import
+payloads. Stale import publication cannot resurrect it. The maintenance pass
+also reconciles offline rebuild caches against the live library; it does not
+alter independent backup archives. Restoring a backup into a new workspace
+preserves its snapshot and holds, then reapplies expired policies. Saved answer
+text and independent backup archives have separate retention, as documented in
+the API reference; source deletion makes no secure-erasure claim.
+
+Current acceptance evidence: Windows `go test ./internal/rag ./internal/server
+./internal/cli -run 'TestRetention|TestDocumentRetention' -count=1` passed.
+WSL `CGO_ENABLED=1 go test -race ./internal/rag ./internal/server -run Retention
+-count=1` passed. The targeted CLI retention contract passed, and the Python
+retention client suite passed 12 tests. These cases cover restart, unknown
+policy, hold/release, offline backup and restore, concurrent expiry/deletion,
+stale-worker publication, cache batch/restart/error paths, redirected staging
+paths, and source/original/preview denial after expiry. This focused audit does
+not close collection policy (4.1), scheduling (4.3), complete document-answer
+quality (5.2), or unavailable platform and human checks.

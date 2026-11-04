@@ -33,7 +33,7 @@
 ## 4. Organization and resource boundaries
 
 - [ ] 4.1 Implement collection/document policy applied to ingestion, retrieval, source/export and scoped caches; preserve legacy workspace policy through an explicit migration and pass cross-user/collection/revocation/deduplication tests.
-- [ ] 4.2 Implement documented retention/deletion across originals, text, vectors, jobs and caches with explicit backup/hold behavior; test restart, stale-worker resurrection, concurrent delete and export denial.
+- [x] 4.2 Implement documented retention/deletion across originals, text, vectors, jobs and caches with explicit backup/hold behavior; test restart, stale-worker resurrection, concurrent delete and export denial.
 - [ ] 4.3 Bound extraction/index scheduling and expose useful progress on low-memory/offline systems without changing existing model/index identity; measure warm/cold import, cancellation and concurrent chat behavior.
 
 ## 5. Integrated acceptance
