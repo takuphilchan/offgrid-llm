@@ -1,5 +1,7 @@
 {
   "en": {
+    "trayBackgroundTitle": "OffGrid is still running",
+    "trayBackgroundBody": "Closing the window keeps your work running. Open OffGrid from its tray icon, or choose Quit OffGrid in the tray menu to exit.",
     "serviceUpdateTitle": "Workspace service needs an update",
     "serviceUpdateBody": "This workspace is managed separately. Update its service to a compatible build, then retry. Reinstalling the desktop does not update it.",
     "bundleRepairTitle": "Desktop files need repair",
@@ -38,6 +40,8 @@
     "reconnectingBody": "Your existing service is not ready yet. OffGrid will reconnect automatically when it becomes available. Your workspace stays unchanged."
   },
   "fr": {
+    "trayBackgroundTitle": "OffGrid fonctionne toujours",
+    "trayBackgroundBody": "Fermer la fenêtre laisse votre travail en cours. Rouvrez OffGrid depuis son icône de notification, ou choisissez Quitter OffGrid dans son menu pour arrêter l’application.",
     "serviceUpdateTitle": "Le service de l’espace doit être mis à jour",
     "serviceUpdateBody": "Cet espace est géré séparément. Mettez son service à jour vers une version compatible, puis réessayez. Réinstaller le bureau ne le met pas à jour.",
     "bundleRepairTitle": "Les fichiers du bureau doivent être réparés",
@@ -76,6 +80,8 @@
     "reconnectingBody": "Votre service existant n’est pas encore prêt. OffGrid se reconnectera automatiquement dès qu’il sera disponible. Votre espace de travail reste inchangé."
   },
   "de": {
+    "trayBackgroundTitle": "OffGrid läuft weiter",
+    "trayBackgroundBody": "Beim Schließen des Fensters läuft Ihre Arbeit weiter. Öffnen Sie OffGrid über das Symbol im Infobereich oder wählen Sie dort OffGrid beenden, um die Anwendung zu schließen.",
     "serviceUpdateTitle": "Arbeitsbereichsdienst muss aktualisiert werden",
     "serviceUpdateBody": "Dieser Arbeitsbereich wird separat verwaltet. Aktualisieren Sie seinen Dienst auf eine kompatible Version und versuchen Sie es erneut. Eine Desktop-Neuinstallation aktualisiert ihn nicht.",
     "bundleRepairTitle": "Desktop-Dateien müssen repariert werden",
@@ -114,6 +120,8 @@
     "reconnectingBody": "Dein bestehender Dienst ist noch nicht bereit. OffGrid verbindet sich automatisch, sobald er verfügbar ist. Dein Arbeitsbereich bleibt unverändert."
   },
   "es": {
+    "trayBackgroundTitle": "OffGrid sigue en ejecución",
+    "trayBackgroundBody": "Cerrar la ventana mantiene el trabajo en curso. Abre OffGrid desde su icono de la bandeja o elige Salir de OffGrid en su menú para cerrar la aplicación.",
     "serviceUpdateTitle": "El servicio del espacio necesita actualizarse",
     "serviceUpdateBody": "Este espacio se gestiona por separado. Actualiza su servicio a una versión compatible y vuelve a intentarlo. Reinstalar la aplicación de escritorio no lo actualiza.",
     "bundleRepairTitle": "Los archivos de escritorio necesitan reparación",
@@ -152,6 +160,8 @@
     "reconnectingBody": "Tu servicio existente aún no está listo. OffGrid se reconectará automáticamente cuando esté disponible. Tu espacio de trabajo no cambia."
   },
   "ar": {
+    "trayBackgroundTitle": "لا يزال OffGrid قيد التشغيل",
+    "trayBackgroundBody": "إغلاق النافذة يُبقي عملك قيد التشغيل. افتح OffGrid من أيقونته في منطقة الإعلام، أو اختر إنهاء OffGrid من قائمتها للخروج.",
     "serviceUpdateTitle": "تحتاج خدمة مساحة العمل إلى تحديث",
     "serviceUpdateBody": "تُدار مساحة العمل هذه بشكل منفصل. حدّث خدمتها إلى إصدار متوافق ثم أعد المحاولة. إعادة تثبيت تطبيق سطح المكتب لا تُحدّث الخدمة.",
     "bundleRepairTitle": "تحتاج ملفات سطح المكتب إلى إصلاح",
@@ -190,6 +200,8 @@
     "reconnectingBody": "الخدمة الحالية ليست جاهزة بعد. سيعيد OffGrid الاتصال تلقائيًا عندما تصبح متاحة. ستبقى مساحة عملك دون تغيير."
   },
   "sw": {
+    "trayBackgroundTitle": "OffGrid bado inaendelea",
+    "trayBackgroundBody": "Kufunga dirisha huacha kazi yako ikiendelea. Fungua OffGrid kupitia ikoni yake kwenye eneo la arifa, au chagua Ondoka OffGrid kwenye menyu yake ili kufunga programu.",
     "serviceUpdateTitle": "Huduma ya eneo la kazi inahitaji kusasishwa",
     "serviceUpdateBody": "Eneo hili linasimamiwa kando. Sasisha huduma yake iwe toleo linalooana, kisha jaribu tena. Kusakinisha upya programu ya kompyuta hakusasishi huduma hiyo.",
     "bundleRepairTitle": "Faili za programu zinahitaji kurekebishwa",
@@ -228,6 +240,8 @@
     "reconnectingBody": "Huduma yako iliyopo bado haiko tayari. OffGrid itaunganisha tena kiotomatiki itakapopatikana. Eneo lako la kazi halitabadilika."
   },
   "sn": {
+    "trayBackgroundTitle": "OffGrid ichiri kushanda",
+    "trayBackgroundBody": "Kuvhara hwindo kunosiya basa rako richiitwa. Vhura OffGrid nechiratidzo chayo munzvimbo yezviziviso, kana sarudza Buda muOffGrid pamenyu yayo kuti uvhare chirongwa.",
     "serviceUpdateTitle": "Sevhisi yenzvimbo yebasa inoda kuvandudzwa",
     "serviceUpdateBody": "Nzvimbo iyi inotongwa yakazvimirira. Vandudza sevhisi yayo kuti ienderane, woedza zvakare. Kuisa app yekombiyuta patsva hakuvandudzi sevhisi iyoyo.",
     "bundleRepairTitle": "Mafaira eapp anoda kugadziriswa",
@@ -266,6 +280,8 @@
     "reconnectingBody": "Sevhisi yako iripo haisati yagadzirira. OffGrid ichabatanazve yega kana yava kuwanikwa. Nzvimbo yako yebasa haichinji."
   },
   "nd": {
+    "trayBackgroundTitle": "I-OffGrid isasebenza",
+    "trayBackgroundBody": "Ukuvala iwindi kutshiya umsebenzi wakho uqhubeka. Vula i-OffGrid ngophawu lwayo endaweni yezaziso, kumbe ukhethe Phuma ku-OffGrid kumenyu yayo ukuze uvale uhlelo.",
     "serviceUpdateTitle": "Isevisi yendawo yokusebenza idinga ukubuyekezwa",
     "serviceUpdateBody": "Indawo le iphathwa ngokwehlukana. Buyekeza isevisi yayo ibe yinguqulo ehambelanayo, ubusuzama futhi. Ukufaka uhlelo lwekhompyutha kutsha akuyibuyekezi.",
     "bundleRepairTitle": "Amafayela ohlelo adinga ukulungiswa",
@@ -304,6 +320,8 @@
     "reconnectingBody": "Isevisi yakho ekhona ayikalungeli. I-OffGrid izaxhuma futhi ngokuzenzakalela nxa isitholakala. Indawo yakho yokusebenza kayiguquki."
   },
   "zu": {
+    "trayBackgroundTitle": "I-OffGrid isasebenza",
+    "trayBackgroundBody": "Ukuvala iwindi kushiya umsebenzi wakho uqhubeka. Vula i-OffGrid ngesithonjana sayo endaweni yezaziso, noma ukhethe Phuma ku-OffGrid kumenyu yayo ukuze uvale uhlelo.",
     "serviceUpdateTitle": "Isevisi yendawo yokusebenza idinga ukubuyekezwa",
     "serviceUpdateBody": "Le ndawo iphathwa ngokwehlukana. Buyekeza isevisi yayo ibe yinguqulo ehambisanayo, bese uzama futhi. Ukufaka kabusha uhlelo lwekhompyutha akuyibuyekezi.",
     "bundleRepairTitle": "Amafayela ohlelo adinga ukulungiswa",

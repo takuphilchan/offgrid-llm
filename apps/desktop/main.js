@@ -7,6 +7,7 @@ const { isTrustedPage, isTrustedSender, fingerprintUI, workspaceChannelAllowed }
 const { DesktopRuntime } = require('./runtime');
 const { attachmentStore } = require('./attachment');
 const { normalize: normalizePresentation, readCopy } = require('./presentation');
+const { createTrayFeedback } = require('./tray-feedback');
 const { ComputerRuntime, parseComputerLink } = require('./computer-runtime');
 const { createApplicationLauncher } = require('./application-launcher');
 const { ExecutionRuntime } = require('./execution-runtime');
@@ -145,6 +146,7 @@ let presentation = normalizePresentation({});
 let presentationCopy;
 let presentationQueue = Promise.resolve();
 const copy = key => presentationCopy?.[presentation.locale]?.[key] ?? presentationCopy?.en?.[key] ?? key;
+const reportTrayBackground = createTrayFeedback({ platform: process.platform, tray: () => tray, copy });
 const effectiveTheme = () => presentation.theme === 'system' ? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light') : presentation.theme;
 const presentationSnapshot = () => ({ ...presentation, effectiveTheme: effectiveTheme(), copy: presentationCopy?.[presentation.locale] });
 
@@ -271,6 +273,7 @@ async function createMainWindow() {
     if (!quitting && process.platform !== 'darwin' && runtime.state.state === 'ready' && tray) {
       event.preventDefault();
       mainWindow.hide();
+      reportTrayBackground();
     }
   });
   mainWindow.on('closed', () => { mainWindow = null; });

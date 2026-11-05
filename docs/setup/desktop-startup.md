@@ -121,6 +121,11 @@ this desktop; it never stops an externally managed container/service. Failed
 first launches are not silently hidden in the tray. A stopped child returns the
 window to recovery rather than leaving a blank page.
 
+On Windows, the first close in each launch requests a quiet tray notification
+explaining that OffGrid is still running and where to find Quit. Windows quiet
+time or notification settings can suppress it. Closing does not stop active work,
+and notification failure does not prevent closing or quitting.
+
 Quit attempts cleanup of every owned component even if one reports a failure.
 A failed or stalled preference save cannot prevent input and service cleanup.
 The app waits for the owned service's exit acknowledgement after termination;

@@ -308,3 +308,23 @@ offline-model-setup.spec.ts offline-model-import.spec.ts chat-readiness.spec.ts
 (`offline-setup-handoff-ui.log`). The service fixture contains synthetic GGUF
 storage metadata, not a qualified inference model. Wider journey, real-model,
 manual accessibility and human evaluation gates remain open.
+
+The complete renderer suite at **fe45f734** passed **1,038 tests, 31 skipped**
+(`setup-final-full-renderer.log`). Its new first-use and handoff screenshots were
+inspected. The dialog entrance capture also revealed underlying text bleeding
+through its fade; that separate animation correction is recorded below.
+
+## Windows close-versus-quit feedback
+
+The existing Windows hide-to-tray lifecycle now requests one localized, quiet
+notification on the first close per launch. It explains that work continues and
+identifies the tray's open/Quit actions. No task is stopped, shell started or
+authority changed. The notification respects Windows quiet time; refusal or
+suppression does not block closing or produce repeated errors. macOS/Linux do
+not invoke this Windows-only API.
+
+The helper is explicitly included in the desktop package. Focused lifecycle,
+presentation and notification tests passed **19/19**; the full desktop unit suite
+passed **129, with one platform skip** (`tray-desktop-suite.log`). These tests
+verify behavior and locale keys, not actual OS notification delivery or native
+translation quality. A live Windows notification observation remains unverified.

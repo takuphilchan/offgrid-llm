@@ -45,6 +45,7 @@
     "files": [
       "main.js",
       "shutdown.js",
+      "tray-feedback.js",
       "execution-runtime.js",
       "folder-trust.js",
       "folder-trust-copy.js",
