@@ -15,6 +15,7 @@ import { api, type AgentProfile, type AgentResourceRestrictions, type ChatMessag
 import { composerAttachmentLabel } from '../../i18n/composer';
 import { Icon } from '../../components/Icon';
 import { MarkdownMessage } from '../../components/MarkdownMessage';
+import { AttachmentAnswer } from './AttachmentAnswer';
 import { ModelSelect } from '../../components/ModelSelect';
 import type { HistoryItem } from '../../components/HistoryDeleteDialog';
 import { ChatHistoryDelete } from './ChatHistoryDelete';
@@ -537,7 +538,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
           const messageKey = `${index}-${'timestamp' in message ? message.timestamp : content.slice(0, 24)}`;
           return <article className={`message ${message.role}`} key={messageKey}>
             <div className="message-heading"><div className="message-label">{message.role === 'user' ? text.chat.you : message.role === 'assistant' ? text.chat.assistant : message.role}</div></div>
-            <div className="message-body">{message.role === 'assistant' ? <MarkdownMessage content={content} /> : content}</div>
+            <div className="message-body">{message.role === 'assistant' ? 'attachment_selections' in message && Array.isArray(message.attachment_selections) && message.attachment_selections.length ? <AttachmentAnswer content={content} session={activeName} selections={message.attachment_selections} /> : <MarkdownMessage content={content} /> : content}</div>
             <ImageAttachments images={message.images}/>
             <FileAttachments name={activeName} references={message.attachments} active={busy && index === conversation.length-1}/>
             {message.role === 'assistant' && <KnowledgePassages passages={message.knowledge_sources} />}

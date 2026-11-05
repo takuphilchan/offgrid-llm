@@ -182,6 +182,7 @@ export const api = {
   documentPage: (path: string, signal: AbortSignal) => request<Blob>(path, { signal }, 120_000, response => response.blob()),
   deleteSessionAttachment: (name: string, id: string) => request<{ removed: boolean }>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   sessionAttachmentOriginal: (name: string, id: string, signal?: AbortSignal) => request<Blob>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}/original`, { signal }, 120_000, response => response.blob()),
+  sessionAttachmentPassage: (name: string, id: string, revision: string, start: number, end: number, signal: AbortSignal) => request<components['schemas']['AttachmentPassage']>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}/passage?${new URLSearchParams({revision, start: String(start), end: String(end)})}`, { signal }),
   createSession: (name: string, modelID: string, signal?: AbortSignal) => request<ChatSession>('/v1/sessions', {
     method: 'POST', signal, body: JSON.stringify({ name, model_id: modelID })
   }),

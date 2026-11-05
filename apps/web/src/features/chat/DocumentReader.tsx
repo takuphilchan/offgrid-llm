@@ -13,7 +13,8 @@ export function DocumentReader({ source, close }: { source: ReaderSource; close:
  const [preview, setPreview] = useState<DocumentPreview>();
  const [error, setError] = useState(''), [pageError, setPageError] = useState('');
  const [page, setPage] = useState(source.citation?.index ?? 1), [zoom, setZoom] = useState(100);
- const [query, setQuery] = useState(''), [textView, setTextView] = useState(!!source.verifiedText);
+ const [query, setQuery] = useState(''), [textView, setTextView] = useState(!!(source.verifiedText || source.passage));
+ const [passagePage, setPassagePage] = useState<number>();
  const [pixels, setPixels] = useState(''), [loadingPage, setLoadingPage] = useState(false);
  const [retryPage, setRetryPage] = useState(0);
  const closeButton = useRef<HTMLButtonElement>(null), surface = useRef<HTMLDivElement>(null);
@@ -25,6 +26,12 @@ export function DocumentReader({ source, close }: { source: ReaderSource; close:
    if (source.sha256 && result.sha256 !== source.sha256) throw Error(messages.common.error);
    if (source.citation && (result.sha256 !== source.citation.source_sha256 || !result.units.some(unit => unit.index === source.citation?.index && unit.kind === source.citation?.kind))) throw Error(messages.common.error);
    setPreview(result); setPage(source.citation ? Math.max(1,result.units.findIndex(unit=>unit.index===source.citation?.index&&unit.kind===source.citation?.kind)+1) : 1);
+   if (source.passage) {
+    // Only one exact occurrence in one native unit establishes a page location.
+    // Cross-page passages and repeated text remain a verified excerpt, not a guessed page.
+    const matches = result.units.flatMap((unit, index) => unit.text.includes(source.passage!) ? [{unit,index}] : []);
+    if (matches.length === 1 && matches[0].unit.text.indexOf(source.passage) === matches[0].unit.text.lastIndexOf(source.passage)) { setPassagePage(matches[0].index+1); setPage(matches[0].index+1); }
+   }
   }).catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : messages.common.error); });
   return () => controller.abort();
  }, [source]);
@@ -42,11 +49,11 @@ export function DocumentReader({ source, close }: { source: ReaderSource; close:
  }, [preview, page, textView, retryPage]);
  const matches = useMemo(() => query.trim() ? preview?.units.filter(item => item.text.toLocaleLowerCase().includes(query.toLocaleLowerCase())) ?? [] : [], [query, preview]);
  const text = unit?.text ?? '';
- const highlight = source.verifiedText || query;
+ const highlight = source.verifiedText || (page === passagePage ? source.passage : '') || query;
  // Exact citation text must never be mapped through case folding: some Unicode
  // characters change length when folded, which would highlight different bytes.
  const folded = text.toLocaleLowerCase(), foldedHighlight = highlight.toLocaleLowerCase();
- const offset = !highlight ? -1 : source.verifiedText ? text.indexOf(highlight)
+ const offset = !highlight ? -1 : source.verifiedText || source.passage && page === passagePage ? text.indexOf(highlight)
   : folded.length === text.length && foldedHighlight.length === highlight.length ? folded.indexOf(foldedHighlight) : text.indexOf(highlight);
  useEffect(() => { surface.current?.scrollTo(0, 0); }, [page, textView]);
  const download = async () => {
@@ -80,6 +87,7 @@ export function DocumentReader({ source, close }: { source: ReaderSource; close:
    {preview.format !== 'pdf' && <p className="document-coverage">{copy.structured}</p>}
    {query && <div className="document-search-results" role="status">{matches.length ? matches.map(item => <button className="text-button" key={item.index} onClick={() => { setPage(preview.units.indexOf(item) + 1); setTextView(true); }}>{item.name || item.index}</button>) : copy.noMatch}</div>}
    {pageError && <div className="document-page-error"><p role="alert">{pageError}</p><button className="icon-button" aria-label={messages.common.retry} title={messages.common.retry} onClick={() => setRetryPage(value=>value+1)}><Icon name="refresh" size={18}/></button></div>}
+   {source.passage && !passagePage && <section className="document-verified-passage"><h3>{knowledgeScope[locale].passages}</h3><blockquote dir="auto">{source.passage}</blockquote></section>}
    {source.verifiedText && unit?.index === source.citation?.index && !text.includes(source.verifiedText) && <section className="document-verified-passage"><h3>{knowledgeScope[locale].passages}</h3><blockquote dir="auto">{source.verifiedText}</blockquote></section>}
    <div ref={surface} className="document-reader-surface" tabIndex={0} aria-busy={loadingPage}>
     {loadingPage && <div className="document-scan" role="status">{messages.common.loading}</div>}

@@ -35,6 +35,22 @@ for(const width of [390,1280]) test(`ready attachment never collapses into a ver
  await page.screenshot({path:test.info().outputPath(`attachment-${width}.png`)});
 });
 
+test('new document chat gives the paper priority without losing the draft',async({page})=>{
+ await page.setViewportSize({width:1440,height:900});
+ await setup(page,'en','dark',{...file,status:'ready',error_code:''});
+ const session={name:'Demo briefing',model_id:'Local-Research-7B-Instruct-Q4_K_M-long-model-name',messages:[]};
+ await page.route('**/v1/sessions',r=>r.fulfill({json:{sessions:[session]}}));
+ await page.route('**/v1/sessions/Demo%20briefing',r=>r.fulfill({json:session}));
+ await page.reload();
+ await expect(page.locator('.empty-chat h2')).toBeVisible();
+ await page.getByRole('button',{name:'Open document',exact:true}).click();
+ await expect(page.locator('.empty-chat .orb')).toBeHidden();
+ await expect(page.locator('.empty-chat h2')).toHaveCSS('font-size','24px');
+ expect((await page.locator('.empty-chat').boundingBox())!.height).toBeLessThan(240);
+ await expect(page.locator('.composer textarea')).toHaveValue('Explain this paper');
+ await page.screenshot({path:test.info().outputPath('document-first-question.png')});
+});
+
 test('active attachment announcement stays accessible without floating beside the file',async({page})=>{
  await page.setViewportSize({width:700,height:1000});
  await setup(page,'en','dark',{...file,status:'ready',error_code:'',coverage:'native_text_only'} as typeof file);

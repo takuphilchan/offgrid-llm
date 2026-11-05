@@ -1,4 +1,4 @@
-import { isValidElement, memo, useState, type ReactNode } from 'react';
+import { cloneElement, isValidElement, memo, useMemo, useState, type ReactNode } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { copyText } from '../lib/clipboard';
@@ -47,7 +47,18 @@ function safeUrl(url: string): string {
 }
 
 // Input, lifecycle and unrelated progress updates must not reparse saved prose.
-export const MarkdownMessage = memo(function MarkdownMessage({ content, streaming = false }: { content: string; streaming?: boolean }) {
-  if (streaming || content.length > 4096) return <AsyncMarkdown content={content} components={components} />;
-  return <Markdown remarkPlugins={[remarkGfm]} components={components} urlTransform={safeUrl}>{content}</Markdown>;
+export const MarkdownMessage = memo(function MarkdownMessage({ content, streaming = false, renderText }: { content: string; streaming?: boolean; renderText?: (text: string) => ReactNode }) {
+  const renderers = useMemo<Components>(() => {
+    if (!renderText) return components;
+    const transform = (node: ReactNode): ReactNode => {
+      if (typeof node === 'string') return renderText(node);
+      if (Array.isArray(node)) return node.map(transform);
+      // Never interpret citations inside code, links or already rendered controls.
+      if (isValidElement<{children?: ReactNode}>(node) && ['strong','em','del','span'].includes(String(node.type))) return cloneElement(node, {}, transform(node.props.children));
+      return node;
+    };
+    return {...components, p: ({children}) => <p>{transform(children)}</p>, li: ({children}) => <li>{transform(children)}</li>, td: ({children}) => <td>{transform(children)}</td>, th: ({children}) => <th>{transform(children)}</th>};
+  }, [renderText]);
+  if (streaming || content.length > 4096) return <AsyncMarkdown content={content} components={renderers} />;
+  return <Markdown remarkPlugins={[remarkGfm]} components={renderers} urlTransform={safeUrl}>{content}</Markdown>;
 });

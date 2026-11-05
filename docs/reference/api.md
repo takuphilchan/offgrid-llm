@@ -19,6 +19,7 @@ Services advertising `session-files-v1` expose private conversation sources:
 - `GET /v1/sessions/{name}/attachments`: source names, identities and extraction states.
 - `POST /v1/sessions/{name}/attachments/{id}/prepare`: retry extraction of a retained original.
 - `GET /v1/sessions/{name}/attachments/{id}/original`: authenticated, digest-verified download.
+- `GET /v1/sessions/{name}/attachments/{id}/passage?revision=REV&start=N&end=N`: owner-scoped exact retained UTF-8 passage, pinned to the extraction revision. Bounds are exclusive at the end and limited to 256 KiB; invalid/stale sources return 422 and malformed parameters return 400. Responses are not cached. This verifies the source identity and bytes, not an answer's interpretation or page location.
 - `DELETE /v1/sessions/{name}/attachments/{id}`: remove an unused source; history or active-work references return 409.
 
 An accepted source is `uploaded`, `ready` or `failed`. Failed extraction returns
@@ -34,10 +35,13 @@ Every admission rechecks ownership, original bytes and extraction revision.
 Agent file context is not yet enabled; unsupported paths fail explicitly.
 
 Limits are eight originals and 100 MiB per conversation, 50 MiB per file and
-500 MiB per owner. Direct conversation context permits 256 KiB of extracted
-source text across the full history; model context admission may impose a lower
-limit. No text is silently truncated. Larger documents require Knowledge
-retrieval. PDF/OCR readiness remains subject to the documented parser limits.
+500 MiB per owner. Retained extraction admission is bounded to 32 MiB across
+referenced sources. Each turn selects full text or exact excerpts within its
+available context, with a 256 KiB candidate ceiling; model token admission can
+impose a lower limit. Saved answers record the extraction revisions and ranges
+used, and excerpt-based answers disclose limited coverage. Conversation history
+and full source text are retained. Knowledge provides a separate reusable
+retrieval library. PDF/OCR readiness remains subject to the parser limits.
 Draft-chip removal does not delete a retained source. Explicit conversation
 deletion removes its original and extracted attachment files; if cleanup fails,
 the conversation remains for an explicit deletion retry. Backups are separate.

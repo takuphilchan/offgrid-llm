@@ -2,6 +2,10 @@
 .document-chat { display:flex; flex:1; min-width:0; min-height:0; }
 .document-chat > .chat-workspace { width:100%; }
 .document-workspace.has-document .document-chat { flex: 1 1 45%; }
+.document-workspace.has-document .empty-chat { min-height:0; padding-block:var(--space-6); align-items:flex-start; text-align:start; }
+.document-workspace.has-document .empty-chat .orb { display:none; }
+.document-workspace.has-document .empty-chat h2 { margin-block:0 var(--space-2); font-size:var(--type-title); letter-spacing:var(--tracking-title); }
+.document-workspace.has-document .empty-chat p { max-width:var(--measure-copy); font-size:var(--type-ui); }
 .document-reader { display:flex; flex-direction:column; flex:1 1 55%; min-width:0; min-height:0; overflow:hidden; border-inline-start:1px solid var(--line); padding-inline-start:20px; }
 .document-reader > header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-block:8px 16px; }
 .document-reader > header > div { min-width:0; }
@@ -51,6 +55,11 @@
  .document-workspace[data-view=document].has-document .document-chat, .document-workspace[data-view=chat] .document-reader { display:none; }
  .document-reader { flex:1; border:0; padding:0; }
 }
+.message-body .citation-chip { display:inline-flex; max-width:100%; min-height:24px; vertical-align:baseline; margin-inline:3px; padding:2px 7px; border:0; border-radius:var(--radius-sm); background:var(--surface-2); color:var(--text); font:inherit; font-size:var(--type-meta); text-align:start; }
+.citation-chip bdi { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.citation-chip:hover { background:var(--surface-3); }
+.document-verified-passage blockquote { max-height:35vh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; margin:0; }
+@media (pointer:coarse) { .message-body .citation-chip { min-height:44px; } }
 .document-coverage-pages { display:flex; flex-wrap:wrap; gap:0.25rem 0.5rem; margin-block:0 0.5rem; }
 .document-coverage-pages .text-button { padding:0.2rem 0.45rem; font-size:var(--text-sm,0.875rem); }
 .document-coverage-pages [aria-current=page] { background:var(--surface-hover); }

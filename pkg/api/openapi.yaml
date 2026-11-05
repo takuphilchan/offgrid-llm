@@ -755,6 +755,25 @@ paths:
         '409': { $ref: '#/components/responses/Error' }
         '422': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
+  /v1/sessions/{name}/attachments/{attachment_id}/passage:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+      - { name: attachment_id, in: path, required: true, schema: { type: string } }
+      - { name: revision, in: query, required: true, schema: { type: string } }
+      - { name: start, in: query, required: true, schema: { type: integer, minimum: 0 } }
+      - { name: end, in: query, required: true, schema: { type: integer, minimum: 1 } }
+    get:
+      operationId: getSessionAttachmentPassage
+      description: Owner-scoped exact UTF-8 passage from a pinned extraction revision, after original digest verification. Maximum 256 KiB. Does not infer a page number or verify a model claim.
+      responses:
+        '200':
+          description: Exact retained passage
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentPassage' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
   /v1/sessions/{name}/attachments/{attachment_id}/original:
     parameters:
       - $ref: '#/components/parameters/SessionName'
@@ -2986,6 +3005,17 @@ components:
             turn_id: { type: string }
             knowledge_sources: { type: array, items: { $ref: '#/components/schemas/KnowledgePassage' } }
             knowledge_documents: { type: array, items: { type: string }, description: 'Retained source dependencies checked against current access; not an access grant.' }
+    AttachmentPassage:
+      type: object
+      required: [id, revision, name, sha256, start_byte, end_byte, text]
+      properties:
+        id: { type: string }
+        revision: { type: string }
+        name: { type: string }
+        sha256: { type: string }
+        start_byte: { type: integer, minimum: 0 }
+        end_byte: { type: integer, minimum: 1 }
+        text: { type: string }
     AttachmentSelection:
       type: object
       description: Exact source revision and UTF-8 extracted-text byte ranges supplied for this answer. Excerpts are not a complete document review.

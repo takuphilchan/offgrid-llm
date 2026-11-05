@@ -6,6 +6,7 @@ import (
 	"mime"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/takuphilchan/offgrid-llm/internal/rag"
@@ -68,6 +69,23 @@ func (h *SessionHandlers) handleSessionAttachments(w http.ResponseWriter, r *htt
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": a.Name}))
 		_, _ = w.Write(data)
+		return
+	}
+	if r.Method == http.MethodGet && id != "" && subaction == "passage" {
+		start, startErr := strconv.Atoi(r.URL.Query().Get("start"))
+		end, endErr := strconv.Atoi(r.URL.Query().Get("end"))
+		revision := r.URL.Query().Get("revision")
+		if startErr != nil || endErr != nil || revision == "" {
+			writeError(w, "A pinned source revision and valid passage range are required", 400)
+			return
+		}
+		passage, err := scope.ReadAttachmentPassage(name, sessions.AttachmentReference{ID: id, Revision: revision}, start, end)
+		if err != nil {
+			writeSessionError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(passage)
 		return
 	}
 	if r.Method == http.MethodGet && id != "" && subaction == "preview" {

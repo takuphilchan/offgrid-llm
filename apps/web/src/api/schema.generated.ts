@@ -603,6 +603,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{name}/attachments/{attachment_id}/passage": {
+        parameters: {
+            query: {
+                revision: string;
+                start: number;
+                end: number;
+            };
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Owner-scoped exact UTF-8 passage from a pinned extraction revision, after original digest verification. Maximum 256 KiB. Does not infer a page number or verify a model claim. */
+        get: operations["getSessionAttachmentPassage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{name}/attachments/{attachment_id}/original": {
         parameters: {
             query?: never;
@@ -2286,6 +2310,15 @@ export interface components {
             knowledge_sources?: components["schemas"]["KnowledgePassage"][];
             /** @description Retained source dependencies checked against current access; not an access grant. */
             knowledge_documents?: string[];
+        };
+        AttachmentPassage: {
+            id: string;
+            revision: string;
+            name: string;
+            sha256: string;
+            start_byte: number;
+            end_byte: number;
+            text: string;
         };
         /** @description Exact source revision and UTF-8 extracted-text byte ranges supplied for this answer. Excerpts are not a complete document review. */
         AttachmentSelection: {
@@ -4455,6 +4488,36 @@ export interface operations {
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
             503: components["responses"]["Error"];
+        };
+    };
+    getSessionAttachmentPassage: {
+        parameters: {
+            query: {
+                revision: string;
+                start: number;
+                end: number;
+            };
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact retained passage */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentPassage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     getSessionAttachmentOriginal: {

@@ -12,6 +12,7 @@ import (
 // Offsets identify exact UTF-8 bytes in the immutable extracted-text revision,
 // not invented PDF page numbers. Originals and full extraction stay untouched.
 type AttachmentExcerpt struct {
+	Citation  string `json:"citation,omitempty"`
 	StartByte int    `json:"start_byte"`
 	EndByte   int    `json:"end_byte"`
 	Text      string `json:"text"`
@@ -68,7 +69,7 @@ func documentChunks(text string) []AttachmentExcerpt {
 				end += size
 			}
 		}
-		chunks = append(chunks, AttachmentExcerpt{start, end, text[start:end]})
+		chunks = append(chunks, AttachmentExcerpt{StartByte: start, EndByte: end, Text: text[start:end]})
 		start = end
 	}
 	return chunks
