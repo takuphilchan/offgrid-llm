@@ -13,6 +13,7 @@ for (const theme of ['light', 'dark']) for (const locale of ['en', 'ar']) for (c
     await trigger.click();
     const panel = page.locator('.workspace-options-panel');
     await expect(panel).toHaveCSS('opacity', '1');
+    await panel.evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)));
     await expect(panel).toHaveCSS('background-image', /linear-gradient/);
     await expect(panel).toHaveCSS('backdrop-filter', 'blur(12px)');
     const geometry = await panel.boundingBox();

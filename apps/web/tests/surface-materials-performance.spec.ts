@@ -23,6 +23,7 @@ test('floating surfaces remain responsive over a streaming answer at 4x and 6x C
       });
       const panel = page.locator('.composer-context-menu > .utility-popover-panel');
       await expect(panel).toHaveCSS('opacity', '1');
+      await panel.evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)));
       await expect(panel).toHaveCSS('backdrop-filter', mode === 'on' ? 'blur(12px)' : 'none');
       const events: { name: string; dur?: number }[] = [];
       cdp.on('Tracing.dataCollected', ({ value }) => events.push(...value));

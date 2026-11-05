@@ -328,3 +328,26 @@ presentation and notification tests passed **19/19**; the full desktop unit suit
 passed **129, with one platform skip** (`tray-desktop-suite.log`). These tests
 verify behavior and locale keys, not actual OS notification delivery or native
 translation quality. A live Windows notification observation remains unverified.
+
+## Opaque overlay entrance
+
+The inspected first-use screenshot showed background headings through the setup
+dialog during entrance. The shared animation faded the whole overlay, including
+text, even though its settled surface was opaque. New frame-sampled checks
+reproduced this in all six setup/palette/menu light/dark cases before the fix.
+Overlays now retain opacity while moving by the existing four-pixel distance;
+the existing reduced-motion fallback remains unchanged.
+
+The first combined rerun exposed eight material-geometry test failures: those
+tests used opacity reaching one as a proxy for completed motion. They now await
+the actual finite entrance animation before comparing exact bounding boxes.
+Geometry and contrast assertions were not relaxed. Corrected overlay, material
+and offline-setup tests passed **32/32** (`opaque-overlays-final-ui.log`), and
+the corrected setup capture was inspected.
+
+The opt-in one-worker paint test also passed with `OFFGRID_PAINT_MEASURE=1`
+(`opaque-overlays-performance.log`). Across light/dark, materials on/off, and
+4x/6x CPU throttling, observed open feedback was **20.7–42.4 ms**, Stop feedback
+**3.1–38.7 ms**, and frame p95 **16.7–33.4 ms**. This is one isolated fixture run
+on this machine, not a cross-device performance or inference-speed claim. It
+does not close the broader historical 15% comparison requirement.

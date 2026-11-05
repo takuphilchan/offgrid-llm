@@ -31,7 +31,13 @@
   .utility-popover-panel { position: fixed; inset: auto; margin: 0; overflow-y: auto; overflow-x: hidden; padding: var(--space-4); border: 1px solid var(--line-strong); border-radius: var(--radius-panel); color: var(--text); background: var(--surface-1); box-shadow: var(--shadow); overscroll-behavior: contain; touch-action: pan-y; scrollbar-gutter: stable; }
   .utility-popover-content { display: grid; gap: var(--space-4); min-width: 0; overflow-wrap: anywhere; }
   .utility-popover-panel:popover-open, .command-palette, dialog.onboarding[open] {
-    animation: workspace-enter var(--motion-enter) var(--ease-enter) both;
+    animation: workspace-overlay-enter var(--motion-enter) var(--ease-enter) both;
+  }
+  /* Keep controls and their text opaque while the overlay arrives. Fading the
+     whole panel lets the underlying workspace compete with its instructions. */
+  @keyframes workspace-overlay-enter {
+    from { transform: translateY(var(--motion-distance)); }
+    to { transform: translateY(0); }
   }
   .utility-popover-panel, dialog.command-palette {
     background-color: var(--material-fill);
