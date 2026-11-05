@@ -1,6 +1,6 @@
 # OffGrid product experience audit and design plan
 
-**Updated:** 2026-11-05. **Baseline:** the running, installed OffGrid **v0.4.25**, distinguished below from the newer working-tree renderer. Audit and plan only. The old `web/app` and `desktop/` names in the request now refer to `apps/web` and `apps/desktop`. Source locations identify implementation owners; they do not establish that an uninstalled change is already visible to users.
+**Updated:** 2026-11-05. **Baseline:** the running, installed OffGrid **v0.4.25**, distinguished below from the newer working-tree renderer. The application source is in `apps/web` and `apps/desktop`; implementation status is recorded separately below. Source locations identify implementation owners; they do not establish that an uninstalled change is already visible to users.
 
 ## Executive summary
 
