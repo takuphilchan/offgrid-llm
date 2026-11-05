@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v2/models/import/gguf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Explicit offline single-file GGUF upload into the connected workspace. Requires model management authority. Bounded header checks and a stored SHA256 do not establish tensor validity, runtime compatibility or qualification. No overwrite, automatic model selection, loading or companion download. Requires gguf-offline-import-v1 capability. */
+        post: operations["importOfflineGGUF"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/execution/pairing": {
         parameters: {
             query?: never;
@@ -3229,6 +3246,74 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    importOfflineGGUF: {
+        parameters: {
+            query: {
+                filename: string;
+                size: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description File installed. A failed inventory refresh does not undo publication; inspect installed models before attempting another import. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        model_id: string;
+                        filename: string;
+                        size: number;
+                        sha256: string;
+                        inventory_refreshed: boolean;
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Model management permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Existing filename or model identity preserved. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported name */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Storage unavailable; no existing file overwritten. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     pairExecutionHost: {
         parameters: {
             query?: never;

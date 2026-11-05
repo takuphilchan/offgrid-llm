@@ -640,6 +640,19 @@ contract and [host protocol reference](../../apps/computer/README.md).
 
 ## Model packages (development contract)
 
+`POST /api/v2/models/import/gguf?filename=NAME.gguf&size=BYTES` accepts an explicit
+offline single-file upload with `Content-Type: application/octet-stream`, when
+`gguf-offline-import-v1` is advertised. Model-management authorization is checked
+before reading the body. Limits are 1 MiB–32 GiB and a 30-minute transfer deadline.
+Unsafe paths, projectors, split metadata/shard names and mismatched lengths are
+rejected. Atomic no-replace publication preserves existing filenames and models;
+the response includes model ID, filename, size, SHA256 and `inventory_refreshed`.
+A false refresh flag means storage succeeded and inventory should be inspected,
+not that the upload should be repeated. `409` preserves an existing model; `503`
+may indicate storage failure or another active import. Installation and bounded
+header checks are not runtime qualification. No model is loaded or selected and
+no network model acquisition occurs. Inspect inventory after a lost response.
+
 The shared catalog/inventory types distinguish `legacy_file` and `package`
 installation targets and four capability categories (`language`, `embeddings`,
 `speech_recognition`, `speech_generation`). Each variant carries provenance and

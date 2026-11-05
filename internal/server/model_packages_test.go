@@ -128,7 +128,7 @@ func TestSpeechPackageCannotReachChatInference(t *testing.T) {
 }
 
 func TestPackageBodyLimitRetainsOrdinaryRequestLimit(t *testing.T) {
-	for _, path := range []string{"/v1/chat/completions", modelPackagePath} {
+	for _, path := range []string{"/v1/chat/completions", modelPackagePath, modelGGUFImportPath} {
 		var limit int64
 		handler := requestBodyLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, err := io.Copy(io.Discard, r.Body)
@@ -139,10 +139,10 @@ func TestPackageBodyLimitRetainsOrdinaryRequestLimit(t *testing.T) {
 		}))
 		reader := &zeroPackageReader{remaining: maxRequestBodyBytes + 1}
 		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("POST", path, reader))
-		if path == modelPackagePath && limit != 0 {
+		if path != "/v1/chat/completions" && limit != 0 {
 			t.Fatal("package incorrectly limited to JSON request size")
 		}
-		if path != modelPackagePath && limit != maxRequestBodyBytes {
+		if path == "/v1/chat/completions" && limit != maxRequestBodyBytes {
 			t.Fatalf("ordinary request limit changed: %d", limit)
 		}
 	}

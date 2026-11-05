@@ -51,3 +51,11 @@
     .installed-model .model-actions { padding: 0 16px 16px; }
   }
 }
+@layer workspace {
+.offline-model-import { max-inline-size: 48rem; }
+.offline-model-import > p { color: var(--muted); overflow-wrap: anywhere; }
+.offline-model-import .model-actions { align-items: center; justify-content: flex-start; gap: 1rem; }
+.offline-import-spinner { display: inline-block; inline-size: 1em; block-size: 1em; margin-inline-end: .5em; border: 2px solid var(--line); border-block-start-color: currentColor; border-radius: 50%; animation: offline-import-spin 1s linear infinite; }
+@keyframes offline-import-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .offline-import-spinner { animation: none; } }
+}

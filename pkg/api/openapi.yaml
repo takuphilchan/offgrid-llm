@@ -9,6 +9,43 @@ security:
   - sessionCookie: []
   - bearerAuth: []
 paths:
+  /api/v2/models/import/gguf:
+    post:
+      operationId: importOfflineGGUF
+      description: Explicit offline single-file GGUF upload into the connected workspace. Requires model management authority. Bounded header checks and a stored SHA256 do not establish tensor validity, runtime compatibility or qualification. No overwrite, automatic model selection, loading or companion download. Requires gguf-offline-import-v1 capability.
+      parameters:
+        - in: query
+          name: filename
+          required: true
+          schema: { type: string, maxLength: 240 }
+        - in: query
+          name: size
+          required: true
+          schema: { type: integer, minimum: 1048576, maximum: 34359738368 }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '201':
+          description: File installed. A failed inventory refresh does not undo publication; inspect installed models before attempting another import.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [model_id, filename, size, sha256, inventory_refreshed]
+                properties:
+                  model_id: { type: string }
+                  filename: { type: string }
+                  size: { type: integer }
+                  sha256: { type: string }
+                  inventory_refreshed: { type: boolean }
+        '401': { description: Authentication required. }
+        '403': { description: Model management permission required. }
+        '409': { description: Existing filename or model identity preserved. }
+        '422': { description: Unsupported name, size or single-file GGUF header. }
+        '503': { description: Storage unavailable; no existing file overwritten. }
   /api/v2/execution/pairing:
     post:
       operationId: pairExecutionHost

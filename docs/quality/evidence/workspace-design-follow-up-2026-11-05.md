@@ -211,3 +211,55 @@ are now captured after Finish for future diagnosis. The original **two-second
 window-destruction requirement is unchanged**; a hidden window is not counted as
 closed. Compilation, version matching and these local results are not a diagnosis
 of that earlier intermittent CI failure.
+
+## Offline GGUF setup increment (task 22.2)
+
+The model library now exposes an explicit file-import disclosure on services
+advertising `gguf-offline-import-v1`, for model administrators only. Choosing a
+file does not upload it. Review shows the selected name/size and an explicit import
+action. Existing model files and current selection are preserved; the UI supports
+cancellation, real in-flight status, reduced motion and all nine locales.
+
+The shared authenticated API streams into a private staging file and records a
+SHA256. Bounded metadata checks reject unsafe filenames, invalid headers,
+projectors, split filenames and renamed split metadata. Exact byte lengths are
+required. Publication is atomic and cannot replace an existing file; staged files
+are removed on ordinary failures/cancellation. Concurrent imports are bounded.
+No model is loaded, selected or downloaded. These checks are **storage/header
+validation, not tensor validation, runtime qualification or model-quality evidence**.
+
+Lost acknowledgment or cancellation does not establish whether publication
+completed. The UI retains uncertainty, requires inspection/refresh and does not
+automatically replay the upload. A confirmed conflict is shown separately.
+
+The first real-service test caught selection of the newly imported file when the
+previous selection was empty: the shared inventory refresh chose the first model.
+Import refresh now explicitly preserves empty selections too. That run recorded
+48 passes and one failure; the corrected run passed 49, followed by **51 passing
+checks** after adding cancellation/motion and read-only-user scenarios. The real
+service test uses synthetic metadata/storage bytes, verifies the returned digest
+against the input, and verifies inventory and unchanged selection. It performs no
+inference and is not a real-model qualification test.
+
+`go test ./internal/models ./internal/server ./pkg/api -count=1` passed after
+reviewing the new guarded route and updating its frozen registration fixture from
+149 to 150 routes. Focused tests cover exact-byte storage, conflicting identities,
+concurrent publication, nested existing models, malformed input, interrupted
+reads, cancellation and authorization before reading the body. Web build, generated
+API check, documentation links and source-size checks passed. Wider task 22.2
+qualification remains open; this entry does not close the whole first-use program.
+
+The full renderer run recorded **1,023 passed, 31 skipped, one failed**. The new
+mock import test read its baseline selection before initial page setup settled;
+it now starts with an explicit saved selection. The independent real-service test
+waits for the imported inventory row to remain unselected and removes only its own
+synthetic model afterward. The corrected 17-case import suite passed three
+repetitions (**51 passed**, `offline-import-repeated-ui.log`). This focused rerun
+does not rewrite the earlier full-run result.
+
+The overlapping `go test ./...` run failed the isolated default-server startup
+and local-endpoint background-job deadlines while resource pressure was reported.
+With browser testing finished, **`go test -p 1 ./...` passed**
+(`offline-import-go-all-serial.log`); test deadlines and assertions were not changed.
+The request-limit regression also confirms GGUF uploads can exceed the ordinary
+64 MiB JSON limit while ordinary inference requests retain their existing bound.

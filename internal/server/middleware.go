@@ -34,7 +34,7 @@ func requestBodyLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Body != nil {
 			limit := maxRequestBodyBytes
-			if r.Method == http.MethodPost && r.URL.Path == modelPackagePath {
+			if r.Method == http.MethodPost && (r.URL.Path == modelPackagePath || r.URL.Path == modelGGUFImportPath) {
 				limit = maxModelPackageRequestBytes
 			}
 			r.Body = http.MaxBytesReader(w, r.Body, limit)

@@ -107,6 +107,7 @@ func (s *Server) registerModelRoutes(mux *http.ServeMux, guards routeGuards) {
 	mux.HandleFunc("/v1/models", modelsOnly(s.rateLimiter.Middleware(s.handleListModels)))
 	mux.HandleFunc(modelPackagePath, s.rateLimiter.Middleware(s.handleModelPackages))
 	mux.HandleFunc(modelPackagePath+"/", s.rateLimiter.Middleware(s.handleModelPackages))
+	mux.HandleFunc(modelGGUFImportPath, s.rateLimiter.Middleware(s.handleGGUFImport))
 	mux.HandleFunc("/api/v2/models", s.rateLimiter.Middleware(s.handleModelsV2))
 	mux.HandleFunc("/api/v2/models/", s.rateLimiter.Middleware(s.handleModelsV2))
 	mux.HandleFunc("/v1/models/delete", modelManagerOnly(s.rateLimiter.Middleware(s.handleDeleteModel)))

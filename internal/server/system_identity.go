@@ -86,6 +86,7 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 	identity.Capabilities = append(identity.Capabilities, "document-attachment-imports-v1")
 	identity.Capabilities = append(identity.Capabilities, "session-history-seed-v1")
 	identity.Capabilities = append(identity.Capabilities, "gguf-bundles-v1")
+	identity.Capabilities = append(identity.Capabilities, "gguf-offline-import-v1")
 	identity.Capabilities = append(identity.Capabilities, "work-search-v1")
 	if s.executionEnrollment != nil && s.config != nil && s.config.EnableExecutionPreview {
 		identity.Capabilities = append(identity.Capabilities, "native-execution-preview-v1", "execution-access-request-v1")

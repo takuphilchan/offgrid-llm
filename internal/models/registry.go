@@ -15,6 +15,7 @@ import (
 // Registry manages available models
 type Registry struct {
 	mu           sync.RWMutex
+	importMu     sync.Mutex
 	models       map[string]*api.ModelMetadata
 	modelsDir    string
 	loadedModels map[string]interface{} // actual loaded model instances

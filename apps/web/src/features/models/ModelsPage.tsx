@@ -27,6 +27,7 @@ import { UtilityPopover } from '../../components/UtilityPopover';
 import { workspaceOrder } from '../../i18n/workspace-order';
 import { modelBundles } from '../../i18n/model-bundles';
 import { workspaceAudit } from '../../i18n/workspace-audit';
+import { OfflineModelImport } from './OfflineModelImport';
 
 function fileName(path: string): string {
   return path.split('/').pop() ?? path;
@@ -41,13 +42,14 @@ function downloadFor(model: CatalogModel, progress: Record<string, DownloadProgr
   return progress[`${model.id}.gguf`];
 }
 
-export function ModelsPage({ models, selected, setSelected, onRefresh, onboardingPending }: { models: Model[]; selected: string; setSelected: (model: string) => void; onRefresh: () => Promise<void>; onboardingPending: boolean }) {
+export function ModelsPage({ models, selected, setSelected, onRefresh, onImportRefresh, onboardingPending }: { models: Model[]; selected: string; setSelected: (model: string) => void; onRefresh: () => Promise<void>; onImportRefresh: () => Promise<void>; onboardingPending: boolean }) {
   const { messages: text, locale } = useI18n();
   const { admin } = useWorkspace();
   const [bundles, setBundles] = useState(false);
+  const [offlineImport, setOfflineImport] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
-    void api.systemIdentity(controller.signal).then(value => { if (!controller.signal.aborted) setBundles(value.capabilities?.includes('gguf-bundles-v1') === true); }).catch(() => {});
+    void api.systemIdentity(controller.signal).then(value => { if (!controller.signal.aborted) { setBundles(value.capabilities?.includes('gguf-bundles-v1') === true); setOfflineImport(value.capabilities?.includes('gguf-offline-import-v1') === true); } }).catch(() => {});
     return () => controller.abort();
   }, []);
   const [category, setCategory] = useWorkspaceState<ModelCategory>('models.category', 'language');
@@ -188,6 +190,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
     {packageMode ? <PackageModels key={category} category={category} view={view} onDiscover={discover} /> : <>
     {confirmDelete && <ConfirmDialog title={confirmDelete} body={workflow[locale].deleteModel} close={() => setConfirmDelete('')} confirm={async () => { const item = models.find(model => model.id === confirmDelete); if (item) await remove(item); }} />}
     {needsChatModel && <div className="setup-guidance" role="status"><strong>{text.onboarding.chooseModel}</strong><p>{text.onboarding.modelHint}</p></div>}
+    {admin && offlineImport && category === 'language' && <OfflineModelImport onRefresh={onImportRefresh} />}
     {view === 'discover' && <div className="model-discovery-sources" role="group" aria-label={text.models.discover}>
       {(['curated', 'search'] as const).map(source => <button key={source} type="button" className="secondary-button" aria-pressed={discoverySource === source} onClick={() => setDiscoverySources(old => ({ ...old, [category]: source }))}>{modelLibrary(locale)[source]}</button>)}
     </div>}

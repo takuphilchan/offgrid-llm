@@ -40,6 +40,30 @@ within the [recorded qualification profiles](../quality/README.md).
 
 ## Download into the correct workspace
 
+### Import a file you already own
+
+On services advertising offline GGUF import, open **Models → Language → Import a
+model file**. Choose one complete `.gguf` file (1 MiB–32 GiB), review its name and
+size, then choose **Import file**. This uploads to the connected service's model
+storage, which may be on a different computer. Model-management permission is
+required. It preserves existing files and your current selection, including an
+empty selection; choose a model separately after import.
+
+The service stages the file, checks bounded GGUF metadata and records its SHA256.
+These checks do not establish tensor validity, model quality or runtime compatibility.
+Split GGUF shards and projector files are rejected by this single-file flow.
+Use the complete-model download/repair flow for supported vision bundles; this
+import never downloads missing companions. Native MLX/Transformers and speech
+packages continue to use their manifest-based import.
+
+If a response is lost, inspect or refresh installed models before trying again.
+Navigation does not replay an upload. A filename conflict preserves the original
+file; imports never overwrite it. The transfer has a 30-minute deadline and needs
+enough storage for the new file. Filesystems without safe no-replace publication
+fail without replacing existing models.
+
+### Download a supported model
+
 With the intended service running:
 
 ```sh

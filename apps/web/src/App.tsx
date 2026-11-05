@@ -93,7 +93,7 @@ export function App() {
     return () => window.removeEventListener('offgrid:unauthenticated', expired);
   }, []);
 
-  const refreshBase = useCallback(async () => {
+  const refreshBase = useCallback(async (preserveModelSelection = false) => {
     const revision = ++accessRevision.current;
     setLoadError('');
     const [healthResult, modelResult, userResult, identityResult] = await Promise.allSettled([api.health(), api.models(), api.currentUser(), api.systemIdentity()]);
@@ -133,7 +133,7 @@ export function App() {
       setModel(current => {
         // Refresh must not silently switch a saved selection when its files or
         // runtime are unavailable. The composer offers an explicit repair.
-        return current || initialChatModel(modelResult.value);
+        return preserveModelSelection ? current : current || initialChatModel(modelResult.value);
       });
     } else if (modelResult.reason instanceof APIError && modelResult.reason.status === 401) {
       setAccess('login');
@@ -227,7 +227,7 @@ export function App() {
           {page === 'chat' && <ChatPage scope={actor} models={models} model={model} setModel={setModel} onboardingPending={onboardingPending} onFirstResponse={finishOnboarding} onOpenModels={() => { window.location.hash = '#/models'; }} />}
           {page === 'knowledge' && <KnowledgePage models={models} onModelsChanged={refreshBase} onOpenModels={() => { window.location.hash = '#/models'; }} />}
           {page === 'agents' && <AgentPage models={models} model={model} />}
-          {page === 'models' && <ModelsPage models={models} selected={model} setSelected={setModel} onRefresh={refreshBase} onboardingPending={onboardingPending} />}
+          {page === 'models' && <ModelsPage models={models} selected={model} setSelected={setModel} onRefresh={refreshBase} onImportRefresh={() => refreshBase(true)} onboardingPending={onboardingPending} />}
           {page === 'activity' && <ActivityPage health={health} taskFirst={taskFirst} />}
           {page === 'settings' && <SettingsPage health={health} themeChoice={theme.choice} onThemeChange={theme.setChoice} onShowOnboarding={() => setShowOnboarding(true)} />}
         </PageBoundary>
