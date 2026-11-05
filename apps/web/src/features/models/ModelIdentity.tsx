@@ -1,6 +1,6 @@
 import { useI18n } from '../../i18n';
 import { modelAcquisition } from '../../i18n/model-acquisition';
-import { modelLibrary } from '../../i18n/model-library';
+import { modelLibrary, modelProviderDetails } from '../../i18n/model-library';
 import { formatBytes } from './model-format';
 import type { ModelDisplay } from './model-display';
 import './model-library.css';
@@ -9,11 +9,13 @@ import './model-library.css';
 // package readiness; an installed file never becomes a runtime qualification.
 export function ModelIdentity({ model, select, selected }: { model: ModelDisplay; select?: () => void; selected?: boolean }) {
   const { locale } = useI18n(), copy = modelLibrary(locale), acquisition = modelAcquisition[locale];
+  const provider = modelProviderDetails(locale);
+  const runtime = model.runtime === 'unavailable' ? `${provider.ready}: ${provider.no}` : model.runtime === 'ready' ? provider.ready : model.runtime ? copy[model.runtime] : '';
   const size = model.bytes === undefined ? copy.unknown : `${formatBytes(model.bytes)}${model.maximumBytes && model.maximumBytes !== model.bytes ? ` – ${formatBytes(model.maximumBytes)}` : ''}`;
   return <div className="model-display">
     {select ? <button className="secondary-button installed-model-main" aria-label={model.id} aria-pressed={selected} onClick={select}><strong>{model.name}</strong></button> : <h3>{model.name}</h3>}
     <div className="model-summary">
-      <p className="model-meta"><span>{model.category ? acquisition[model.category] : copy.unknown}</span>{model.runtime && <span>{copy[model.runtime]}</span>}</p>
+      <p className="model-meta"><span>{model.category ? acquisition[model.category] : copy.unknown}</span>{runtime && <span>{runtime}</span>}</p>
       <p className="model-size">{model.sizeMeaning === 'installed' ? copy.installedSize : acquisition.transfer}: {size}</p>
     </div>
     <details className="model-display-details"><summary>{copy.details}</summary>

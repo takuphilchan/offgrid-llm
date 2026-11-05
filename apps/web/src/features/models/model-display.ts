@@ -4,7 +4,7 @@ import { supportsChat } from '../../api/model-capabilities';
 export type ModelDisplay = {
   id: string; name: string; category?: ModelCategory; source?: string; revision?: string;
   bytes?: number; maximumBytes?: number; sizeMeaning: 'installed' | 'download';
-  runtime?: 'unchecked' | 'loaded'; quant?: string; license?: string;
+  runtime?: 'unchecked' | 'loaded' | 'ready' | 'unavailable'; quant?: string; license?: string;
   engine?: string; format?: string; backend?: string;
 };
 const bytes = (value: number | undefined) => Number.isSafeInteger(value) && value! > 0 ? value : undefined;
@@ -18,7 +18,7 @@ export function legacyDisplay(model: Model, catalog?: CatalogModel): ModelDispla
   return { id: model.id, name: catalog?.name || readableModelName(model.id), category: model.type === 'embedding' ? 'embeddings' : supportsChat(model) ? 'language' : undefined,
     // The legacy inventory has no immutable provenance. A matching filename is
     // not evidence that this file came from the curated repository.
-    bytes: bytes(model.size), sizeMeaning: 'installed', runtime: model.loaded ? 'loaded' : 'unchecked', quant: catalog?.quant,
+    bytes: bytes(model.size), sizeMeaning: 'installed', runtime: model.runtime_ready === false ? 'unavailable' : model.loaded ? 'loaded' : model.runtime_ready === true ? 'ready' : 'unchecked', quant: catalog?.quant,
     engine: model.engine ?? 'llama_cpp', format: model.format, backend: model.backend };
 }
 export function packageDisplay(model: InstalledTypedModel): ModelDisplay {

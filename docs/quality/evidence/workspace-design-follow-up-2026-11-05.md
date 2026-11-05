@@ -164,3 +164,23 @@ qualification limits above remain open.
 CI at `eabd70c3` passed the Linux suite but failed the Windows installer Finish
 close check. Its diagnostics are being investigated separately; the renderer
 results do not make that release gate pass.
+
+## Runtime readiness and subsequent verification
+
+Models now uses the same chat-eligibility predicate as Chat. Explicit
+`runtime_ready: false` disables selection while retaining the installed row and
+saved preference. An explicit failure overrides a stale loaded flag; missing
+legacy readiness remains unchecked rather than being treated as failure.
+First-use guidance remains visible when all installed chat runtimes are unavailable.
+
+- Web TypeScript/production build passed.
+- Installed-audit follow-up, model-library and model-search suites: **19 passed**.
+- Chat and connection readiness suites: **21 passed**, including localized
+  unavailable-model recovery and draft preservation.
+- Source-size ratchet and maintained documentation checks: passed (317 files,
+  zero link problems).
+
+Before this readiness increment, CI **41952580287** at **2377369b** completed
+successfully in all jobs, including Windows/macOS native, Go/API/UI/desktop and
+document-processing checks. This identifies the tested revision; it does not
+claim that CI has tested later unpushed work.

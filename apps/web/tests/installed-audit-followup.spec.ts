@@ -1,6 +1,44 @@
 import {test, expect} from '@playwright/test';
 import {craftFixture} from './helpers/craft-fixture';
 
+test('installed models expose readiness without changing the saved model', async ({page}) => {
+ const state = await craftFixture(page, 'en', 'light');
+ const selected = 'Unavailable-model';
+ await page.addInitScript(id => localStorage.setItem('offgrid.model', id), selected);
+ await page.route('**/v1/models', route => route.fulfill({json:{data:[
+  {id:selected,type:'chat',runtime_ready:false,loaded:true},
+  {id:'Ready-model',type:'chat',runtime_ready:true},
+  {id:'Legacy-model',type:'chat'},
+ ]}}));
+ await page.goto('/ui/#/models');
+ const unavailable = page.locator('.installed-model').filter({has:page.getByRole('heading',{name:'Unavailable model',exact:true})});
+ await expect(unavailable).toContainText('Runtime ready: No');
+ await expect(unavailable.getByRole('button',{name:'Selected',exact:true})).toBeDisabled();
+ expect(await page.evaluate(() => localStorage.getItem('offgrid.model'))).toBe(selected);
+ const legacy = page.locator('.installed-model').filter({has:page.getByRole('heading',{name:'Legacy model',exact:true})});
+ await expect(legacy).toContainText('Runtime unchecked');
+ await expect(legacy.getByRole('button',{name:'Select model',exact:true})).toBeEnabled();
+ const ready = page.locator('.installed-model').filter({has:page.getByRole('heading',{name:'Ready model',exact:true})});
+ await expect(ready).toContainText('Runtime ready');
+ await ready.getByRole('button',{name:'Select model',exact:true}).click();
+ await expect(ready.getByRole('button',{name:'Selected',exact:true})).toBeEnabled();
+ await expect.poll(() => page.evaluate(() => localStorage.getItem('offgrid.model'))).toBe('Ready-model');
+ expect(state.writes).toEqual([]);
+});
+
+test('first-use guidance remains when installed chat runtimes are unavailable', async ({page}) => {
+ const state = await craftFixture(page, 'en', 'light');
+ await page.addInitScript(() => {
+  localStorage.removeItem('offgrid.onboarding.complete');
+  localStorage.setItem('offgrid.onboarding.stage','working');
+ });
+ await page.route('**/v1/models', route => route.fulfill({json:{data:[{id:'Unavailable-model',type:'chat',runtime_ready:false}]}}));
+ await page.goto('/ui/#/models');
+ await expect(page.locator('.setup-guidance')).toBeVisible();
+ await expect(page.locator('.installed-model').getByRole('button',{name:/Select model|Selected/})).toBeDisabled();
+ expect(state.writes).toEqual([]);
+});
+
 test('empty library distinguishes conversation attachments without a disabled question action',async({page})=>{
  const state=await craftFixture(page,'en','light');state.mode='empty';
  await page.goto('/ui/#/knowledge');

@@ -1,5 +1,5 @@
 import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
-import { supportsChat } from '../../api/model-capabilities';
+import { chatAvailable, supportsChat } from '../../api/model-capabilities';
 import { interaction } from '../../i18n/interaction';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import { useEffect, useRef, useState } from 'react';
@@ -82,7 +82,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
   const [verifications, setVerifications] = useWorkspaceState<Record<string, Verification>>('models.verifications', {});
   const completed = useRef(new Set<string>());
   const activeOperations = useRef(new Set<string>());
-  const needsChatModel = onboardingPending && !models.some(supportsChat);
+  const needsChatModel = onboardingPending && !models.some(chatAvailable);
   const sortedCatalog = catalog.filter(item => category === 'embeddings' ? item.type === 'embedding' : supportsChat(item)).sort((a, b) => {
     const rank = (item: CatalogModel) => (supportsChat(item) ? 2 : 0) + (item.recommended ? 1 : 0);
     return rank(b) - rank(a);
@@ -206,7 +206,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
         <ModelIdentity model={legacyDisplay(model, catalog.find(item => installedCatalogModel(item, [model])))} />
         {verifications[model.id] && <div className="verification model-verification" role="status"><strong>{verifications[model.id].file_name}</strong><span>{verifications[model.id].message}</span><span>{verifications[model.id].sha256}</span></div>}
         <div className="model-actions">
-          {supportsChat(model) && <button className="text-button" aria-pressed={selected === model.id} onClick={() => setSelected(model.id)}>{selected === model.id && <Icon name="check" size={16} />}{selected === model.id ? workspaceAudit(locale).selected : workspaceOrder(locale).selectModel}</button>}
+          {supportsChat(model) && <button className="text-button" disabled={!chatAvailable(model)} aria-pressed={selected === model.id} onClick={() => setSelected(model.id)}>{selected === model.id && <Icon name="check" size={16} />}{selected === model.id ? workspaceAudit(locale).selected : workspaceOrder(locale).selectModel}</button>}
           <UtilityPopover compact align="end" label={`${workspaceOrder(locale).modelActions}: ${model.id}`} trigger={<Icon name="more" size={18} />} triggerClassName="utility-button icon-button" className="model-maintenance">
             {bundles && progress[`${model.id}.gguf`]?.repository && progress[`${model.id}.gguf`]?.source_file && <button className="text-button" disabled={!admin || operation !== '' || isActiveDownload(progress[`${model.id}.gguf`])} onClick={event => {
               event.currentTarget.closest<HTMLElement>('[popover]')?.hidePopover();

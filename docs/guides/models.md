@@ -20,6 +20,12 @@ Check the publisher's model card, license, language coverage, and architecture.
 A filename, parameter count, or successful download is not compatibility evidence.
 Evaluate tool calling and useful outcomes separately from text generation.
 
+Models keeps installed files visible when their runtime is unavailable, but disables
+**Select model** for those entries, matching Chat's eligibility check. An explicit
+readiness failure takes precedence over a stale loaded flag. Older services that do
+not report readiness still show **Runtime unchecked**; this is not qualification.
+Opening Models does not replace your saved selection or download a runtime.
+
 ## Fit memory and storage
 
 Model file size is only part of memory use. Context, KV cache, image processing,
