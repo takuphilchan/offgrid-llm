@@ -49,6 +49,12 @@ storage, which may be on a different computer. Model-management permission is
 required. It preserves existing files and your current selection, including an
 empty selection; choose a model separately after import.
 
+If setup finds no usable chat model, **Import a model file** opens this same
+review directly. The option requires a compatible connected service and model
+management permission. Import does not select the new model on refresh or reload.
+Select a usable model explicitly, then choose **Start your first chat**; any draft
+you already wrote is retained and is not sent automatically.
+
 The service stages the file, checks bounded GGUF metadata and records its SHA256.
 These checks do not establish tensor validity, model quality or runtime compatibility.
 Split GGUF shards and projector files are rejected by this single-file flow.

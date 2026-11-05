@@ -125,6 +125,9 @@ test('real isolated service stores exact uploaded bytes without selecting or loa
   await expect(page.locator('.installed-model').filter({hasText:name.slice(0,-5)}).getByRole('button',{name:'Select model',exact:true})).toBeVisible();
   expect(await page.evaluate(()=>localStorage.getItem('offgrid.model'))).toBe(selected);
   const inventory=await (await page.request.get('/v1/models')).json();expect(inventory.data.some((m:{id:string})=>m.id===name.slice(0,-5))).toBe(true);
+  await page.reload();
+  await expect(page.locator('.installed-model').filter({hasText:name.slice(0,-5)}).getByRole('button',{name:'Select model',exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>localStorage.getItem('offgrid.model'))).toBe(selected);
  } finally {
   // The service is disposable, but keep later real-service tests independent.
   const removed=await page.request.delete('/v1/models/delete',{data:{model_id:name.slice(0,-5)}});

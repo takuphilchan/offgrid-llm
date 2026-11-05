@@ -25,6 +25,7 @@ import { workspaceHelp } from './i18n/workspace-help';
 import { chatReadiness } from './i18n/chat-readiness';
 import { readableModelName } from './features/models/model-display';
 import { workspaceOrder } from './i18n/workspace-order';
+import { modelImport } from './i18n/model-import';
 
 const ActivityPage = deferredPage(() => import('./features/activity/ActivityPage').then(module => module.ActivityPage));
 const AgentPage = deferredPage(() => import('./features/agents/AgentPage').then(module => module.AgentPage));
@@ -71,6 +72,7 @@ export function App() {
   const [health, setHealth] = useState<Health>('checking');
   const [models, setModels] = useState<Model[]>([]);
   const [model, setModel] = useState(() => readPreference('offgrid.model') ?? '');
+  const allowInitialModel = useRef(readPreference('offgrid.model.autoselect') !== 'false');
   const [access, setAccess] = useState<'checking' | 'ready' | 'login'>('checking');
   const [authUser, setAuthUser] = useState<PublicUser | null>(null);
   const [guest, setGuest] = useState(false);
@@ -79,6 +81,7 @@ export function App() {
   const [workspaceID, setWorkspaceID] = useState('');
   const [taskFirst, setTaskFirst] = useState(false);
   const [workSearch, setWorkSearch] = useState(false);
+  const [offlineImport, setOfflineImport] = useState(false);
   const [onboardingPending, setOnboardingPending] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true');
   const [showOnboarding, setShowOnboarding] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true' && readPreference('offgrid.onboarding.stage') !== 'working');
   const [showCommands, setShowCommands] = useState(false);
@@ -94,6 +97,12 @@ export function App() {
   }, []);
 
   const refreshBase = useCallback(async (preserveModelSelection = false) => {
+    // Import is acquisition, not selection. Remember that distinction across
+    // reloads too, while retaining first-launch defaults for existing clients.
+    if (preserveModelSelection) {
+      allowInitialModel.current = false;
+      writePreference('offgrid.model.autoselect', 'false');
+    }
     const revision = ++accessRevision.current;
     setLoadError('');
     const [healthResult, modelResult, userResult, identityResult] = await Promise.allSettled([api.health(), api.models(), api.currentUser(), api.systemIdentity()]);
@@ -124,6 +133,7 @@ export function App() {
     lastIdentity.current = { actor: identityActor, workspace, taskFirst: supported };
     setWorkspaceID(workspace); setTaskFirst(supported);
     setWorkSearch(identityResult.status === 'fulfilled' && identityResult.value.capabilities?.includes('work-search-v1') === true);
+    setOfflineImport(identityResult.status === 'fulfilled' && identityResult.value.capabilities?.includes('gguf-offline-import-v1') === true);
     setAgentReplayScope(JSON.stringify([identityActor, workspace]));
     setAuthUser(userResult.value.authenticated ? userResult.value.user : null);
     setGuest(userResult.value.guest === true);
@@ -133,7 +143,7 @@ export function App() {
       setModel(current => {
         // Refresh must not silently switch a saved selection when its files or
         // runtime are unavailable. The composer offers an explicit repair.
-        return preserveModelSelection ? current : current || initialChatModel(modelResult.value);
+        return preserveModelSelection || !allowInitialModel.current ? current : current || initialChatModel(modelResult.value);
       });
     } else if (modelResult.reason instanceof APIError && modelResult.reason.status === 401) {
       setAccess('login');
@@ -180,7 +190,7 @@ export function App() {
     finally { refreshLock.current = false; setRefreshing(false); }
   };
 
-  const continueSetup = (target: 'chat' | 'models' | 'models/discover') => {
+  const continueSetup = (target: 'chat' | 'models' | 'models/discover' | 'models/import') => {
     if (onboardingPending) writePreference('offgrid.onboarding.stage', 'working');
     setShowOnboarding(false);
     window.location.hash = `#/${target}`;
@@ -236,16 +246,17 @@ export function App() {
     </main>
     {showHelp && !showOnboarding && <WorkspaceHelp close={()=>setShowHelp(false)} guide={()=>{setShowHelp(false);setShowOnboarding(true);}} />}
     {showCommands && !showOnboarding && !showHelp && <CommandPalette workSearch={workSearch} actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
-    {showOnboarding && <Onboarding health={health} chatModelCount={chatModels.length} chatReady={chatReady} suggestedModel={suggestedModel} pending={onboardingPending} onAction={() => continueSetup(chatReady ? 'chat' : chatModels.length ? 'models' : 'models/discover')} onSelectSuggested={() => { setModel(suggestedModel); continueSetup('chat'); }} onRetry={refreshBase} onClose={() => setShowOnboarding(false)} />}
+    {showOnboarding && <Onboarding health={health} chatModelCount={chatModels.length} chatReady={chatReady} suggestedModel={suggestedModel} pending={onboardingPending} onImport={admin && offlineImport ? () => continueSetup('models/import') : undefined} onAction={() => continueSetup(chatReady ? 'chat' : chatModels.length ? 'models' : 'models/discover')} onSelectSuggested={() => { setModel(suggestedModel); continueSetup('chat'); }} onRetry={refreshBase} onClose={() => setShowOnboarding(false)} />}
   </div></SidebarContext.Provider></WorkSearchNavigation></ActiveWorkProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
 }
 
-function Onboarding({ health, chatModelCount, chatReady, suggestedModel, pending, onAction, onSelectSuggested, onRetry, onClose }: {
+function Onboarding({ health, chatModelCount, chatReady, suggestedModel, pending, onImport, onAction, onSelectSuggested, onRetry, onClose }: {
   health: Health;
   chatModelCount: number;
   chatReady: boolean;
   suggestedModel: string;
   pending: boolean;
+  onImport?: () => void;
   onAction: () => void;
   onSelectSuggested: () => void;
   onRetry: () => Promise<void>;
@@ -282,6 +293,7 @@ function Onboarding({ health, chatModelCount, chatReady, suggestedModel, pending
     <div className="onboarding-actions">
       <button autoFocus className="primary-button" disabled={pending && health === 'checking'} onClick={!pending ? onClose : health !== 'ready' ? () => void onRetry() : hasSuggested ? onSelectSuggested : onAction}>{action}</button>
       {hasSuggested && <button className="text-button" onClick={onAction}>{text.onboarding.chooseModel}</button>}
+      {pending && health === 'ready' && !chatModelCount && onImport && <button className="text-button" onClick={onImport}>{modelImport(locale).title}</button>}
     </div>
   </dialog>;
 }

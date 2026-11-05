@@ -13,6 +13,12 @@ export function OfflineModelImport({onRefresh}: {onRefresh:()=>Promise<void>}) {
  const [invalid,setInvalid]=useState(false);
  const [state,setState]=useWorkspaceState<{phase:'idle'|'uploading'|'done'|'uncertain'|'rejected'; name?:string; error?:string}>('models.gguf-import',{phase:'idle'});
  const active=useRef<AbortController|null>(null);
+ const panel=useRef<HTMLDetailsElement>(null);
+ useEffect(()=>{
+  const reveal=()=>{if(window.location.hash==='#/models/import'&&panel.current){panel.current.open=true;panel.current.querySelector('summary')?.focus();}};
+  reveal();window.addEventListener('hashchange',reveal);
+  return()=>window.removeEventListener('hashchange',reveal);
+ },[]);
  useEffect(()=>()=>{ if(active.current) { active.current.abort(); setState({phase:'uncertain'}); } },[]);
  const blocked=state.phase==='uploading'||state.phase==='uncertain';
  async function start() {
@@ -32,7 +38,7 @@ export function OfflineModelImport({onRefresh}: {onRefresh:()=>Promise<void>}) {
   finally { if(active.current===controller) active.current=null; }
   if(!controller.signal.aborted) await onRefresh().catch(()=>{});
  }
- return <details className="offline-model-import">
+ return <details ref={panel} className="offline-model-import">
   <summary>{copy.title}</summary>
   <p>{copy.body}</p>
   <FilePicker label={copy.choose} accept=".gguf" disabled={blocked} onFiles={files=>{

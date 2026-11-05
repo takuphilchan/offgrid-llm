@@ -275,3 +275,36 @@ The full-visibility assertion is unchanged. `model-selection.spec.ts` passed
 three repetitions (**45 passed**, `model-picker-inset-tests.log`), and its current
 candidate capture was inspected. This is a targeted correction, not a claim that
 the failed historical CI run passed.
+
+## Guided offline setup and retained selection
+
+CI **41964736383** completed successfully at **9d394e9e**. That result covers
+the preceding import/readiness and picker changes, not this later increment.
+
+When setup has no usable chat model, a capable service now offers an explicit
+offline import entry. It opens the existing review, selects the appropriate
+library category and restores keyboard focus; it never opens a file dialog,
+uploads, downloads or selects a model automatically. Older services, non-admin
+accounts and offline connections do not advertise this unavailable operation.
+All nine locales use the existing translated import label.
+
+Review found a reload gap after preserving an empty selection during import:
+normal startup could subsequently choose the new first model. An import now
+remembers that automatic first-model selection is disabled. Existing clients
+retain their first-launch defaults; explicit selection still works. The real
+isolated-service storage test now reloads and verifies unchanged selection too.
+
+Once the user selects a usable model, first-use Models offers **Start your first
+chat**. The handoff retains the existing question without submitting it. The
+initial test fixture inadvertently loaded a saved answer and reset setup state
+on every reload; those fixture assumptions were corrected without weakening
+the selection, reload or draft assertions. Failure logs remain in the private
+`build/ux-audit` directory.
+
+Validation: the TypeScript/production build and source-size ratchet passed.
+`node scripts/test/test-web-workspace.mjs build/ux-audit/offgrid-import.exe
+offline-model-setup.spec.ts offline-model-import.spec.ts chat-readiness.spec.ts
+--workers=2 --reporter=line` passed **48 tests**
+(`offline-setup-handoff-ui.log`). The service fixture contains synthetic GGUF
+storage metadata, not a qualified inference model. Wider journey, real-model,
+manual accessibility and human evaluation gates remain open.

@@ -54,6 +54,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
   }, []);
   const [category, setCategory] = useWorkspaceState<ModelCategory>('models.category', 'language');
   const [view, setView] = useWorkspaceState<LibraryView>('models.view', 'installed');
+  const [importDestination, setImportDestination] = useState(window.location.hash === '#/models/import');
   const discover = () => { setView('discover'); document.getElementById('model-view-discover')?.focus(); };
   const [filters, setFilters] = useWorkspaceState<Partial<Record<ModelCategory, string>>>('models.installed-filters', {});
   const filter = filters[category] ?? '';
@@ -62,11 +63,17 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
   const [comparisons, setComparisons] = useWorkspaceState<Partial<Record<ModelCategory, string[]>>>('models.catalog-comparisons', {});
   const [discoverySources, setDiscoverySources] = useWorkspaceState<Partial<Record<ModelCategory, 'curated' | 'search'>>>('models.discovery-sources', {});
   useEffect(() => {
-    if (window.location.hash.startsWith('#/models/discover')) {
+    const applyDestination = () => { setImportDestination(window.location.hash === '#/models/import'); if (window.location.hash === '#/models/import') {
+      setCategory('language');
+      setView('installed');
+    } else if (window.location.hash.startsWith('#/models/discover')) {
       setCategory('language');
       setView('discover');
       setDiscoverySources(old => ({ ...old, language: 'curated' }));
-    }
+    } };
+    applyDestination();
+    window.addEventListener('hashchange', applyDestination);
+    return () => window.removeEventListener('hashchange', applyDestination);
   }, []);
   const discoverySource = discoverySources[category] ?? 'curated';
   const packageMode = category === 'speech_recognition' || category === 'speech_generation';
@@ -85,6 +92,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
   const completed = useRef(new Set<string>());
   const activeOperations = useRef(new Set<string>());
   const needsChatModel = onboardingPending && !models.some(chatAvailable);
+  const readyForFirstChat = onboardingPending && models.some(item => item.id === selected && chatAvailable(item));
   const sortedCatalog = catalog.filter(item => category === 'embeddings' ? item.type === 'embedding' : supportsChat(item)).sort((a, b) => {
     const rank = (item: CatalogModel) => (supportsChat(item) ? 2 : 0) + (item.recommended ? 1 : 0);
     return rank(b) - rank(a);
@@ -189,7 +197,8 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
     <div id="model-library-panel" role="tabpanel" aria-labelledby={`model-view-${view}`} className="stack">
     {packageMode ? <PackageModels key={category} category={category} view={view} onDiscover={discover} /> : <>
     {confirmDelete && <ConfirmDialog title={confirmDelete} body={workflow[locale].deleteModel} close={() => setConfirmDelete('')} confirm={async () => { const item = models.find(model => model.id === confirmDelete); if (item) await remove(item); }} />}
-    {needsChatModel && <div className="setup-guidance" role="status"><strong>{text.onboarding.chooseModel}</strong><p>{text.onboarding.modelHint}</p></div>}
+    {needsChatModel && !importDestination && <div className="setup-guidance" role="status"><strong>{text.onboarding.chooseModel}</strong><p>{text.onboarding.modelHint}</p></div>}
+    {readyForFirstChat && <div className="setup-guidance"><p>{text.onboarding.firstReplyHint}</p><a className="primary-button" href="#/chat">{text.onboarding.startChat}</a></div>}
     {admin && offlineImport && category === 'language' && <OfflineModelImport onRefresh={onImportRefresh} />}
     {view === 'discover' && <div className="model-discovery-sources" role="group" aria-label={text.models.discover}>
       {(['curated', 'search'] as const).map(source => <button key={source} type="button" className="secondary-button" aria-pressed={discoverySource === source} onClick={() => setDiscoverySources(old => ({ ...old, [category]: source }))}>{modelLibrary(locale)[source]}</button>)}

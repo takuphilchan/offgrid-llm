@@ -194,6 +194,13 @@ Each phase should extend the existing `workspace-outcome-experience` change, or 
 
 ## Implementation status — 2026-11-05 candidate
 
+The current candidate also connects first-use setup directly to explicit offline
+GGUF import, followed by a separate model choice and a return to the retained
+Chat draft. Import no longer becomes automatic selection on reload. This is
+implementation under the subsequent “continue implement” request; the original
+audit-only restriction remains a record of the earlier review pass, not the
+current authorization. Candidate and installed evidence remain distinct.
+
 The first implementation increments address navigation/onboarding and CLI
 discovery, then the installed-app findings for readable document citations,
 selected models, cancelled transfer history, Activity prioritization and the
