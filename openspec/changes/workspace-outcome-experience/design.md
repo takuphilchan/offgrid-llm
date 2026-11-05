@@ -527,3 +527,23 @@ answer must reflect attached/retrieved sources, not imply the model read every
 page. Reduced motion uses static status, opaque readable text and accessible
 announcements. All nine locales, keyboard focus, 200% zoom, RTL, offline and
 permission-loss paths are acceptance requirements.
+
+### Installed audit implementation
+
+Attachment prompts assign answer-local source identifiers (`S1`, `S1.1`) without
+changing stored source bytes or existing selection records. The renderer binds
+references only to that answer's persisted source ID, revision and exact ranges.
+A new owner-scoped `GET /v1/sessions/{name}/attachments/{id}/passage` validates
+revision, digest, UTF-8 boundaries and a 256 KiB response bound. Legacy filename
+and byte references bind only when unambiguous and exactly selected. Ordinary
+links and code are never interpreted as source references. Revocation or a
+changed source fails closed. The reader finds a page only for one exact match in
+one extraction unit; repeated/cross-page passages display retained text without
+inventing a page. This verifies source identity, not claim entailment.
+
+Activity uses shared running/attention/history classification and scoped UI
+filter preferences. Header navigation selects the matching filter; changing
+filters does not change jobs. Child work remains under its parent. Cancelled
+downloads are collapsed but recoverable, active/failed transfers stay visible,
+and the selected installed model has an explicit label. Knowledge explains its
+reusable-library scope without publishing conversation attachments implicitly.

@@ -223,3 +223,17 @@ identity SHALL survive view switching without sending or changing permissions.
 - **WHEN** the split layout cannot provide readable columns
 - **THEN** accessible view switching preserves draft and reading position
 - **AND** closing the reader restores focus without submitting work
+
+### Requirement: Readable attachment references
+Saved attachment answers SHALL expose compact source references bound to their
+persisted extraction revision and selected ranges, without rewriting source text.
+
+#### Scenario: Valid retained passage
+- **WHEN** the user opens a bound citation
+- **THEN** the service checks owner access, revision, digest and UTF-8 boundaries and returns the exact passage
+- **AND** the reader navigates to a page only for a unique exact match; otherwise it shows the retained passage without a guessed page
+
+#### Scenario: Legacy or invalid citation
+- **WHEN** an old byte citation uniquely matches a selected range it remains openable
+- **THEN** duplicate names, forged ranges, code and ordinary links are not converted to source actions
+- **AND** stale or revoked sources show an error without substituting another file

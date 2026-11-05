@@ -64,3 +64,12 @@ This presentation SHALL consume existing legacy and package APIs without adding 
 - **WHEN** the running service lacks a required package operation
 - **THEN** the UI states the actual capability limitation and does not simulate success
 - **AND** typed Chat and unrelated installed models remain usable
+
+### Requirement: Usable inventory before inactive transfers
+The library SHALL label the selected model and collapse cancelled transfer
+history by default while retaining its explicit recovery controls.
+
+#### Scenario: Returning after a cancelled download
+- **WHEN** installed models coexist with a cancelled transfer
+- **THEN** the installed inventory and selected-model state remain visible
+- **AND** expanding Downloads reveals the retained transfer without restarting it

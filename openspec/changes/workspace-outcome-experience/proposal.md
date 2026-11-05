@@ -223,3 +223,15 @@ and a distinct source-use state during answers. Narrow screens switch between
 Chat and Document without losing drafts or reading position. Preserve text,
 voice, images, terminal switching and current access. This extends the approved
 scope; it does not declare enterprise or document-answer qualification complete.
+
+## Installed-app audit follow-up (2026-11-05)
+
+Implement the approved audit against the installed 0.4.25 baseline, keeping
+fixture, source and installed evidence distinct. Add readable attachment source
+references bound to each saved answer's selected extraction revision and ranges.
+The additive authenticated passage read endpoint returns exact retained text;
+it does not assert that the answer is correct or invent page numbers. Preserve
+legacy byte citations and ordinary Markdown. Make the selected model explicit,
+collapse cancelled transfer history, prioritize attention in Activity, and
+clarify that conversation attachments and the reusable Knowledge library differ.
+No automatic source publication, downloads, grants, execution or deletion.

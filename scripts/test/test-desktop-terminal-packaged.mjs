@@ -108,7 +108,7 @@ try {
  await terminal.getByTitle('New PowerShell terminal',{exact:true}).click();
  await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(1);
  await input.pressSequentially("[Console]::WriteLine(('CHECK_' + [char]0x65e5 + [char]0x672c + [char]0x8a9e))");await input.press('Enter');
- await expect(terminal.locator('.xterm-accessibility-tree')).toContainText('CHECK_\u65e5\u672c\u8a9e');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('CHECK_\u65e5\u672c\u8a9e');
  await terminal.getByTitle('New PowerShell terminal',{exact:true}).click();
  await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(2);
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');

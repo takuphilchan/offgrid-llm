@@ -95,3 +95,12 @@ Follow-up and task steering SHALL use existing capability and lifecycle rules, r
 - **WHEN** a terminal or incompatible task cannot accept a correction
 - **THEN** the interface distinguishes creating a new task from modifying the old one
 - **AND** it preserves the original result and requires explicit submission of new work
+
+### Requirement: Attention and history are distinct
+Activity SHALL separate work needing attention, running work and terminal history,
+with a shared classification and actor/workspace-scoped filter preference.
+
+#### Scenario: Header opens pending work
+- **WHEN** the user opens Activity from Needs attention
+- **THEN** the attention filter is selected and completed history does not obscure pending work
+- **AND** filtering, navigation and inspection do not approve, delete, restart or cancel work

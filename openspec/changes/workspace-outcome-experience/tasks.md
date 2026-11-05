@@ -239,3 +239,9 @@ This group records the user's subsequent request. Execute only after implementat
 - [x] 23.4 Correct attachment metadata collapse in narrow and split views, separate saved coverage notes, replace the conversation-wide focus box with a restrained keyboard indicator, and place actionable context recovery beside the composer. Verify retained drafts, response-settings opening, reload coverage and streaming/Stop feedback within the existing fixture budget.
 
 Evidence for this increment: [document workspace verification](../../../docs/quality/evidence/document-workspace-2026-11-03.md). Source and automated checks only; installed/native, model-answer and human qualification remain separate.
+
+## 24. Installed 0.4.25 audit follow-up
+
+- [x] 24.1 Implement compact citation references and an authenticated pinned-passage read path, preserving legacy histories, exact UTF-8 content and source access. Run `go test ./internal/sessions ./internal/server -count=1`, API generation/check and `attachment-citations.spec.ts`; reject ambiguous, stale, revoked and out-of-selection references without guessing pages.
+- [x] 24.2 Show selected models explicitly, collapse cancelled transfer history, and prioritize attention through shared Activity filters/header navigation without mutations. Clarify library versus conversation attachment scope in nine locales. Run `installed-audit-followup.spec.ts`, model-library, work-continuity and Knowledge suites in both themes and narrow layout.
+- [x] 24.3 Record applicable full renderer, API, CLI, desktop, structural and documentation checks; inspect candidate screenshots against the recorded installed baseline. Keep unavailable installed/native/human evidence distinct and do not claim release readiness from fixture checks.
