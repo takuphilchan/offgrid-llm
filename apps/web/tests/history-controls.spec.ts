@@ -136,6 +136,7 @@ test('bulk chat deletion only removes confirmed matches and retries failures, no
 test('agent activity browses older tasks and deletes selected output without affecting active work', async ({page}) => {
   const state = await fixture(page);
   await page.goto('/ui/#/activity');
+  await page.locator('.work-state-filters').getByRole('button',{name:'All work',exact:false}).click();
   const history = page.locator('.task-list');
   await expect(history.locator('li')).toHaveCount(20);
   await history.getByRole('button',{name:'Show more',exact:false}).click();
@@ -222,6 +223,7 @@ test('unrecoverable interrupted history can be deleted while active and uncertai
   });
   await page.goto('/ui/#/activity');
   const history = page.locator('.task-list');
+  await history.locator('.work-state-filters').getByRole('button',{name:'All work',exact:false}).click();
   for (const title of ['Legacy task without checkpoint', 'Active task', 'Outcome unknown']) {
     await history.locator('li', {hasText:title}).locator('.history-item-menu').click();
     const remove=page.getByRole('button',{name:'Delete task',exact:true});

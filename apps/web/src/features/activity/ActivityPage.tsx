@@ -34,7 +34,8 @@ export function ActivityPage({ health, taskFirst = false }: { health: Health; ta
   const [view, setView] = useWorkspaceState<'work' | 'schedules'>('activity.view', 'work');
   const [schedulesVisited, setSchedulesVisited] = useState(view === 'schedules');
   useEffect(() => {
-    const changed = () => setInspecting(!!taskFromLocation());
+    const changed = () => { setInspecting(!!taskFromLocation()); if (/^#\/activity\/(attention|running|history|all)$/.test(window.location.hash)) setView('work'); };
+    changed();
     window.addEventListener('hashchange', changed);
     return () => window.removeEventListener('hashchange', changed);
   }, []);
@@ -42,7 +43,7 @@ export function ActivityPage({ health, taskFirst = false }: { health: Health; ta
   return <div className="stack activity-page">
     {!inspecting && <p className="model-search-hint">{text.guidance.activity}</p>}
     {!inspecting && <div className="model-library-tabs" role="group" aria-label={text.nav.activity}>
-      <button className="secondary-button" aria-pressed={view === 'work'} onClick={() => setView('work')}>{text.activity.runs}</button>
+      <button className="secondary-button" aria-pressed={view === 'work'} onClick={() => setView('work')}>{text.shell.work}</button>
       <button className="secondary-button" aria-pressed={view === 'schedules'} onClick={() => { setSchedulesVisited(true); setView('schedules'); }}>{agentSchedulesText[locale].title}</button>
     </div>}
     <div hidden={!inspecting && view !== 'work'}><TaskWorkspace scope={scope} workspace={workspace} /></div>

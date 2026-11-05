@@ -17,9 +17,13 @@ bounded to three decorative surface families. See the maintained
 
 The primary navigation is organized by user intent:
 
-- **Work** contains Chat and Agents.
+- **Work** contains Chat, Activity and Agents.
 - **Library** contains Knowledge and Models.
-- **System** contains Activity and Settings.
+- **Settings** lives in the Workspace options footer menu.
+
+Work and Library have visible group labels in the expanded sidebar. Short
+windows and the collapsed rail retain a single vertical sequence of destinations;
+they do not turn the navigation into an unlabelled two-column grid.
 
 Feature behavior belongs under `apps/web/src/features/<feature>`. `App.tsx` owns
 only shell-level state: routing, authentication, service reachability, the
@@ -43,17 +47,30 @@ Library headings reserve space for actions rather than forcing them below long
 descriptions. Models places inventory/discovery and category navigation in one
 wrapping toolbar, with explicit model selection and a separate **Model actions**
 menu for verification/removal. Selection does not load or download a model.
+The current choice is labelled **Selected**. Cancelled transfers remain under
+**Downloads**, collapsed by default; active or failed transfers remain expanded.
 
 Chat's **Context & response** panel contains response, retrieval and voice
 preferences. Microphone input, image attachment and active speech stopping remain
 in the composer. Voice metadata reads are cancelled when the panel closes.
 Knowledge places search and question entry together, with selected-source actions
 appearing only for the current selection. Activity separates saved work and
-**Schedules**; diagnostics stay secondary to work. Profile editing places
+**Schedules**; diagnostics stay secondary to work. Attention, Running, History
+and All work filters separate pending decisions from completed tasks. The header's
+Needs attention entry opens the matching filter without changing any work.
+Profile editing places
 identity/model before purpose and capabilities, with a persistent action footer
 on sufficiently tall desktop layouts and normal document flow on small screens.
 Long artifact names are summarized in two lines, with **Full filename** disclosure
 and the original name retained for downloads.
+
+Saved document answers use compact source chips bound to their stored extraction
+revision and selected passages. Opening a chip checks source access and exact
+UTF-8 content. The reader selects a page only when its text uniquely matches;
+otherwise it shows the retained passage without guessing a page. This verifies
+the source, not whether the answer's interpretation is correct. Unambiguous
+legacy byte references remain openable. Files attached in Chat stay with that
+conversation; adding them to the reusable Knowledge library remains explicit.
 
 Quick actions also finds saved work on services advertising `work-search-v1`.
 It searches authorized **conversation names and root task requests**, not message
@@ -267,6 +284,16 @@ Onboarding is an outcome, not a dismissed modal. It is complete only after:
 Closing the guide never marks setup complete. The Models and Chat pages retain
 inline next-step guidance until the first successful reply. Embedding models
 must never be selected as chat fallbacks.
+
+When an installed, eligible alternative exists, the guide offers its readable
+name as an explicit selection action. The saved selection remains untouched until
+the user chooses. Choosing another model remains available beside that action.
+Connection status stays visible; connection explanations and the installed-model
+count are expandable. An unresolved health check cannot trigger model selection.
+
+Opening a document keeps the empty Chat heading compact and left-aligned so the
+source pane has visual priority. The draft, attachment controls and unread-content
+notices remain visible; closing the reader restores the ordinary Chat layout.
 
 ## Quality gates
 

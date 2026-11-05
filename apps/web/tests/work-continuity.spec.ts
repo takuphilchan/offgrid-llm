@@ -17,8 +17,8 @@ test('attention list keeps long task titles compact and links to activity', asyn
   await expect(panel.locator('.known-work-link').first()).toHaveAttribute('title',title.slice(0,180));
   await expect(panel.locator('.secondary-button')).toHaveCount(0);
   await page.screenshot({path:info.outputPath('compact-attention.png')});
-  await panel.getByRole('link',{name:'Recent tasks'}).click();
-  await expect(page).toHaveURL(/#\/activity$/);
+  await panel.getByRole('link',{name:'Activity',exact:true}).click();
+  await expect(page).toHaveURL(/#\/activity\/attention$/);
   expect(state.writes).toEqual([]);
 });
 async function fixture(page: Page, count = 1) {
@@ -66,7 +66,7 @@ test('work list bounds its metadata and makes overflow explicit', async ({ page 
   const trigger = page.getByRole('button', { name: 'Known work', exact: true });
   await expect(trigger).toContainText('16+'); await trigger.click();
   await expect(page.locator('.known-work-list li')).toHaveCount(16);
-  await expect(page.getByRole('region', { name: 'Known work' }).getByRole('link', { name: 'Recent tasks' })).toHaveAttribute('href', '#/activity');
+  await expect(page.getByRole('region', { name: 'Known work' }).getByRole('link', { name: 'Activity', exact: true })).toHaveAttribute('href', '#/activity/attention');
 });
 
 test('Activity links only known job identities and keeps history when diagnostics fail', async ({ page }) => {

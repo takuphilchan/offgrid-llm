@@ -18,6 +18,9 @@
   .sidebar-toggle, .navigation-trigger { display: none; }
   .primary-nav { display: grid; gap: var(--space-1); flex-shrink: 0; }
   .nav-group { display: grid; gap: 2px; }
+  .nav-group + .nav-group { margin-block-start: var(--space-2); }
+  .nav-group-label { padding: var(--space-2) var(--space-3) var(--space-1); color: var(--muted); font-size: var(--type-meta); font-weight: var(--weight-medium); line-height: var(--leading-ui); }
+  .sidebar-collapsed .nav-group-label { display: none; }
   .nav-link { position: relative; display: flex; width: 100%; align-items: center; min-height: 40px; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--control-radius); color: var(--muted); text-decoration: none; text-align: start; transition: transform var(--motion-press) var(--ease-move); }
   .nav-link svg { flex-shrink: 0; }
   .nav-link span { font-size: var(--type-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; }
@@ -99,8 +102,8 @@
   }
   @media (max-height: 640px) {
     .sidebar { gap: 8px; padding-block: 8px; }
-    .primary-nav { grid-template-columns: 1fr 1fr; gap: 0; }
-    .nav-group { display: contents; }
+    .primary-nav { grid-template-columns: minmax(0, 1fr); }
+    .nav-group-label { display: none; }
     .nav-link { padding-inline: 4px; gap: 6px; }
     .sidebar-context { padding-block-start: 8px; }
     .service-state { padding-block-start: 4px; }

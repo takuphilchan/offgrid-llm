@@ -111,7 +111,7 @@ test('workspace proportions prioritize the editor and keep service navigation in
   const row = page.locator('.installed-model').first();
   await expect(row).toBeVisible();
   await expect(row.getByRole('heading')).toBeVisible();
-  await expect(row.getByRole('button', { name: 'Select model', exact: true })).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Selected', exact: true })).toHaveAttribute('aria-pressed', 'true');
   expect((await row.boundingBox())!.height).toBeLessThanOrEqual(150);
   await page.screenshot({ path: info.outputPath('model-list-desktop.png'), fullPage: true });
   await page.goto('/ui/#/settings');

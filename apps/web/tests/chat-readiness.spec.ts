@@ -54,11 +54,22 @@ test('first-use preserves an unavailable saved choice even when an alternative e
   expect(state.fixture.writes).toEqual([]);
 });
 
-test('first-use offers an installed alternative only through explicit selection', async ({ page }) => {
+test('first-use prioritizes an installed alternative only through explicit selection', async ({ page }, info) => {
   const state = await setup(page, 'saved-model', true);
   await page.goto('/ui/');
   const guide = page.getByRole('dialog');
   await expect(guide.getByRole('button', { name: 'Select model: working model' })).toBeVisible();
+  await expect(guide.locator('.primary-button')).toHaveText('Select model: working model');
+  await expect(guide.getByRole('button', { name: 'Choose a chat model' })).toBeVisible();
+  await expect(guide.locator('.onboarding-connection')).not.toHaveAttribute('open', '');
+  await expect(guide.locator('.onboarding-connection summary')).toContainText('Service ready');
+  await guide.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(guide.locator('.readiness-list')).toBeVisible();
+  await page.keyboard.press('Tab');
+  await expect(guide.locator('.primary-button')).toBeFocused();
+  await guide.locator('summary').click();
+  await page.screenshot({ path: info.outputPath('installed-model-setup.png') });
   expect(await page.evaluate(() => localStorage.getItem('offgrid.model'))).toBe('saved-model');
   await guide.getByRole('button', { name: 'Select model: working model' }).click();
   await expect(page).toHaveURL(/#\/chat$/);
@@ -66,6 +77,26 @@ test('first-use offers an installed alternative only through explicit selection'
   await expect.poll(() => page.evaluate(() => localStorage.getItem('offgrid.model'))).toBe('working-model');
   expect(state.fixture.writes).toEqual([]);
 });
+
+for (const locale of ['en', 'ar'] as LocaleCode[]) {
+  test(`first-use actions remain reachable in a small window: ${locale}`, async ({ page }, info) => {
+    const state = await setup(page, 'saved-model', true, locale);
+    await page.setViewportSize({ width: 320, height: 480 });
+    await page.goto('/ui/');
+    const guide = page.getByRole('dialog');
+    await expect(guide.locator('.primary-button')).toBeEnabled();
+    await guide.locator('.primary-button').focus();
+    await expect(guide.locator('.primary-button')).toBeInViewport();
+    await page.keyboard.press('Tab');
+    await expect(guide.locator('.onboarding-actions .text-button')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(guide.locator('.onboarding-close')).toBeFocused();
+    expect(await guide.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`first-use-${locale}.png`) });
+    expect(state.fixture.writes).toEqual([]);
+  });
+}
 
 test('refresh preserves a removed selection and draft until an explicit replacement', async ({ page }) => {
   const state = await setup(page, 'working-model');

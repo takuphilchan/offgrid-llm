@@ -23,8 +23,9 @@ export function WorkspaceNavigation({ page, health, open, narrow, collapsed, onT
     </div>
     <div className="sidebar-create" ref={actionRef}>{page !== 'chat' && <a className="new-chat-button" href="#/chat/new" onClick={onClose} title={text.chat.newChat} aria-label={text.chat.newChat}><Icon name="plus" size={18} /><span>{text.chat.newChat}</span></a>}</div>
     <nav id="workspace-navigation" className="primary-nav" aria-label={labels.navigation}>
-      {navigationGroups.map(group => <div className="nav-group" key={group.label}>
-        {group.items.filter(item => item !== 'settings').map(item => <a key={item} href={`#/${item}`} onClick={onClose} className={page === item ? 'nav-link active' : 'nav-link'} aria-label={text.nav[item]} aria-current={page === item ? 'page' : undefined} title={text.nav[item]}>
+      {navigationGroups.filter(group => group.label !== 'system').map(group => <div className="nav-group" key={group.label} role="group" aria-label={text.shell[group.label]}>
+        <span className="nav-group-label" aria-hidden="true">{text.shell[group.label]}</span>
+        {group.items.map(item => <a key={item} href={`#/${item}`} onClick={onClose} className={page === item ? 'nav-link active' : 'nav-link'} aria-label={text.nav[item]} aria-current={page === item ? 'page' : undefined} title={text.nav[item]}>
           <Icon name={item} size={18} /><span>{text.nav[item]}</span>
         </a>)}
       </div>)}

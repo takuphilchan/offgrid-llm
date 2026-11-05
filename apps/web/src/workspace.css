@@ -1,6 +1,12 @@
 /* Tokens and feature presentation. Shell geometry lives in components/shell;
    legacy feature layout remains in styles.css until migrated. */
 @layer workspace {
+  .work-state-filters { display:flex; flex-wrap:wrap; gap:var(--space-2); margin-block-end:var(--space-4); }
+  .work-state-filters button { gap:var(--space-2); }
+  .work-state-filters [aria-pressed=false] { background:transparent; }
+  .work-state-filters [aria-pressed=true] { background:var(--surface-2); font-weight:var(--weight-heading); }
+  .work-state-filters button span { font-variant-numeric:tabular-nums; color:var(--muted); }
+  .activity-known-chats { margin-block:var(--space-4); }
   /* Three decorative families maximum: sidebar, composer, floating utilities.
      Reading surfaces and code remain flat. All ramps resolve centrally. */
   .app-shell > .sidebar { background-image: var(--gradient-sidebar); }
@@ -327,11 +333,21 @@
   .onboarding { width: min(580px, 100%); padding: var(--space-8); background: var(--surface-1); border-color: var(--line-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow); }
   .onboarding { position: relative; }
   .onboarding-close { position: absolute; inset-block-start: 18px; inset-inline-end: 18px; }
-  .onboarding-mark { margin-block-end: 22px; }
+  .onboarding-heading { display: flex; align-items: center; gap: var(--space-3); padding-inline-end: var(--space-6); }
+  .onboarding-heading .onboarding-mark { width: 40px; height: 40px; margin: 0; flex: 0 0 auto; }
+  .onboarding-heading h2 { margin: 0; }
   .onboarding h2 { font-size: var(--type-title); font-weight: var(--weight-heading); line-height: var(--leading-ui); letter-spacing: var(--tracking-title); }
   .onboarding > p { color: var(--muted); font-size: 14px; }
-  .onboarding .onboarding-next { margin: -10px 0 22px; color: var(--text); font-size: 13px; }
-  .onboarding-suggestion { display: block; max-width: 100%; margin-block-end: 12px; text-align: start; white-space: normal; overflow-wrap: anywhere; }
+  .onboarding .onboarding-next { margin: var(--space-4) 0; color: var(--text); font-size: var(--type-ui); }
+  .onboarding-connection { margin-block: var(--space-4); padding-block: var(--space-3); border-block: 1px solid var(--line); }
+  .onboarding-connection > summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); font-size: var(--type-meta); color: var(--muted); cursor: pointer; }
+  .onboarding-connection > summary::before { content: '+'; width: 1em; text-align: center; }
+  .onboarding-connection[open] > summary::before { content: '−'; }
+  .onboarding-connection > summary strong { margin-inline-start: auto; color: var(--text); font-weight: var(--weight-medium); }
+  .onboarding-connection > p { margin-block: var(--space-3); color: var(--muted); font-size: var(--type-meta); }
+  .onboarding-connection .readiness-list { margin: 0; }
+  .onboarding-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+  .onboarding-actions > button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
   .readiness-list > div { font-size: 13px; }
   .readiness-list strong { font-size: 12px; }
   .readiness-list i, .readiness-list i.ready { background: transparent; border: 1px solid var(--text); }

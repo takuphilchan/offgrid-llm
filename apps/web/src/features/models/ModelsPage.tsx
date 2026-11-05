@@ -26,6 +26,7 @@ import { modelComparison } from '../../i18n/model-comparison';
 import { UtilityPopover } from '../../components/UtilityPopover';
 import { workspaceOrder } from '../../i18n/workspace-order';
 import { modelBundles } from '../../i18n/model-bundles';
+import { workspaceAudit } from '../../i18n/workspace-audit';
 
 function fileName(path: string): string {
   return path.split('/').pop() ?? path;
@@ -178,6 +179,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
     finally { setOperation(''); }
   };
 
+  const transfers = Object.values(progress).filter(item => item.status !== 'complete' && !(view === 'discover' && discoverySource === 'curated' && filteredCatalog.some(model => `${model.id}.gguf` === item.file_name)));
   return <div className="stack models-workspace">
     <div className="model-library-toolbar"><LibraryNavigation view={view} change={setView} />
     <div className="model-category-picker" role="group" aria-label={categoryCopy.category}>{categories.map(value => <button key={value} className="secondary-button" aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryCopy[value]}</button>)}</div></div>
@@ -192,11 +194,11 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
     {view === 'discover' && discoverySource === 'search' && (admin ? <ModelSearch key={category} bundles={bundles} category={category} models={models} progress={progress} busy={operation !== ''} download={download} cancel={cancel} /> : <p className="permission-notice">{interaction[locale].adminOnly}</p>)}
     {error && <div className="inline-error" role="alert">{error}<button disabled={loading} onClick={() => void load()}>{text.common.refresh}</button></div>}
     {progressError && <div className="inline-error" role="alert">{progressError}<button onClick={() => void load()}>{text.common.retry}</button></div>}
-    {Object.values(progress).filter(item => item.status !== 'complete' && !(view === 'discover' && discoverySource === 'curated' && filteredCatalog.some(model => `${model.id}.gguf` === item.file_name))).map(item => {
+    {!!transfers.length && <details className="model-transfers" open={transfers.some(item => isActiveDownload(item) || item.status === 'failed')}><summary>{workspaceAudit(locale).downloads} · {transfers.length}</summary><div className="stack">{transfers.map(item => {
       const catalogItem = catalog.find(model => `${model.id}.gguf` === item.file_name);
       const source = item.repository && item.source_file && item.model_id ? { id: item.model_id, repo: item.repository, file: item.source_file, quant: item.quantization ?? '' } : catalogItem;
       return <article className="catalog-card" key={item.file_name}><h3>{catalogItem?.name ?? item.file_name}</h3><ModelDownloadProgress download={item} /><div className="catalog-actions">{isActiveDownload(item) ? <button className="danger-button" disabled={!admin || operation !== ''} onClick={() => void cancel(item)}>{text.models.cancel}</button> : <button className="primary-button" disabled={!admin || operation !== '' || !source} onClick={() => { if (source) void download(source, item.enable_knowledge === true); }}>{text.models.resume}</button>}</div></article>;
-    })}
+    })}</div></details>}
     {view === 'installed' && <section className="model-section" aria-label={text.models.installed}>
       <SectionHeading title={`${text.models.installed} · ${categoryModels.length}`} />
     {!!categoryModels.length && <SearchField id="installed-model-search" className="model-installed-search" label={modelLibrary(locale).filterInstalled} value={filter} onChange={value => setFilters(old => ({ ...old, [category]: value }))} />}
@@ -204,7 +206,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onboardin
         <ModelIdentity model={legacyDisplay(model, catalog.find(item => installedCatalogModel(item, [model])))} />
         {verifications[model.id] && <div className="verification model-verification" role="status"><strong>{verifications[model.id].file_name}</strong><span>{verifications[model.id].message}</span><span>{verifications[model.id].sha256}</span></div>}
         <div className="model-actions">
-          {supportsChat(model) && <button className="text-button" aria-pressed={selected === model.id} onClick={() => setSelected(model.id)}>{selected === model.id && <Icon name="check" size={16} />}{workspaceOrder(locale).selectModel}</button>}
+          {supportsChat(model) && <button className="text-button" aria-pressed={selected === model.id} onClick={() => setSelected(model.id)}>{selected === model.id && <Icon name="check" size={16} />}{selected === model.id ? workspaceAudit(locale).selected : workspaceOrder(locale).selectModel}</button>}
           <UtilityPopover compact align="end" label={`${workspaceOrder(locale).modelActions}: ${model.id}`} trigger={<Icon name="more" size={18} />} triggerClassName="utility-button icon-button" className="model-maintenance">
             {bundles && progress[`${model.id}.gguf`]?.repository && progress[`${model.id}.gguf`]?.source_file && <button className="text-button" disabled={!admin || operation !== '' || isActiveDownload(progress[`${model.id}.gguf`])} onClick={event => {
               event.currentTarget.closest<HTMLElement>('[popover]')?.hidePopover();

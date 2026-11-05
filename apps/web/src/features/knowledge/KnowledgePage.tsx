@@ -26,6 +26,7 @@ import { KnowledgeImport } from './KnowledgeImport';
 import { knowledgeImport } from '../../i18n/knowledge-import';
 import { knowledgeStart } from '../../i18n/knowledge-start';
 import { knowledgeGuidance } from '../../i18n/knowledge-options';
+import { libraryScope } from '../../i18n/workspace-audit';
 import '../chat/knowledge-scope.css';
 
 type Props = {
@@ -206,7 +207,7 @@ function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
     {retentionDocument && <DocumentRetentionDialog id={retentionDocument.id} name={retentionDocument.name} close={() => setRetentionDocument(null)} />}
     {sourceID && <DocumentSourceDialog id={sourceID} close={() => setSourceID('')} />}
     {deleting && <ConfirmDialog title={deleting.name} body={copy.deleteDocument} close={() => setDeleting(null)} confirm={async () => { await api.deleteDocument(deleting.id); await refresh(); }} />}
-    <SectionHeading title={documents.length ? `${management.documents} · ${documents.length}` : management.documents} description={enabled || documents.length > 0 ? guidance.intro : undefined} actions={<>
+    <SectionHeading title={documents.length ? `${management.documents} · ${documents.length}` : management.documents} description={documents.length ? guidance.intro : libraryScope[locale]} actions={<>
       {enabled && <UtilityPopover label={management.manageKnowledge} trigger={<Icon name="more" />} triggerClassName="icon-button" align="end">
         <p className="knowledge-model">{text.knowledgeSetup.active}: {status?.embedding_model || presentation[locale].unknown}</p>
         {permissions.admin && <button className="secondary-button" disabled={busy || reindexing !== ''} onClick={() => { setBusy(true); void api.disableRAG().then(refresh).catch(reason => { setError(reason instanceof Error ? reason.message : text.common.error); setBusy(false); }); }}>{copy.disableKnowledge}</button>}
@@ -238,7 +239,7 @@ function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
     {permissions.admin && <KnowledgeImport status={status} disabled={busy || !enabled || reindexing !== ''} setupDisabled={busy || reindexing !== ''} refresh={refresh} durable={durableImports} />}
     <div className="knowledge-library-toolbar">
     {documents.length > 0 && <ListSearch id="knowledge-document-search" label={management.searchDocuments} value={query} onChange={setQuery} />}
-    {enabled && !selection.length && <button className="secondary-button" aria-describedby="knowledge-retrieval-scope" disabled={busy || !documents.length || !!status?.stats?.index_error} onClick={() => handoff.askKnowledge()}>{management.askKnowledge}</button>}
+    {enabled && !!documents.length && !selection.length && <button className="secondary-button" aria-describedby="knowledge-retrieval-scope" disabled={busy || !!status?.stats?.index_error} onClick={() => handoff.askKnowledge()}>{management.askKnowledge}</button>}
     {selection.length > 0 && <div className="knowledge-selection">
       <button className="primary-button" disabled={busy || !enabled || !scopedReady || !!status?.stats?.index_error || selection.some(id => !documents.some(doc => doc.id === id && doc.index_status === 'ready'))} onClick={() => handoff.askKnowledge(selection.map(id => ({ id, name: documents.find(doc => doc.id === id)!.name })))}>{scopeCopy.ask} · {selection.length}/16</button>
       <button className="text-button" onClick={() => setSelection([])}>{text.models.cancel}</button>

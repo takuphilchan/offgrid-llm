@@ -259,21 +259,27 @@ function Onboarding({ health, chatModelCount, chatReady, suggestedModel, pending
   }, []);
   const containFocus = (event: KeyboardEvent<HTMLDialogElement>) => {
     if (event.key !== 'Tab') return;
-    const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+    const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), summary, [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(element => element.getClientRects().length > 0);
     if (focusable.length === 0) { event.preventDefault(); event.currentTarget.focus(); return; }
     const first = focusable[0], last = focusable[focusable.length - 1], active = document.activeElement;
     if (event.shiftKey && (active === first || !event.currentTarget.contains(active))) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && (active === last || !event.currentTarget.contains(active))) { event.preventDefault(); first.focus(); }
   };
-  const action = !pending ? text.onboarding.close : health !== 'ready' ? text.onboarding.retryService : chatReady ? text.onboarding.startChat : text.onboarding.chooseModel;
+  const hasSuggested = pending && health === 'ready' && !!suggestedModel;
+  const action = !pending ? text.onboarding.close : health === 'checking' ? text.status.checking : health !== 'ready' ? text.onboarding.retryService : chatReady ? text.onboarding.startChat : hasSuggested ? `${workspaceOrder(locale).selectModel}: ${readableModelName(suggestedModel)}` : text.onboarding.chooseModel;
   return <dialog ref={dialog} className="onboarding" aria-labelledby="onboarding-title" onKeyDown={containFocus} onCancel={event => { event.preventDefault(); onClose(); }}>
     <button className="onboarding-close icon-button" onClick={onClose} aria-label={text.onboarding.close}><Icon name="close" size={18} /></button>
-    <div className="onboarding-mark"><Icon name="models" size={28} /></div><span className="eyebrow">{text.privateWorkspace}</span>
-    <h2 id="onboarding-title">{text.onboarding.title}</h2><p>{text.onboarding.body}</p>
-    <p>{text.guidance.connectionMeaning}</p>
-    <div className="readiness-list"><div><i className={health === 'ready' ? 'ready' : ''} /><span>{text.onboarding.service}</span><strong>{health === 'ready' ? text.status.ready : text.status.offline}</strong></div><div><i className={chatModelCount > 0 ? 'ready' : ''} /><span>{text.onboarding.models}</span><strong>{chatModelCount}</strong></div><div><span aria-hidden="true" /><span>{text.onboarding.privacy}</span><strong>{text.onboarding.local}</strong></div></div>
+    <div className="onboarding-heading"><div className="onboarding-mark"><Icon name="models" size={24} /></div><h2 id="onboarding-title">{text.onboarding.title}</h2></div>
+    <p>{text.onboarding.body}</p>
+    <details className="onboarding-connection">
+      <summary><span>{text.onboarding.service}</span><strong>{health === 'ready' ? text.status.ready : health === 'checking' ? text.status.checking : text.status.offline}</strong></summary>
+      <p>{text.guidance.connectionMeaning}</p>
+      <div className="readiness-list"><div><i className={chatModelCount > 0 ? 'ready' : ''} /><span>{text.onboarding.models}</span><strong>{chatModelCount}</strong></div></div>
+    </details>
     {pending && <p className="onboarding-next">{chatReady ? text.onboarding.firstReplyHint : suggestedModel ? chatReadiness[locale].unavailable : chatReadiness[locale].setup}</p>}
-    {pending && health === 'ready' && suggestedModel && <button className="secondary-button onboarding-suggestion" onClick={onSelectSuggested}>{workspaceOrder(locale).selectModel}: {readableModelName(suggestedModel)}</button>}
-    <button autoFocus className="primary-button" onClick={!pending ? onClose : health !== 'ready' ? () => void onRetry() : onAction}>{action}</button>
+    <div className="onboarding-actions">
+      <button autoFocus className="primary-button" disabled={pending && health === 'checking'} onClick={!pending ? onClose : health !== 'ready' ? () => void onRetry() : hasSuggested ? onSelectSuggested : onAction}>{action}</button>
+      {hasSuggested && <button className="text-button" onClick={onAction}>{text.onboarding.chooseModel}</button>}
+    </div>
   </dialog>;
 }

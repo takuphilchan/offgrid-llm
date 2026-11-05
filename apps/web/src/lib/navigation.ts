@@ -3,9 +3,9 @@ export type Page = typeof pages[number];
 export type ServiceHealth = 'checking' | 'ready' | 'offline';
 
 export const navigationGroups: { label: 'work' | 'library' | 'system'; items: Page[] }[] = [
-  { label: 'work', items: ['chat', 'agents'] },
+  { label: 'work', items: ['chat', 'activity', 'agents'] },
   { label: 'library', items: ['knowledge', 'models'] },
-  { label: 'system', items: ['activity', 'settings'] },
+  { label: 'system', items: ['settings'] },
 ];
 
 export function pageFromLocation(): Page {

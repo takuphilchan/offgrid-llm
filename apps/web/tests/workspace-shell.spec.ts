@@ -47,6 +47,9 @@ test('compact shell preserves a draft across navigation layout, preferences, and
   for (const name of ['Chat', 'Agents', 'Knowledge', 'Models', 'Activity']) {
     await expect(page.locator('.sidebar').getByRole('link', { name, exact: true })).toBeVisible();
   }
+  await expect(page.locator('.primary-nav').getByRole('group', { name: 'Work' }).locator('a').first()).toHaveAttribute('href', '#/chat');
+  await expect(page.locator('.primary-nav').getByRole('group', { name: 'Work' }).locator('a')).toHaveCount(3);
+  await expect(page.locator('.primary-nav').getByRole('group', { name: 'Library' }).locator('a')).toHaveCount(2);
   await expect(page.locator('.sidebar').getByRole('link', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
   const options = page.getByRole('button', { name: 'Workspace options', exact: true });
   await options.click();
@@ -139,6 +142,8 @@ test('expanded navigation remains usable in a short desktop viewport', async ({ 
   await openSettings(page);
   await expect(page).toHaveURL(/#\/settings$/);
   await expect(page.locator('.sidebar-foot')).toBeInViewport();
+  const positions = await page.locator('.primary-nav .nav-link').evaluateAll(links => links.map(link => link.getBoundingClientRect().x));
+  expect(new Set(positions).size).toBe(1);
   const knowledge = page.locator('.primary-nav a[href="#/knowledge"] span');
   expect(await knowledge.evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(30);
   await page.screenshot({ path: info.outputPath('shell-expanded-desktop.png') });

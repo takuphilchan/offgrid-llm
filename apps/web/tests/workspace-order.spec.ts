@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { craftFixture } from './helpers/craft-fixture';
 import { workspaceManagement } from '../src/i18n/workspace-management';
 import { workspaceOrder } from '../src/i18n/workspace-order';
+import { workspaceAudit } from '../src/i18n/workspace-audit';
 import { agentSchedulesText } from '../src/i18n/agent-schedules';
 
 for (const locale of ['en', 'ar'] as const) for (const width of [390, 1440]) test(`management hierarchy ${locale} ${width}`, async ({ page }, info) => {
@@ -28,10 +29,10 @@ for (const locale of ['en', 'ar'] as const) for (const width of [390, 1440]) tes
     expect(heading!.height).toBeLessThan(140);
   }
   await page.goto('/ui/#/models');
-  await expect(page.getByRole('button', { name: order.selectModel, exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: workspaceAudit(locale).selected, exact: true })).toBeVisible();
   await expect(page.locator('.model-maintenance > .utility-popover-panel')).toBeHidden();
-  await page.getByRole('button', { name: order.selectModel, exact: true }).click();
-  await expect(page.getByRole('button', { name: order.selectModel, exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: workspaceAudit(locale).selected, exact: true }).click();
+  await expect(page.getByRole('button', { name: workspaceAudit(locale).selected, exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.goto('/ui/#/activity');
   const views=page.locator('.model-library-tabs');
   const selectedFill=await views.locator('[aria-pressed=true]').evaluate(el=>getComputedStyle(el).backgroundColor);

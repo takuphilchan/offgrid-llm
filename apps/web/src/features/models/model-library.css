@@ -1,4 +1,7 @@
 @layer workspace {
+  .model-transfers { border-block-end: 1px solid var(--line); padding-block: var(--space-2); }
+  .model-transfers > summary { width: fit-content; font-size: var(--type-ui); cursor: pointer; }
+  .model-transfers > .stack { margin-block: var(--space-3); }
   .model-library-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
   .model-library-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 32px; }
   .model-library-toolbar > * { min-width: 0; }
