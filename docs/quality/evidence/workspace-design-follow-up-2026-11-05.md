@@ -263,3 +263,15 @@ With browser testing finished, **`go test -p 1 ./...` passed**
 (`offline-import-go-all-serial.log`); test deadlines and assertions were not changed.
 The request-limit regression also confirms GGUF uploads can exceed the ordinary
 64 MiB JSON limit while ordinary inference requests retain their existing bound.
+
+## Model-picker scroll-edge correction
+
+CI **41957045585** at **7c7068b9** passed 1,006 renderer tests and skipped 31,
+but failed the English dark model-picker check: the focused final option had an
+intersection ratio of **0.994140625**, rather than full visibility. The list now
+has a three-pixel inset and matching scroll padding, keeping the last row and its
+focus outline inside the scrolling surface instead of flush against its edge.
+The full-visibility assertion is unchanged. `model-selection.spec.ts` passed
+three repetitions (**45 passed**, `model-picker-inset-tests.log`), and its current
+candidate capture was inspected. This is a targeted correction, not a claim that
+the failed historical CI run passed.
