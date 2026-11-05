@@ -2,7 +2,7 @@
   .agent-profiles { max-width: 90rem; margin-inline: auto; min-width: 0; container-type: inline-size; }
   .profile-library-header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-block: 1rem 1.5rem; }
   .profile-library-header h2 { margin: 0; font-size: var(--type-section); line-height: var(--leading-ui); }
-  .profile-library-header p, .profile-hint { color: var(--muted); font-size: .875rem; line-height: 1.55; }
+  .profile-library-header p { color: var(--muted); font-size: .875rem; line-height: 1.55; }
   .profile-library-header p { margin-block: .4rem 0; }
   .profile-library-header > button { flex-shrink: 0; }
   .profile-library-layout { display: grid; grid-template-columns: minmax(12rem, 17rem) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
@@ -40,19 +40,12 @@
   .profile-resources legend { padding-inline: 0 .5rem; font-size: .875rem; font-weight: 600; }
   .profile-resources details { margin-block-start: 1rem; }
   .profile-options { display: grid; gap: .8rem; max-height: 20rem; overflow: auto; padding: .5rem; margin-inline: -.5rem; }
-  .profile-option { display: flex; align-items: start; gap: .65rem; font-size: .875rem; }
-  .profile-option input { flex: 0 0 auto; margin-block-start: .2rem; accent-color: var(--text); }
-  .profile-option span { min-width: 0; overflow-wrap: anywhere; }
-  .profile-option small { display: block; line-height: 1.5; margin-block-start: .2rem; }
   .profile-advanced > :not(summary) { margin-block-start: 1rem; }
   .profile-advanced > label { max-width: 12rem; }
   .profile-advanced > .profile-description { max-width: none; }
   .profile-resource-settings, .profile-advanced { min-width: 0; }
   .profile-resource-settings > summary, .profile-advanced > summary { cursor: pointer; padding-block: 12px; font-size: var(--type-body); }
   .profile-resource-settings > .profile-resources { padding-block-start: 12px; border-block-start: 0; }
-  .profile-execution-policy { display: grid; gap: .75rem; min-width: 0; margin: 0; padding: 0; border: 0; }
-  .profile-execution-policy > label:not(.profile-option) { display: grid; gap: .5rem; font-size: .875rem; }
-  .profile-execution-policy > p { margin: 0; }
   .profile-context-resources { min-width: 0; overflow-wrap: anywhere; }
   .profile-context-field { display: grid; gap: .5rem; margin-block: .75rem; }
   .profile-actions { display: flex; flex-wrap: wrap; gap: .65rem; }

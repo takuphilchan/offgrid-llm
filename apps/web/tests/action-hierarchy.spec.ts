@@ -72,7 +72,7 @@ test.describe('touch controls',()=>{
   for(const route of ['settings','chat','knowledge']){
    await page.goto(`/ui/#/${route}`);expect(await page.evaluate(()=>matchMedia('(pointer: coarse)').matches)).toBe(true);
    const controls=route==='settings'?page.locator('.settings-group :is(select,button):visible'):route==='chat'?page.locator('.composer button:visible'):page.locator('.knowledge-library-toolbar button:visible');
-   expect(await controls.count()).toBeGreaterThan(0);
+   await expect(controls.first()).toBeVisible();
    for(const control of await controls.all()){const box=await control.boundingBox();expect(box!.height,await control.getAttribute('class')??'control').toBeGreaterThanOrEqual(44);}
   }
   expect(state.writes).toEqual([]);

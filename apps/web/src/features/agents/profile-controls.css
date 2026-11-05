@@ -1,0 +1,11 @@
+/* Shared by Chat and profile editing; must not depend on visiting Agents. */
+@layer workspace {
+  .profile-hint { color: var(--muted); font-size: .875rem; line-height: 1.55; }
+  .profile-option { display: flex; align-items: start; gap: .65rem; font-size: .875rem; }
+  .profile-option input { flex: 0 0 auto; margin-block-start: .2rem; accent-color: var(--text); }
+  .profile-option span { min-width: 0; overflow-wrap: anywhere; }
+  .profile-option small { display: block; line-height: 1.5; margin-block-start: .2rem; }
+  .profile-execution-policy { display: grid; gap: .75rem; min-width: 0; margin: 0; padding: 0; border: 0; }
+  .profile-execution-policy > label:not(.profile-option) { display: grid; gap: .5rem; font-size: .875rem; }
+  .profile-execution-policy > p { margin: 0; }
+}

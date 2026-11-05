@@ -1,6 +1,10 @@
 /* Tokens and feature presentation. Shell geometry lives in components/shell;
    legacy feature layout remains in styles.css until migrated. */
 @layer workspace {
+  .deferred-page { display:flex; align-items:center; gap:var(--space-3); min-height:100px; color:var(--muted); }
+  .deferred-page-indicator { width:16px; height:16px; border:2px solid var(--line-strong); border-block-start-color:var(--text); border-radius:50%; animation:deferred-page-turn 900ms linear infinite; }
+  @keyframes deferred-page-turn { to { transform:rotate(360deg); } }
+  @media(prefers-reduced-motion:reduce) { .deferred-page-indicator { animation:none; } }
   .work-state-filters { display:flex; flex-wrap:wrap; gap:var(--space-2); margin-block-end:var(--space-4); }
   .work-state-filters button { gap:var(--space-2); }
   .work-state-filters [aria-pressed=false] { background:transparent; }

@@ -5,14 +5,10 @@ import { APIError, api, setAgentReplayScope, type Model, type PublicUser } from 
 import { WorkSearchNavigation, WorkSearchReturn } from './components/WorkSearchNavigation';
 import { CommandPalette, type CommandAction } from './components/CommandPalette';
 import { Icon } from './components/Icon';
-import { ActivityPage } from './features/activity/ActivityPage';
-import { AgentPage } from './features/agents/AgentPage';
+import { deferredPage } from './components/deferred-page';
 import { ComputerActivity } from './features/agents/ComputerActivity';
 import { ChatPage } from './features/chat/ChatPage';
 import { LoginPage } from './features/auth/LoginPage';
-import { KnowledgePage } from './features/knowledge/KnowledgePage';
-import { ModelsPage } from './features/models/ModelsPage';
-import { SettingsPage } from './features/settings/SettingsPage';
 import { useI18n } from './i18n';
 import { WorkspaceHeader, WorkspaceOptions } from './components/shell/WorkspaceHeader';
 import { WorkspaceNavigation } from './components/shell/WorkspaceNavigation';
@@ -29,6 +25,12 @@ import { workspaceHelp } from './i18n/workspace-help';
 import { chatReadiness } from './i18n/chat-readiness';
 import { readableModelName } from './features/models/model-display';
 import { workspaceOrder } from './i18n/workspace-order';
+
+const ActivityPage = deferredPage(() => import('./features/activity/ActivityPage').then(module => module.ActivityPage));
+const AgentPage = deferredPage(() => import('./features/agents/AgentPage').then(module => module.AgentPage));
+const KnowledgePage = deferredPage(() => import('./features/knowledge/KnowledgePage').then(module => module.KnowledgePage));
+const ModelsPage = deferredPage(() => import('./features/models/ModelsPage').then(module => module.ModelsPage));
+const SettingsPage = deferredPage(() => import('./features/settings/SettingsPage').then(module => module.SettingsPage));
 
 class PageBoundary extends Component<{ children: ReactNode; message: string; retry: string }, { failed: boolean }> {
   state = { failed: false };

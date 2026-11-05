@@ -8,6 +8,7 @@ import { ExecutionPolicy } from '../agents/ExecutionPolicy';
 import { Icon } from '../../components/Icon';
 import { workspaceHelp } from '../../i18n/workspace-help';
 import { readableModelName } from '../models/model-display';
+import '../agents/profile-controls.css';
 
 export function AgentSelector({ value, onChange, disabled }: { value: AgentProfile | null; onChange: (profile: AgentProfile | null) => void; disabled: boolean }) {
   const { locale, messages } = useI18n(), copy = agentProfilesText[locale];

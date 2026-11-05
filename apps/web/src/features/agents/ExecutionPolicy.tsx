@@ -1,6 +1,7 @@
 import type { components } from '../../api/schema.generated';
 import { useI18n } from '../../i18n';
 import { executionWorkspaceText,executionPolicyText } from '../../i18n/execution-workspace';
+import './profile-controls.css';
 type Permissions=components['schemas']['ExecutionPermissions'];
 
 /** Configuration may only narrow a separately established native grant. */

@@ -126,3 +126,41 @@ was available in the checked environment. Race coverage remains unverified.
 No real-model citation/follow-up qualification, new installation, human usability,
 manual screen-reader/translation review, macOS or Linux native qualification is
 claimed. The remaining audit phases and release gates are still open.
+
+## Secondary-page loading and shared-control ownership
+
+Chat now defers the Activity, Agents, Knowledge, Models and Settings page modules.
+The loader caches code only; it does not retain actor data or page state. Pending
+navigation remains dismissible, loading has an accessible status and reduced-motion
+fallback, and a failed module offers an explicit app reload that retains the saved
+Chat draft. It does not retry mutations or automatically reload the workspace.
+
+The first full run found 48 failures (957 passed, 31 skipped): shared Chat profile
+controls depended on CSS imported by the deferred Agents page. Names, descriptions
+and revisions lost their block separation, including in accessible labels. Those
+controls now import their own shared stylesheet. One touch-target test was also
+corrected to wait for the actual screen control before measuring it, retaining its
+44px assertion. No agent selection or authority assertions were weakened.
+
+- `npm.cmd --prefix apps/web run build`: passed. Main JavaScript is 836.50 kB;
+  its eager shared chunk is 160.70 kB. The large-chunk warning remains.
+- `deferred-pages.spec.ts` records 997,212 decoded JavaScript bytes across two
+  initial Chat assets, with no secondary page modules requested until navigation.
+  This is a transfer/code measurement, not a model-generation latency claim.
+- Corrected regression run across eight affected suites: **183 passed**.
+- Full `test-web-workspace.mjs` run: **1,005 passed, 31 skipped**
+  (`build/ux-audit/deferred-final-renderer.log`).
+- After moving the final shared hint style, the deferred-page, action-hierarchy
+  and agent-chat suites passed **88 tests** (`deferred-final-focused.log`).
+- API generation check, source-size ratchet and diff whitespace check passed.
+
+The full run overlapped isolated installer packaging: history feedback p95 was
+55.1 ms, stream feedback p95 64.5 ms and Stop feedback 30.4 ms. These pass the
+existing fixture feedback checks. Cold-route timings were materially slower under
+that competing build load, so this run does not establish the unchanged-hardware
+15% performance comparison or close task 6.3. Human, native-platform and real-model
+qualification limits above remain open.
+
+CI at `eabd70c3` passed the Linux suite but failed the Windows installer Finish
+close check. Its diagnostics are being investigated separately; the renderer
+results do not make that release gate pass.
