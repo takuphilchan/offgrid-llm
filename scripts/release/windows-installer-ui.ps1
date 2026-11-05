@@ -195,6 +195,7 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
         while ($clock.Elapsed.TotalSeconds -lt 180) {
             foreach ($capture in $captures) { Update-WizardCapture $capture }
             if ($finishAt -ge 0 -and $finishClosedMs -lt 0) {
+                Write-WizardDiagnostic $diagnosticPath 'finish-window' @{ window = $finishWindow.ToInt64(); exists = [OffGridWizard]::IsWindow($finishWindow); visible = [OffGridWizard]::IsWindowVisible($finishWindow); owner = [OffGridWizard]::Owner($finishWindow); title = [OffGridWizard]::Text($finishWindow); elapsedMs = $clock.ElapsedMilliseconds - $finishAt }
                 if (-not [OffGridWizard]::IsWindow($finishWindow)) { $finishClosedMs = $clock.ElapsedMilliseconds - $finishAt }
                 elseif ($clock.ElapsedMilliseconds - $finishAt -gt 2000) { throw 'Finish did not close the installer window within 2 seconds.' }
             }

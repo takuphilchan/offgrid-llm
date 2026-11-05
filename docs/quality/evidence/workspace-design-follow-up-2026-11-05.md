@@ -184,3 +184,30 @@ Before this readiness increment, CI **41952580287** at **2377369b** completed
 successfully in all jobs, including Windows/macOS native, Go/API/UI/desktop and
 document-processing checks. This identifies the tested revision; it does not
 claim that CI has tested later unpushed work.
+
+## Isolated Windows packaging and installer diagnostics
+
+The packaged renderer theme check passed with isolated state
+(`build/ux-audit/deferred-final-packaged-theme.log`): six screens, 200% zoom,
+Help, nine language options, saved appearance and restart. This was the local
+candidate package, not a replacement of the user's installed application.
+
+An initial isolated installer failed startup because its generated service binary
+was still **0.4.24**, while desktop was **0.4.25**. The refusal was correct. The
+isolated candidate was repackaged with the matching service and passed the full
+installer test (`build/ux-audit/installer-verified-test.log`), covering install,
+startup, Finish launch, silent active-app refusal, interactive reinstall and
+uninstall. Finish closed in **247 ms**; reinstall Finish closed in **157 ms**.
+No personal workspace or installed OffGrid application was replaced by these tests.
+
+The installer test now checks the bundled service version before testing startup,
+so stale build artifacts fail with their actual mismatch instead of a generic
+startup timeout. Process inspection is bounded and retains its handle until exit
+to obtain a reliable exit code on Windows PowerShell 5.1.
+
+The earlier CI Finish failure was not reproduced by this test or the subsequent
+green CI run. Per-poll HWND existence, visibility, owner, title and elapsed time
+are now captured after Finish for future diagnosis. The original **two-second
+window-destruction requirement is unchanged**; a hidden window is not counted as
+closed. Compilation, version matching and these local results are not a diagnosis
+of that earlier intermittent CI failure.

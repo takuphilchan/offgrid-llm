@@ -48,6 +48,25 @@ $stage = 'install the isolated package silently'
 Write-Output "Installing isolated test package into $installRoot"
 Invoke-TestProcess $installer "/S /currentuser /D=$installRoot"
 if (-not (Test-Path -LiteralPath $appExe)) { throw 'Installed application is missing.' }
+$stage = 'verify the bundled service version'
+$serviceExe = Join-Path $installRoot 'resources/bin/offgrid.exe'
+$expectedVersion = (Get-Content (Join-Path $PSScriptRoot '../../apps/desktop/package.json') | ConvertFrom-Json).version
+$versionOutput = Join-Path $diagnosticDirectory 'service-version.json'
+$versionProcess = Start-Process -FilePath $serviceExe -ArgumentList '--json version' -WindowStyle Hidden -PassThru -RedirectStandardOutput $versionOutput -RedirectStandardError (Join-Path $diagnosticDirectory 'service-version.stderr.log')
+try {
+    [void]$versionProcess.Handle
+    if (-not $versionProcess.WaitForExit(15000)) {
+        $versionProcess.Kill()
+        [void]$versionProcess.WaitForExit(2000)
+        throw 'Bundled service version inspection timed out.'
+    }
+    if ($versionProcess.ExitCode -ne 0) { throw "Bundled service version inspection failed: $($versionProcess.ExitCode)" }
+} finally { $versionProcess.Dispose() }
+$serviceIdentity = Get-Content -LiteralPath $versionOutput -Raw | ConvertFrom-Json
+if ($serviceIdentity.version -ne $expectedVersion) {
+    throw "Bundled service version $($serviceIdentity.version) does not match desktop $expectedVersion. Rebuild the service before packaging; test installation retained."
+}
+Write-WizardDiagnostic $diagnosticPath 'bundled-service-version' @{ expected = $expectedVersion; actual = $serviceIdentity.version }
 $registered = (Get-ItemProperty -LiteralPath $registryPath).InstallLocation
 if ([IO.Path]::GetFullPath($registered).TrimEnd('\') -ne $installRoot) { throw 'Unexpected test install registration; refusing further actions.' }
 
