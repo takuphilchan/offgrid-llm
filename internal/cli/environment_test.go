@@ -149,4 +149,17 @@ func TestExecuteHelpAllPreservesCommandCatalog(t *testing.T) {
 	if code := Execute(context.Background(), []string{"help", "all"}, env); code != 0 || !strings.Contains(stdout.String(), "Model Management") || !strings.Contains(stdout.String(), "offgrid model list") || strings.Contains(stdout.String(), "auto-downloads") || stderr.Len() != 0 {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
+	listed := map[string]bool{}
+	for _, line := range strings.Split(stdout.String(), "\n") {
+		if strings.HasPrefix(line, "    ") {
+			if fields := strings.Fields(line); len(fields) > 0 {
+				listed[fields[0]] = true
+			}
+		}
+	}
+	for _, command := range commandNames {
+		if !listed[command.Name] {
+			t.Errorf("help all does not expose registered command %q", command.Name)
+		}
+	}
 }

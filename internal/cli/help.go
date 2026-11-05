@@ -52,6 +52,7 @@ func (p Presenter) HelpAll(version string) {
 		{
 			title: "Model Management",
 			cmds: []cmdEntry{
+				{"model <cmd>", "Discover, review, install, and verify model packages"},
 				{"recommend", "Get model recommendations for your system"},
 				{"list", "List installed models"},
 				{"search <query>", "Search HuggingFace"},
@@ -60,6 +61,11 @@ func (p Presenter) HelpAll(version string) {
 				{"import <path>", "Import from USB/SD card"},
 				{"export <id> <dst>", "Export to USB/SD card"},
 				{"remove <id>", "Remove installed model"},
+				{"verify <id>", "Verify model integrity"},
+				{"alias <cmd>", "Manage model aliases"},
+				{"favorite <cmd>", "Manage favorite models"},
+				{"quantization", "Explain model quantization choices"},
+				{"quantize <args>", "Convert model quantization"},
 			},
 		},
 		{
@@ -67,7 +73,9 @@ func (p Presenter) HelpAll(version string) {
 			cmds: []cmdEntry{
 				{"serve", "Start API server (default)"},
 				{"run <model>", "Interactive chat (--image for VLMs)"},
+				{"chat <args>", "Chat with a selected model"},
 				{"session <cmd>", "Manage chat sessions"},
+				{"export-session <args>", "Export a saved conversation"},
 				{"kb <cmd>", "Manage knowledge base (RAG)"},
 				{"workspace <cmd>", "Offline backup, verification, and safe restore"},
 				{"template <cmd>", "Manage prompt templates"},
@@ -85,6 +93,13 @@ func (p Presenter) HelpAll(version string) {
 				{"peers", "P2P network status & model sharing"},
 				{"appliance <cmd>", "Plan offline community devices"},
 				{"benchmark <id>", "Performance testing"},
+				{"compare <args>", "Compare model performance"},
+				{"test <args>", "Test inference"},
+				{"metrics", "Inspect service metrics"},
+				{"version", "Show the installed version"},
+				{"help [all]", "First steps or the complete command catalog"},
+				{"completions <shell>", "Generate shell completions"},
+				{"shell-completion", "Manage shell completion setup"},
 			},
 		},
 		{
@@ -94,7 +109,8 @@ func (p Presenter) HelpAll(version string) {
 				{"agent [cmd]", "Conversation, tools, and saved agent work"},
 				{"hermes [cmd]", "Install and run Hermes on OffGrid"},
 				{"openclaw [cmd]", "Install and run OpenClaw on OffGrid"},
-				{"integrations <cmd>", "Connect Hermes, OpenClaw, and other agents"},
+				{"integration <cmd>", "Connect Hermes, OpenClaw, and other agents"},
+				{"computer <cmd>", "Inspect and manage local computer access"},
 				{"audio <cmd>", "Speech-to-text & TTS"},
 				{"users <cmd>", "Multi-user management"},
 				{"audit <cmd>", "Security audit logs (export CSV/JSON)"},
