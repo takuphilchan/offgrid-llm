@@ -1,8 +1,8 @@
 # OffGrid product experience audit and design plan
 
-**Updated:** 2026-11-05. **Baseline:** the running, installed OffGrid **v0.4.25**, distinguished below from the newer working-tree renderer. The application source is in `apps/web` and `apps/desktop`; implementation status is recorded separately below. Source locations identify implementation owners; they do not establish that an uninstalled change is already visible to users.
+**Updated:** 2026-11-05. **Audit baseline:** the then-running, installed OffGrid **v0.4.25**. The baseline findings and captures below are historical evidence, not the current installation. **Current installation:** v0.4.26 from `cbcf13e8`, installed on November 5 after packaged startup, terminal and appearance checks. See the [installation evidence](../quality/evidence/workspace-design-follow-up-2026-11-05.md#installed-v0426-and-release-source). The application source is in `apps/web` and `apps/desktop`; source locations identify owners, not proof of live behavior.
 
-## Executive summary
+## Baseline findings
 
 1. Attached-document answers expose raw byte-range citations. The installed app has a reader, but the answer does not offer a readable, verified route from each claim to its passage.
 2. Models gives a cancelled download a large leading card above five installed models; all five say “Runtime unchecked,” and the selected model still says “Select model.”
@@ -12,7 +12,7 @@
 
 **Design idea:** make the default experience one clear work surface: ask, add a source, inspect a result. Reveal model, agent, tool, terminal, and recovery controls at the point where they matter, with a persistent, truthful account of where work runs and what can leave the machine.
 
-### Correct installed baseline and evidence limits
+### Inspected v0.4.25 baseline and evidence limits
 
 The installed executable is `C:/Users/phil/AppData/Local/Programs/OffGrid LLM Desktop/OffGrid LLM Desktop.exe`, product version **0.4.25.0**, with its bundled native `resources/bin/offgrid.exe` running. The running service at `http://127.0.0.1:11611/api/v2/system` reports **0.4.25**, API v2, a ready desktop bridge, and UI build ID:
 

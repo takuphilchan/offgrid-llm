@@ -351,3 +351,43 @@ The opt-in one-worker paint test also passed with `OFFGRID_PAINT_MEASURE=1`
 **3.1–38.7 ms**, and frame p95 **16.7–33.4 ms**. This is one isolated fixture run
 on this machine, not a cross-device performance or inference-speed claim. It
 does not close the broader historical 15% comparison requirement.
+
+## Installed v0.4.26 and release source
+
+The user explicitly requested installation and confirmed quitting OffGrid.
+Process inspection confirmed the desktop and its model process had exited.
+The Windows NSIS installer was built from clean source `cbcf13e8`, including
+the matching v0.4.26 service and the current web renderer. Packaging verified
+the copied speech, document, terminal, execution and computer packs.
+
+Before replacement, these checks ran against the packaged executable:
+
+- `node scripts/test/test-desktop-startup.mjs <packaged-executable>`: passed;
+  first window 516 ms, recovery 674 ms in the isolated fixture.
+- `node scripts/test/test-desktop-terminal-packaged.mjs <packaged-executable>`:
+  passed input, Unicode, tabs, retained cursor, reload, CLI/agent interaction,
+  clipboard boundary, 200% zoom, service identity and owned-child cleanup.
+- `node scripts/test/test-desktop-theme.mjs <packaged-executable>`: passed saved
+  and live appearance, nine readable locale choices, menu and Help checks.
+
+The previous application, desktop profile, configuration and workspace data
+were backed up outside the repository. Model files and the existing native
+GPU runtime were retained in place. The installer exited zero. Installed
+`resources/app.asar`, `resources/bin/offgrid.exe` and `resources/ui/index.html`
+hashes matched the tested package. **All 391 recorded workspace data file
+hashes were unchanged** immediately after installation. The installed desktop
+reported 0.4.26.0; the bundled CLI reported 0.4.26 and detected the RTX 5060.
+Detection is not a new inference benchmark.
+
+The same startup script then passed against the installed executable in an
+isolated profile: first window 856 ms and recovery 930 ms. No test processes
+remained after cleanup. Local logs are under `build/ux-audit/desktop-0.4.26-*`;
+preservation manifests and private backups are deliberately excluded from Git.
+
+Exact-source [CI](https://github.com/takuphilchan/offgrid-llm/actions/runs/41972042825)
+and [release safety](https://github.com/takuphilchan/offgrid-llm/actions/runs/41974588811)
+passed. Tag `v0.4.26` points to that source. The
+[release build](https://github.com/takuphilchan/offgrid-llm/actions/runs/41974880894)
+was started; this record alone does not establish publication or asset success.
+No participant study, manual screen-reader/localization review, new model
+quality qualification or physical macOS/Linux qualification is claimed.
