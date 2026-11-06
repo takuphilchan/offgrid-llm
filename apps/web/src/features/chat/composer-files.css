@@ -29,3 +29,13 @@
 .saved-file-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.4rem;max-width:55%}
 .saved-file-actions button{max-width:100%}
 @media(max-width:480px){.saved-file-list li{flex-wrap:wrap}.saved-file-list li>span{flex-basis:100%}.saved-file-actions{max-width:100%;justify-content:flex-start}}
+/* Source identity leads; actions and coverage stay on their own readable rows. */
+.file-attachments .file-summary { display:flex; align-items:center; gap:10px; padding-inline-end:32px; min-height:44px; }
+.file-attachments .file-summary > div { min-width:0; flex:1; }
+.file-attachments .file-type-mark { display:grid; place-items:center; width:36px; height:44px; flex:none; color:var(--muted); background:var(--surface-1); border:1px solid var(--line); border-radius:7px; }
+.file-attachments li { position:relative; }
+.file-attachments strong { max-width:none; }
+.file-attachments .file-remove { position:absolute; inset-inline-end:6px; inset-block-start:6px; }
+.file-attachments .file-actions { gap:6px 12px; }
+.file-attachments .file-actions .text-button { padding:4px 0; min-height:32px; font-size:var(--type-meta); font-weight:500; }
+@media(pointer:coarse){.file-attachments .file-actions .text-button{min-height:44px}}

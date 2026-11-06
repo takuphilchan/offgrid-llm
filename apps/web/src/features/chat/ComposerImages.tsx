@@ -3,7 +3,8 @@ import type {SessionImage,Model} from '../../api/client';
 import {useDraft,readDraft,writeDraft} from '../../lib/drafts';
 import {Icon} from '../../components/Icon';
 import {useI18n} from '../../i18n';
-import {chatImages} from '../../i18n/chat-images';
+import {chatImages,imagePreview} from '../../i18n/chat-images';
+import {ImagePreview} from './ImagePreview';
 import './composer-images.css';
 
 const limit=2*1024*1024;
@@ -12,7 +13,7 @@ export function readImages(value:string):SessionImage[]{
 }
 export function useComposerImages(scope:string,id:string,disabled:boolean,availability:{service:boolean;agent:boolean;model?:Model;history:boolean}){
  const draft=useDraft(scope,'chat-images',id),images=useMemo(()=>readImages(draft.value),[draft.value]);
- const {locale}=useI18n(),copy=chatImages(locale);
+ const {locale,messages}=useI18n(),copy=chatImages(locale);
  const blocker=!(images.length||availability.history)?'':availability.agent?copy.agent:!availability.service?copy.service:!['unknown','tested'].includes(availability.model?.capability_status?.vision??'')?copy.model:'';
  const blockerCode=blocker===copy.model?'vision_projector_unavailable':'';
  const [error,setError]=useState(''),[processing,setProcessing]=useState(false);
@@ -43,11 +44,25 @@ export function useComposerImages(scope:string,id:string,disabled:boolean,availa
   paste:(event:ClipboardEvent)=>{const files=[...event.clipboardData.files];if(files.length){event.preventDefault();void add(files);}},
   dragOver:(event:DragEvent)=>{if(event.dataTransfer.types.includes('Files')){event.preventDefault();event.dataTransfer.dropEffect=disabled?'none':'copy';}},
   drop:(event:DragEvent)=>{if(event.dataTransfer.types.includes('Files')){event.preventDefault();void add([...event.dataTransfer.files]);}},
-  control:<><input hidden ref={input} type="file" accept="image/png,image/jpeg" multiple onChange={event=>{void add([...event.target.files??[]]);event.target.value='';}}/><button type="button" className="utility-button composer-image-add" disabled={disabled||processing||images.length>=4} aria-label={copy.add} title={copy.limits} onClick={()=>input.current?.click()}><Icon name="upload" size={17}/><span>{copy.add}</span></button></>,
-  preview:<>{images.length>0&&<ImageAttachments images={images} remove={index=>draft.setValue(JSON.stringify(images.filter((_,i)=>i!==index)))} disabled={disabled||processing}/ >}{error&&<p role="alert" className="image-input-notice">{error}</p>}{draft.unsaved&&<p role="alert" className="image-input-notice">{copy.unsaved}</p>}</>,
+  control:<><input hidden ref={input} type="file" accept="image/png,image/jpeg" multiple onChange={event=>{void add([...event.target.files??[]]);event.target.value='';}}/><button type="button" className="utility-button composer-image-add" disabled={disabled||processing||images.length>=4} aria-label={copy.add} title={copy.limits} onClick={()=>input.current?.click()}><Icon name="image" size={17}/><span>{copy.add}</span></button></>,
+  preview:<>{images.length>0&&<ImageAttachments images={images} remove={index=>draft.setValue(JSON.stringify(images.filter((_,i)=>i!==index)))} disabled={disabled||processing}/ >}{processing&&<div className="document-scan file-input-notice" role="status"><Icon name="file" size={20}/><span>{copy.images}</span><p>{messages.common.loading}</p></div>}{error&&<p role="alert" className="image-input-notice">{error}</p>}{draft.unsaved&&<p role="alert" className="image-input-notice">{copy.unsaved}</p>}</>,
  };
 }
 export function ImageAttachments({images,remove,disabled}:{images?:SessionImage[];remove?:(index:number)=>void;disabled?:boolean}){
- const {locale}=useI18n(),copy=chatImages(locale);if(!images?.length)return null;
- return <div className="image-attachments" aria-label={copy.images}>{images.map((image,index)=><figure key={index}><img src={/^data:image\/(png|jpeg);base64,/.test(image.data_url)?image.data_url:undefined} alt={image.name}/><figcaption title={image.name}>{image.name}</figcaption>{remove&&<button type="button" className="icon-button" disabled={disabled} aria-label={`${copy.remove}: ${image.name}`} onClick={event=>{const composer=event.currentTarget.closest('.composer');remove(index);requestAnimationFrame(()=>{const next=composer?.querySelectorAll<HTMLButtonElement>('.image-attachments button');(next?.[Math.min(index,next.length-1)]??composer?.querySelector<HTMLButtonElement>('.composer-attachments-menu > button'))?.focus();});}}><Icon name="close" size={16}/></button>}</figure>)}</div>;
+ const {locale}=useI18n(),copy=chatImages(locale);
+ const [selected,setSelected]=useState<SessionImage>();
+ if(!images?.length)return null;
+ return <div className="image-attachments" aria-label={copy.images}>
+  {images.map((image,index)=><figure key={index}>
+   <button type="button" className="image-attachment-open" aria-label={`${imagePreview[locale].open}: ${image.name}`} onClick={()=>setSelected(image)}>
+    <img src={/^data:image\/(png|jpeg);base64,/.test(image.data_url)?image.data_url:undefined} alt={image.name}/>
+    <span title={image.name}><bdi>{image.name}</bdi></span>
+   </button>
+   {remove&&<button type="button" className="icon-button image-attachment-remove" disabled={disabled} aria-label={`${copy.remove}: ${image.name}`} onClick={event=>{
+    const composer=event.currentTarget.closest('.composer');remove(index);
+    requestAnimationFrame(()=>{const next=composer?.querySelectorAll<HTMLButtonElement>('.image-attachment-remove');(next?.[Math.min(index,next.length-1)]??composer?.querySelector<HTMLButtonElement>('.composer-attachments-menu > button'))?.focus();});
+   }}><Icon name="close" size={16}/></button>}
+  </figure>)}
+  {selected&&images.includes(selected)&&<ImagePreview image={selected} close={()=>setSelected(undefined)}/>}
+ </div>;
 }

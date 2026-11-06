@@ -12,3 +12,15 @@ const labels: Record<LocaleCode,Copy> = {
  zu:['Engeza izithombe','Susa isithombe','Izithombe','Izithombe zePNG/JPEG ezingafika ku-4, 2 MiB ngasinye. Namathisela noma hudulela lapha.','Khetha imodeli yokubona efakiwe neprojektha yayo. Izithombe zakho zigciniwe.','Imisebenzi ye-agent ayikasekeli izithombe. Sebenzisa iChat evamile.','Buyekeza isevisi ukuze uthumele izithombe. Okubhalayo kugciniwe.','Ezinye izithombe azikwazanga ukugcinwa kudivayisi. Gcina leli windi livuliwe.'],
 };
 export function chatImages(locale:LocaleCode){const [add,remove,images,limits,model,agent,service,unsaved]=labels[locale];return {add,remove,images,limits,model,agent,service,unsaved};}
+
+export const imagePreview: Record<LocaleCode,{open:string;close:string;zoom:string}> = {
+ en:{open:'Preview image',close:'Close image',zoom:'Actual size'},
+ fr:{open:'Aperçu de l’image',close:'Fermer l’image',zoom:'Taille réelle'},
+ de:{open:'Bildvorschau',close:'Bild schließen',zoom:'Originalgröße'},
+ es:{open:'Vista previa de imagen',close:'Cerrar imagen',zoom:'Tamaño real'},
+ ar:{open:'معاينة الصورة',close:'إغلاق الصورة',zoom:'الحجم الفعلي'},
+ sw:{open:'Hakiki picha',close:'Funga picha',zoom:'Ukubwa halisi'},
+ sn:{open:'Tarisa mufananidzo',close:'Vhara mufananidzo',zoom:'Saizi chaiyo'},
+ nd:{open:'Hlola umfanekiso',close:'Vala umfanekiso',zoom:'Ubukhulu bangempela'},
+ zu:{open:'Buka isithombe',close:'Vala isithombe',zoom:'Usayizi wangempela'},
+};

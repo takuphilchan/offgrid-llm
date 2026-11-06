@@ -18,7 +18,14 @@ export function DocumentWorkspace({ children, scope }: { children: ReactNode; sc
  useEffect(() => { setSelection(undefined); }, [scope]);
  const [view, setView] = useState('document');
  const trigger = useRef<HTMLElement | null>(null);
- const open = useCallback((next: ReaderSource) => { trigger.current = document.activeElement as HTMLElement; setSelection({scope,source:next}); setView('document'); }, [scope]);
+ const open = useCallback((next: ReaderSource) => {
+  trigger.current = document.activeElement as HTMLElement;
+  // Reopening the same attachment is navigation, not a new preview request.
+  // Keep its page, zoom and search; a citation deliberately selects a passage.
+  setSelection(current => current?.scope === scope && current.source.path === next.path && current.source.sha256 === next.sha256
+   && !next.citation && !next.passage && !next.verifiedText ? current : {scope,source:next});
+  setView('document');
+ }, [scope]);
  const close = useCallback(() => { setSelection(undefined); requestAnimationFrame(() => { if (trigger.current?.isConnected) trigger.current.focus(); }); }, []);
  return <ReaderContext.Provider value={open}><div className={`document-workspace ${source ? 'has-document' : ''}`} data-view={view}>
   {source && <div className="document-view-tabs" role="tablist" aria-label={copy.document} onKeyDown={event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const next=event.key==='Home'?'chat':event.key==='End'?'document':view==='chat'?'document':'chat';setView(next);event.currentTarget.querySelectorAll<HTMLButtonElement>('button')[next==='chat'?0:1]?.focus();}}}>

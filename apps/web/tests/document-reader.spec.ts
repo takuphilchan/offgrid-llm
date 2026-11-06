@@ -51,6 +51,20 @@ test('new document chat gives the paper priority without losing the draft',async
  await page.screenshot({path:test.info().outputPath('document-first-question.png')});
 });
 
+test('reopening the current attachment retains the reading position and zoom',async({page})=>{
+ await page.setViewportSize({width:1440,height:900});
+ await setup(page,'en','dark',{...file,status:'ready',error_code:''});
+ const open=page.getByRole('button',{name:'Open document',exact:true});
+ await open.click();
+ const reader=page.locator('.document-reader');
+ await reader.getByRole('button',{name:documentReader('en').next,exact:true}).click();
+ await reader.getByRole('combobox',{name:documentReader('en').zoom,exact:true}).selectOption('150');
+ await open.click();
+ await expect(reader.getByRole('spinbutton')).toHaveValue('2');
+ await expect(reader.getByRole('combobox',{name:documentReader('en').zoom,exact:true})).toHaveValue('150');
+ await expect(page.locator('.composer textarea')).toHaveValue('Explain this paper');
+});
+
 test('active attachment announcement stays accessible without floating beside the file',async({page})=>{
  await page.setViewportSize({width:700,height:1000});
  await setup(page,'en','dark',{...file,status:'ready',error_code:'',coverage:'native_text_only'} as typeof file);
@@ -76,7 +90,7 @@ test('context recovery opens response settings without another submission',async
  });
  await page.locator('.composer-actions').getByRole('button',{name:'Send',exact:true}).click();
  const notice=page.locator('.chat-recovery');await expect(notice).toContainText('Not enough room');
- await expect(page.getByRole('heading',{name:'What would you like to work on?'})).toHaveCount(0);
+ await expect(page.locator('.empty-chat')).toHaveCount(0);
  await notice.getByRole('button',{name:'Response settings',exact:true}).click();
  await expect(page.getByRole('region',{name:'Response settings',exact:true})).toBeVisible();
  await page.locator('.response-advanced summary').click();
@@ -113,7 +127,7 @@ test('partial PDF stays readable beside chat; search, zoom and closing preserve 
  await expect(reader).toContainText(documentReader('en').partial);
  await expect(page.locator('.composer textarea')).toBeVisible();
  await page.screenshot({path:test.info().outputPath('reader-wide.png')});
- await reader.getByRole('searchbox').fill('42');await reader.getByRole('button',{name:'2',exact:true}).click();
+ await reader.getByRole('searchbox').fill('42');await reader.locator('.document-search-results').getByRole('button',{name:'Page 2',exact:true}).click();
  await expect(reader.locator('mark')).toHaveText('42');await expect(reader.locator('pre')).toContainText('<script>untrusted</script>');
  await reader.getByLabel('Zoom',{exact:true}).selectOption('150');
  await expect(reader.locator('pre')).toHaveCSS('font-size','24px');
@@ -293,6 +307,7 @@ test('private supplied PDF is text-ready without OCR while retaining visual limi
  // invalid. Original-page viewing must not depend on those OCR coordinates.
  if(result.pages>=13){
   await page.locator('.document-reader input[type=number]').fill('13');
+  await page.locator('.document-reader input[type=number]').press('Enter');
   await expect(page.locator('.document-reader img')).toHaveAttribute('alt',/13$/,{timeout:60_000});
   await expect(page.locator('.document-reader img')).toHaveJSProperty('naturalWidth',1700);
   await expect(page.locator('.document-reader [role=alert]')).toHaveCount(0);
@@ -300,4 +315,25 @@ test('private supplied PDF is text-ready without OCR while retaining visual limi
  const destination=process.env.OFFGRID_TEST_DOCUMENT_SAMPLE_OUTPUT;
  if(destination){await page.screenshot({path:resolve(destination,'reader.png')});writeFileSync(resolve(destination,'receipt.json'),JSON.stringify({sha256:sha,pages:result.pages,characters:result.units.reduce((n:number,u:{text:string})=>n+[...u.text].length,0),review_pages:result.units.filter((u:{state:string})=>u.state==='native_text_with_visuals').map((u:{index:number})=>u.index),coverage:'native_text_only'},null,2));}
  expect((await (await request.get(`/v1/sessions/${name}`)).json()).messages).toHaveLength(0);
+});
+
+test('page edits commit once and original download failures do not masquerade as page failures',async({page})=>{
+ await setup(page);
+ const pages:number[]=[];
+ await page.route('**/attachments/*/preview*',r=>{
+  const u=new URL(r.request().url());
+  if(u.searchParams.has('page')){pages.push(Number(u.searchParams.get('page')));return r.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5ZkAAAAASUVORK5CYII=','base64')});}
+  return r.fulfill({json:{name:file.name,sha256:file.sha256,format:'pdf',state:'complete',pages:37,units:Array.from({length:37},(_,i)=>({kind:'page',index:i+1,text:'Page '+(i+1),state:'ready',source_sha256:file.sha256}))}});
+ });
+ await page.route('**/attachments/*/original',r=>r.fulfill({status:503,json:{error:{message:'Original temporarily unavailable'}}}));
+ await page.getByRole('button',{name:'Open document',exact:true}).click();
+ const reader=page.locator('.document-reader'), number=reader.getByRole('spinbutton');
+ await expect(reader.locator('img')).toBeVisible();
+ await number.fill('');await number.pressSequentially('13');
+ expect(pages).toEqual([1]);await number.press('Enter');await expect.poll(()=>pages).toEqual([1,13]);
+ await number.fill('');await number.press('Tab');await expect(number).toHaveValue('13');
+ await number.fill('900');await number.press('Enter');await expect(number).toHaveValue('37');
+ await reader.getByRole('button',{name:'Download original file',exact:true}).click();
+ await expect(reader.locator('.document-download-error')).toContainText('Original temporarily unavailable');
+ await expect(reader.locator('.document-page-error')).toHaveCount(0);await expect(reader.locator('img')).toBeVisible();
 });

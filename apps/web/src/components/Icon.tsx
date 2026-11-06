@@ -1,8 +1,12 @@
 import type { ReactNode } from 'react';
 
-export type IconName = 'arrow-up' | 'arrow-down' | 'download' | 'chevron-left' | 'chevron-right' | 'file' | 'sliders' | 'help' | 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings' | 'send' | 'upload' | 'refresh' | 'plus' | 'trash' | 'check' | 'copy' | 'search' | 'menu' | 'close' | 'mic' | 'speaker' | 'more' | 'sidebar';
+export type IconName = 'image' | 'folder' | 'terminal' | 'arrow-up' | 'arrow-down' | 'download' | 'chevron-left' | 'chevron-right' | 'file' | 'sliders' | 'help' | 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings' | 'send' | 'upload' | 'refresh' | 'plus' | 'trash' | 'check' | 'copy' | 'search' | 'menu' | 'close' | 'mic' | 'waveform' | 'stop' | 'speaker' | 'more' | 'sidebar';
 
 const paths: Record<IconName, string[]> = {
+  image: ['M3 3h18v18H3z', 'M3 16l6-6 5 5 3-3 4 4', 'M16 7h.01'],
+  folder: ['M3 6h7l2 3h9v11H3z', 'M3 6V4h7l2 2h9v3'],
+  terminal: ['M4 5l6 7-6 7', 'M13 19h7'],
+  waveform: ['M4 10v4m4-8v12m4-15v18m4-14v10m4-7v4'],
   'arrow-up': ['M12 20V4m-6 6 6-6 6 6'],
   'arrow-down': ['M12 4v16m-6-6 6 6 6-6'],
   download: ['M12 3v12m-5-5 5 5 5-5', 'M5 16v5h14v-5'],
@@ -30,7 +34,8 @@ const paths: Record<IconName, string[]> = {
   search: ['m21 21-4.4-4.4', 'M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0z'],
   menu: ['M4 6h16M4 12h16M4 18h16'],
   close: ['M18 6 6 18M6 6l12 12'],
-  mic: ['M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z', 'M19 10v2a7 7 0 0 1-14 0v-2', 'M12 19v3', 'M8 22h8']
+  mic: ['M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z', 'M19 10v2a7 7 0 0 1-14 0v-2', 'M12 19v3', 'M8 22h8'],
+  stop: ['M6 6h12v12H6z']
 };
 
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }): ReactNode {

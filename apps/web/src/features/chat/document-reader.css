@@ -63,3 +63,23 @@
 .document-coverage-pages { display:flex; flex-wrap:wrap; gap:0.25rem 0.5rem; margin-block:0 0.5rem; }
 .document-coverage-pages .text-button { padding:0.2rem 0.45rem; font-size:var(--text-sm,0.875rem); }
 .document-coverage-pages [aria-current=page] { background:var(--surface-hover); }
+/* A compact reader header, one navigation toolbar and a distinct page canvas. */
+.document-reader > header { gap:10px; padding-block:8px 12px; }
+.document-file-mark { color:var(--muted); flex:none; }
+.document-reader .document-heading { flex:1; min-width:0; }
+.document-reader h2 { margin:0; font-size:var(--type-ui); font-weight:550; }
+.document-heading .workspace-secondary { font-size:var(--type-caption); }
+.document-header-actions { display:flex; gap:4px; flex:none; }
+.document-reader-tools { padding-block:0 8px; border-block-end:1px solid var(--line); }
+.document-search { min-height:36px; border-radius:8px; padding-inline:10px; background:var(--surface-2); color:var(--muted); }
+.document-search input { border:0; box-shadow:none; background:transparent; padding:8px; font-size:var(--type-meta); }
+.document-page-tools { column-gap:8px; }
+.document-page-navigation { font-variant-numeric:tabular-nums; }
+.document-view-mode button { min-height:32px; font-weight:500; }
+.document-reader-surface { background:var(--surface-0); border-radius:10px; padding:16px; scrollbar-width:thin; }
+.document-reader-surface:has(pre) { padding:24px; background:var(--surface-1); }
+.document-reader-surface pre { max-width:72ch; margin-inline:auto; }
+.document-search-results { padding-block:8px; font-size:var(--type-meta); }
+.document-search-results [aria-current=page] { background:var(--surface-2); }
+.document-download-error { color:var(--red); font-size:var(--type-meta); }
+@media(max-width:480px){.document-reader-surface{padding:8px}.document-reader-surface:has(pre){padding:12px}.document-view-mode{margin-inline-start:0}.document-page-tools{gap:4px}}

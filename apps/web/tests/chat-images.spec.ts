@@ -81,3 +81,29 @@ for(const fail of [false,true])test(`image-only send ${fail?'retains failed inpu
  if(fail){await expect(page.locator('.composer .image-attachments img')).toBeVisible();await expect(page.getByRole('alert')).toContainText('Projector is unavailable');await expect(page.getByRole('alert').getByRole('button',{name:'Models',exact:true})).toBeVisible();await expect(page.getByRole('alert').getByRole('button',{name:'Check request status'})).toHaveCount(0);}
  else{await expect(page.locator('.message.assistant')).toContainText('A red square.');await expect(page.locator('.composer .image-attachments')).toHaveCount(0);const saved=await page.evaluate(()=>(window as any).imageSession);await page.route('**/v1/sessions',r=>r.fulfill({json:{sessions:[saved]}}));await page.route('**/v1/sessions/Demo%20briefing',r=>r.fulfill({json:saved}));await page.reload();await expect(page.locator('.message.user .image-attachments img')).toHaveAttribute('src',dataURL);}
 });
+
+test('image inspection fits large originals, traps focus and restores its trigger without sending',async({page},info)=>{
+ const {state}=await fixture(page);
+ const dataURL=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=1600;c.height=1000;const ctx=c.getContext('2d')!;ctx.fillStyle='#d9e4db';ctx.fillRect(0,0,1600,1000);ctx.fillStyle='#364e42';ctx.font='70px sans-serif';ctx.fillText('Field notes — attachment preview',90,180);return c.toDataURL('image/png');});
+ const name='Field notes — café 日本語.png';
+ await page.locator('.composer textarea').fill('Keep my question');
+ await page.locator('.composer input[type=file]').setInputFiles({name,mimeType:'image/png',buffer:Buffer.from(dataURL.split(',')[1],'base64')});
+ const trigger=page.getByRole('button',{name:'Preview image: '+name,exact:true});
+ await trigger.click();
+ const preview=page.getByRole('dialog',{name:'Preview image: '+name});
+ await expect(preview).toBeVisible();await expect(preview.locator('img')).toHaveAttribute('src',dataURL);
+ const bounds=await preview.locator('img').boundingBox(),surface=await preview.locator('.image-preview-surface').boundingBox();
+ expect(bounds!.width).toBeLessThanOrEqual(surface!.width);expect(bounds!.height).toBeLessThanOrEqual(surface!.height);
+ await page.screenshot({path:info.outputPath('image-preview-wide.png')});
+ await preview.getByRole('button',{name:'Actual size',exact:true}).click();
+ await expect(preview.locator('img')).toHaveCSS('width','1600px');
+ await preview.getByRole('button',{name:'Actual size',exact:true}).click();
+ await page.setViewportSize({width:320,height:480});
+ await expect(preview.getByRole('button',{name:'Close image',exact:true})).toBeInViewport();
+ await preview.getByRole('button',{name:'Close image',exact:true}).focus();await page.keyboard.press('Tab');
+ expect(await preview.evaluate(node=>node.contains(document.activeElement))).toBe(true);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:info.outputPath('image-preview-narrow.png')});
+ await page.keyboard.press('Escape');await expect(preview).toHaveCount(0);await expect(trigger).toBeFocused();
+ await expect(page.locator('.composer textarea')).toHaveValue('Keep my question');expect(state.writes).toEqual([]);
+});

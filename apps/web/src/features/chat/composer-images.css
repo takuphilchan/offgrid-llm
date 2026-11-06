@@ -1,10 +1,26 @@
-@layer controls {
- .image-attachments { display:flex; flex-wrap:wrap; gap:12px; margin-block:8px; min-width:0; }
- .image-attachments figure { position:relative; margin:0; min-width:0; width:min(100%,160px); padding:8px; border-radius:var(--radius-md); background:var(--surface-2); }
- .image-attachments img { display:block; width:100%; height:112px; object-fit:contain; border-radius:4px; }
- .image-attachments figcaption { margin-block-start:6px; font-size:12px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
- .composer .image-attachments .icon-button { position:absolute; inset-block-start:4px; inset-inline-end:4px; background:var(--surface-1); color:var(--text); }
- .image-input-notice { margin:4px 10px; color:var(--muted); font-size:13px; line-height:1.5; }
+﻿@layer controls {
+ .image-attachments { display:flex; flex-wrap:wrap; gap:10px; margin-block:8px 12px; min-width:0; }
+ .image-attachments figure { position:relative; margin:0; min-width:0; width:min(100%,148px); }
+ .image-attachment-open { display:block; width:100%; padding:0; text-align:start; border:1px solid var(--line); border-radius:12px; background:var(--surface-1); color:var(--text); overflow:hidden; cursor:zoom-in; }
+ .image-attachment-open:hover { border-color:var(--line-strong); background:var(--surface-2); }
+ .image-attachments img { display:block; width:100%; height:100px; object-fit:contain; background:var(--surface-2); }
+ .image-attachment-open > span { display:block; padding:8px 10px; font-size:var(--type-caption); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+ .composer .image-attachments .image-attachment-remove { position:absolute; inset-block-start:5px; inset-inline-end:5px; width:28px; height:28px; min-height:28px; padding:0; border:1px solid var(--line); border-radius:50%; background:var(--surface-1); color:var(--text); box-shadow:0 1px 4px #0001; }
+ .image-input-notice { margin:4px 10px; color:var(--muted); font-size:var(--type-meta); line-height:1.5; }
  .composer .composer-image-add { color:var(--muted); background:transparent; border-color:transparent; }
  .composer .composer-image-add:hover:not(:disabled) { color:var(--text); background:var(--surface-2); }
+ .image-preview { width:min(1100px,calc(100vw - 32px)); height:min(820px,calc(100dvh - 32px)); max-width:none; max-height:none; margin:auto; padding:0; color:var(--text); background:var(--surface-1); border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:var(--shadow); }
+ .image-preview[open] { display:flex; flex-direction:column; }
+ .image-preview::backdrop { background:var(--scrim); }
+ .image-preview > header { display:flex; align-items:center; gap:16px; padding:10px 16px; border-block-end:1px solid var(--line); flex-shrink:0; }
+ .image-preview h2 { flex:1; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; margin:0; font-size:var(--type-ui); font-weight:500; }
+ .image-preview header > div { display:flex; align-items:center; gap:8px; }
+ .image-preview [aria-pressed=true] { background:var(--surface-2); }
+ .image-preview-surface { flex:1; min-height:0; overflow:auto; background:var(--surface-0); padding:20px; display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr); }
+ .image-preview-surface img { display:block; margin:auto; width:100%; height:100%; max-width:100%; max-height:100%; object-fit:contain; align-self:center; justify-self:center; }
+ .image-preview-surface[data-zoomed=true] { display:block; }
+ .image-preview-surface[data-zoomed=true] img { width:auto; height:auto; max-width:none; max-height:none; }
+ @media (max-width:480px) { .image-preview > header { gap:8px; padding:8px; } .image-preview header > div { gap:4px; } .image-preview-surface { padding:8px; } }
+ @media (pointer:coarse) { .composer .image-attachments .image-attachment-remove { width:44px; height:44px; min-height:44px; } }
+ @media (forced-colors:active) { .image-attachment-open, .image-preview { border-color:CanvasText; } }
 }

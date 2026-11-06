@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {Icon} from '../../components/Icon';
 import {api,type SessionAttachment} from '../../api/client';
 import {useI18n} from '../../i18n';
 import {chatFiles,fileRecovery} from '../../i18n/chat-files';
@@ -23,7 +24,7 @@ export function SavedFilePicker({name,disabled,selected,choose}:{name:string;dis
   return()=>abort.abort();
  },[name,open]);
  if(!name)return null;
- return <div className="saved-file-picker">{publishing&&<FileKnowledgeImport session={name} file={publishing} close={()=>setPublishing(undefined)}/>}<button type="button" className="text-button" disabled={disabled} aria-expanded={open} onClick={()=>setOpen(value=>!value)}>{labels.saved}</button>{open&&<div className="saved-file-list" aria-label={labels.saved}>
+ return <div className="saved-file-picker">{publishing&&<FileKnowledgeImport session={name} file={publishing} close={()=>setPublishing(undefined)}/>}<button type="button" className="text-button" disabled={disabled} aria-expanded={open} onClick={()=>setOpen(value=>!value)}><Icon name="folder" size={17}/><span>{labels.saved}</span></button>{open&&<div className="saved-file-list" aria-label={labels.saved}>
   {loading?<p role="status">{copy.preparing}</p>:error?<p role="alert">{error}</p>:!files.length?<p>{labels.empty}</p>:<ul>{files.map(file=><li key={file.id}><span><strong>{file.name}</strong><small>{file.status==='ready'?(file.coverage==='native_text_only'?documentCoverage(locale):copy.ready):documentRecovery(locale,file.error_code)??copy.blocked}</small></span><div className="saved-file-actions"><button type="button" className="text-button" disabled={disabled||selected.includes(file.id)||selected.length>=8} onClick={event=>{choose(file);event.currentTarget.closest<HTMLElement>("[popover]")?.hidePopover();requestAnimationFrame(()=>document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus());}}>{selected.includes(file.id)?labels.selected:labels.use}</button>{canImport&&<button type="button" className="text-button" disabled={disabled} onClick={()=>setPublishing(file)}>{fileKnowledge(locale).title}</button>}</div></li>)}</ul>}
  </div>}</div>;
 }
