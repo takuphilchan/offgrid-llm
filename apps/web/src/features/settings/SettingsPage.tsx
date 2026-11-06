@@ -10,6 +10,7 @@ import type { ThemeChoice } from '../../theme';
 import { SectionHeading } from '../../components/WorkspacePresentation';
 import { workspaceManagement } from '../../i18n/workspace-management';
 import { desktopCompatibility } from '../../i18n/desktop-compatibility';
+import { computerStatus } from '../../i18n/computer-status';
 
 type Health = 'checking' | 'ready' | 'offline';
 type Details = {
@@ -17,6 +18,7 @@ type Details = {
   config?: Awaited<ReturnType<typeof api.systemConfig>>;
   rag?: Awaited<ReturnType<typeof api.ragStatus>>;
   computer?: Awaited<ReturnType<typeof api.computerStatus>>;
+  localComputer?: { installed: boolean };
 };
 
 export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboarding }: {
@@ -43,13 +45,14 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
     const revision = ++refreshRevision.current;
     setLoading(true);
     setError('');
-    const [config, rag, computer, identity] = await Promise.allSettled([api.systemConfig(), knowledge ? api.ragStatus() : Promise.resolve(undefined), admin ? api.computerStatus() : Promise.resolve(undefined), api.systemIdentity()]);
+    const [config, rag, computer, identity, localComputer] = await Promise.allSettled([api.systemConfig(), knowledge ? api.ragStatus() : Promise.resolve(undefined), admin ? api.computerStatus() : Promise.resolve(undefined), api.systemIdentity(), admin ? window.electron?.getComputerStatus?.() : Promise.resolve(undefined)]);
     if (revision !== refreshRevision.current) return;
     setDetails({
       identity: identity.status === 'fulfilled' ? identity.value : undefined,
       config: config.status === 'fulfilled' ? config.value : undefined,
       rag: rag.status === 'fulfilled' ? rag.value : undefined,
-      computer: computer.status === 'fulfilled' ? computer.value : undefined
+      computer: computer.status === 'fulfilled' ? computer.value : undefined,
+      localComputer: localComputer.status === 'fulfilled' ? localComputer.value : undefined
     });
     const failed = [config, rag, computer, identity].find(item => item.status === 'rejected');
     if (failed?.status === 'rejected') setError(failed.reason instanceof Error ? failed.reason.message : text.common.error);
@@ -77,6 +80,11 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
     { choice: 'dark', label: text.shell.darkTheme },
     { choice: 'light', label: text.shell.lightTheme }
   ];
+  const computerCopy = computerStatus[locale];
+  const computerDescription = !admin ? interaction[locale].adminOnly
+    : details.computer?.active_sessions ? computerCopy.connected
+    : details.localComputer ? (details.localComputer.installed ? computerCopy.installed : computerCopy.missing)
+    : window.electron?.getComputerStatus || !details.computer ? unknown : computerCopy.idle;
 
   return <div className="stack settings-page">
     {error && <div className="inline-error" role="alert">{error}</div>}
@@ -95,7 +103,7 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
       <div><dt>{text.settings.version}</dt><dd>{details.identity?.version ?? details.config?.version ?? unknown}</dd></div>
       {backend && <div><dt>Desktop</dt><dd>{backend.desktopVersion}</dd></div>}
     </dl></div></div>
-      <div className="settings-panel"><div><h3>{text.settings.computerUse}</h3><p>{!admin ? interaction[locale].adminOnly : !details.computer ? unknown : details.computer.available ? text.settings.available : text.settings.unavailable}</p></div>{admin && details.computer?.available && <div className="settings-actions"><span role="status" className={details.computer.emergency_stop ? 'status-pill danger' : 'status-pill'}>{details.computer.emergency_stop ? text.settings.stopped : `${details.computer.active_sessions} ${text.settings.sessions}`}</span><button className="danger-button" disabled={stopping} onClick={() => void stopComputer()}>{stopping ? text.common.loading : text.settings.emergencyStop}</button></div>}</div>
+      <div className="settings-panel"><div><h3>{text.settings.computerUse}</h3><p>{computerDescription}</p></div>{admin && !!details.computer?.active_sessions && <div className="settings-actions"><span role="status" className={details.computer.emergency_stop ? 'status-pill danger' : 'status-pill'}>{details.computer.emergency_stop ? text.settings.stopped : `${details.computer.active_sessions} ${text.settings.sessions}`}</span><button className="danger-button" disabled={stopping} onClick={() => void stopComputer()}>{stopping ? text.common.loading : text.settings.emergencyStop}</button></div>}</div>
     </section>
     <details className="settings-diagnostics desktop-storage"><summary>{management.diagnostics}</summary><dl>
       <div><dt>API</dt><dd>{details.identity?.api_version ?? unknown}</dd></div>

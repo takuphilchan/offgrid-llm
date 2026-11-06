@@ -21,7 +21,15 @@ export function messageText(content: ChatMessage['content']): string {
 
 export function newSessionName(prompt: string): string {
   const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
-  const title = prompt.replace(/\s+/g, ' ').slice(0, 42).trim();
+  // Session names are also file names on native hosts. Keep the original
+  // prompt in the message; only the generated storage title is normalized.
+  const cleaned = prompt.replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  let title = '';
+  for (const character of Array.from(cleaned).slice(0, 42)) {
+    if (new TextEncoder().encode(title + character).length > 96) break;
+    title += character;
+  }
+  title = title.trim();
   return `${title || 'Chat'} · ${stamp}`;
 }
 

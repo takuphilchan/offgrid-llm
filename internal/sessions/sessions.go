@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -373,6 +374,12 @@ func (sm *SessionManager) sessionFilePath(name string) (string, error) {
 		strings.IndexFunc(name, unicode.IsControl) >= 0 {
 		return "", fmt.Errorf("%w: %q", ErrInvalidSessionName, name)
 	}
+	// Reject names Windows cannot store before reaching file I/O. In
+	// particular, ':' can name an alternate stream rather than a session file.
+	// Keep readable legacy names on other platforms compatible.
+	if runtime.GOOS == "windows" && invalidWindowsSessionName(name) {
+		return "", fmt.Errorf("%w: %q", ErrInvalidSessionName, name)
+	}
 
 	path := filepath.Join(sm.sessionsDir, name+".json")
 	rel, err := filepath.Rel(sm.sessionsDir, path)
@@ -380,6 +387,17 @@ func (sm *SessionManager) sessionFilePath(name string) (string, error) {
 		return "", fmt.Errorf("%w: %q", ErrInvalidSessionName, name)
 	}
 	return path, nil
+}
+
+func invalidWindowsSessionName(name string) bool {
+	if strings.ContainsAny(name, `<>:"|?*`) || strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") {
+		return true
+	}
+	base := strings.ToUpper(strings.SplitN(name, ".", 2)[0])
+	if base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" || base == "CONIN$" || base == "CONOUT$" {
+		return true
+	}
+	return len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && base[3] >= '1' && base[3] <= '9'
 }
 
 // NewSession creates a new session
