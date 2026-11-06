@@ -388,10 +388,14 @@ func (e *Engine) TranscribeContext(ctx context.Context, req TranscriptionRequest
 	var fullText strings.Builder
 	var segments []Segment
 	for i, t := range result.Transcription {
-		fullText.WriteString(t.Text)
+		text := whisperSpeechText(t.Text)
+		if strings.TrimSpace(text) == "" {
+			continue
+		}
+		fullText.WriteString(text)
 		segments = append(segments, Segment{
 			ID:   i,
-			Text: t.Text,
+			Text: text,
 		})
 	}
 
