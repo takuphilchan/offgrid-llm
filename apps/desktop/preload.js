@@ -63,6 +63,13 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 window.addEventListener('resize',measureTerminalWorkspace);
 window.addEventListener('hashchange',()=>{if(terminalVisible)void ipcRenderer.invoke('terminal-hide').catch(()=>{});measureTerminalWorkspace();});
+// Same-route navigation and New chat must also reveal the web workspace.
+// Hiding the native view leaves terminal processes and their tabs intact.
+document.addEventListener('click',event=>{
+  if(!terminalVisible||event.defaultPrevented||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
+  const target=event.target instanceof Element?event.target.closest('#workspace-sidebar .primary-nav a[href^="#/"], #workspace-sidebar .new-chat-button'):null;
+  if(target&&!target.matches(':disabled,[aria-disabled="true"]'))void ipcRenderer.invoke('terminal-hide').catch(()=>{});
+},true);
 let presentation;
 try { const value = process.argv.find(item => item.startsWith('--offgrid-presentation=')); if (value) presentation = JSON.parse(Buffer.from(value.split('=')[1], 'base64').toString('utf8')); } catch { /* Main provides validated display preferences. */ }
 

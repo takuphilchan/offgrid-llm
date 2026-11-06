@@ -14,17 +14,17 @@ function fit(tab){
 }
 function activate(focus=true){focusPending=focusPending||focus;cancelAnimationFrame(fitFrame);fitFrame=requestAnimationFrame(()=>{const focusNow=focusPending;focusPending=false;const tab=tabs.get(current);fit(tab);if(visible&&focusNow){if(tab){tab.term.refresh(0,tab.term.rows-1);tab.term.focus();}else $('start').focus();}});}
 function folderLabel(path){const parts=String(path||'').replace(/[\\/]+$/,'').split(/[\\/]/).filter(Boolean);return parts.at(-1)||path||'Local folder';}
-function select(id){current=id;for(const tab of tabs.values()){tab.term.blur();tab.term.options.disableStdin=tab.id!==id;tab.pane.hidden=tab.id!==id;tab.select.setAttribute('aria-selected',String(tab.id===id));tab.select.tabIndex=tab.id===id?0:-1;}const tab=tabs.get(id);$('empty').hidden=!!tab;const identity=$('identity');identity.textContent=tab?`${tab.title} · ${folderLabel(tab.cwd)} · ${tab.state}`:'Local terminal · not sandboxed';identity.title=tab?.cwd||'';if(tab){if(visible)tab.term.focus();activate();}}
-function setLaunchDisabled(disabled){for(const id of ['new','cli','agent','start'])$(id).disabled=disabled;}
+function select(id){current=id;for(const tab of tabs.values()){tab.term.blur();tab.term.options.disableStdin=tab.id!==id;tab.pane.hidden=tab.id!==id;tab.select.setAttribute('aria-selected',String(tab.id===id));tab.select.tabIndex=tab.id===id?0:-1;}const tab=tabs.get(id);$('empty').hidden=!!tab;const identity=$('identity');identity.textContent=tab?`${folderLabel(tab.cwd)} \u00b7 ${tab.state==='running'?'Session open':tab.state}`:'Local terminal \u00b7 not sandboxed';identity.title=tab?.cwd||'';if(tab){if(visible)tab.term.focus();activate();}}
+function setLaunchDisabled(disabled){for(const id of ['new','shell','cli','agent','start','start-agent'])$(id).disabled=disabled;}
 async function close(id){const tab=tabs.get(id);if(!tab)return;try{await request('close',{id});tab.term.dispose();tab.pane.remove();tab.button.remove();tabs.delete(id);setLaunchDisabled(!ready||tabs.size>=4);select([...tabs.keys()].at(-1)||'');notice('');}catch(error){if(!String(error.message).includes('terminal_close_cancelled'))showError(error);}}
 async function create(kind){
- if(creating||!ready)return;creating=true;setLaunchDisabled(true);notice('Choose a local folder…');
+ if(creating||!ready)return;creating=true;$('launch-menu').hidePopover();setLaunchDisabled(true);notice('Choose a local folder…');
  try{
   const session=await request('create',{kind,cols:90,rows:24});if(!session){notice('');return;}
   const pane=document.createElement('div');pane.className='pane';pane.id=`pane-${session.id}`;pane.setAttribute('role','tabpanel');pane.setAttribute('aria-label',session.title);$('panes').append(pane);
   const surface=document.createElement('div');surface.className='terminal-surface';pane.append(surface);
   const button=document.createElement('div');button.className='terminal-tab';
-  const choose=document.createElement('button');choose.setAttribute('role','tab');choose.setAttribute('aria-controls',pane.id);choose.textContent=session.title;choose.title=session.cwd;choose.onclick=()=>select(session.id);
+  const choose=document.createElement('button');choose.setAttribute('role','tab');choose.setAttribute('aria-label',session.title);choose.setAttribute('aria-controls',pane.id);choose.textContent=`${session.title==='OffGrid CLI'?'CLI':session.title} \u00b7 ${folderLabel(session.cwd)}`;choose.title=session.cwd;choose.onclick=()=>select(session.id);
   const remove=document.createElement('button');remove.className='close';remove.textContent='×';remove.setAttribute('aria-label',`Close ${session.title}`);remove.onclick=()=>void close(session.id);button.append(choose,remove);$('tabs').append(button);
   const term=new Terminal({cursorBlink:!matchMedia('(prefers-reduced-motion: reduce)').matches,scrollback:5000,fontFamily:'Cascadia Code, Consolas, monospace',fontSize:14,lineHeight:1.25,screenReaderMode:true,allowProposedApi:false,theme:theme()});
   const fitAddon=new FitAddon.FitAddon(),search=new SearchAddon.SearchAddon();term.loadAddon(fitAddon);term.loadAddon(search);term.open(surface);
@@ -46,7 +46,8 @@ const find=previous=>{const tab=tabs.get(current);if(tab&&$('query').value)tab.s
 $('query').oninput=()=>find(false);$('next').onclick=()=>find(false);$('previous').onclick=()=>find(true);
 $('query').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();find(e.shiftKey);}if(e.key==='Escape')$('find-close').click();};
 $('find-close').onclick=()=>{$('find').hidden=true;fit(tabs.get(current));tabs.get(current)?.term.focus();};
-$('search').onclick=openSearch;$('new').onclick=()=>void create('shell');$('start').onclick=$('cli').onclick=()=>void create('cli');$('agent').onclick=()=>void create('agent');
+$('search').onclick=openSearch;$('shell').onclick=()=>void create('shell');$('start').onclick=$('cli').onclick=()=>void create('cli');$('start-agent').onclick=$('agent').onclick=()=>void create('agent');
+$('launch-menu').addEventListener('toggle',event=>{if(event.newState==='open'){const box=$('new').getBoundingClientRect();$('launch-menu').style.left=`${Math.max(8,Math.min(box.left,innerWidth-210))}px`;$('cli').focus();}});
 $('hide').onclick=$('chat').onclick=()=>void request('hide').catch(showError);
 $('tabs').onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;const ids=[...tabs.keys()],index=ids.indexOf(current);const next=e.key==='Home'?0:e.key==='End'?ids.length-1:(index+(e.key==='ArrowRight'?1:-1)+ids.length)%ids.length;if(ids[next]){e.preventDefault();select(ids[next]);tabs.get(ids[next]).select.focus();}};
 new ResizeObserver(()=>activate(false)).observe($('panes'));

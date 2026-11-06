@@ -39,6 +39,12 @@ Ctrl+C, selection/copy, bounded scrollback and accessible focus navigation.
 - **THEN** the matching `offgrid agent` CLI starts its existing profile-selection flow
 - **AND** ordinary OffGrid CLI terminals remain at the shell prompt rather than entering Agent automatically
 
+#### Scenario: Leave Agent and continue in the shell
+- **WHEN** the user enters `/exit` in the Agent terminal
+- **THEN** the conversation is saved according to the CLI contract and a usable shell prompt remains in the same chosen folder
+- **AND** `offgrid --help` and ordinary shell commands can run without opening a replacement tab or repeating agent input
+- **AND** closing that tab still terminates the owned shell and remaining descendants
+
 ### Requirement: Desktop-only authority boundary
 Terminal input/output SHALL use a trusted desktop-owned surface. Remote pages,
 model output and tool results SHALL NOT gain shell input or private terminal

@@ -5,15 +5,17 @@ import "fmt"
 // Help puts the first useful local workflow ahead of the full command catalog.
 // Keep HelpAll available for scripts and experienced users looking for a family.
 func (p Presenter) Help(version string) {
+	commands := p
+	commands.Style.Bold = ""
 	fmt.Fprintln(p.Stdout)
 	fmt.Fprintf(p.Stdout, "  %sOffGrid%s %s%s%s\n", p.Style.Primary+p.Style.Bold, p.Style.Reset, p.Style.Muted, version, p.Style.Reset)
 	fmt.Fprintf(p.Stdout, "  %sRun local models. Downloads and connected tools may use the network.%s\n", p.Style.Muted, p.Style.Reset)
 	fmt.Fprintln(p.Stdout)
-	fmt.Fprintf(p.Stdout, "  %sStart here%s\n", p.Style.Primary, p.Style.Reset)
-	p.rows([]presentationRow{{"offgrid agent", "Start a conversation"}, {"offgrid model list", "See models already installed"}, {"offgrid doctor", "Check service and runtime readiness"}})
+	fmt.Fprintf(p.Stdout, "  %sStart here%s\n", p.Style.Bold, p.Style.Reset)
+	commands.rowsWidth([]presentationRow{{"offgrid agent", "Start a conversation"}, {"offgrid model list", "See models already installed"}, {"offgrid doctor", "Check service and runtime readiness"}}, len("offgrid model catalog"))
 	fmt.Fprintln(p.Stdout)
-	fmt.Fprintf(p.Stdout, "  %sWhen you need more%s\n", p.Style.Primary, p.Style.Reset)
-	p.rows([]presentationRow{{"offgrid model catalog", "Review models available to install"}, {"offgrid kb help", "Work with local documents"}, {"offgrid agent help", "Agent tools and saved work"}, {"offgrid help all", "Every command family"}})
+	fmt.Fprintf(p.Stdout, "  %sWhen you need more%s\n", p.Style.Bold, p.Style.Reset)
+	commands.rowsWidth([]presentationRow{{"offgrid model catalog", "Review models available to install"}, {"offgrid kb help", "Work with local documents"}, {"offgrid agent help", "Agent tools and saved work"}, {"offgrid help all", "Every command family"}}, len("offgrid model catalog"))
 	fmt.Fprintln(p.Stdout)
 	fmt.Fprintf(p.Stdout, "  %sUsage%s  offgrid %s<command>%s %s[options]%s\n", p.Style.Bold, p.Style.Reset, p.Style.Primary, p.Style.Reset, p.Style.Muted, p.Style.Reset)
 	fmt.Fprintf(p.Stdout, "  %sUse --json for automation or --no-color for plain output.%s\n", p.Style.Muted, p.Style.Reset)
@@ -22,7 +24,7 @@ func (p Presenter) Help(version string) {
 
 func (p Presenter) HelpAll(version string) {
 	fmt.Fprintln(p.Stdout)
-	fmt.Fprintf(p.Stdout, "  %sOffGrid LLM%s %s%s%s\n", p.Style.Primary+p.Style.Bold, p.Style.Reset, p.Style.Muted, version, p.Style.Reset)
+	fmt.Fprintf(p.Stdout, "  %sOffGrid%s %s%s%s\n", p.Style.Primary+p.Style.Bold, p.Style.Reset, p.Style.Muted, version, p.Style.Reset)
 	fmt.Fprintf(p.Stdout, "  %sLocal inference; downloads and connected tools may use the network%s\n", p.Style.Muted, p.Style.Reset)
 	fmt.Fprintln(p.Stdout)
 	fmt.Fprintf(p.Stdout, "  %sUsage%s  offgrid %s<command>%s %s[options]%s\n", p.Style.Bold, p.Style.Reset, p.Style.Primary, p.Style.Reset, p.Style.Muted, p.Style.Reset)

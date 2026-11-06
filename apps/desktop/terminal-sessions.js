@@ -7,7 +7,13 @@ const { StringDecoder } = require('node:string_decoder');
 
 const shellArgs=['-NoLogo','-NoProfile','-NoExit','-Command','[Console]::InputEncoding = [Text.UTF8Encoding]::new($false); [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding'];
 function launchCommand(kind,cli,systemRoot=process.env.SystemRoot) {
-  if(kind==='agent'||kind==='offgrid')return {file:cli,args:['agent']};
+  if(kind==='agent'||kind==='offgrid') {
+    // Invoke the pinned executable as a literal PowerShell string. The parent
+    // shell remains interactive after /exit; no input is replayed or restarted.
+    const args=[...shellArgs];
+    args[args.length-1]+="; & '"+cli.replace(/'/g,"''")+"' agent";
+    return {file:path.win32.join(systemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),args};
+  }
   if(kind==='shell'||kind==='cli')return {file:path.win32.join(systemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),args:shellArgs};
   throw Error('terminal_invalid_kind');
 }

@@ -9,8 +9,9 @@ start a shell automatically. The browser application does not expose a terminal.
   supported command; it does not enter Agent automatically.
 - **Agent** starts the matching bundled `offgrid agent` in the selected folder
   and opens its existing profile chooser. Existing CLI authentication and
-  workspace approval rules still apply.
-- **+** opens a plain PowerShell tab, up to four tabs total. All tabs use the
+  workspace approval rules still apply. `/exit` saves the conversation and
+  returns to a usable PowerShell prompt in that same folder; the tab stays open.
+- **+** offers OffGrid CLI, Agent and plain PowerShell, up to four tabs total. All tabs use the
   same configured service address without exposing credentials in command lines.
 - Terminal replaces the main Chat area while keeping the sidebar available.
   Switch back with **Chat**; your shell and unfinished command stay in their tab.
@@ -29,7 +30,8 @@ Stopping a local process does not undo its changes or automatically cancel work
 already submitted to an external service. Saved OffGrid agent work keeps its
 normal Stop/Resume controls.
 
-The footer identifies the shell and local folder. Commands run with your normal
+The tab identifies the session and folder; the footer shows whether the session
+is open. An open session does not mean a command is busy. Commands run with your normal
 computer permissions: this is not a sandbox. Terminal output is not automatically
 sent to a model, saved in conversations, or exported in diagnostics. Shell output
 cannot automatically write the clipboard or open web links.

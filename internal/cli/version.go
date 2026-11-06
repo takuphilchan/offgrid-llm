@@ -50,7 +50,7 @@ func RunVersion(_ context.Context, _ []string, env Environment, presenter Presen
 		return encoder.Encode(data)
 	}
 	_, _ = fmt.Fprintln(env.Stdout)
-	_, _ = fmt.Fprintf(env.Stdout, "  %s%s OffGrid LLM%s\n", presenter.Style.Primary+presenter.Style.Bold, presenter.Style.Bolt, presenter.Style.Reset)
+	_, _ = fmt.Fprintf(env.Stdout, "  %s%s OffGrid%s\n", presenter.Style.Primary+presenter.Style.Bold, presenter.Style.Bolt, presenter.Style.Reset)
 	_, _ = fmt.Fprintln(env.Stdout)
 	presenter.KeyValue("Version", version)
 	presenter.KeyValue("Platform", fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH))

@@ -50,7 +50,7 @@ func (p Presenter) Banner(version string) {
 		return
 	}
 	_, _ = fmt.Fprintln(p.Stdout)
-	_, _ = fmt.Fprintf(p.Stdout, "  %sOffGrid LLM%s %s%s%s\n", p.Style.Primary+p.Style.Bold, p.Style.Reset, p.Style.Muted, version, p.Style.Reset)
+	_, _ = fmt.Fprintf(p.Stdout, "  %sOffGrid%s %s%s%s\n", p.Style.Primary+p.Style.Bold, p.Style.Reset, p.Style.Muted, version, p.Style.Reset)
 	_, _ = fmt.Fprintf(p.Stdout, "  %sLocal AI that works offline%s\n", p.Style.Muted, p.Style.Reset)
 	_, _ = fmt.Fprintln(p.Stdout)
 }

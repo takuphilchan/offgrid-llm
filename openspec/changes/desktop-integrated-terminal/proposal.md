@@ -23,6 +23,9 @@ required setup surface would worsen the ordinary-user experience.
   untrusted and not automatically submitted to models or exported in diagnostics.
 - Preserve unfinished input/cursor position across tab changes and add agent CLI
   `/clear` for display-only cleanup without deleting conversation history.
+- Keep the explicitly opened Agent inside the matching CLI-ready shell so `/exit`
+  returns to a command prompt in the chosen folder. Consolidate terminal creation
+  under the tab-strip plus menu and use the pane width for terminal output.
 
 ## Capabilities
 

@@ -2,11 +2,12 @@
 // local HTTP fixture. This never changes OS appearance or the user's workspace.
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {mkdtemp, readFile, writeFile} from 'node:fs/promises';
+import {mkdtemp, mkdir, readFile, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join, resolve, sep, extname} from 'node:path';
 import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
 const root = resolve(import.meta.dirname,'../..');
 const require = createRequire(join(root, 'apps/web/package.json'));
 const {_electron: electron} = require('playwright');
@@ -71,7 +72,10 @@ let app;
 // Bound the harness itself and stop only the isolated process it launched.
 const deadline = setTimeout(() => {
   console.error('Packaged theme check exceeded its three-minute deadline');
-  app?.process().kill('SIGKILL');
+  const child=app?.process();
+  if(child && child.exitCode===null){
+    try{if(process.platform==='win32')execFileSync('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});else child.kill('SIGKILL');}catch{}
+  }
   process.exit(1);
 }, 180000);
 deadline.unref();
@@ -81,6 +85,7 @@ async function launch() {
   app.context().setDefaultTimeout(15000);
   app.context().setDefaultNavigationTimeout(15000);
   const page = await app.firstWindow();
+  await page.waitForURL("**/ui/**",{timeout:30000});
   // The runner's virtual display may start below the navigation breakpoint.
   // Exercise the expanded-sidebar case at an explicit size, independently of
   // that display. The narrow/200% terminal case is checked separately below.
@@ -90,6 +95,8 @@ async function launch() {
   });
   await expect.poll(()=>page.evaluate(()=>innerWidth)).toBeGreaterThan(1023);
   await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete','true'));
+  await page.evaluate(() => localStorage.setItem('offgrid.onboarding.complete','true'));
+  await page.reload();
 
   console.log('Packaged theme fixture connected');
   return page;
@@ -97,32 +104,81 @@ async function launch() {
 
 try {
  const page=await launch();
+ page.setDefaultTimeout(15000);
  await page.waitForURL('**/ui/**',{timeout:30000});
+ // Windows chrome is one quiet, native-control strip, including at browser zoom.
+ if(process.platform==='win32') {
+   await expect(page.locator('#offgrid-native-chrome')).toHaveCount(1);
+   assert.equal(await page.locator('#offgrid-native-chrome').innerText(),'');
+   assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].getTitle()),'OffGrid');
+   for(const zoom of [1,1.25,2]) {
+     await app.evaluate(({BrowserWindow},factor)=>BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(factor),zoom);
+     await expect.poll(()=>page.evaluate(()=>Math.round(document.querySelector('#offgrid-native-chrome').getBoundingClientRect().height*devicePixelRatio))).toBeGreaterThan(0);
+     await expect.poll(()=>page.evaluate(()=>document.querySelector('main.workspace').getBoundingClientRect().top)).toBeCloseTo(36/zoom,0);
+     const fit=await page.evaluate(()=>({height:innerHeight,bottom:document.querySelector('main.workspace').getBoundingClientRect().bottom,color:getComputedStyle(document.querySelector('#offgrid-native-chrome')).backgroundColor,sidebar:getComputedStyle(document.querySelector('.sidebar')).backgroundColor}));
+     assert.ok(Math.abs(fit.bottom-fit.height)<2,JSON.stringify(fit));
+     assert.equal(fit.color,fit.sidebar);
+   }
+   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1));
+   await page.screenshot({path:join(evidence,'native-chrome-dark.png')});
+ }
  assert.equal(await page.evaluate(()=>typeof window.terminalDesktop),'undefined');
  await app.evaluate(({dialog},folder)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[folder]});dialog.showMessageBox=async()=>({response:1});},evidence);
  console.log('Opening dock');
  await app.evaluate(({Menu})=>Menu.getApplicationMenu().items.find(x=>x.role==='viewmenu').submenu.items.find(x=>x.label==='Terminal').click());
  await expect.poll(()=>app.context().pages().some(x=>x.url().endsWith('/terminal.html'))).toBe(true);
  const terminal=app.context().pages().find(x=>x.url().endsWith('/terminal.html'));
+ terminal.setDefaultTimeout(15000);
+ // Navigation can report its URL before open() applies the visible view bounds.
+ if(process.platform==='win32') await expect.poll(()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].contentView.children.at(-1).getBounds().y)).toBeGreaterThanOrEqual(36);
  terminal.on('pageerror',error=>console.error('TERMINAL PAGE ERROR',error));
- await terminal.getByRole('button',{name:'Open OffGrid CLI'}).click();
+ await expect(terminal.locator('#start-agent')).toBeVisible();
+ await terminal.screenshot({path:join(evidence,'terminal-welcome.png')});
+ // The sidebar must reveal Chat even when its route is already selected.
+ await page.getByRole('link',{name:'Chat',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.hasAttribute('data-native-terminal-visible'))).toBe(false);
+ await page.getByRole('button',{name:'Open terminal',exact:true}).click();
+ await page.getByRole('button',{name:'New chat',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.hasAttribute('data-native-terminal-visible'))).toBe(false);
+ await page.getByRole('button',{name:'Open terminal',exact:true}).click();
+ if(process.env.OFFGRID_DOC_CAPTURES){
+   const demoFolder=join(evidence,'OffGrid Demo');await mkdir(demoFolder);
+   await app.evaluate(({dialog},folder)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[folder]});},demoFolder);
+ }
+ await terminal.locator('#start').click();
  await expect(terminal.getByRole('tab',{name:'OffGrid CLI',exact:true})).toHaveCount(1);
  const input=terminal.locator('.pane:not([hidden]) .xterm-helper-textarea');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');
  await input.pressSequentially('offgrid --help');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('agent');
+ if(process.env.OFFGRID_DOC_CAPTURES){
+   await input.pressSequentially("function prompt { 'PS OffGrid Demo> ' }; Clear-Host; offgrid --help");await input.press('Enter');
+   await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS OffGrid Demo>');
+   await expect.poll(()=>terminal.evaluate(()=>{const t=tabs.get(current).term;return t.buffer.active.getLine(t.buffer.active.baseY+t.buffer.active.cursorY)?.translateToString(true)||'';})).toBe('PS OffGrid Demo> ');
+   await terminal.screenshot({path:join(root,'build/documentation-captures/desktop-terminal.png')});
+   await app.evaluate(({dialog},folder)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[folder]});},evidence);
+ }
  await terminal.getByRole('button',{name:'Close OffGrid CLI',exact:true}).click();
- await terminal.getByTitle('New PowerShell terminal',{exact:true}).click();
+ await terminal.getByTitle('New terminal',{exact:true}).click();
+ await terminal.locator('#shell').click();
  await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(1);
  await input.pressSequentially("[Console]::WriteLine(('CHECK_' + [char]0x65e5 + [char]0x672c + [char]0x8a9e))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('CHECK_\u65e5\u672c\u8a9e');
- await terminal.getByTitle('New PowerShell terminal',{exact:true}).click();
+ await terminal.getByTitle('New terminal',{exact:true}).click();
+ await terminal.locator('#shell').click();
  await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(2);
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');
  await input.pressSequentially("[Console]::WriteLine(('SECOND_' + 'TAB'))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('SECOND_TAB');
  await app.evaluate(({clipboard})=>{global.__terminalCopy=[];clipboard.writeText=text=>global.__terminalCopy.push(text);});
  await terminal.getByTitle('Search terminal output').click();await terminal.getByRole('searchbox',{name:'Search terminal output'}).fill('SECOND_TAB');
+ await expect(terminal.locator('#query')).toHaveCSS('outline-style','none');
+ // Electron rounds a one-CSS-pixel border to device pixels at Windows scaling.
+ const searchBorder=await terminal.locator('#query').evaluate(el=>parseFloat(getComputedStyle(el).borderTopWidth));
+ assert.ok(searchBorder>=.5&&searchBorder<=1, `Unexpected search boundary: ${searchBorder}`);
+ await terminal.emulateMedia({forcedColors:'active'});
+ await expect(terminal.locator('#query')).toHaveCSS('outline-width','2px');
+ await terminal.emulateMedia({forcedColors:'none'});
  await expect.poll(()=>terminal.evaluate(()=>[...tabs.values()].find(tab=>!tab.pane.hidden).term.getSelection())).toBe('SECOND_TAB');
  await input.focus();await input.press('Control+Shift+C');
  await expect.poll(()=>app.evaluate(()=>global.__terminalCopy)).toEqual(['SECOND_TAB']);
@@ -154,10 +210,11 @@ try {
  await input.pressSequentially("$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 300' -WindowStyle Hidden -PassThru; [Console]::WriteLine(('RELOAD' + 'PID:' + $p.Id))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText(/RELOADPID:[0-9]+/);
  const reloadOutput=await terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree').innerText(),reloadPID=Number(reloadOutput.match(/RELOADPID:([0-9]+)/)[1]);
- await terminal.reload();await expect(terminal.getByRole('button',{name:'Open OffGrid CLI'})).toBeEnabled();
+ await terminal.reload();await expect(terminal.locator('#start')).toBeEnabled();
  assert.equal(execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`if(Get-Process -Id ${reloadPID} -ErrorAction SilentlyContinue){'alive'}else{'gone'}`],{encoding:'utf8',windowsHide:true}).trim(),'gone');
  await expect(terminal.getByRole('tab')).toHaveCount(0);
- await terminal.getByTitle('New PowerShell terminal',{exact:true}).click();
+ await terminal.getByTitle('New terminal',{exact:true}).click();
+ await terminal.locator('#shell').click();
  await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(1);
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');
 
@@ -173,7 +230,7 @@ try {
  const geometry=await app.evaluate(({BrowserWindow})=>{const win=BrowserWindow.getAllWindows()[0];return {view:win.contentView.children[0].getBounds(),size:win.getContentSize()};});
  const workspace=await page.locator('main.workspace').boundingBox();
  assert.ok(Math.abs(geometry.view.x-workspace.x)<=1,'terminal covers sidebar');
- assert.equal(geometry.view.y,0);assert.equal(geometry.view.height,geometry.size[1]);
+ assert.equal(geometry.view.y,Math.round(workspace.y));assert.equal(geometry.view.height,geometry.size[1]-geometry.view.y);
  // Web menus must never be cut off by the native terminal's compositing layer.
  const nativeVisible=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].contentView.children[0].getVisible());
  await input.pressSequentially("[Console]::WriteLine(('MENU_' + 'EXACT'))");await input.press('ArrowLeft');
@@ -198,12 +255,13 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('MENU_EXACT');
  await input.pressSequentially("[Console]::WriteLine(('SERVICE:' + $env:OFFGRID_SERVER_URL))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('SERVICE:http://127.0.0.1:'+server.address().port);
+ await terminal.getByTitle('New terminal',{exact:true}).click();
  await terminal.getByTitle('Open OffGrid Agent and choose a profile').click();
  await expect(terminal.getByRole('tab',{name:'Agent',exact:true})).toHaveCount(1);
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Search or number:',{timeout:15000});
 	await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1440,900));
 	await expect.poll(()=>terminal.evaluate(()=>innerWidth)).toBeGreaterThan(1100);
-	assert.equal(await terminal.evaluate(()=>{const pane=document.querySelector('.pane:not([hidden])'),surface=pane.querySelector('.terminal-surface');const a=pane.getBoundingClientRect(),b=surface.getBoundingClientRect();return b.width<=1041&&b.left>a.left+24&&Math.abs((b.left+b.right)/2-(a.left+a.right)/2)<2;}),true,'terminal content is not centered at wide width');
+	assert.equal(await terminal.evaluate(()=>{const pane=document.querySelector('.pane:not([hidden])'),surface=pane.querySelector('.terminal-surface');const a=pane.getBoundingClientRect(),b=surface.getBoundingClientRect();return Math.abs(b.left-a.left-24)<2&&Math.abs(b.right-a.right+24)<2;}),true,'terminal content does not use the available pane width');
  await terminal.screenshot({path:join(evidence,'agent-profile-picker.png')});
 	await terminal.evaluate(()=>appearance({theme:'dark'}));
 	await terminal.screenshot({path:join(evidence,'agent-profile-picker-dark.png')});
@@ -212,6 +270,7 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Choose a listed profile number');
  const closedAgentTab=await terminal.evaluate(()=>current);
  await terminal.getByRole('button',{name:'Close Agent',exact:true}).click();
+ await terminal.getByTitle('New terminal',{exact:true}).click();
  await terminal.getByTitle('Open OffGrid Agent and choose a profile').click();
  await expect.poll(()=>terminal.evaluate(()=>current)).not.toBe(closedAgentTab);
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Search or number:');
@@ -260,6 +319,13 @@ try {
  await terminal.screenshot({path:join(evidence,'agent-profile-continuity.png')});
  await input.pressSequentially('/exit');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Conversation saved');
+ await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();})).toMatch(/^PS .*>$/);
+ await input.pressSequentially("[Console]::WriteLine(('AFTER_'+'AGENT:'+(Get-Location).Path))");await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('AFTER_AGENT:'+evidence);
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).not.toContainText('[Process exited:');
+ await input.pressSequentially('offgrid --help');await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Start here');
+ await terminal.screenshot({path:join(evidence,'agent-returned-to-shell.png')});
  await terminal.getByRole('button',{name:'Close Agent',exact:true}).click();
 	await expect(input).toBeFocused();
 

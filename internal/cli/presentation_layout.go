@@ -62,10 +62,14 @@ func formatCount(n int) string {
 }
 
 func (p Presenter) rows(rows []presentationRow) {
+	p.rowsWidth(rows, 0)
+}
+
+func (p Presenter) rowsWidth(rows []presentationRow, minimumWidth int) {
 	if p.JSON {
 		return
 	}
-	width, detailWidth := 0, 0
+	width, detailWidth := minimumWidth, 0
 	for _, row := range rows {
 		width = max(width, ansi.StringWidth(terminalLine(row.Name)))
 		detailWidth = max(detailWidth, ansi.StringWidth(terminalLine(row.Detail)))

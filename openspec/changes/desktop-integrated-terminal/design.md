@@ -51,6 +51,18 @@ terminal text, agent-to-shell shortcut, implicit WSL or elevated execution.
 
 ## Risks / Trade-offs
 
+### Agent exit and terminal presentation follow-up (2026-11-07)
+
+The Agent entry invokes the pinned CLI through a literal, single-quoted command
+in the existing Windows PowerShell launcher with `-NoExit`. Single quotes in the
+executable path are escaped; user input is never interpolated. The shell and its
+agent child remain inside the same owned process tree and selected folder.
+`/exit` ends the CLI conversation and returns to the shell; no agent is restarted
+and no previous input is replayed. Closing the tab still stops its owned tree.
+One plus menu exposes CLI, Agent and PowerShell. Tabs include folder labels;
+the footer describes an open session rather than claiming a command is running.
+Output uses the available pane width with bounded edge padding.
+
 - Native ABI dependency -> pinned packages, packaged Windows/macOS/Linux smoke
   tests; compilation alone is not interactive PTY qualification.
 - Shell privileges -> isolate renderer/IPC and disclose host/folder; no agent

@@ -16,7 +16,7 @@ func TestPresenterUsesInjectedStreamsAndJSONSuppression(t *testing.T) {
 	p.Error("failed")
 	p.Info("info")
 	p.Warning("warn")
-	if !strings.Contains(stdout.String(), "PBOffGrid LLMR M0.4.18R") ||
+	if !strings.Contains(stdout.String(), "PBOffGridR M0.4.18R") ||
 		!strings.Contains(stdout.String(), "PBModelsR") ||
 		!strings.Contains(stdout.String(), "SOKR ready") ||
 		!strings.Contains(stdout.String(), "PiR info") ||

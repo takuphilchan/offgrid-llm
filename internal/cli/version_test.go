@@ -49,7 +49,7 @@ func TestRunVersionUsesInjectedOutputAndDevice(t *testing.T) {
 	if err := RunVersion(context.Background(), nil, env, presenter); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "PB* OffGrid LLMR") || !strings.Contains(out.String(), "Fixture GPU (2048MB)") {
+	if !strings.Contains(out.String(), "PB* OffGridR") || !strings.Contains(out.String(), "Fixture GPU (2048MB)") {
 		t.Fatalf("text=%q", out.String())
 	}
 }

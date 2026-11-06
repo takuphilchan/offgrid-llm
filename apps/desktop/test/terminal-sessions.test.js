@@ -5,8 +5,10 @@ test('OffGrid CLI opens a shell with commands ready; Agent opens profile selecti
  const ordinary=launchCommand('cli',cli,root),agent=launchCommand('agent',cli,root);
  assert.match(ordinary.file,/powershell\.exe$/i);
  assert.equal(ordinary.args.includes('agent'),false);
- assert.equal(agent.file,cli);
- assert.deepEqual(agent.args,['agent']);
+ assert.equal(agent.file,ordinary.file);
+ assert.ok(agent.args.includes('-NoExit'));
+ assert.ok(agent.args.at(-1).endsWith("; & 'C:\\OffGrid\\offgrid.exe' agent"));
+ assert.ok(launchCommand('agent',"C:\\O'Brien $test\\offgrid.exe",root).args.at(-1).endsWith("; & 'C:\\O''Brien $test\\offgrid.exe' agent"));
  assert.throws(()=>launchCommand('arbitrary-command',cli,root),/invalid_kind/);
  const env=launchEnvironment({PATH:'old-path',Path:'older-path',ELECTRON_RUN_AS_NODE:'1'},cli,'http://127.0.0.1:11611');
  assert.equal(Object.keys(env).filter(key=>key.toLowerCase()==='path').length,1);

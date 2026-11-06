@@ -25,3 +25,16 @@ Windows x64 evidence: `docs/quality/evidence/desktop-terminal-2026-11-02.md`.
 The unchecked packaging/platform tasks retain macOS/Linux/ARM64 qualification;
 those terminal platforms remain unavailable. Human accessibility/localization
 review and full release CI are not claimed by the Windows checks.
+
+## 4. Same-route navigation and welcome follow-up
+
+- [x] 4.1 Offer CLI/Agent launch choices in the empty terminal and return to Chat on explicit sidebar Chat/New chat activation even when the route is unchanged, preserving existing terminal processes.
+- [x] 4.2 Verify same-route navigation, CLI/Agent interaction, input preservation and owned-process cleanup in the packaged Windows candidate; install only under the separate user authorization.
+
+Follow-up evidence: `docs/quality/evidence/management-refinement-2026-11-06.md`. Other-platform qualification remains unchecked above.
+
+## 5. Agent exit and terminal presentation
+
+- [x] 5.1 Return from Agent `/exit` to the same-folder CLI-ready shell; verify literal path escaping, actual prompt/command execution and owned-tree cleanup in the packaged Windows candidate. Consolidate launch controls, align output to the pane and identify tabs by folder.
+
+Evidence: `docs/quality/evidence/terminal-session-followup-2026-11-07.md`.

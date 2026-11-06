@@ -3,6 +3,18 @@
 The desktop application is a secure Electron host for the same React UI and Go
 runtime used by the browser edition. It does not maintain a second frontend.
 
+The public product and shortcut name is OffGrid. The package ID, protocol,
+workspace paths and Windows/Linux executable identities remain stable for
+upgrades. `branding.cjs` preserves Electron's existing user-data path before
+setting the public name. New release downloads include OS and architecture;
+see the [installation guide](../../docs/setup/installation.md).
+
+On Windows the native caption controls share the sidebar's light/dark surface.
+The application name remains available to Windows task switching; the visible
+brand appears once in the sidebar. The preload reserves a zoom-corrected drag
+strip, and the terminal view stays below it. macOS and Linux retain their native
+title bars. No window-control IPC is exposed to service content.
+
 The current task UI displays versioned outcome checks from the canonical job,
 including partial and unavailable verification. Saved-control discovery uses the
 same service implementation for UIA, Accessibility and AT-SPI observations; it
@@ -81,7 +93,7 @@ Then make an OffGrid server available at `127.0.0.1:11611`. It can be the local
 development binary or the Docker container. From the repository root:
 
 ```bash
-go build -trimpath -ldflags "-X main.Version=0.4.19" -o build/linux/offgrid ./cmd/offgrid
+go build -ldflags "-X main.Version=0.4.19" -o build/linux/offgrid ./cmd/offgrid
 
 cd apps/desktop
 npm ci
@@ -263,7 +275,7 @@ The Node tests exercise handshake/timeout/URL/IPC and lifecycle policy. CI also
 launches native unpacked Electron on Windows, Linux, macOS Intel and Apple Silicon
 against isolated fixture services and the bundled Go binary. On Windows, pass
 `dist/win-unpacked/OffGrid LLM Desktop.exe` to the smoke script. On Mac, pass the
-executable inside `dist/mac[-arm64]/OffGrid LLM Desktop.app/Contents/MacOS`.
+executable inside `dist/mac[-arm64]/OffGrid.app/Contents/MacOS`.
 The script creates its own temporary profile, never modifies the installed app,
 and leaves screenshots/test data as evidence. It does not perform installation,
 uninstallation, signing, notarization, upgrades or real-model qualification.
