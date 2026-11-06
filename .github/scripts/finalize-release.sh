@@ -20,12 +20,12 @@ expected=(
   "offgrid-${version}-darwin-amd64-cpu-avx2.tar.gz"
   "offgrid-${version}-darwin-arm64-metal-apple-silicon.tar.gz"
   "offgrid-${version}-windows-amd64-cpu-avx2.zip"
-  "OffGrid.LLM.Desktop-${package_version}-amd64.deb"
-  "OffGrid.LLM.Desktop-${package_version}-x86_64.AppImage"
-  "OffGrid.LLM.Desktop-${package_version}-arm64.zip"
-  "OffGrid.LLM.Desktop-${package_version}-x64.zip"
-  "OffGrid.LLM.Desktop-${package_version}-Portable.exe"
-  "OffGrid.LLM.Desktop-Setup-${package_version}.exe"
+  "OffGrid-${package_version}-linux-amd64.deb"
+  "OffGrid-${package_version}-linux-x86_64.AppImage"
+  "OffGrid-${package_version}-macos-arm64.zip"
+  "OffGrid-${package_version}-macos-x64.zip"
+  "OffGrid-${package_version}-windows-x64-portable.exe"
+  "OffGrid-${package_version}-windows-x64-setup.exe"
 )
 
 # gh resolves both drafts and published releases. The REST tag endpoint only

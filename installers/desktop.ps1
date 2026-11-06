@@ -1,5 +1,5 @@
 # OffGrid LLM Desktop - Windows Installer
-# PowerShell script to install OffGrid LLM on Windows
+# PowerShell script to install OffGrid on Windows
 
 $ErrorActionPreference = "Stop"
 
@@ -166,7 +166,12 @@ try {
     if ($INSTALL_DESKTOP) {
         Print-Step "Installing Desktop application..."
         
-        $DESKTOP_FILE = "OffGrid.LLM.Desktop-Setup-${VERSION}.exe"
+        $coreVersion = [version](($VERSION -split '-')[0])
+        $DESKTOP_FILE = if ($coreVersion -ge [version]'0.4.27') {
+            "OffGrid-${VERSION}-windows-x64-setup.exe"
+        } else {
+            "OffGrid.LLM.Desktop-Setup-${VERSION}.exe"
+        }
         $DESKTOP_URL = "${RELEASE_URL}/${DESKTOP_FILE}"
         $INSTALLER_PATH = Join-Path $TMP_DIR "offgrid-desktop-setup.exe"
         
@@ -203,7 +208,7 @@ try {
     Write-Host ""
     Write-Host "${GREEN}╔═══════════════════════════════════════════════════════════════╗${NC}"
     Write-Host "${GREEN}║                                                               ║${NC}"
-    Write-Host "${GREEN}║  OffGrid LLM has been installed successfully!                 ║${NC}"
+    Write-Host "${GREEN}║  OffGrid has been installed successfully!                 ║${NC}"
     Write-Host "${GREEN}║                                                               ║${NC}"
     Write-Host "${GREEN}╚═══════════════════════════════════════════════════════════════╝${NC}"
     Write-Host ""
@@ -218,7 +223,7 @@ try {
     
     if ($INSTALL_DESKTOP) {
         Write-Host "Desktop app installed:"
-        Write-Host "  - Launch from Start Menu: OffGrid LLM Desktop"
+        Write-Host "  - Launch from Start Menu: OffGrid"
         Write-Host "  - Or from Desktop shortcut"
         Write-Host ""
     }

@@ -18,12 +18,12 @@ const names = [
   `offgrid-${version}-darwin-amd64-cpu-avx2.tar.gz`,
   `offgrid-${version}-darwin-arm64-metal-apple-silicon.tar.gz`,
   `offgrid-${version}-windows-amd64-cpu-avx2.zip`,
-  `OffGrid.LLM.Desktop-${packageVersion}-amd64.deb`,
-  `OffGrid.LLM.Desktop-${packageVersion}-x86_64.AppImage`,
-  `OffGrid.LLM.Desktop-${packageVersion}-arm64.zip`,
-  `OffGrid.LLM.Desktop-${packageVersion}-x64.zip`,
-  `OffGrid.LLM.Desktop-${packageVersion}-Portable.exe`,
-  `OffGrid.LLM.Desktop-Setup-${packageVersion}.exe`,
+  `OffGrid-${packageVersion}-linux-amd64.deb`,
+  `OffGrid-${packageVersion}-linux-x86_64.AppImage`,
+  `OffGrid-${packageVersion}-macos-arm64.zip`,
+  `OffGrid-${packageVersion}-macos-x64.zip`,
+  `OffGrid-${packageVersion}-windows-x64-portable.exe`,
+  `OffGrid-${packageVersion}-windows-x64-setup.exe`,
 ];
 const digest = 'a'.repeat(64);
 

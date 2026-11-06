@@ -9,7 +9,7 @@ expensive, or unavailable.
 
 Think of the system in two layers:
 
-- OffGrid LLM is the engine: model management, chat, RAG, API, CLI, and web UI.
+- OffGrid is the engine: model management, chat, RAG, API, CLI, and web UI.
 - OffGrid Box is the appliance: hardware profile, local portal, offline content,
   repair flow, and USB-based updates.
 

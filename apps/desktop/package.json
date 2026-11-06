@@ -1,11 +1,11 @@
 {
   "name": "offgrid-llm-desktop",
   "desktopName": "com.offgrid.llm.desktop",
-  "version": "0.4.26",
-  "description": "OffGrid LLM Desktop - Local AI Platform",
+  "version": "0.4.27",
+  "description": "OffGrid private local AI workspace",
   "homepage": "https://github.com/takuphilchan/offgrid-llm",
   "author": {
-    "name": "OffGrid LLM Team",
+    "name": "OffGrid contributors",
     "email": "team@offgrid-llm.dev"
   },
   "license": "MIT",
@@ -26,8 +26,8 @@
   },
   "build": {
     "appId": "com.offgrid.llm.desktop",
-    "productName": "OffGrid LLM Desktop",
-    "copyright": "Copyright © 2024-2026 OffGrid LLM Team",
+    "productName": "OffGrid",
+    "copyright": "Copyright (c) 2024-2026 OffGrid contributors",
     "beforePack": "./prepare-computer.cjs",
     "afterPack": "./verify-computer.cjs",
     "protocols": [
@@ -44,6 +44,7 @@
     },
     "files": [
       "main.js",
+      "branding.cjs",
       "shutdown.js",
       "tray-feedback.js",
       "execution-runtime.js",
@@ -151,10 +152,10 @@
       ],
       "category": "Development",
       "icon": "assets/icon.png",
-      "maintainer": "OffGrid LLM Team <team@offgrid-llm.dev>",
+      "maintainer": "OffGrid contributors <team@offgrid-llm.dev>",
       "desktop": {
         "entry": {
-          "Name": "OffGrid LLM Desktop",
+          "Name": "OffGrid",
           "GenericName": "Private Local AI Workspace",
           "Comment": "Run private AI models locally",
           "Categories": "Development;Science;Education;",
@@ -165,7 +166,7 @@
         }
       },
       "executableName": "offgrid-llm-desktop",
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "OffGrid-${version}-linux-${arch}.${ext}"
     },
     "mac": {
       "signIgnore": [
@@ -200,7 +201,7 @@
       "icon": "assets/icon.icns",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "OffGrid-${version}-macos-${arch}.${ext}"
     },
     "deb": {
       "depends": [
@@ -217,7 +218,7 @@
       ]
     },
     "dmg": {
-      "title": "OffGrid LLM Desktop ${version}",
+      "title": "OffGrid ${version}",
       "writeUpdateInfo": false,
       "sign": false,
       "backgroundColor": "#ffffff",
@@ -274,7 +275,8 @@
         }
       ],
       "icon": "assets/icon.ico",
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "OffGrid-${version}-windows-${arch}-setup.${ext}",
+      "executableName": "OffGrid LLM Desktop"
     },
     "nsis": {
       "oneClick": false,
@@ -283,7 +285,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "OffGrid LLM Desktop",
+      "shortcutName": "OffGrid",
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
       "include": "assets/installer.nsh",
@@ -293,7 +295,7 @@
       "warningsAsErrors": false
     },
     "portable": {
-      "artifactName": "${productName}-${version}-Portable.${ext}"
+      "artifactName": "OffGrid-${version}-windows-${arch}-portable.${ext}"
     },
     "asarUnpack": [
       "node_modules/node-pty/**"

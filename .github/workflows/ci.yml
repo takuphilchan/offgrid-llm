@@ -209,6 +209,7 @@ jobs:
           shellcheck .github/scripts/finalize-release.sh .github/scripts/resolve-release-context.sh .github/scripts/verify-release-containers.sh
           node scripts/release/test-finalize-release.mjs
           node scripts/release/test-release-asset-access.mjs
+          node scripts/release/test-desktop-branding.mjs
           node scripts/release/test-release-context.mjs
           node scripts/release/test-release-ci.mjs
           node scripts/release/test-release-containers.mjs
@@ -279,7 +280,7 @@ jobs:
         run: |
           mkdir -p build/linux
           version=$(node -p "require('./apps/desktop/package.json').version")
-          go build -trimpath -ldflags "-X main.Version=v$version" -o build/linux/offgrid ./cmd/offgrid
+          go build -ldflags "-X main.Version=v$version" -o build/linux/offgrid ./cmd/offgrid
           go -C runtimes/pdfium build -mod=readonly -trimpath -o ../../build/linux/offgrid-document-worker .
           go -C runtimes/ocr/worker build -mod=readonly -trimpath -o ../../../build/linux/offgrid-ocr-worker .
 
@@ -426,11 +427,11 @@ jobs:
           version=$(node -p "require('./apps/desktop/package.json').version")
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             mkdir -p build/windows
-            go build -trimpath -ldflags "-X main.Version=v$version" -o build/windows/offgrid.exe ./cmd/offgrid
+            go build -ldflags "-X main.Version=v$version" -o build/windows/offgrid.exe ./cmd/offgrid
           else
             mkdir -p build/macos
             for arch in amd64 arm64; do
-              CGO_ENABLED=0 GOARCH="$arch" go build -trimpath -ldflags "-X main.Version=v$version" -o "build/macos/offgrid-$arch" ./cmd/offgrid
+              CGO_ENABLED=0 GOARCH="$arch" go build -ldflags "-X main.Version=v$version" -o "build/macos/offgrid-$arch" ./cmd/offgrid
             done
           fi
 
@@ -455,9 +456,9 @@ jobs:
             npx electron-builder --dir --mac "--$arch" --publish never
             package_dir=mac
             if [[ "$arch" == arm64 ]]; then package_dir=mac-arm64; fi
-            node ../../scripts/test/test-desktop-startup.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
-            node ../../scripts/test/test-packaged-browser.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
-            node ../../scripts/test/test-desktop-theme.mjs "dist/$package_dir/OffGrid LLM Desktop.app/Contents/MacOS/OffGrid LLM Desktop"
+            node ../../scripts/test/test-desktop-startup.mjs "dist/$package_dir/OffGrid.app/Contents/MacOS/OffGrid"
+            node ../../scripts/test/test-packaged-browser.mjs "dist/$package_dir/OffGrid.app/Contents/MacOS/OffGrid"
+            node ../../scripts/test/test-desktop-theme.mjs "dist/$package_dir/OffGrid.app/Contents/MacOS/OffGrid"
           fi
 
       - name: Build isolated Windows installer test package

@@ -249,6 +249,20 @@ if [ "$INSTALL_CLI" = true ]; then
     echo ""
 fi
 
+# Public desktop names changed in 0.4.27; old release assets remain unchanged.
+desktop_asset_name() {
+    local version="${1#v}" os="$2" arch="$3" kind="$4"
+    local core="${version%%-*}" major minor patch
+    IFS=. read -r major minor patch <<< "$core"
+    if (( major > 0 || minor > 4 || (minor == 4 && patch >= 27) )); then
+        printf 'OffGrid-%s-%s-%s%s' "$version" "$os" "$arch" "$kind"
+    elif [ "$os" = windows ]; then
+        printf 'OffGrid.LLM.Desktop-Setup-%s.exe' "$version"
+    else
+        printf 'OffGrid.LLM.Desktop-%s-%s%s' "$version" "$arch" "$kind"
+    fi
+}
+
 # Install Desktop
 if [ "$INSTALL_DESKTOP" = true ]; then
     print_step "Installing Desktop application..."
@@ -266,12 +280,12 @@ if [ "$INSTALL_DESKTOP" = true ]; then
                 APPIMAGE_ARCH="arm64"
             fi
             
-            DESKTOP_FILE="OffGrid.LLM.Desktop-${VERSION}-${DESKTOP_ARCH}.deb"
+            DESKTOP_FILE=$(desktop_asset_name "$VERSION" linux "$DESKTOP_ARCH" .deb)
             print_step "Downloading Debian package..."
             
             if ! curl -fSL "${RELEASE_URL}/${DESKTOP_FILE}" -o "${TMP_DIR}/offgrid-desktop.deb"; then
                 print_warning "Debian package not available, trying AppImage..."
-                DESKTOP_FILE="OffGrid.LLM.Desktop-${VERSION}-${APPIMAGE_ARCH}.AppImage"
+                DESKTOP_FILE=$(desktop_asset_name "$VERSION" linux "$APPIMAGE_ARCH" .AppImage)
                 
                 if ! curl -fSL "${RELEASE_URL}/${DESKTOP_FILE}" -o "${TMP_DIR}/OffGrid-LLM-Desktop.AppImage"; then
                     print_error "Failed to download desktop application"
@@ -288,7 +302,7 @@ if [ "$INSTALL_DESKTOP" = true ]; then
                 mkdir -p "$HOME/.local/share/applications"
                 cat > "$HOME/.local/share/applications/offgrid-llm-desktop.desktop" << EOF
 [Desktop Entry]
-Name=OffGrid LLM Desktop
+Name=OffGrid
 Comment=Local AI Platform
 Exec=$HOME/.local/bin/OffGrid-LLM-Desktop.AppImage
 Icon=offgrid-llm
@@ -314,7 +328,9 @@ EOF
             
         else
             # Use AppImage for other distros
-            DESKTOP_FILE="OffGrid-LLM-Desktop-${VERSION}-${ARCH}.AppImage"
+            APPIMAGE_ARCH="$ARCH"
+            [ "$ARCH" = amd64 ] && APPIMAGE_ARCH=x86_64
+            DESKTOP_FILE=$(desktop_asset_name "$VERSION" linux "$APPIMAGE_ARCH" .AppImage)
             print_step "Downloading AppImage..."
             
             if ! curl -fSL "${RELEASE_URL}/${DESKTOP_FILE}" -o "${TMP_DIR}/OffGrid-LLM-Desktop.AppImage"; then
@@ -332,7 +348,7 @@ EOF
             mkdir -p "$HOME/.local/share/applications"
             cat > "$HOME/.local/share/applications/offgrid-llm-desktop.desktop" << EOF
 [Desktop Entry]
-Name=OffGrid LLM Desktop
+Name=OffGrid
 Comment=Local AI Platform
 Exec=$HOME/.local/bin/OffGrid-LLM-Desktop.AppImage
 Icon=offgrid-llm
@@ -346,30 +362,24 @@ EOF
         fi
         
     elif [ "$OS" = "darwin" ]; then
-        # macOS - use .dmg
-        # Map architecture for DMG naming
-        if [ "$ARCH" = "amd64" ]; then
-            DMG_ARCH="x64"
-        else
-            DMG_ARCH="arm64"
-        fi
-        DESKTOP_FILE="OffGrid LLM Desktop-${VERSION}-${DMG_ARCH}.dmg"
-        print_step "Downloading macOS DMG..."
-        
-        if ! curl -fSL "${RELEASE_URL}/${DESKTOP_FILE}" -o "${TMP_DIR}/offgrid-desktop.dmg"; then
+        ZIP_ARCH="$ARCH"
+        [ "$ARCH" = amd64 ] && ZIP_ARCH=x64
+        DESKTOP_FILE=$(desktop_asset_name "$VERSION" macos "$ZIP_ARCH" .zip)
+        print_step "Downloading macOS application..."
+        if ! curl -fSL "${RELEASE_URL}/${DESKTOP_FILE}" -o "${TMP_DIR}/offgrid-desktop.zip"; then
             print_error "Failed to download desktop application"
             exit 1
         fi
-        
-        print_step "Mounting DMG..."
-        MOUNT_POINT=$(hdiutil attach "${TMP_DIR}/offgrid-desktop.dmg" | grep Volumes | awk '{print $3}')
-        
+        mkdir -p "${TMP_DIR}/desktop"
+        ditto -x -k "${TMP_DIR}/offgrid-desktop.zip" "${TMP_DIR}/desktop"
+        APP_PATH="${TMP_DIR}/desktop/OffGrid.app"
+        [ -d "$APP_PATH" ] || APP_PATH="${TMP_DIR}/desktop/OffGrid LLM Desktop.app"
+        if [ ! -d "$APP_PATH" ]; then
+            print_error "The download does not contain the expected application"
+            exit 1
+        fi
         print_step "Installing to /Applications..."
-        cp -R "${MOUNT_POINT}/OffGrid LLM Desktop.app" /Applications/
-        
-        print_step "Unmounting DMG..."
-        hdiutil detach "$MOUNT_POINT"
-        
+        ditto "$APP_PATH" "/Applications/$(basename "$APP_PATH")"
         print_success "Desktop app installed to /Applications"
     fi
     
@@ -388,7 +398,7 @@ print_success "Installation complete!"
 echo ""
 echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║                                                               ║${NC}"
-echo -e "${GREEN}║  OffGrid LLM has been installed successfully!                 ║${NC}"
+echo -e "${GREEN}║  OffGrid has been installed successfully!                 ║${NC}"
 echo -e "${GREEN}║                                                               ║${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
@@ -411,7 +421,7 @@ if [ "$INSTALL_DESKTOP" = true ]; then
         fi
     elif [ "$OS" = "darwin" ]; then
         echo "  - Launch from Applications folder or Launchpad"
-        echo "  - Or run: open -a 'OffGrid LLM Desktop'"
+        echo "  - Open the installed app in /Applications"
     fi
     echo ""
 fi

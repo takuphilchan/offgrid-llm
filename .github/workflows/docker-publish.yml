@@ -197,7 +197,7 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.version }}-${{ matrix.arch }}
           labels: |
-            org.opencontainers.image.title=OffGrid LLM
+            org.opencontainers.image.title=OffGrid
             org.opencontainers.image.description=Private, local-first LLM inference, agents, and knowledge retrieval
             org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
             org.opencontainers.image.revision=${{ needs.prepare.outputs.source_sha }}
@@ -263,7 +263,7 @@ jobs:
             type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=raw,value=sha-${{ needs.prepare.outputs.source_short_sha }},enable=${{ !startsWith(github.ref, 'refs/heads/release-container/v') }}
           labels: |
-            org.opencontainers.image.title=OffGrid LLM
+            org.opencontainers.image.title=OffGrid
             org.opencontainers.image.description=Private, local-first LLM inference, agents, and knowledge retrieval
 
       - name: Create and inspect multi-platform manifest
@@ -377,7 +377,7 @@ jobs:
             type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=raw,value=sha-${{ needs.prepare.outputs.source_short_sha }},enable=${{ !startsWith(github.ref, 'refs/heads/release-container/v') }}
           labels: |
-            org.opencontainers.image.title=OffGrid LLM (NVIDIA CUDA)
+            org.opencontainers.image.title=OffGrid (NVIDIA CUDA)
             org.opencontainers.image.description=Private, local-first LLM inference with NVIDIA CUDA acceleration
             org.offgrid.packaging.revision=${{ github.sha }}
 

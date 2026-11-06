@@ -1,6 +1,6 @@
-# OffGrid LLM - Installation Scripts
+# OffGrid - Installation Scripts
 
-> **Note:** The recommended way to install OffGrid LLM is using the unified installer at the repository root. These individual scripts are kept for legacy compatibility.
+> **Note:** The recommended way to install OffGrid is using the unified installer at the repository root. These individual scripts are kept for legacy compatibility.
 
 ---
 

@@ -17,7 +17,7 @@ const { spawn } = require('node:child_process');
 // Verification code belongs to the application, not the unverified payload.
 const { verifyPack: verifyComputerPack } = require(app.isPackaged ? './computer-pack/pack.cjs' : '../computer/pack.cjs');
 
-const APP_NAME = 'OffGrid LLM Desktop';
+const APP_NAME = require('./branding.cjs').applyBranding(app);
 // Test packages must remain isolated even when an elevated installer launches
 // through Explorer, which does not inherit the installer's environment.
 const installerTest = require('./package.json').name === 'offgrid-desktop-install-test';
@@ -219,7 +219,7 @@ async function createMainWindow() {
   mainWindow = new BrowserWindow({
     ...state, minWidth: 760, minHeight: 560, title: APP_NAME, show: showOnCreate, autoHideMenuBar: true,
     icon: path.join(__dirname, 'assets/icon.png'),
-    backgroundColor: effectiveTheme() === 'dark' ? '#101011' : '#f7f7f6',
+    ...require('./branding.cjs').windowChrome(process.platform, effectiveTheme()),
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'), backgroundThrottling: true, spellcheck: true, additionalArguments: ['--offgrid-presentation=' + Buffer.from(JSON.stringify(presentationSnapshot())).toString('base64')] }
   });
   terminal = require('./terminal-dock').createTerminalDock({electron:require('electron'),window:mainWindow,host:app.isPackaged?path.join(process.resourcesPath,'terminal-runtime','offgrid-terminal-host.exe'):path.join(__dirname,'../../build/terminal-runtime/win-x64/offgrid-terminal-host.exe'),cli:path.join(binaryRoot,binaryName),service:()=>runtime.url,presentation:()=>({theme:effectiveTheme(),locale:presentation.locale})});
@@ -378,7 +378,7 @@ handleTrustedIPC('set-presentation', value => {
     await fs.promises.rename(presentationPath + '.tmp', presentationPath);
     presentation = next;
     nativeTheme.themeSource = presentation.theme;
-    mainWindow?.setBackgroundColor(effectiveTheme() === 'dark' ? '#101011' : '#f7f7f6');
+    require('./branding.cjs').updateChrome(mainWindow, process.platform, effectiveTheme());
     updateMenus();
     terminal?.appearance();
   });
@@ -405,7 +405,7 @@ handleTrustedIPC('get-system-theme', () => nativeTheme.shouldUseDarkColors ? 'da
 nativeTheme.on('updated', () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
-  mainWindow.setBackgroundColor(effectiveTheme() === 'dark' ? '#101011' : '#f7f7f6');
+  require('./branding.cjs').updateChrome(mainWindow, process.platform, effectiveTheme());
   mainWindow.webContents.send('system-theme-changed', theme);
   terminal?.appearance();
 });

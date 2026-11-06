@@ -2,7 +2,7 @@
 # Source-install and service helpers for scripts/build/install-from-source.sh.
 
 install_binary() {
-    print_progress "Installing OffGrid LLM Binary" "~10 seconds"
+    print_progress "Installing OffGrid Binary" "~10 seconds"
 
     local INSTALL_DIR="/usr/local/bin"
 
@@ -61,7 +61,7 @@ setup_llama_server_service() {
     if [ ! -f "/usr/local/bin/llama-server" ]; then
         print_error "llama-server binary not found at /usr/local/bin/llama-server"
         print_warning "Skipping llama-server service setup"
-        print_info "OffGrid LLM will run in mock mode"
+        print_info "OffGrid will run in mock mode"
         return 1
     fi
 
@@ -348,7 +348,7 @@ setup_systemd_service() {
 
     sudo tee "$SERVICE_FILE" > /dev/null <<SERVICE_EOF
 [Unit]
-Description=OffGrid LLM - Offline AI Inference Engine
+Description=OffGrid - Offline AI Inference Engine
 Documentation=https://github.com/yourusername/offgrid-llm
 After=network-online.target llama-server.service
 Wants=network-online.target
@@ -483,7 +483,7 @@ install_completions() {
 
 # Start Service
 start_service() {
-    print_progress "Starting OffGrid LLM Service" "~15 seconds"
+    print_progress "Starting OffGrid Service" "~15 seconds"
 
     print_step "Starting offgrid-llm service..."
     sudo systemctl start offgrid-llm.service

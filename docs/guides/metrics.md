@@ -1,6 +1,6 @@
 # Metrics & Monitoring
 
-OffGrid LLM provides comprehensive metrics for monitoring system health, performance, and usage.
+OffGrid provides comprehensive metrics for monitoring system health, performance, and usage.
 
 ## Accessing Metrics
 

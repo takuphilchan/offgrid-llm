@@ -1,6 +1,6 @@
 # Audit Logs
 
-OffGrid LLM includes tamper-evident security audit logging for compliance and monitoring.
+OffGrid includes tamper-evident security audit logging for compliance and monitoring.
 
 ---
 

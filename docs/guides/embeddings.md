@@ -1,6 +1,6 @@
 # Embedding Models Guide
 
-This guide explains how to use embedding models with OffGrid LLM for semantic search, document similarity, and RAG (Retrieval Augmented Generation).
+This guide explains how to use embedding models with OffGrid for semantic search, document similarity, and RAG (Retrieval Augmented Generation).
 
 In the development Chat composer, **Context & response** contains Knowledge
 readiness and the explicit retrieval switch. **Set up Knowledge** can take you to

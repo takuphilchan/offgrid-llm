@@ -6,6 +6,7 @@ module.exports = {
   protocols: [],
   appId: 'com.offgrid.llm.desktop.installtest',
   productName: 'OffGrid Desktop Install Test',
+  win: { ...build.win, executableName: 'OffGrid Desktop Install Test', artifactName: 'OffGrid Desktop Install Test-Setup-${version}.${ext}' },
   extraMetadata: { name: 'offgrid-desktop-install-test' },
   directories: { ...build.directories, output: '../../build/windows-installer-smoke' },
   nsis: {

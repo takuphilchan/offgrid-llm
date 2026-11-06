@@ -16,9 +16,9 @@
   {
     "path": "install.sh",
     "owner": "Installer maintainers",
-    "responsibility": "Existing Installer implementation for install; no-growth baseline pending focused extraction.",
+    "responsibility": "Standalone streamed installer; six-line net growth for tested historical/current desktop artifact selection during OffGrid rebranding.",
     "reviewDate": "2027-04-21",
-    "baselineLines": 653
+    "baselineLines": 659
   },
   {
     "path": "internal/agents/agent.go",
@@ -44,9 +44,9 @@
   {
     "path": "internal/agents/manager.go",
     "owner": "Agent maintainers",
-    "responsibility": "Existing agents implementation for manager; no-growth baseline pending focused extraction.",
+    "responsibility": "Existing agents implementation for manager; no-growth baseline pending focused extraction. One additive ArchivedAt persistence field; archive behavior remains in archive.go.",
     "reviewDate": "2027-04-21",
-    "baselineLines": 666
+    "baselineLines": 667
   },
   {
     "path": "internal/agents/orchestration.go",

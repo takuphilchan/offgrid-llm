@@ -1,5 +1,5 @@
 #!/bin/bash
-# OffGrid LLM - Universal Installer
+# OffGrid - Universal Installer
 # One command to install everything: CLI, Desktop, Voice
 #
 # Usage:
@@ -67,7 +67,7 @@ spin_fail() {
 
 print_banner() {
     echo "" >&2
-    printf "  ${CYAN}◈${NC} ${BOLD}OffGrid LLM${NC}\n" >&2
+    printf "  ${CYAN}◈${NC} ${BOLD}OffGrid${NC}\n" >&2
     printf "  ${DIM}Run AI locally, completely offline${NC}\n" >&2
     echo "" >&2
 }
@@ -264,31 +264,37 @@ verify_legacy_checksums() {
     ok "Checksums verified"
 }
 
+# Public desktop names changed in 0.4.27; old release assets remain unchanged.
+desktop_asset_name() {
+    local version="${1#v}" os="$2" arch="$3" kind="$4"
+    local core="${version%%-*}" major minor patch
+    IFS=. read -r major minor patch <<< "$core"
+    if (( major > 0 || minor > 4 || (minor == 4 && patch >= 27) )); then
+        printf 'OffGrid-%s-%s-%s%s' "$version" "$os" "$arch" "$kind"
+    elif [ "$os" = windows ]; then
+        printf 'OffGrid.LLM.Desktop-Setup-%s.exe' "$version"
+    else
+        printf 'OffGrid.LLM.Desktop-%s-%s%s' "$version" "$arch" "$kind"
+    fi
+}
+
 download_desktop_app() {
     local os="$1"
     local arch="$2"
     local version="$3"
     local tmp_dir="$4"
     
-    local app_name=""
-    local version_num="${version#v}"
-    
-    case "$os" in
-        linux)
-            [ "$arch" = "amd64" ] && app_name="OffGrid.LLM.Desktop-${version_num}-x86_64.AppImage"
-            [ "$arch" = "arm64" ] && app_name="OffGrid.LLM.Desktop-${version_num}-arm64.AppImage"
-            ;;
-        darwin)
-            [ "$arch" = "arm64" ] && app_name="OffGrid.LLM.Desktop-${version_num}-arm64.zip"
-            [ "$arch" = "amd64" ] && app_name="OffGrid.LLM.Desktop-${version_num}-x64.zip"
-            ;;
-        windows)
-            app_name="OffGrid.LLM.Desktop-Setup-${version_num}.exe"
-            ;;
+    local target_os="$os" target_arch="$arch" extension=""
+    case "$os:$arch" in
+        linux:amd64) target_arch=x86_64; extension=.AppImage ;;
+        linux:arm64) extension=.AppImage ;;
+        darwin:amd64) target_os=macos; target_arch=x64; extension=.zip ;;
+        darwin:arm64) target_os=macos; extension=.zip ;;
+        windows:amd64) target_arch=x64; extension=-setup.exe ;;
+        *) return 0 ;;
     esac
-    
-    [ -z "$app_name" ] && return 0
-    
+    local app_name
+    app_name=$(desktop_asset_name "$version" "$target_os" "$target_arch" "$extension")
     local download_url="${GITHUB_URL}/releases/download/${version}/${app_name}"
     
     if download_with_progress "$download_url" "${tmp_dir}/${app_name}" "Downloading Desktop app..."; then
@@ -471,7 +477,7 @@ LAUNCHER
                 mkdir -p "$HOME/.local/share/applications"
                 cat > "$HOME/.local/share/applications/offgrid-llm.desktop" << EOF
 [Desktop Entry]
-Name=OffGrid LLM
+Name=OffGrid
 Comment=Local AI Assistant
 Exec=$bin_dir/offgrid-desktop
 Type=Application
@@ -630,7 +636,7 @@ main() {
     if [ -n "$app_path" ] && [ -f "$app_path" ]; then
         case "$os" in
             linux) printf "    ${DIM}Desktop:${NC} offgrid-desktop\n" >&2 ;;
-            darwin) printf "    ${DIM}Desktop:${NC} Open 'OffGrid LLM' from Applications\n" >&2 ;;
+            darwin) printf "    ${DIM}Desktop:${NC} Open 'OffGrid' from Applications\n" >&2 ;;
         esac
     fi
     

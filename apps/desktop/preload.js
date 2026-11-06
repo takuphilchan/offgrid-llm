@@ -1,4 +1,24 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
+// Native Windows caption controls remain OS-owned. Reserve their unzoomed strip;
+// never give service content a close/minimize IPC or draw duplicate app branding.
+function fitNativeChrome() {
+  if (process.platform !== 'win32') return;
+  document.documentElement.style.setProperty('--native-chrome-height', `${36 / webFrame.getZoomFactor()}px`);
+}
+window.addEventListener('DOMContentLoaded', () => {
+  if (process.platform !== 'win32') return;
+  const style = document.createElement('style');
+  style.textContent = `:root { --workspace-viewport: calc(100dvh - var(--native-chrome-height, 0px)); }
+    body { padding-top: var(--native-chrome-height) !important; box-sizing: border-box; }
+    #offgrid-native-chrome { position: fixed; inset: 0 0 auto; height: var(--native-chrome-height); z-index: 2147483647; background: var(--surface-0, var(--bg, Canvas)); -webkit-app-region: drag; user-select: none; }
+    @media (forced-colors: active) { #offgrid-native-chrome { background: Canvas; } }`;
+  document.head.append(style);
+  const strip = document.createElement('div');
+  strip.id = 'offgrid-native-chrome'; strip.setAttribute('aria-hidden', 'true');
+  document.body.append(strip);
+  fitNativeChrome();
+});
+window.addEventListener('resize', fitNativeChrome);
 // Geometry only: the service renderer never receives the local terminal bridge.
 let terminalVisible=false,terminalFrame=0,terminalRect='',terminalOverlay=false,terminalBackdrop;
 function measureTerminalWorkspace(){

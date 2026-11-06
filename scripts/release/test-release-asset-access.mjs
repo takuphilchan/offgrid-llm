@@ -67,7 +67,7 @@ function run(name, assets, denied = false) {
 
 const asset = (name) => ({ name, state: 'uploaded', size: 1024, digest: `sha256:${'a'.repeat(64)}` });
 const bundle = asset('offgrid-v0.4.2-linux-amd64-cpu-avx2.tar.gz');
-const desktop = ['OffGrid.LLM.Desktop-0.4.2-amd64.deb', 'OffGrid.LLM.Desktop-0.4.2-x86_64.AppImage'].map(asset);
+const desktop = ['OffGrid-0.4.2-linux-amd64.deb', 'OffGrid-0.4.2-linux-x86_64.AppImage'].map(asset);
 const preflight = 'Verify draft asset access before starting builds';
 for (const assets of [[], [bundle, ...desktop], [{ ...bundle, digest: null }]]) {
   const result = run(preflight, assets);

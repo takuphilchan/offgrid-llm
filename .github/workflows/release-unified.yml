@@ -122,7 +122,7 @@ jobs:
             gh release create "${version}" \
               --repo "${{ github.repository }}" \
               --verify-tag \
-              --title "OffGrid LLM ${version}" \
+              --title "OffGrid ${version}" \
               --notes "Release is being built. Artifacts will appear after verification. ${marker}" \
               --draft
           fi
@@ -670,7 +670,7 @@ jobs:
           SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
           AUDIO_DIR="$HOME/.offgrid-llm/audio"
           
-          echo "Installing OffGrid LLM..."
+          echo "Installing OffGrid..."
           
           # Install main binaries
           sudo cp "$SCRIPT_DIR/offgrid" /usr/local/bin/offgrid
@@ -706,7 +706,7 @@ jobs:
           fi
           
           echo ""
-          echo "✓ OffGrid LLM installed successfully!"
+          echo "✓ OffGrid installed successfully!"
           echo ""
           echo "Get started:"
           echo "  offgrid --version"
@@ -724,7 +724,7 @@ jobs:
           
           # Create README
           cat > "$BUNDLE_NAME/README.md" << EOF
-          # OffGrid LLM ${VERSION}
+          # OffGrid ${VERSION}
           
           **Platform:** ${{ matrix.name }}
           **llama.cpp:** ${{ env.LLAMA_COMMIT }}
@@ -919,20 +919,20 @@ jobs:
           case "${{ matrix.os }}" in
             linux)
               expected=(
-                "OffGrid.LLM.Desktop-${package_version}-amd64.deb"
-                "OffGrid.LLM.Desktop-${package_version}-x86_64.AppImage"
+                "OffGrid-${package_version}-linux-amd64.deb"
+                "OffGrid-${package_version}-linux-x86_64.AppImage"
               )
               ;;
             macos)
               expected=(
-                "OffGrid.LLM.Desktop-${package_version}-arm64.zip"
-                "OffGrid.LLM.Desktop-${package_version}-x64.zip"
+                "OffGrid-${package_version}-macos-arm64.zip"
+                "OffGrid-${package_version}-macos-x64.zip"
               )
               ;;
             windows)
               expected=(
-                "OffGrid.LLM.Desktop-${package_version}-Portable.exe"
-                "OffGrid.LLM.Desktop-Setup-${package_version}.exe"
+                "OffGrid-${package_version}-windows-x64-portable.exe"
+                "OffGrid-${package_version}-windows-x64-setup.exe"
               )
               ;;
           esac

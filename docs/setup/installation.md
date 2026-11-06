@@ -20,10 +20,15 @@ Use the [official releases](https://github.com/takuphilchan/offgrid-llm/releases
 
 | Platform | Desktop package |
 | --- | --- |
-| Windows x64 | Setup `.exe` or portable `.exe` |
-| macOS Intel | x64 `.zip` containing the app |
-| macOS Apple Silicon | arm64 `.zip` containing the app |
-| Linux x64 | `.AppImage` or `.deb` |
+| Windows x64 | `OffGrid-X.Y.Z-windows-x64-setup.exe` (recommended); `OffGrid-X.Y.Z-windows-x64-portable.exe` for portable use |
+| macOS Intel | `OffGrid-X.Y.Z-macos-x64.zip` |
+| macOS Apple Silicon | `OffGrid-X.Y.Z-macos-arm64.zip` |
+| Linux x64 | `OffGrid-X.Y.Z-linux-amd64.deb` for Debian/Ubuntu; `OffGrid-X.Y.Z-linux-x86_64.AppImage` for other distributions |
+
+These desktop names apply from 0.4.27 onward. Earlier releases retain their
+original names. The application and shortcuts are named **OffGrid**; repository
+URLs, application IDs and existing data directories retain their established
+identities. CLI/runtime archives are separate downloads, not desktop installers.
 
 CLI/runtime archives also cover Linux ARM64. That does not imply a Linux ARM64 desktop package. Check the release's actual assets; do not assume Windows ARM64, RPM, or universal macOS packages exist.
 

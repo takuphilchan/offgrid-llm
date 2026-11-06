@@ -16,7 +16,7 @@ function createTerminalDock({electron,window,host,cli,service,presentation}){
   function layout(){
     if(window.isDestroyed())return {};
     const [width,height]=window.getContentSize();
-    const bounds=terminalBounds(workspaceBounds,width,height,window.webContents.getZoomFactor());
+    const bounds=terminalBounds(workspaceBounds,width,height,window.webContents.getZoomFactor(),process.platform==='win32'?36:0);
     view?.setBounds(bounds);view?.setVisible(visible&&!overlay);
     window.webContents.send('terminal-visibility',visible);emit({type:'layout',visible});return bounds;
   }
