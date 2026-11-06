@@ -11,7 +11,7 @@ function applyPresentation(value) {
   document.documentElement.dir = value.locale === 'ar' ? 'rtl' : 'ltr';
   document.documentElement.dataset.theme = value.effectiveTheme;
   for (const node of document.querySelectorAll('[data-copy]')) node.textContent = t(node.dataset.copy);
-  document.title = 'OffGrid — ' + t('opening');
+  document.title = 'OffGrid';
   if (lastState) render(lastState);
 }
 if (preferences) applyPresentation(preferences);
@@ -22,7 +22,7 @@ function render(state) {
   const busy = ['checking', 'starting'].includes(state.state);
   const ready = state.state === 'ready';
   const recoveryKind = state.code === 'bundle_inconsistent' ? 'bundleRepair' : state.state === 'incompatible' ? (state.canOpenBrowser ? 'serviceUpdate' : 'addressConflict') : null;
-  byId('title').textContent = t(busy ? 'opening' : ready ? 'ready' : 'attention');
+  document.title = 'OffGrid';
   byId('status-title').textContent = t(({ checking: 'checking', starting: 'starting', ready: 'ready', incompatible: 'incompatible', unavailable: 'unavailable', error: 'attention', offline: 'unavailable' })[state.state] || 'checking');
   byId('status-text').hidden = busy || ready;
   byId('status-text').textContent = t(ready ? 'ready' : 'guidance');
@@ -32,7 +32,6 @@ function render(state) {
   } else if (['unavailable','offline'].includes(state.state)) byId('status-text').textContent = t('unavailableBody');
   if (state.autoReconnect) {
     byId('status-text').hidden = false;
-    byId('title').textContent = t('opening');
     byId('status-title').textContent = t('reconnecting');
     byId('status-text').textContent = t('reconnectingBody');
   }
@@ -44,9 +43,9 @@ function render(state) {
   byId('address').textContent = state.url || '—';
   byId('timing').textContent = state.elapsedMs ? `${(state.elapsedMs / 1000).toFixed(1)}s` : '';
   byId('recovery').hidden = busy || ready;
+  byId('technical').hidden = busy || ready;
   byId('browser').hidden = !state.canOpenBrowser;
   byId('separate').hidden = Boolean(state.managedByDesktop);
-  byId('footer-state').textContent = t(state.workspaceMode === 'isolated' ? 'separate' : 'configured');
 }
 
 async function perform(action) {

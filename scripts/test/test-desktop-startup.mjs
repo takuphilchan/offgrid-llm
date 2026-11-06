@@ -43,7 +43,10 @@ const launch = async profile => {
   const env = { ...process.env, OFFGRID_PORT: String(fixturePort), OFFGRID_DESKTOP_HOME: profile };
   delete env.OFFGRID_DESKTOP_TEST_HIDDEN;
   delete env.ELECTRON_RUN_AS_NODE;
-  return electron.launch({ executablePath: binary, env, timeout: 30000 });
+  // Start-menu launches inherit the installed application's directory, where
+  // Electron ships a lowercase `version` file. On Windows VERSION is the same
+  // path: an unversioned service must not accidentally identify as Electron.
+  return electron.launch({ executablePath: binary, cwd: dirname(binary), env, timeout: 30000 });
 };
 let app;
 async function capture(filename) {
@@ -71,6 +74,7 @@ try {
   assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), true,
     'Desktop must show its native startup window before backend recovery completes');
   await page.locator('#recovery:not([hidden])').waitFor();
+  assert.equal(await page.title(), 'OffGrid', 'Startup keeps a stable, uncluttered app title');
   const recoveryMs = Math.round(performance.now() - start);
   assert.equal(await page.locator('#technical').getAttribute('open'), null,
     'Startup keeps version and address metadata secondary to recovery');
@@ -94,6 +98,7 @@ try {
   assert.notEqual(separateURL, url);
   const ready = await page.evaluate(() => window.electron.getBackendInfo());
   assert.equal(ready.state, 'ready');
+  assert.equal(ready.version, version, 'Owned service identity must come from its build, not the launch directory');
   assert.equal(ready.managedByDesktop, true);
   assert.equal(ready.workspaceMode, 'isolated');
   const paths = await page.evaluate(() => window.electron.getPaths());

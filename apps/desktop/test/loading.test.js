@@ -33,6 +33,7 @@ test('startup shows recovery and subscribes once without authorizing navigation'
   assert.equal(elements.get('browser').hidden, false);
   subscription({ state: 'starting', managedByDesktop: true });
   assert.equal(elements.get('recovery').hidden, true);
+  assert.equal(elements.get('technical').hidden, true);
   subscription({ state: 'ready', managedByDesktop: true });
   assert.equal(elements.get('status-title').textContent, 'Connected');
   assert.equal(probes, 1);
@@ -41,6 +42,8 @@ test('startup shows recovery and subscribes once without authorizing navigation'
   assert.equal(elements.get('status-text').textContent, translations.en.serviceUpdateBody);
   subscription({state:'incompatible', code:'bundle_inconsistent',managedByDesktop:true});
   assert.equal(elements.get('status-title').textContent, translations.en.bundleRepairTitle);
+  assert.equal(elements.get('technical').hidden, false);
+  assert.equal(elements.get('separate').hidden, true);
   subscription({state:'incompatible',code:'service_not_offgrid'});
   assert.equal(elements.get('status-title').textContent, translations.en.addressConflictTitle);
   subscription({state:'unavailable'});
@@ -53,4 +56,6 @@ test('startup has a strict local CSP without inline executable content', () => {
   assert.ok(!html.includes('unsafe-inline'));
   assert.ok(!html.includes('onclick='));
   assert.match(html, /script src="startup.js" defer/);
+  assert.equal((html.match(/<h1\b/g) || []).length, 1);
+  assert.doesNotMatch(html, /class="(?:welcome|eyebrow|edition)"|<footer/);
 });

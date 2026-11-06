@@ -40,6 +40,6 @@ for (const locale of Object.keys(catalog)) test(`startup applies ${locale} and s
   assert.equal(elements.get('status-text').textContent,catalog[locale].reconnectingBody);
   assert.equal(elements.get('recovery').hidden,true);
   vm.runInContext("render({state:'unavailable',autoReconnect:true})",sandbox);
-  assert.equal(elements.get('title').textContent,catalog[locale].opening);
+  assert.equal(sandbox.document.title,'OffGrid');
   assert.equal(elements.get('recovery').hidden,false);
 });
