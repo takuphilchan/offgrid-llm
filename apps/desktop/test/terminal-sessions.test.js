@@ -13,6 +13,8 @@ test('OffGrid CLI opens a shell with commands ready; Agent opens profile selecti
  assert.ok(env.Path.startsWith('C:\\OffGrid'));
  assert.equal(env.OFFGRID_SERVER_URL,'http://127.0.0.1:11611');
  assert.equal(env.ELECTRON_RUN_AS_NODE,undefined);
+ assert.equal(env.OFFGRID_UNICODE,'1');
+ assert.equal(launchEnvironment({OFFGRID_UNICODE:'0'},cli,'http://127.0.0.1:11611').OFFGRID_UNICODE,'0');
 });
 test('returning to an unchanged terminal does not trigger a PTY redraw',()=>{
  const frames=[],manager=new TerminalSessions({});

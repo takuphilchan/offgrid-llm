@@ -13,7 +13,8 @@ function fit(tab){
  }catch(error){showError(error);}
 }
 function activate(focus=true){focusPending=focusPending||focus;cancelAnimationFrame(fitFrame);fitFrame=requestAnimationFrame(()=>{const focusNow=focusPending;focusPending=false;const tab=tabs.get(current);fit(tab);if(visible&&focusNow){if(tab){tab.term.refresh(0,tab.term.rows-1);tab.term.focus();}else $('start').focus();}});}
-function select(id){current=id;for(const tab of tabs.values()){tab.term.blur();tab.term.options.disableStdin=tab.id!==id;tab.pane.hidden=tab.id!==id;tab.select.setAttribute('aria-selected',String(tab.id===id));tab.select.tabIndex=tab.id===id?0:-1;}const tab=tabs.get(id);$('empty').hidden=!!tab;$('identity').textContent=tab?`${tab.title} · ${tab.cwd} · ${tab.state}`:'Local terminal · not sandboxed';if(tab)activate();}
+function folderLabel(path){const parts=String(path||'').replace(/[\\/]+$/,'').split(/[\\/]/).filter(Boolean);return parts.at(-1)||path||'Local folder';}
+function select(id){current=id;for(const tab of tabs.values()){tab.term.blur();tab.term.options.disableStdin=tab.id!==id;tab.pane.hidden=tab.id!==id;tab.select.setAttribute('aria-selected',String(tab.id===id));tab.select.tabIndex=tab.id===id?0:-1;}const tab=tabs.get(id);$('empty').hidden=!!tab;const identity=$('identity');identity.textContent=tab?`${tab.title} · ${folderLabel(tab.cwd)} · ${tab.state}`:'Local terminal · not sandboxed';identity.title=tab?.cwd||'';if(tab){if(visible)tab.term.focus();activate();}}
 function setLaunchDisabled(disabled){for(const id of ['new','cli','agent','start'])$(id).disabled=disabled;}
 async function close(id){const tab=tabs.get(id);if(!tab)return;try{await request('close',{id});tab.term.dispose();tab.pane.remove();tab.button.remove();tabs.delete(id);setLaunchDisabled(!ready||tabs.size>=4);select([...tabs.keys()].at(-1)||'');notice('');}catch(error){if(!String(error.message).includes('terminal_close_cancelled'))showError(error);}}
 async function create(kind){
@@ -21,11 +22,12 @@ async function create(kind){
  try{
   const session=await request('create',{kind,cols:90,rows:24});if(!session){notice('');return;}
   const pane=document.createElement('div');pane.className='pane';pane.id=`pane-${session.id}`;pane.setAttribute('role','tabpanel');pane.setAttribute('aria-label',session.title);$('panes').append(pane);
+  const surface=document.createElement('div');surface.className='terminal-surface';pane.append(surface);
   const button=document.createElement('div');button.className='terminal-tab';
   const choose=document.createElement('button');choose.setAttribute('role','tab');choose.setAttribute('aria-controls',pane.id);choose.textContent=session.title;choose.title=session.cwd;choose.onclick=()=>select(session.id);
   const remove=document.createElement('button');remove.className='close';remove.textContent='×';remove.setAttribute('aria-label',`Close ${session.title}`);remove.onclick=()=>void close(session.id);button.append(choose,remove);$('tabs').append(button);
-  const term=new Terminal({cursorBlink:!matchMedia('(prefers-reduced-motion: reduce)').matches,scrollback:5000,fontFamily:'Cascadia Code, Consolas, monospace',fontSize:13,screenReaderMode:true,allowProposedApi:false,theme:theme()});
-  const fitAddon=new FitAddon.FitAddon(),search=new SearchAddon.SearchAddon();term.loadAddon(fitAddon);term.loadAddon(search);term.open(pane);
+  const term=new Terminal({cursorBlink:!matchMedia('(prefers-reduced-motion: reduce)').matches,scrollback:5000,fontFamily:'Cascadia Code, Consolas, monospace',fontSize:14,lineHeight:1.25,screenReaderMode:true,allowProposedApi:false,theme:theme()});
+  const fitAddon=new FitAddon.FitAddon(),search=new SearchAddon.SearchAddon();term.loadAddon(fitAddon);term.loadAddon(search);term.open(surface);
   // Shell escape sequences never write the clipboard, navigate or open URLs.
   term.parser.registerOscHandler(52,()=>true);
   const tab={...session,cols:90,rows:24,term,fit:fitAddon,search,pane,button,select:choose};tabs.set(tab.id,tab);

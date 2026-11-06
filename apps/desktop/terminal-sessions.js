@@ -18,6 +18,7 @@ function launchEnvironment(base,cli,service) {
   for(const key of Object.keys(env))if(key.toLowerCase()==='path')delete env[key];
   env.Path=path.win32.dirname(cli)+path.win32.delimiter+pathValue;
   env.TERM='xterm-256color';
+  if(env.OFFGRID_UNICODE===undefined)env.OFFGRID_UNICODE='1';
   env.OFFGRID_SERVER_URL=service;
   return env;
 }
