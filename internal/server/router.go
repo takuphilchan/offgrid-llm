@@ -114,6 +114,7 @@ func (s *Server) registerModelRoutes(mux *http.ServeMux, guards routeGuards) {
 	mux.HandleFunc("/v1/models/download", modelManagerOnly(s.rateLimiter.Middleware(s.handleDownloadModel)))
 	mux.HandleFunc("/v1/models/download/progress", modelsOnly(s.handleDownloadProgress))
 	mux.HandleFunc("/v1/models/download/cancel", modelManagerOnly(s.handleCancelDownload))
+	mux.HandleFunc("/v1/models/download/discard", modelManagerOnly(s.handleDiscardDownload))
 	mux.HandleFunc("/v1/models/verify", modelManagerOnly(s.handleVerifyModel))
 	mux.HandleFunc("/v1/integrations", modelsOnly(s.handleIntegrations))
 	mux.HandleFunc("/v1/integrations/", modelsOnly(s.handleIntegration))

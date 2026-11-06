@@ -267,6 +267,9 @@ export const api = {
   cancelDownload: (fileName: string) => request<{ success: boolean }>('/v1/models/download/cancel', {
     method: 'POST', body: JSON.stringify({ file_name: fileName })
   }),
+  discardDownload: (fileName: string) => request<{ success: boolean }>('/v1/models/download/discard', {
+    method: 'POST', body: JSON.stringify({ file_name: fileName })
+  }),
   deleteModel: (modelID: string) => request<{ success: boolean }>('/v1/models/delete', {
     method: 'DELETE', body: JSON.stringify({ model_id: modelID })
   }),
@@ -329,6 +332,12 @@ export const api = {
     const generation = agentReplayGeneration;
     const result = await request<{success: boolean}>(`/api/v2/jobs/${encodeURIComponent(id)}`, {method:'DELETE'});
     if (result.success && generation === agentReplayGeneration) notifyWorkChanged({id, deleted:true});
+    return result;
+  },
+  archiveJob: async (id: string, archived: boolean) => {
+    const generation = agentReplayGeneration;
+    const result = await request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/${archived ? 'archive' : 'restore'}`, {method:'POST',body:'{}'});
+    if (generation === agentReplayGeneration) notifyWorkChanged({id, archived, status:result.status});
     return result;
   },
   exportJob: (id: string) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/export`),

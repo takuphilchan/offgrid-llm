@@ -54,6 +54,7 @@ type Task struct {
 	StartedAt              *time.Time          `json:"started_at,omitempty"`
 	CompletedAt            *time.Time          `json:"completed_at,omitempty"`
 	DeletedAt              *time.Time          `json:"deleted_at,omitempty"`
+	ArchivedAt             *time.Time          `json:"archived_at,omitempty"`
 	Model                  string              `json:"model,omitempty"`
 	Actor                  string              `json:"actor,omitempty"`
 	ComputerSessionExpired bool                `json:"computer_session_expired,omitempty"`

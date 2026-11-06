@@ -22,7 +22,7 @@ type Instruction struct {
 // CanSteerTask describes saved-state eligibility, not a grant. Corrections to
 // running parent work are queued; they never cancel input already dispatched.
 func CanSteerTask(t *Task) bool {
-	if t == nil || t.AdmissionHeld || t.DeletedAt != nil || t.ParentID != "" || len(t.Instructions)+len(t.PendingInstructions) >= 32 || t.Checkpoint == nil || t.Delegation != nil {
+	if t == nil || t.AdmissionHeld || t.ArchivedAt != nil || t.DeletedAt != nil || t.ParentID != "" || len(t.Instructions)+len(t.PendingInstructions) >= 32 || t.Checkpoint == nil || t.Delegation != nil {
 		return false
 	}
 	return t.Status == TaskRunning || (t.Status == TaskInterrupted && t.Checkpoint.ExecutingCall == "")
@@ -244,7 +244,7 @@ func (r *Runner) RequestAccess(id, actor, mode, target, url string) (*Task, erro
 		if t.Actor != actor {
 			return ErrTaskNotFound
 		}
-		if !t.Config.TaskFirst || t.ParentID != "" || t.Delegation != nil || t.Checkpoint == nil || t.Checkpoint.ExecutingCall != "" || (t.Status != TaskInterrupted && t.Status != TaskInput) {
+		if t.ArchivedAt != nil || !t.Config.TaskFirst || t.ParentID != "" || t.Delegation != nil || t.Checkpoint == nil || t.Checkpoint.ExecutingCall != "" || (t.Status != TaskInterrupted && t.Status != TaskInput) {
 			return ErrRunConflict
 		}
 		if (mode != "app" && mode != "browser") || strings.TrimSpace(target) == "" || len(target) > 256 || len(url) > 2048 {

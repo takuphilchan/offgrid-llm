@@ -67,8 +67,8 @@ func (s *Server) handleWorkSummary(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = n
 	}
-	if bucket != "all" && bucket != "attention" && bucket != "running" && bucket != "history" {
-		writeJobError(w, 400, "invalid_work_query", "Choose attention, running, history or all.", false)
+	if bucket != "all" && bucket != "attention" && bucket != "running" && bucket != "history" && bucket != "archived" {
+		writeJobError(w, 400, "invalid_work_query", "Choose attention, running, history, archived or all.", false)
 		return
 	}
 	search := strings.ToLower(strings.TrimSpace(q.Get("query")))
@@ -91,7 +91,7 @@ func (s *Server) handleWorkSummary(w http.ResponseWriter, r *http.Request) {
 		cursor = &c
 	}
 	actor, admin := s.agentActor(r), s.profileAdmin(r)
-	page := workPage{Items: []agents.WorkSummary{}, Counts: map[string]int{"attention": 0, "running": 0, "history": 0, "all": 0}, Scope: "actor_jobs"}
+	page := workPage{Items: []agents.WorkSummary{}, Counts: map[string]int{"attention": 0, "running": 0, "history": 0, "all": 0, "archived": 0}, Scope: "actor_jobs"}
 	rows := []agents.WorkSummary{}
 	for _, row := range s.agentManager.ListWorkSummaries() {
 		if row.Actor != "" && row.Actor != actor || !admin && (!row.ProfilePresent || row.Actor != actor) || row.UnscopedKnowledge || !s.savedKnowledgeAllowed(actor, row.SourceIDs) {
@@ -99,11 +99,20 @@ func (s *Server) handleWorkSummary(w http.ResponseWriter, r *http.Request) {
 		}
 		if row.Actor != actor && !(row.Actor == "" && actor == "local-admin") {
 			row.Deletable = false
+			row.Archivable = false
 			row.Protection = "ownership"
 		}
 		kind := workBucket(row.Status)
+		if row.ArchivedAt != nil {
+			kind = "archived"
+		}
 		page.Counts[kind]++
-		page.Counts["all"]++
+		if kind != "archived" {
+			page.Counts["all"]++
+		}
+		if bucket != "archived" && kind == "archived" && q.Get("id") == "" {
+			continue
+		}
 		if q.Get("id") != "" && q.Get("id") != row.ID || (bucket != "all" && kind != bucket) || search != "" && !strings.Contains(strings.ToLower(row.Title), search) {
 			continue
 		}

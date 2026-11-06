@@ -885,8 +885,11 @@ Model lifecycle endpoints include:
 - `POST /v1/models/download`
 - `GET /v1/models/download/progress`
 - `POST /v1/models/download/cancel`
+- `POST /v1/models/download/discard`
 - `POST /v1/models/verify`
 - `POST /v1/models/delete`
+
+Discard accepts `{ "file_name": "exact-model.gguf" }` for a stopped transfer and requires model-management permission. Active workers return 409. It removes only that transfer's temporary data and saved progress; installed weights/projectors remain intact. Storage failures keep the record retryable.
 
 Downloads retain a partial file when cancelled and resume through an HTTP range
 request. A successful download is rescanned into the registry before it is
@@ -1284,6 +1287,14 @@ First-party tasks use `/api/v2/jobs`, not a separate history or runner:
 | `GET /api/v2/jobs/{id}/export` | Evidence export |
 | `GET /api/v2/jobs/{id}/artifact` | Owner-authorized artifact download; parameters are defined in OpenAPI |
 | `DELETE /api/v2/jobs/{id}` | Delete eligible history; not cancellation or undo |
+| `POST /api/v2/jobs/{id}/archive` | Archive an inactive root from everyday Activity, preserving its outcome and recovery evidence; body `{}` |
+| `POST /api/v2/jobs/{id}/restore` | Restore an archived root to Activity without resuming it; body `{}` |
+
+`GET /api/v2/work?bucket=archived` pages archived records. Normal work buckets and
+attention counts exclude these records; `counts.archived` reports them separately.
+Archive and restore are owner-scoped and idempotent. Active workers, active children
+and pending approvals block archival. Archival does not resolve unknown effects,
+grant permission to delete protected records, or permit execution while archived.
 
 Submit with an installed model ID and a caller-generated request ID:
 

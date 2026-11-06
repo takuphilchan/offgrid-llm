@@ -554,6 +554,32 @@ paths:
                   success: { type: boolean }
                   cancelled: { type: boolean }
                   message: { type: string }
+  /v1/models/download/discard:
+    post:
+      operationId: discardDownload
+      description: Discard an inactive failed, cancelled or interrupted GGUF download and its exact temporary files. Installed artifacts are preserved. Requires model management permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file_name]
+              properties: { file_name: { type: string } }
+      responses:
+        '200':
+          description: Partial data and saved entry removed, or entry already absent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties: { success: { type: boolean } }
+        '409':
+          description: Download is active or is not discardable
+        '500':
+          description: Partial file or history removal failed; retry is safe
   /v1/models/delete:
     delete:
       operationId: deleteModel
@@ -1699,9 +1725,9 @@ paths:
   /api/v2/work:
     get:
       operationId: listWorkSummary
-      description: Authorized root-job metadata and complete actor-job counts, without transcripts or tool arguments. Requires work-summary-v1. Stable newest-first pagination within the chosen bucket; counts do not include ordinary text-only conversation turns. Deletion eligibility is advisory and rechecked by the mutation endpoint.
+      description: Authorized root-job metadata and complete actor-job counts, without transcripts or tool arguments. Requires work-summary-v1. Stable newest-first pagination within the chosen bucket; counts do not include ordinary text-only conversation turns. Deletion and archive eligibility are advisory and rechecked by the mutation endpoint. Normal counts exclude archived jobs; the archived bucket retains original outcomes and evidence.
       parameters:
-        - { name: bucket, in: query, schema: { type: string, enum: [all, attention, running, history], default: all } }
+        - { name: bucket, in: query, schema: { type: string, enum: [all, attention, running, history, archived], default: all } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
         - { name: cursor, in: query, schema: { type: string, maxLength: 512 } }
         - { name: query, in: query, schema: { type: string, maxLength: 512 }, description: Case-insensitive search of the bounded title. }
@@ -1871,10 +1897,10 @@ paths:
   /api/v2/jobs/{id}/{action}:
     post:
       operationId: commandDurableJob
-      description: All clients share the durable runner. Pause settles or labels in-flight effects uncertain. Takeover revokes the host session. Steering invalidates unexecuted proposals, is idempotent by request_id, and requires explicit resume. Reconnect requests fresh local consent, never an automatic retry.
+      description: All clients share the durable runner. Pause settles or labels in-flight effects uncertain. Takeover revokes the host session. Steering invalidates unexecuted proposals, is idempotent by request_id, and requires explicit resume. Reconnect requests fresh local consent, never an automatic retry. Archive and restore change visibility for inactive root jobs only, preserving original outcomes and evidence without resuming execution.
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
-        - { name: action, in: path, required: true, schema: { type: string, enum: [approve, deny, cancel, pause, resume, takeover, steer, reconnect, reconcile] } }
+        - { name: action, in: path, required: true, schema: { type: string, enum: [approve, deny, cancel, pause, resume, takeover, steer, reconnect, reconcile, archive, restore] } }
       requestBody:
         required: true
         content:
@@ -3972,6 +3998,8 @@ components:
         model: { type: string }
         outcome: { type: string, enum: [answer_only] }
         deletable: { type: boolean }
+        archivable: { type: boolean }
+        archived_at: { type: string, format: date-time }
         protection: { type: string, enum: [unknown_effects, pending_approval, unsettled_action, recovery_checkpoint, active_work, child_work, ownership] }
         origin:
           type: object
@@ -3993,6 +4021,7 @@ components:
             running: { type: integer, minimum: 0 }
             history: { type: integer, minimum: 0 }
             all: { type: integer, minimum: 0 }
+            archived: { type: integer, minimum: 0 }
         removable_count: { type: integer, minimum: 0, description: Eligible items matching the current bucket and search across all pages. }
         next_cursor: { type: string }
         has_more: { type: boolean }
@@ -4001,6 +4030,7 @@ components:
       type: object
       required: [id, prompt, status, created_at]
       properties:
+        archived_at: { type: string, format: date-time, nullable: true }
         workflow: { $ref: '#/components/schemas/WorkflowVerification' }
         outcome: { type: string, enum: [answer_only], description: A model answer without executed external work, not evidence that an application task completed. }
         deletable: { type: boolean, description: Whether this actor may remove this terminal run or interrupted record without recovery state; the server rechecks ownership and execution state at deletion time. }

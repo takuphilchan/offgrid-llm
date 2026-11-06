@@ -465,6 +465,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/models/download/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Discard an inactive failed, cancelled or interrupted GGUF download and its exact temporary files. Installed artifacts are preserved. Requires model management permission. */
+        post: operations["discardDownload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/models/delete": {
         parameters: {
             query?: never;
@@ -1268,7 +1285,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Authorized root-job metadata and complete actor-job counts, without transcripts or tool arguments. Requires work-summary-v1. Stable newest-first pagination within the chosen bucket; counts do not include ordinary text-only conversation turns. Deletion eligibility is advisory and rechecked by the mutation endpoint. */
+        /** @description Authorized root-job metadata and complete actor-job counts, without transcripts or tool arguments. Requires work-summary-v1. Stable newest-first pagination within the chosen bucket; counts do not include ordinary text-only conversation turns. Deletion and archive eligibility are advisory and rechecked by the mutation endpoint. Normal counts exclude archived jobs; the archived bucket retains original outcomes and evidence. */
         get: operations["listWorkSummary"];
         put?: never;
         post?: never;
@@ -1388,7 +1405,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description All clients share the durable runner. Pause settles or labels in-flight effects uncertain. Takeover revokes the host session. Steering invalidates unexecuted proposals, is idempotent by request_id, and requires explicit resume. Reconnect requests fresh local consent, never an automatic retry. */
+        /** @description All clients share the durable runner. Pause settles or labels in-flight effects uncertain. Takeover revokes the host session. Steering invalidates unexecuted proposals, is idempotent by request_id, and requires explicit resume. Reconnect requests fresh local consent, never an automatic retry. Archive and restore change visibility for inactive root jobs only, preserving original outcomes and evidence without resuming execution. */
         post: operations["commandDurableJob"];
         delete?: never;
         options?: never;
@@ -3195,6 +3212,9 @@ export interface components {
             /** @enum {string} */
             outcome?: "answer_only";
             deletable: boolean;
+            archivable?: boolean;
+            /** Format: date-time */
+            archived_at?: string;
             /** @enum {string} */
             protection?: "unknown_effects" | "pending_approval" | "unsettled_action" | "recovery_checkpoint" | "active_work" | "child_work" | "ownership";
             origin?: {
@@ -3210,6 +3230,7 @@ export interface components {
                 running: number;
                 history: number;
                 all: number;
+                archived?: number;
             };
             /** @description Eligible items matching the current bucket and search across all pages. */
             removable_count: number;
@@ -3219,6 +3240,8 @@ export interface components {
             scope: "actor_jobs";
         };
         AgentTask: {
+            /** Format: date-time */
+            archived_at?: string | null;
             workflow?: components["schemas"]["WorkflowVerification"];
             /**
              * @description A model answer without executed external work
@@ -4268,6 +4291,48 @@ export interface operations {
                         message?: string;
                     };
                 };
+            };
+        };
+    };
+    discardDownload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    file_name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Partial data and saved entry removed, or entry already absent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                    };
+                };
+            };
+            /** @description Download is active or is not discardable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Partial file or history removal failed; retry is safe */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -6061,7 +6126,7 @@ export interface operations {
     listWorkSummary: {
         parameters: {
             query?: {
-                bucket?: "all" | "attention" | "running" | "history";
+                bucket?: "all" | "attention" | "running" | "history" | "archived";
                 limit?: number;
                 cursor?: string;
                 /** @description Case-insensitive search of the bounded title. */
@@ -6336,7 +6401,7 @@ export interface operations {
             header?: never;
             path: {
                 id: string;
-                action: "approve" | "deny" | "cancel" | "pause" | "resume" | "takeover" | "steer" | "reconnect" | "reconcile";
+                action: "approve" | "deny" | "cancel" | "pause" | "resume" | "takeover" | "steer" | "reconnect" | "reconcile" | "archive" | "restore";
             };
             cookie?: never;
         };

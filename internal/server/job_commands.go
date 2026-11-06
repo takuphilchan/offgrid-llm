@@ -20,7 +20,7 @@ func (s *Server) handleJobCommand(w http.ResponseWriter, r *http.Request, id, ac
 		return
 	}
 	task, ok := s.agentManager.GetTask(id)
-	legacyDelete := ok && action == "delete" && r.Method == http.MethodDelete && task.Actor == "" && s.agentActor(r) == "local-admin"
+	legacyDelete := ok && (action == "delete" || action == "archive" || action == "restore") && task.Actor == "" && s.agentActor(r) == "local-admin"
 	if !ok || (task.Actor != s.agentActor(r) && !legacyDelete) {
 		writeJobReadError(w, agents.ErrTaskNotFound)
 		return
@@ -69,6 +69,18 @@ func (s *Server) handleJobCommand(w http.ResponseWriter, r *http.Request, id, ac
 			return
 		}
 		writeJSON(w, 202, taskResponse(recovered))
+		return
+	}
+	if action == "archive" || action == "restore" {
+		if !decodeExecutionRequest(w, r, &struct{}{}, 4096) {
+			return
+		}
+		updated, err := s.agentRunner.Archive(id, s.agentActor(r), action == "archive")
+		if err != nil {
+			writeJobCommandError(w, err)
+			return
+		}
+		writeJSON(w, 202, taskResponse(updated))
 		return
 	}
 	var req struct {

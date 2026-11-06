@@ -230,7 +230,7 @@ func (r *Runner) Continue(ctx context.Context, id, actor, action, approvalID str
 		if task.Actor != actor {
 			return ErrTaskNotFound
 		}
-		if task.AdmissionHeld {
+		if task.AdmissionHeld || task.ArchivedAt != nil {
 			return ErrRunConflict
 		}
 		if !WorkflowVersionSupported(task) {

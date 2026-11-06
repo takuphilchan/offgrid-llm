@@ -13,6 +13,8 @@ type WorkSummary struct {
 	Origin            *ConversationOrigin `json:"origin,omitempty"`
 	Outcome           string              `json:"outcome,omitempty"`
 	Deletable         bool                `json:"deletable"`
+	ArchivedAt        *time.Time          `json:"archived_at,omitempty"`
+	Archivable        bool                `json:"archivable"`
 	Protection        string              `json:"protection,omitempty"`
 	Actor             string              `json:"-"`
 	ProfilePresent    bool                `json:"-"`
@@ -54,6 +56,7 @@ func (m *Manager) ListWorkSummaries() []WorkSummary {
 		}
 		row.UnscopedKnowledge = task.Config.KnowledgeContext != "" && len(row.SourceIDs) == 0
 		row.Deletable = CanDeleteTask(task)
+		row.ArchivedAt, row.Archivable = task.ArchivedAt, CanArchiveTask(task)
 		if !row.Deletable {
 			switch {
 			case task.Status == TaskUncertain:
@@ -69,10 +72,16 @@ func (m *Manager) ListWorkSummaries() []WorkSummary {
 			}
 		}
 		for _, link := range task.ChildHistory {
-			if child := m.tasks[link.ID]; child != nil && child.DeletedAt == nil && !CanDeleteTask(child) {
-				row.Deletable = false
-				row.Protection = "child_work"
-				break
+			if child := m.tasks[link.ID]; child != nil && child.DeletedAt == nil {
+				childRoot := *child
+				childRoot.ParentID = ""
+				if !CanArchiveTask(&childRoot) {
+					row.Archivable = false
+				}
+				if !CanDeleteTask(child) {
+					row.Deletable = false
+					row.Protection = "child_work"
+				}
 			}
 		}
 		rows = append(rows, row)
