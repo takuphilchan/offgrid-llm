@@ -6,6 +6,7 @@ Start here to install OffGrid, finish a task, or maintain an existing workspace.
 
 | I want to | Start with |
 | --- | --- |
+| See what the app looks like | [Workspace tour](guides/interface-tour.md) |
 | Install and ask my first question | [Quickstart](setup/quickstart.md) |
 | Choose desktop, CLI, or Docker | [Installation](setup/installation.md) |
 | Use my existing workspace after updating desktop | [Desktop startup and recovery](setup/desktop-startup.md) |

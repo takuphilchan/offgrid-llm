@@ -1,4 +1,4 @@
-# OffGrid LLM
+# OffGrid
 
 OffGrid is a local-first AI runtime with a CLI, HTTP API, responsive web UI,
 and Electron desktop host. It runs GGUF models through `llama-server` and keeps
@@ -25,9 +25,28 @@ For development changes, see [Contributing](CONTRIBUTING.md) and the
 For help and responsible disclosure, see [Support](SUPPORT.md) and
 [Security](SECURITY.md).
 
+## Desktop download
+
+Download OffGrid for Windows, macOS or Linux from the
+[official releases](https://github.com/takuphilchan/offgrid-llm/releases).
+Windows users should choose the **setup.exe** download. See the
+[platform and architecture guide](docs/setup/installation.md#download-and-verify-a-release)
+for the matching package and checksum instructions. Desktop includes the local
+service; Docker and WSL are optional. The integrated terminal is currently
+available on Windows x64.
+
+## See the workspace
+
+![OffGrid Chat with a sample workshop plan](docs/images/chat-workspace.png)
+
+Chat, reusable documents and a native desktop terminal in one workspace.
+See the [illustrated tour](docs/guides/interface-tour.md) for Knowledge and terminal
+screenshots. Captures use isolated demonstration data from the 0.4.27 development
+build; they are not model benchmark results.
+
 ## Community
 
-Join the [OffGrid LLM Discord community](https://discord.gg/fc7EqyqHf) to ask
+Join the [OffGrid Discord community](https://discord.gg/fc7EqyqHf) to ask
 questions, get installation help, share workflows and demos, compare local
 models, and help shape the project. Bugs and reproducible technical problems
 should still be reported through [GitHub Issues](https://github.com/takuphilchan/offgrid-llm/issues).
