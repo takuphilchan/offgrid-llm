@@ -123,9 +123,14 @@ func (s *Server) handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 		s.downloadMutex.RUnlock()
 		if bundle == nil {
 			var err error
-			bundle, err = s.hubForModels().ResolveGGUFBundle(r.Context(), req.Repository, "", sourceFileName)
+			revision, digest := models.DefaultCatalog().PinnedSource(req.ModelID, req.Repository, sourceFileName)
+			bundle, err = s.hubForModels().ResolveGGUFBundle(r.Context(), req.Repository, revision, sourceFileName)
 			if err != nil {
 				modelHTTPError(w, err)
+				return
+			}
+			if digest != "" && bundle.Weights.SHA256 != digest {
+				writeErrorWithCode(w, "The source no longer matches the reviewed catalog artifact. No download was started.", 422, "catalog_digest_mismatch")
 				return
 			}
 		}

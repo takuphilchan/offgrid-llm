@@ -75,7 +75,7 @@ func bundleFamily(filename string) string {
 
 func auxiliaryGGUF(filename string) bool {
 	n := strings.ToLower(path.Base(filename))
-	return strings.HasPrefix(n, "dflash-") || strings.HasPrefix(n, "imatrix") || strings.HasPrefix(n, "draft-")
+	return strings.HasPrefix(n, "dflash-") || strings.HasPrefix(n, "imatrix") || strings.HasPrefix(n, "draft-") || strings.HasPrefix(n, "mtp-")
 }
 
 func selectBundleProjector(files []hubPackageFile, selected string) (*hubPackageFile, error) {

@@ -42,9 +42,8 @@ type ModelSource struct {
 	Priority int    `json:"priority"` // Lower number = higher priority
 }
 
-// DefaultCatalog returns the built-in model catalog
-// These are curated, verified models from HuggingFace with proper download URLs
-func DefaultCatalog() *ModelCatalog {
+// Keep existing IDs and artifacts available to saved configurations and scripts.
+func compatibilityCatalog() *ModelCatalog {
 	return &ModelCatalog{
 		Packages: curatedPackageEntries(),
 		Models: []CatalogEntry{

@@ -73,8 +73,8 @@ func TestCatalog(t *testing.T) {
 			t.Fatal("Mistral not found in catalog")
 		}
 
-		if !model.Recommended {
-			t.Error("Mistral should be recommended")
+		if model.Recommended {
+			t.Error("Compatibility Mistral should not displace current starter choices")
 		}
 	})
 

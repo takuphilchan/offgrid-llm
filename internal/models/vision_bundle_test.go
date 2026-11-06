@@ -37,6 +37,39 @@ func TestVisionBundleResolvesGenericPrecisionAlternatives(t *testing.T) {
 	}
 }
 
+func TestQwen35LayoutsIncludeMatchingProjector(t *testing.T) {
+	for _, size := range []string{"0.8", "2", "4"} {
+		t.Run(size, func(t *testing.T) {
+			f, hf, _ := newPackageHubFixture(t, "vision")
+			stem := "Qwen3.5-" + size + "B"
+			for _, suffix := range []string{"-Q4_K_M.gguf", "-BF16.gguf", "-UD-Q4_K_XL.gguf", "-IQ4_XS.gguf"} {
+				f.add(stem+suffix, []byte("fixture weights"), true)
+			}
+			for _, name := range []string{"mmproj-F16.gguf", "mmproj-BF16.gguf", "mmproj-F32.gguf"} {
+				f.add(name, []byte("fixture projector"), true)
+			}
+			b, err := hf.ResolveGGUFBundle(context.Background(), f.meta.ID, fixtureRevision, stem+"-Q4_K_M.gguf")
+			if err != nil || b.Projector == nil || b.Projector.Path != "mmproj-F16.gguf" {
+				t.Fatalf("incomplete bundle: %+v %v", b, err)
+			}
+		})
+	}
+}
+
+func TestVisionBundleGemmaIgnoresSpeculativeMTPWeights(t *testing.T) {
+	f, hf, _ := newPackageHubFixture(t, "vision")
+	for _, name := range []string{"gemma-4-E2B-it-Q4_K_M.gguf", "gemma-4-E2B-it-BF16.gguf", "mtp-gemma-4-E2B-it.gguf", "MTP/mtp-gemma-4-E2B-it-F16.gguf", "mmproj-F16.gguf"} {
+		f.add(name, []byte("fixture"), true)
+	}
+	b, err := hf.ResolveGGUFBundle(context.Background(), f.meta.ID, fixtureRevision, "gemma-4-E2B-it-Q4_K_M.gguf")
+	if err != nil || b.Projector == nil || b.Projector.Path != "mmproj-F16.gguf" {
+		t.Fatalf("wrong bundle: %+v %v", b, err)
+	}
+	if _, err := hf.ResolveGGUFBundle(context.Background(), f.meta.ID, fixtureRevision, "mtp-gemma-4-E2B-it.gguf"); err == nil {
+		t.Fatal("MTP draft accepted as standalone chat weights")
+	}
+}
+
 func TestVisionBundleRejectsAmbiguousOrIncompleteSources(t *testing.T) {
 	for _, mode := range []string{"mixed", "missing", "revision", "no-digest", "duplicate-projector"} {
 		t.Run(mode, func(t *testing.T) {

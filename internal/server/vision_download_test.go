@@ -98,3 +98,40 @@ func TestVisionDownloadCompletesAllAssetsAndRepairsMissing(t *testing.T) {
 		t.Fatalf("source binding was replaced: %d %s", w.Code, w.Body)
 	}
 }
+
+func TestCatalogDownloadUsesReviewedRevisionAndRejectsChangedDigest(t *testing.T) {
+	dir := t.TempDir()
+	entry := models.DefaultCatalog().FindModel("qwen3.5-2b")
+	file := "Qwen3.5-2B-Q4_K_M.gguf"
+	repo := "unsloth/Qwen3.5-2B-GGUF"
+	revision, _ := models.DefaultCatalog().PinnedSource(entry.ID, repo, file)
+	fetches := 0
+	hf := models.NewHuggingFaceClient().WithHTTPClient(&http.Client{Transport: modelTestTransport(func(r *http.Request) (*http.Response, error) {
+		fetches++
+		if !strings.Contains(r.URL.Path, revision) || strings.Contains(r.URL.Path, "/resolve/") {
+			t.Errorf("mutable metadata or premature transfer: %s", r.URL)
+		}
+		var value any
+		if strings.Contains(r.URL.Path, "/tree/") {
+			value = []map[string]any{}
+			for _, name := range []string{file, "mmproj-F16.gguf"} {
+				value = append(value.([]map[string]any), map[string]any{"type": "file", "path": name, "size": 12, "lfs": map[string]any{"oid": strings.Repeat("b", 64), "size": 12}})
+			}
+		} else {
+			value = map[string]any{"id": repo, "sha": revision, "pipeline_tag": "image-text-to-text"}
+		}
+		body, _ := json.Marshal(value)
+		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(bytes.NewReader(body)), Request: r}, nil
+	})})
+	s := &Server{config: &config.Config{ModelsDir: dir}, modelHub: hf}
+	body, _ := json.Marshal(map[string]string{"model_id": entry.ID, "repository": repo, "file_name": file})
+	w := httptest.NewRecorder()
+	s.handleDownloadModel(w, httptest.NewRequest("POST", "/v1/models/download", bytes.NewReader(body)))
+	if fetches == 0 || w.Code != 422 || !strings.Contains(w.Body.String(), "catalog_digest_mismatch") {
+		t.Fatalf("changed catalog artifact accepted: %d %s", w.Code, w.Body)
+	}
+	files, _ := os.ReadDir(dir)
+	if len(files) != 0 || len(s.downloadProgress) != 0 {
+		t.Fatal("rejected artifact changed model storage")
+	}
+}

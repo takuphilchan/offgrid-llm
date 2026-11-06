@@ -4,6 +4,15 @@ OffGrid is not limited to its curated catalog. Larger models are available to
 users with suitable hardware; there is no automatic catalog-sized RAM restriction.
 Discovery requires internet access to Hugging Face. Ordinary local inference does not.
 
+The small-model catalog includes Qwen3.5 2B, SmolLM3 3B, Granite 4.1 3B,
+LFM2.5 1.2B Instruct and Gemma 4 E2B. The first three are starter suggestions;
+older entries remain available for compatibility. These curated entries pin
+their source revisions and weight hashes. The Qwen and Gemma bundles also
+resolve their matching vision projectors. Downloading them does not qualify
+vision, tool calling or answer quality on your hardware. Review each license;
+Liquid's LFM license differs from the Apache-2.0 entries. Memory figures are
+estimates, and runtime admission still checks actual capacity.
+
 ## Language and embedding models
 
 If you arrived from a missing-model action in Chat or Agents, the development UI

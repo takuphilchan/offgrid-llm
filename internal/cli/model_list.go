@@ -15,11 +15,12 @@ import (
 )
 
 type modelChoice struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Repo  string `json:"repo"`
-	File  string `json:"file"`
-	Quant string `json:"quant"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Repo        string `json:"repo"`
+	File        string `json:"file"`
+	Quant       string `json:"quant"`
+	Recommended bool   `json:"recommended,omitempty"`
 }
 
 func listCommand(ctx context.Context, args []string, env Environment) error {
@@ -68,10 +69,19 @@ func RunList(ctx context.Context, args []string, p Presenter, serverURL, apiKey 
 		p.Heading(fmt.Sprintf("OffGrid / Model catalog (%d)", len(result.Models)))
 		p.Detail("Service", serverURL)
 		p.Note("Catalog entries are not necessarily installed.")
-		sort.SliceStable(result.Models, func(i, j int) bool { return result.Models[i].ID < result.Models[j].ID })
+		sort.SliceStable(result.Models, func(i, j int) bool {
+			if result.Models[i].Recommended != result.Models[j].Recommended {
+				return result.Models[i].Recommended
+			}
+			return false // Preserve the service's curated order within each group.
+		})
 		rows := make([]presentationRow, 0, len(result.Models))
 		for _, item := range result.Models {
-			rows = append(rows, presentationRow{item.ID, item.Quant})
+			detail := item.Quant
+			if item.Recommended {
+				detail += " · Recommended"
+			}
+			rows = append(rows, presentationRow{item.ID, detail})
 		}
 		p.rows(rows)
 		if len(rows) == 0 {
