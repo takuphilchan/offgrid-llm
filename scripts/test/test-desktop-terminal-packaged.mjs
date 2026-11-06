@@ -189,6 +189,11 @@ try {
  await terminal.getByTitle('Return to Chat',{exact:true}).click();
  await page.getByRole('button',{name:'Open terminal',exact:true}).click();
  await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(2);
+ // Existing tabs remain in the DOM while hidden. Wait for the native visibility
+ // event to re-enable input and restore focus before sending a single command.
+ await expect.poll(()=>terminal.evaluate(()=>visible&&!tabs.get(current).term.options.disableStdin)).toBe(true);
+ await expect(input).toBeFocused();
+ await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();})).toMatch(/^PS .*>$/);
  await input.pressSequentially("[Console]::WriteLine(('TAB_'+'DRAFT'))");
  await expect.poll(()=>terminal.evaluate(()=>{const t=tabs.get(current).term;return t.buffer.active.getLine(t.buffer.active.baseY+t.buffer.active.cursorY)?.translateToString().trimEnd();})).toMatch(/TAB_'\+'DRAFT'\)\)$/);
  const draftCursor=await terminal.evaluate(()=>{const t=tabs.get(current).term;return {x:t.buffer.active.cursorX,y:t.buffer.active.cursorY,line:t.buffer.active.getLine(t.buffer.active.baseY+t.buffer.active.cursorY)?.translateToString()};});

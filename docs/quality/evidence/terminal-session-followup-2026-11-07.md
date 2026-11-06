@@ -116,3 +116,12 @@ and restores those prerequisites explicitly. The production launcher and shutdow
 assertions are unchanged. The six terminal-session tests passed on Windows and
 Linux; the Windows desktop suite passed 139 tests with one platform skip.
 Remote CI must be rerun on the corrected revision before release.
+
+The same run's packaged Windows terminal check typed into a just-reopened view
+before its visibility event restored input. The fixture now waits for visibility,
+enabled input, focus and the shell prompt before typing once. It does not retry
+commands or weaken the cursor/draft assertions. The isolated packaged check
+passed with tab switching, draft/cursor preservation, CLI/Agent input, Unicode,
+search, clipboard restrictions, zoom and close/quit child-process cleanup.
+Evidence: `build/release-0427-terminal-readiness.log`. Linux's complete desktop
+suite also passed all 140 tests after the environment correction above.
