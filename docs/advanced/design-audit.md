@@ -217,6 +217,121 @@ These are candidate results, not a replacement of the installed 0.4.25 baseline.
 The complete token inventory, remaining first-use/agent/recovery journeys,
 real-model document-answer qualification and human review are not complete.
 
+## Current 0.4.26 presentation follow-up — 2026-11-06
+
+The current source includes the integrated terminal; the older 0.4.25 captures
+above are historical evidence, not the target of this pass. The blank Chat view
+now removes the decorative logo and storage explanation, uses a shorter welcome,
+and leaves the message composer as the action. The sidebar keeps all five route
+destinations, removes the redundant visible group captions, and places New chat
+beside Chat instead of using another full-width row. Accessible names, draft
+preservation, collapse and mobile navigation remain intact.
+
+The composer uses distinct send, generation-stop, dictation and Talk controls.
+Recording shows actual microphone levels and elapsed time, with separate discard
+and finish actions. Transcription has its own cancellable progress state. Small
+screens retain the waveform without a detached rectangular action background;
+reduced-motion users retain the textual state without animated bars. A typed
+draft can still be sent while recording, but its send action is visually secondary
+to finishing the recording. Dictation never silently enables Talk auto-send.
+
+The source checks passed: web type/build, 46 shell/composition/baseline/voice
+fixtures, then 62 voice/shell/document fixtures with two native-service tests
+skipped. Desktop unit checks passed 129 tests with one platform skip. The final
+dictation fixture also checks real level changes, discard without transcription,
+draft preservation, dark appearance and reduced-motion transcription. These
+fixtures do not qualify microphone hardware or recognition accuracy. Baseline
+captures now wait for route loading and skeletons to finish rather than treating
+a loading screen as a reviewed page.
+
+An additional 49 control, palette, baseline and quality checks passed, including
+contrast, all nine locales, IME, 200% layout and the 1,000-history fixture (88.9 ms
+p95 feedback on this machine). The Go CLI suites and OpenSpec validation passed.
+The production web build passed with its existing large-chunk warning.
+
+The November 6 candidate was packaged and installed after the user quit OffGrid.
+Its installer SHA-256 is
+`1a51c779e211f5f0370caa107debc6af81cf27092b0aed1fdbf10b83eb0beee5`.
+Five installed payloads match the staged desktop, app archive, CLI, UI index and
+terminal host. All 382 root-data files and 10 desktop-workspace data files retain
+their hashes/counts; model inventory and native inference executable hashes are
+unchanged. The rollback backup is
+`D:/OffGrid-install-backups/v0.4.26-before-ui-finish-20261106-012557`.
+The new installed UI index SHA-256 is
+`b7451ec5afa0384e67e470f44b7c4b5a521410d983f25711c98a50815876fc17`.
+The shared 0.4.26 version number alone does not distinguish this build from
+earlier previews.
+
+The first packaged terminal fixture timed out waiting five seconds for CLI help
+while installer compression and renderer checks were active. The bundled CLI
+responded independently, and the complete fixture passed without changing its
+assertions after packaging finished. It covered CLI/Agent entry, profile search,
+tab/cursor preservation, Unicode, search/copy, 200% zoom and descendant cleanup
+on reload/close/quit. Private captures are under
+`C:/Users/phil/AppData/Local/Temp/offgrid-desktop-theme-Cr9Dd5`.
+This is local installation evidence, not publication or cross-platform/human
+usability qualification.
+
+## Sidebar, empty Chat and attachment follow-up, 2026-11-06
+
+The latest terminal-enabled source gives conversation history the flexible
+sidebar space, with Knowledge and Models below it. Empty Chat groups its short
+welcome with the editor rather than separating them across the screen. Saved
+conversations and document reading retain their bottom composer. A populated
+80-conversation fixture checks independent scrolling and reachable footer links
+at 900px and 480px heights, in light and dark appearance.
+
+Image drafts now have labeled thumbnails, separate removal controls and a local
+modal preview with fit/actual-size viewing, Escape dismissal and focus return.
+Previewing preserves the original attachment bytes and never submits a model
+request. Document drafts separate file identity, coverage and actions. The
+reader has a compact file header, download action, page navigation and distinct
+page canvas. Page-number edits commit on Enter or blur, avoiding requests for
+intermediate digits; original-download failures no longer appear as page-render
+failures. Source coverage and citation checks remain unchanged.
+
+The first broad check was run against the Vite fixture server: 1,037 passed,
+18 failed and 36 skipped. It identified a nested composer menu covering the
+editor, outdated expectations for removed welcome copy/voice controls, a route
+loading race in a geometry test, and tests requiring built assets or a real
+service. The menu now anchors vertically outside the composer. After those
+corrections, 152 targeted checks passed against a built renderer and isolated
+service. The full equivalent run then passed **1,061 tests, with 31 skipped**:
+
+```
+npm.cmd --prefix apps/web run build
+go build -o build/ui-regression-offgrid.exe ./cmd/offgrid
+node scripts/test/test-web-workspace.mjs build/ui-regression-offgrid.exe --workers=3
+npm.cmd --prefix apps/web run api:check
+npm.cmd --prefix apps/desktop test
+```
+
+Desktop unit results were 129 passed, one platform skip. Four Go packages timed
+out during the initial simultaneous full Go/browser run; unchanged assertions
+passed when rerun with `go test -p 1 ./cmd/offgrid ./cmd/offgrid-executor
+./internal/execution ./internal/rag`. The CLI suite and the three affected
+OpenSpec validations also passed. These results do not replace native platform,
+microphone accuracy or human usability qualification. Installation evidence is
+recorded separately after packaged checks.
+
+### Further sidebar hierarchy correction
+
+The owner's next comparison identified that merely moving the library links
+still left global destinations competing with conversations. The follow-up
+separates a 44px navigation rail from the conversation panel, exposes a labeled
+New chat action, gives titles a 256px context column, and anchors workspace
+options at the foot of the rail. Destinations retain accessible names and
+hover/keyboard labels; other work pages use the compact rail. Chat's collapse
+preference remains explicit and saved. Empty histories contain no invented
+projects or demonstration conversations. Mobile navigation remains a modal
+drawer, not a second permanently visible sidebar.
+
+The preceding preview was installed with five payload hashes verified and all
+382 root data files, ten desktop data files, model inventory and native inference
+runtimes preserved. The final rail subsequently passed its own responsive/locale
+and packaged terminal checks and was installed with the same preservation
+verification. See the sidebar evidence record for the distinct installer hash.
+
 ## Review checklist (answer yes/no for each change)
 
 1. Can a first-time user see one obvious next action without opening a menu?
@@ -239,3 +354,51 @@ real-model document-answer qualification and human review are not complete.
 18. Is any animation tied to real progress or a meaningful transition?
 19. Does desktop close/quit/tray/terminal behavior match what its label promises?
 20. Does CLI human output stay concise while `--json` and full help remain stable?
+
+## CLI follow-up, 2026-11-05
+
+The current CLI review corrected the user's v0.4.26 `info`/`list` examples and
+the connected entry flow: shared width-aware human layouts, explicit local
+configuration versus service inventory, normal-contrast values, readable profile
+choices, consistent session headers and portable recovery guidance. Exact IDs,
+JSON fields, command arguments, authority and execution remain unchanged.
+Evidence and remaining legacy-renderer/platform limits are recorded in
+[CLI presentation follow-up](../quality/evidence/cli-presentation-2026-11-05.md).
+The broader pass covers discovery/downloads, diagnostics, Knowledge, speech,
+integrations, configuration, users/audit, batch/logs and model preferences.
+It also removes false diagnostic success and fabricated first-token timing,
+preserves exact identifiers, and bounds interactive chat to terminal columns.
+Installed-build evidence is recorded separately in the linked follow-up.
+
+### Remaining CLI and document interaction corrections (2026-11-06)
+
+The sidebar installation above succeeded. Subsequent review found additional
+interaction issues: rigid session-help columns, truncated narrow slash-menu
+labels, action labels capped at 18 characters, and re-opening a document
+resetting its reading position. The follow-up uses width-aware grouped help,
+selected-command descriptions in narrow terminals, terminal-native selection
+highlighting, display-cell-bounded progress, and retained document page/zoom.
+
+Previous packaged terminal screenshots inherited the test runner's `NO_COLOR=1`.
+That exercised the plain fallback but was not representative of styled output.
+The packaged fixture now explicitly captures styled output and verifies the
+selected command's inverse attribute. Plain/no-color contracts remain tested
+separately. This does not change installed-user environment settings.
+
+The broader redesign is still not completely qualified: defaults-first journey
+comparison, real-model document/image quality, manual screen-reader/usability
+review and unavailable platform checks remain open in their existing plans.
+
+## Final November 6 candidate
+
+The final candidate supersedes the centered-empty-composer experiment above:
+both empty and populated Chat keep the composer at the bottom. The sidebar uses
+the separate navigation rail and conversation panel. Startup is now a compact
+brand/status surface with one recovery action and closed technical details.
+The window title is simply OffGrid.
+
+The installed-startup failure and its version-embedding fix are recorded in
+[desktop startup evidence](../quality/evidence/desktop-startup-identity-2026-11-06.md).
+The final source review and complete-suite results, including failed assertions
+and their follow-ups, are recorded in
+[release verification](../quality/evidence/release-0.4.27-2026-11-06.md).
