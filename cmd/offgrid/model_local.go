@@ -46,21 +46,17 @@ func handleLoRA(args []string) {
 	}
 
 	if len(args) < 1 {
-		fmt.Println()
-		fmt.Printf("  %sLoRA Adapters%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("  %sExperimental adapter registry%s\n", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sUsage%s  offgrid lora <command>\n", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sCommands%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %-24s %sList registered adapters%s\n", "list", colorDim, colorReset)
-		fmt.Printf("    %-24s %sRegister an adapter%s\n", "register <name> <path>", colorDim, colorReset)
-		fmt.Printf("    %-24s %sRemove an adapter%s\n", "remove <id>", colorDim, colorReset)
-		fmt.Printf("    %-24s %sShow adapter info%s\n", "info <id>", colorDim, colorReset)
-		fmt.Printf("    %-24s %sSet scale (0.0-1.0)%s\n", "scale <id> <value>", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sMaturity%s  Experimental. Registration works; runtime hot-loading is not available yet.\n", colorDim, colorReset)
-		fmt.Println()
+		p := legacyPresenter()
+		p.JSON = false
+		p.Heading("OffGrid / LoRA adapters")
+		p.Note("Experimental registry. Registration works; runtime hot-loading is not available.")
+		p.ModernSection("Registry", [][]string{
+			{"offgrid lora list", "List registered adapters"},
+			{"offgrid lora info ID", "Inspect an adapter"},
+			{"offgrid lora register NAME PATH [SCALE]", "Register adapter data"},
+			{"offgrid lora scale ID VALUE", "Set scale from 0.0 to 1.0"},
+			{"offgrid lora remove ID", "Remove a registry entry"},
+		})
 		return
 	}
 
@@ -81,9 +77,12 @@ func handleLoRA(args []string) {
 			fmt.Printf("  %sRegister an adapter:%s offgrid lora register <name> <path>\n", colorDim, colorReset)
 		} else {
 			fmt.Printf("  %sMaturity:%s Experimental registry; runtime loading is not available yet.\n\n", colorDim, colorReset)
-			fmt.Printf("  %s%-16s  %-20s  %-8s  %s%s\n", colorDim, "ID", "Name", "Scale", "Path", colorReset)
 			for _, a := range adapterList {
-				fmt.Printf("  %-16s  %-20s  %-8.2f  %s\n", a.ID[:16], a.Name, a.Scale, a.Path)
+				p := legacyPresenter()
+				p.Heading(a.Name)
+				p.Detail("ID", a.ID)
+				p.Detail("Scale", fmt.Sprintf("%.2f", a.Scale))
+				p.Detail("Path", a.Path)
 			}
 		}
 		fmt.Println()

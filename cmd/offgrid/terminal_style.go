@@ -21,9 +21,10 @@ const (
 )
 
 var (
-	colorReset = "\033[0m"
-	colorBold  = "\033[1m"
-	colorDim   = "\033[2m"
+	colorReset    = "\033[0m"
+	colorBold     = "\033[1m"
+	colorSelected = "\033[7m"
+	colorDim      = "" // Essential values retain the user's terminal foreground.
 
 	// Legacy semantic names remain aliases while command output is migrated to
 	// higher-level renderers. None of them introduce a hue.
@@ -39,7 +40,7 @@ var (
 	brandAccent    = "\033[1m"
 	brandSuccess   = "\033[1m"
 	brandError     = "\033[1m"
-	brandMuted     = "\033[2m"
+	brandMuted     = ""
 )
 
 var (
@@ -128,6 +129,7 @@ func enableUnicodeSymbols() {
 
 func disableColors() {
 	colorReset, colorBold, colorDim = "", "", ""
+	colorSelected = ""
 	colorCyan, colorGreen, colorYellow = "", "", ""
 	colorRed, colorBlue, colorMagenta = "", "", ""
 	brandPrimary, brandSecondary, brandAccent = "", "", ""

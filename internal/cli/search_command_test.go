@@ -37,7 +37,7 @@ func TestSearchUsesInjectedTransportAndStreams(t *testing.T) {
 func TestSearchHelpAndInvalidUsageNeverUseNetwork(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	p := Presenter{Stdout: &stdout, Stderr: &stderr, Style: PresentationStyle{Search: "search"}}
-	if err := RunSearch(context.Background(), []string{"--help"}, p, nil); err != nil || !strings.Contains(stdout.String(), "Search HuggingFace") {
+	if err := RunSearch(context.Background(), []string{"--help"}, p, nil); err != nil || !strings.Contains(stdout.String(), "Model discovery") {
 		t.Fatalf("help: err=%v stdout=%q", err, stdout.String())
 	}
 	stdout.Reset()

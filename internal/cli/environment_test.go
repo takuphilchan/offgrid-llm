@@ -151,7 +151,7 @@ func TestExecuteHelpAllPreservesCommandCatalog(t *testing.T) {
 	}
 	listed := map[string]bool{}
 	for _, line := range strings.Split(stdout.String(), "\n") {
-		if strings.HasPrefix(line, "    ") {
+		if strings.HasPrefix(line, "  ") {
 			if fields := strings.Fields(line); len(fields) > 0 {
 				listed[fields[0]] = true
 			}

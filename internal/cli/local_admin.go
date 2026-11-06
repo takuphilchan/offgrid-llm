@@ -113,20 +113,17 @@ func configCommand(_ context.Context, args []string, env Environment) error {
 		args = nil
 	}
 	if len(args) == 0 {
-		_, _ = fmt.Fprintln(env.Stdout)
-		_, _ = fmt.Fprintf(env.Stdout, "  %s◈ Configuration%s\n", s.Primary+s.Bold, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "  %sManage settings and preferences%s\n\n", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "  %sUsage%s  offgrid config <action>\n\n", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "  %sActions%s\n", s.Primary, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "    %-20s %sCreate config file%s\n", "init [path]", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "    %-20s %sDisplay current config%s\n", "show", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "    %-20s %sValidate config file%s\n\n", "validate [path]", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "  %sExamples%s\n", s.Primary, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "    %s$%s offgrid config init\n", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "    %s$%s offgrid config show\n", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "    %s$%s offgrid config validate config.yaml\n\n", s.Dim, s.Reset)
+		p := Presenter{Stdout: env.Stdout, Style: s}
+		p.Heading("OffGrid / Configuration")
+		p.ModernSection("Local settings", [][]string{
+			{"offgrid config show", "Inspect configured values, not live allocations"},
+			{"offgrid config validate PATH", "Validate a configuration file"},
+			{"offgrid config init [PATH]", "Create a configuration file"},
+		})
+		p.Note("Use OFFGRID_CONFIG to choose a file. A remote service can have different settings.")
 		return ReportedError{}
 	}
+
 	switch args[0] {
 	case "init":
 		path := ""

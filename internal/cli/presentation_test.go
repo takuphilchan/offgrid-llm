@@ -54,15 +54,15 @@ func TestPresenterLegacyHelpersUseInjectedStreams(t *testing.T) {
 	p.HelpfulError(fmt.Errorf("connection refused"), "Connect")
 	got := stdout.String()
 	for _, want := range []string{
-		"MModel:              R BreadyR\n",
-		"S--json                    R machine-readable\n",
-		"Doffgrid versionR\n",
-		"\nP> ModelsR\n\n",
+		"Model           ready\n",
+		"B--jsonR  machine-readable\n",
+		"offgrid version\n",
+		"\n  BModelsR\n",
 		"P+----------------------------------------------------------+R\n",
 		"M+--R BPDetailR M",
 		"M------------------------------------------------------------R\n",
-		"PiR Possible causes:\n",
-		"  • OffGrid server not running\n",
+		"The configured endpoint did not accept a connection.",
+		"Run offgrid doctor",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("stdout does not contain %q; got %q", want, got)

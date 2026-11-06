@@ -7,6 +7,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/templates"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -17,21 +18,15 @@ func handleAlias(args []string) {
 	}
 
 	if len(args) == 0 {
-		fmt.Println()
-		fmt.Printf("  %s◈ Aliases%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("  %sShortcut names for models%s\n", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sUsage%s  offgrid alias <command>\n", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sCommands%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %-22s %sList all aliases%s\n", "list", colorDim, colorReset)
-		fmt.Printf("    %-22s %sCreate an alias%s\n", "set <alias> <model>", colorDim, colorReset)
-		fmt.Printf("    %-22s %sRemove an alias%s\n", "remove <alias>", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sExamples%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %s$%s offgrid alias set llama tinyllama-1.1b-chat.Q4_K_M\n", colorDim, colorReset)
-		fmt.Printf("    %s$%s offgrid run llama  %s# uses the alias%s\n", colorDim, colorReset, colorDim, colorReset)
-		fmt.Println()
+		p := legacyPresenter()
+		p.JSON = false
+		p.Heading("OffGrid / Model aliases")
+		p.ModernSection("Shortcuts", [][]string{
+			{"offgrid alias list", "Inspect built-in and custom aliases"},
+			{"offgrid alias set NAME MODEL", "Give a model a shortcut name"},
+			{"offgrid alias remove NAME", "Remove a custom shortcut"},
+		})
+		p.Note("Use an exact installed model ID from offgrid list. Run an alias with offgrid run NAME.")
 		return
 	}
 
@@ -62,22 +57,30 @@ func handleAlias(args []string) {
 			"Embeddings (RAG)": {"embed", "nomic"},
 		}
 
-		for category, aliases := range categories {
-			fmt.Printf("  %s%s%s\n", colorBold, category, colorReset)
+		p := legacyPresenter()
+		p.JSON = false
+		for _, category := range []string{"Chat Models", "Small/Fast", "Coding", "Vision", "Embeddings (RAG)"} {
+			aliases := categories[category]
+			rows := [][]string{}
 			for _, alias := range aliases {
 				if info, ok := builtIn[alias]; ok {
-					fmt.Printf("    %s%-18s%s %s~%dGB RAM%s  %s\n", brandPrimary, alias, colorReset, colorDim, info.RAM, colorReset, info.Pattern)
+					rows = append(rows, []string{alias, fmt.Sprintf("%s | estimated %d GB RAM", info.Pattern, info.RAM)})
 				}
 			}
-			fmt.Println()
+			p.ModernSection(category, rows)
 		}
 
 		// Show user-defined aliases
 		if len(userAliases) > 0 {
 			fmt.Printf("  %s%s Custom Aliases%s\n", brandSecondary+colorBold, iconDiamond, colorReset)
 			fmt.Println()
-			for alias, modelID := range userAliases {
-				fmt.Printf("    %s%-18s%s → %s\n", brandSecondary, alias, colorReset, modelID)
+			aliases := make([]string, 0, len(userAliases))
+			for alias := range userAliases {
+				aliases = append(aliases, alias)
+			}
+			sort.Strings(aliases)
+			for _, alias := range aliases {
+				p.Detail(alias, userAliases[alias])
 			}
 			fmt.Println()
 		}
@@ -128,21 +131,15 @@ func handleFavorite(args []string) {
 	}
 
 	if len(args) == 0 {
-		fmt.Println()
-		fmt.Printf("  %s◈ Favorites%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("  %sBookmark frequently used models%s\n", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sUsage%s  offgrid favorite <command>\n", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sCommands%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %-20s %sList favorites%s\n", "list", colorDim, colorReset)
-		fmt.Printf("    %-20s %sAdd to favorites%s\n", "add <model>", colorDim, colorReset)
-		fmt.Printf("    %-20s %sRemove from favorites%s\n", "remove <model>", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sExamples%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %s$%s offgrid favorite add llama-3.2-3b\n", colorDim, colorReset)
-		fmt.Printf("    %s$%s offgrid favorite list\n", colorDim, colorReset)
-		fmt.Println()
+		p := legacyPresenter()
+		p.JSON = false
+		p.Heading("OffGrid / Favorites")
+		p.ModernSection("Bookmarks", [][]string{
+			{"offgrid favorite list", "List saved models"},
+			{"offgrid favorite add MODEL", "Bookmark a model ID"},
+			{"offgrid favorite remove MODEL", "Remove a bookmark"},
+		})
+		p.Note("Favorites do not install models or change the active model.")
 		return
 	}
 
@@ -211,21 +208,15 @@ func handleTemplate(args []string) {
 	}
 
 	if len(args) == 0 {
-		fmt.Println()
-		fmt.Printf("  %s◈ Templates%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Printf("  %sReusable prompt templates%s\n", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sUsage%s  offgrid template <command>\n", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sCommands%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %-20s %sList all templates%s\n", "list", colorDim, colorReset)
-		fmt.Printf("    %-20s %sShow template details%s\n", "show <name>", colorDim, colorReset)
-		fmt.Printf("    %-20s %sApply interactively%s\n", "apply <name>", colorDim, colorReset)
-		fmt.Println()
-		fmt.Printf("  %sExamples%s\n", brandPrimary, colorReset)
-		fmt.Printf("    %s$%s offgrid template list\n", colorDim, colorReset)
-		fmt.Printf("    %s$%s offgrid template show code-review\n", colorDim, colorReset)
-		fmt.Println()
+		p := legacyPresenter()
+		p.JSON = false
+		p.Heading("OffGrid / Prompt templates")
+		p.ModernSection("Reusable prompts", [][]string{
+			{"offgrid template list", "List templates"},
+			{"offgrid template show NAME", "Inspect text and variables"},
+			{"offgrid template apply NAME", "Fill in variables interactively"},
+		})
+		p.Note("Prompt templates are separate from agent profiles and reviewed skills.")
 		return
 	}
 
@@ -234,10 +225,12 @@ func handleTemplate(args []string) {
 		fmt.Println()
 		fmt.Printf("%sTemplates%s\n", brandPrimary+colorBold, colorReset)
 		templateList := templates.ListTemplates()
+		rows := [][]string{}
 		for _, name := range templateList {
 			tpl, _ := templates.GetTemplate(name)
-			fmt.Printf("%s%-20s%s %s\n", brandSecondary, name, colorReset, tpl.Description)
+			rows = append(rows, []string{name, tpl.Description})
 		}
+		legacyPresenter().ModernSection("Available prompts", rows)
 		fmt.Println()
 
 	case "show", "info":

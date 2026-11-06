@@ -42,7 +42,7 @@ func TestBatchUsesInjectedServerAndProcessor(t *testing.T) {
 		t.Fatalf("legacy invalid batch contract changed: code=%d stderr=%q", code, errOut.String())
 	}
 	out.Reset()
-	if code := Execute(context.Background(), []string{"batch"}, env); code != 0 || !strings.Contains(out.String(), "Batch Processing") {
+	if code := Execute(context.Background(), []string{"batch"}, env); code != 0 || !strings.Contains(out.String(), "Batch processing") {
 		t.Fatalf("batch help changed: code=%d stdout=%q", code, out.String())
 	}
 }

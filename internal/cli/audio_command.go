@@ -22,31 +22,10 @@ func audioCommand(ctx context.Context, args []string, env Environment) error {
 	}
 
 	if len(args) < 1 {
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %s◈ Audio%s\n", env.Style.Primary+env.Style.Bold, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "  %sSpeech-to-text and text-to-speech%s\n", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sUsage%s  offgrid audio <command> [options]\n", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sCommands%s\n", env.Style.Primary, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sTranscribe audio to text%s\n", "transcribe <file>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sConvert text to speech%s\n", "speak <text>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sShow audio system status%s\n", "status", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sList audio models%s\n", "models", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sDownload Whisper model%s\n", "setup whisper", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sDownload Piper voice%s\n", "setup piper", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sOptions%s\n", env.Style.Primary, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %stiny, base, small, medium, large%s\n", "--model <name>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sPiper voice name%s\n", "--voice <name>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sOutput file for TTS%s\n", "--output <file>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sLanguage code for ASR%s\n", "--language <code>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sExamples%s\n", env.Style.Primary, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %s$%s offgrid audio transcribe recording.wav\n", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %s$%s offgrid audio speak \"Hello!\" --output hello.wav\n", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %s$%s offgrid audio setup whisper --model base.en\n", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
+		// Preserve existing human help behavior even when requested with --json.
+		help := p
+		help.JSON = false
+		help.audioHelp()
 		return nil
 	}
 

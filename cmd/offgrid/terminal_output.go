@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/charmbracelet/x/term"
 	"github.com/takuphilchan/offgrid-llm/internal/cli"
 	"github.com/takuphilchan/offgrid-llm/internal/output"
 	"os"
@@ -34,13 +35,15 @@ func printWarning(message string) {
 }
 
 func legacyPresenter() cli.Presenter {
+	columns, _, _ := term.GetSize(os.Stdout.Fd())
 	return cli.Presenter{
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 		JSON:   output.JSONMode,
 		Style: cli.PresentationStyle{
+			Columns: columns,
 			Primary: brandPrimary, Secondary: brandSecondary, Success: brandSuccess, Error: brandError,
-			Accent: brandAccent, Muted: brandMuted, Bold: colorBold, Dim: colorDim,
+			Accent: brandAccent, Muted: brandMuted, Bold: colorBold, Selected: colorSelected, Dim: colorDim,
 			Reset: colorReset, Check: iconCheck, Cross: iconCross, Bolt: iconBolt,
 			Chevron: iconChevron, Separator: separator,
 			Search: iconSearch, Star: iconStar, Circle: iconCircle,

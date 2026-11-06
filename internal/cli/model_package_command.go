@@ -84,8 +84,7 @@ func modelPackageCommand(ctx context.Context, args []string, env Environment) er
 		if env.Options.JSON {
 			return printModelJSON(env.Stdout, map[string]string{"usage": usageText})
 		}
-		fmt.Fprintln(env.Stdout, usageText)
-		fmt.Fprintln(env.Stdout, "All operations use OFFGRID_SERVER_URL / OFFGRID_API_KEY. Importing a model package does not install or qualify its runtime.")
+		Presenter{Stdout: env.Stdout, Style: env.Style}.modelPackageHelp()
 		return nil
 	}
 	client, err := serviceClient(env)

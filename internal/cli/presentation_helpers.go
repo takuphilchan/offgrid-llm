@@ -3,47 +3,34 @@ package cli
 import (
 	"fmt"
 	"strings"
-)
 
-const (
-	itemLabelWidth = 20
-	optionWidth    = 26
+	"github.com/charmbracelet/x/ansi"
 )
 
 func (p Presenter) HelpfulError(err error, context string) {
-	p.Error(fmt.Sprintf("%s failed: %v", context, err))
+	p.Error(terminalLine(fmt.Sprintf("%s failed: %v", context, err)))
 	_, _ = fmt.Fprintln(p.Stdout)
 
 	errStr := err.Error()
 	switch {
 	case strings.Contains(errStr, "connection refused"):
-		p.Info("Possible causes:")
-		p.lines("  • OffGrid server not running", "  • Port 11611 in use by another application", "")
-		p.Info("Solutions:")
-		p.lines("  • Start server: offgrid serve", "  • Check server: systemctl status llama-server", "  • Check port: lsof -i :11611")
+		p.Note("The configured endpoint did not accept a connection.")
+		p.Note("Run offgrid doctor to check the service address and readiness. Open OffGrid Desktop, or start the intended service with offgrid serve.")
 	case strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded"):
-		p.Info("Connection timed out - possible causes:")
-		p.lines("  • Slow internet connection", "  • HuggingFace servers overloaded", "  • Model is very large", "")
-		p.Info("Solutions:")
-		p.lines("  • Try again (temporary network issue)", "  • Check internet: ping huggingface.co", "  • Use smaller model")
+		p.Note("The operation did not finish within its deadline. A timeout alone does not identify the cause.")
+		p.Note("Check offgrid doctor and offgrid logs. Inspect saved work before retrying an operation that may have changed files or external state.")
 	case strings.Contains(errStr, "no such host") || strings.Contains(errStr, "DNS"):
-		p.Info("Cannot reach server - check internet connection:")
-		p.lines("  • Test connection: ping 8.8.8.8", "  • Check DNS: ping huggingface.co", "  • Try offline mode: offgrid list (local models)")
+		p.Note("The endpoint name could not be resolved. Check the configured address and its network connection.")
 	case strings.Contains(errStr, "permission denied"):
-		p.Info("Permission problem:")
-		p.lines("  • Check directory permissions", "  • Models directory: ~/.offgrid/models", "  • Fix: chmod 755 ~/.offgrid && chmod 755 ~/.offgrid/models")
+		p.Note("Check access to the reported file or folder. offgrid info shows the locally configured model folder; a remote service may use a different folder.")
 	case strings.Contains(errStr, "no space left"):
-		p.Info("Disk full:")
-		p.lines("  • Check space: df -h", "  • Free space: delete old models with offgrid remove", "  • Models are typically 2-8GB each")
+		p.Note("Check free space on the destination drive before continuing. Existing models are listed by offgrid list.")
 	case strings.Contains(errStr, "out of memory") || strings.Contains(errStr, "OOM"):
-		p.Info("Not enough RAM:")
-		p.lines("  • Check available RAM: offgrid info", "  • Use smaller model: offgrid search --ram 4", "  • Close other applications", "  • See: docs/4GB_RAM.md")
+		p.Note("Check runtime readiness with offgrid doctor. Close unused applications or explicitly choose a smaller supported context or model.")
 	case strings.Contains(errStr, "model not found") || strings.Contains(errStr, "404"):
-		p.Info("Model not available:")
-		p.lines("  • Check model name is correct", "  • Model may be private or removed", "  • Search for alternatives: offgrid search <query>")
+		p.Note("The requested resource was not found. For a model request, check its exact ID with offgrid list.")
 	case strings.Contains(errStr, "rate limit") || strings.Contains(errStr, "429"):
-		p.Info("HuggingFace rate limit reached:")
-		p.lines("  • Wait a few minutes and try again", "  • Consider using local models: offgrid list", "  • Use fewer concurrent downloads")
+		p.Note("The endpoint is limiting requests. Follow its retry delay and avoid starting duplicate requests.")
 	}
 	_, _ = fmt.Fprintln(p.Stdout)
 }
@@ -55,36 +42,42 @@ func (p Presenter) lines(lines ...string) {
 }
 
 func (p Presenter) Item(label, value string) {
-	_, _ = fmt.Fprintf(p.Stdout, "  %s%-*s%s %s%s%s\n", p.Style.Muted, itemLabelWidth, label+":", p.Style.Reset, p.Style.Bold, value, p.Style.Reset)
+	p.Detail(label, value)
 }
 
 func (p Presenter) Option(option, description string) {
-	_, _ = fmt.Fprintf(p.Stdout, "  %s%-*s%s %s\n", p.Style.Secondary, optionWidth, option, p.Style.Reset, description)
+	p.rows([]presentationRow{{option, description}})
 }
 
 func (p Presenter) Example(command string) {
-	_, _ = fmt.Fprintf(p.Stdout, "  %s%s%s\n", p.Style.Dim, command, p.Style.Reset)
+	if !p.JSON {
+		// Preserve a copyable command; the terminal may soft-wrap it.
+		_, _ = fmt.Fprintf(p.Stdout, "  %s\n", terminalLine(command))
+	}
 }
 
 func (p Presenter) Divider() {
-	_, _ = fmt.Fprintf(p.Stdout, "%s%s%s\n", p.Style.Muted, strings.Repeat(p.Style.Separator, 60), p.Style.Reset)
+	if !p.JSON {
+		_, _ = fmt.Fprintf(p.Stdout, "%s%s%s\n", p.Style.Muted, strings.Repeat(p.Style.Separator, max(1, min(60, p.columns()-2))), p.Style.Reset)
+	}
 }
 
 func (p Presenter) SectionHeader(title string) {
 	if p.JSON {
 		return
 	}
-	_, _ = fmt.Fprintf(p.Stdout, "\n%s%s %s%s\n\n", p.Style.Primary, p.Style.Chevron, title, p.Style.Reset)
+	p.Heading(title)
 }
 
 func (p Presenter) ModernSection(title string, items [][]string) {
-	_, _ = fmt.Fprintf(p.Stdout, "  %s%s%s\n", p.Style.Primary, title, p.Style.Reset)
+	p.Heading(title)
+	rows := make([]presentationRow, 0, len(items))
 	for _, item := range items {
 		if len(item) >= 2 {
-			_, _ = fmt.Fprintf(p.Stdout, "    %s%s%s %-22s %s%s%s\n", p.Style.Primary, p.Style.Chevron, p.Style.Reset, item[0], p.Style.Dim, item[1], p.Style.Reset)
+			rows = append(rows, presentationRow{item[0], item[1]})
 		}
 	}
-	_, _ = fmt.Fprintln(p.Stdout)
+	p.rows(rows)
 }
 
 func (p Presenter) stripStyle(value string) string {
@@ -97,13 +90,19 @@ func (p Presenter) stripStyle(value string) string {
 }
 
 func (p Presenter) Box(title, content string) {
-	const width = 58
+	if p.JSON {
+		return
+	}
+	width := max(8, min(58, p.columns()-2))
 	_, _ = fmt.Fprintf(p.Stdout, "%s%s%s%s%s\n", p.Style.Primary, p.Style.BoxTL, strings.Repeat(p.Style.BoxH, width), p.Style.BoxTR, p.Style.Reset)
-	padding := (width - len(title) - 2) / 2
-	_, _ = fmt.Fprintf(p.Stdout, "%s%s%s %s%s%s %s%s%s\n", p.Style.Primary, p.Style.BoxV, p.Style.Reset, strings.Repeat(" ", padding), p.Style.Bold+title+p.Style.Reset, strings.Repeat(" ", width-len(title)-padding-2), p.Style.Primary, p.Style.BoxV, p.Style.Reset)
+	for _, line := range strings.Split(ansi.Wrap(terminalLine(title), width-2, ""), "\n") {
+		textWidth := ansi.StringWidth(line)
+		padding := max(0, (width-textWidth-2)/2)
+		_, _ = fmt.Fprintf(p.Stdout, "%s%s%s %s%s%s %s%s%s\n", p.Style.Primary, p.Style.BoxV, p.Style.Reset, strings.Repeat(" ", padding), p.Style.Bold+line+p.Style.Reset, strings.Repeat(" ", max(0, width-textWidth-padding-2)), p.Style.Primary, p.Style.BoxV, p.Style.Reset)
+	}
 	_, _ = fmt.Fprintf(p.Stdout, "%s%s%s%s%s\n", p.Style.Primary, p.Style.BoxVR, strings.Repeat(p.Style.BoxH, width), p.Style.BoxVL, p.Style.Reset)
-	for _, line := range strings.Split(content, "\n") {
-		contentPadding := width - len(p.stripStyle(line))
+	for _, line := range strings.Split(ansi.Wrap(content, width-2, ""), "\n") {
+		contentPadding := width - ansi.StringWidth(p.stripStyle(line))
 		if contentPadding < 2 {
 			contentPadding = 2
 		}
@@ -117,13 +116,23 @@ func (p Presenter) Card(title string, lines []string) {
 		return
 	}
 	const width = 56
-	rightPad := width - len(p.stripStyle(title)) - 4
+	if p.columns() < width+2 || ansi.StringWidth(p.stripStyle(title))+6 > width {
+		p.Box(title, strings.Join(lines, "\n"))
+		return
+	}
+	for _, line := range lines {
+		if ansi.StringWidth(p.stripStyle(line)) > width-2 {
+			p.Box(title, strings.Join(lines, "\n"))
+			return
+		}
+	}
+	rightPad := width - ansi.StringWidth(p.stripStyle(title)) - 4
 	if rightPad < 0 {
 		rightPad = 0
 	}
 	_, _ = fmt.Fprintf(p.Stdout, "%s%s%s%s %s%s%s %s%s%s\n", p.Style.Muted, p.Style.BoxTL, strings.Repeat(p.Style.BoxH, 2), p.Style.Reset, p.Style.Bold+p.Style.Primary, title, p.Style.Reset, p.Style.Muted, strings.Repeat(p.Style.BoxH, rightPad)+p.Style.BoxTR, p.Style.Reset)
 	for _, line := range lines {
-		padding := width - len(p.stripStyle(line)) - 2
+		padding := width - ansi.StringWidth(p.stripStyle(line)) - 2
 		if padding < 0 {
 			padding = 0
 		}
@@ -136,5 +145,5 @@ func (p Presenter) SubtleDivider() {
 	if p.JSON {
 		return
 	}
-	_, _ = fmt.Fprintf(p.Stdout, "%s%s%s\n", p.Style.Muted, strings.Repeat(p.Style.BoxH, 50), p.Style.Reset)
+	_, _ = fmt.Fprintf(p.Stdout, "%s%s%s\n", p.Style.Muted, strings.Repeat(p.Style.BoxH, max(1, min(50, p.columns()-2))), p.Style.Reset)
 }

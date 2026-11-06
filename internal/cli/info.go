@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/takuphilchan/offgrid-llm/internal/output"
@@ -51,7 +52,7 @@ func infoCommand(ctx context.Context, _ []string, env Environment) error {
 
 func (p Presenter) InfoSnapshot(snapshot InfoSnapshot) error {
 	if snapshot.ModelScanError != nil && !p.JSON {
-		_, _ = fmt.Fprintf(p.Stderr, "  ✗ Model scan error: %v\n", snapshot.ModelScanError)
+		_, _ = fmt.Fprintf(p.Stderr, "  Model scan failed: %s\n", terminalLine(snapshot.ModelScanError.Error()))
 	}
 	if p.JSON {
 		var models []output.ModelInfo
@@ -81,50 +82,54 @@ func (p Presenter) InfoSnapshot(snapshot InfoSnapshot) error {
 			"system": output.SystemInfo{CPU: fmt.Sprintf("%d cores", snapshot.CPUCores), Memory: snapshot.Memory, OS: snapshot.OS, Architecture: snapshot.Arch},
 		})
 	}
-	s := p.Style
-	_, _ = fmt.Fprintln(p.Stdout)
-	_, _ = fmt.Fprintf(p.Stdout, "  %s◈ OffGrid LLM%s %sv%s%s\n\n", s.Primary+s.Bold, s.Reset, s.Muted, snapshot.Version, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "  %sConfiguration%s\n", s.Primary, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    Port       %s%d%s\n", s.Dim, snapshot.ServerPort, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    Models     %s%s%s\n", s.Dim, snapshot.ModelsDir, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    Threads    %s%d%s\n", s.Dim, snapshot.NumThreads, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    Context    %s%d tokens%s\n", s.Dim, snapshot.MaxContextSize, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    Memory     %s%d MB%s\n", s.Dim, snapshot.MaxMemoryMB, s.Reset)
+	p.Heading("OffGrid / Local configuration")
+	p.Detail("Version", snapshot.Version)
+	p.Note("Local settings and files; live service allocations may differ.")
+	p.Heading("Configuration")
+	p.Detail("Port", fmt.Sprint(snapshot.ServerPort))
+	p.Detail("Model folder", snapshot.ModelsDir)
+	threads := fmt.Sprint(snapshot.NumThreads)
+	if snapshot.NumThreads == 0 {
+		threads = "Automatic"
+	}
+	p.Detail("Threads", threads)
+	p.Detail("Context limit", fmt.Sprintf("%s tokens (configured)", formatCount(snapshot.MaxContextSize)))
+	p.Detail("Memory budget", fmt.Sprintf("%s MB (configured)", formatCount(int(snapshot.MaxMemoryMB))))
 	if snapshot.EnableP2P {
-		_, _ = fmt.Fprintf(p.Stdout, "    P2P        %senabled (port %d)%s\n", s.Dim, snapshot.P2PPort, s.Reset)
+		p.Detail("P2P", fmt.Sprintf("Enabled on port %d", snapshot.P2PPort))
 	}
-	_, _ = fmt.Fprintln(p.Stdout)
-	count := len(snapshot.Models)
-	if count == 1 {
-		_, _ = fmt.Fprintf(p.Stdout, "  %sInstalled Models%s %s· 1 model%s\n", s.Primary, s.Reset, s.Muted, s.Reset)
-	} else {
-		_, _ = fmt.Fprintf(p.Stdout, "  %sInstalled Models%s %s· %d models%s\n", s.Primary, s.Reset, s.Muted, count, s.Reset)
-	}
+	p.Heading(fmt.Sprintf("Local model files (%d)", len(snapshot.Models)))
+	models := append([]InfoModel(nil), snapshot.Models...)
+	sort.SliceStable(models, func(i, j int) bool { return models[i].ID < models[j].ID })
+	rows := make([]presentationRow, 0, len(models))
 	var totalSize int64
-	if count > 0 {
-		for _, model := range snapshot.Models {
-			icon, color := "○", s.Dim
-			if model.IsLoaded {
-				icon, color = "●", s.Success
-			}
-			_, _ = fmt.Fprintf(p.Stdout, "    %s%s%s %s", color, icon, s.Reset, model.ID)
-			if model.Size > 0 {
-				_, _ = fmt.Fprintf(p.Stdout, " %s· %s%s", s.Dim, FormatBytes(model.Size), s.Reset)
-				totalSize += model.Size
-			}
-			if model.Quantization != "" && model.Quantization != "unknown" {
-				_, _ = fmt.Fprintf(p.Stdout, " %s· %s%s", s.Dim, model.Quantization, s.Reset)
-			}
-			_, _ = fmt.Fprintln(p.Stdout)
+	for _, model := range models {
+		detail := "Size unavailable"
+		if model.Size > 0 {
+			detail = FormatBytes(model.Size)
+			totalSize += model.Size
 		}
-		if totalSize > 0 {
-			_, _ = fmt.Fprintf(p.Stdout, "    %sTotal: %s%s\n", s.Muted, FormatBytes(totalSize), s.Reset)
+		// Registry quantization is a filename heuristic, not verified GGUF
+		// metadata. Keep the exact identity and size here; JSON remains compatible.
+		if model.IsLoaded {
+			detail += " / loaded"
 		}
-	} else {
-		_, _ = fmt.Fprintf(p.Stdout, "    %sNo models installed%s\n", s.Muted, s.Reset)
+		rows = append(rows, presentationRow{model.ID, detail})
 	}
-	_, _ = fmt.Fprintln(p.Stdout)
-	_, _ = fmt.Fprintf(p.Stdout, "  %sCatalog%s %s· %d models (%d recommended)%s\n\n", s.Primary, s.Reset, s.Muted, snapshot.CatalogCount, snapshot.Recommended, s.Reset)
+	p.rows(rows)
+	if len(models) == 0 && snapshot.ModelScanError == nil {
+		p.Note("No model files found in this folder.")
+	}
+	if totalSize > 0 {
+		p.Note("Total on disk: " + FormatBytes(totalSize))
+	}
+	p.Heading("Next steps")
+	p.rows([]presentationRow{
+		{"offgrid list", "Models available from the active service"},
+		{"offgrid doctor", "Check service and runtime readiness"},
+		{"offgrid agent", "Start an agent conversation"},
+	})
+	fmt.Fprintln(p.Stdout)
 	return nil
 }
 

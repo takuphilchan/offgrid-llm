@@ -8,6 +8,8 @@ import (
 // PresentationStyle contains the already-selected terminal tokens for one
 // invocation. The OS adapter decides whether color and Unicode are supported.
 type PresentationStyle struct {
+	// Columns is measured by the terminal adapter; zero uses a portable default.
+	Columns   int
 	Primary   string
 	Secondary string
 	Success   string
@@ -15,6 +17,7 @@ type PresentationStyle struct {
 	Accent    string
 	Muted     string
 	Bold      string
+	Selected  string // Terminal-native selection; empty in plain/no-color output.
 	Dim       string
 	Reset     string
 	Check     string
@@ -76,8 +79,5 @@ func (p Presenter) Warning(message string) {
 }
 
 func (p Presenter) KeyValue(key, value string) {
-	if p.JSON {
-		return
-	}
-	_, _ = fmt.Fprintf(p.Stdout, "  %s%-16s%s %s%s%s\n", p.Style.Muted, key, p.Style.Reset, p.Style.Bold, value, p.Style.Reset)
+	p.Detail(key, value)
 }

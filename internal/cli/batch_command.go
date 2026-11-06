@@ -23,17 +23,14 @@ func batchCommand(ctx context.Context, args []string, env Environment) error {
 	s := env.Style
 	p := Presenter{Stdout: env.Stdout, Stderr: env.Stderr, JSON: env.Options.JSON, Style: s}
 	if len(args) == 0 {
-		_, _ = fmt.Fprintln(env.Stdout)
-		_, _ = fmt.Fprintf(env.Stdout, "  %s◈ Batch Processing%s\n", s.Primary+s.Bold, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "  %sProcess multiple prompts from JSONL files%s\n\n", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "  %sUsage%s  offgrid batch process <input.jsonl> [output.jsonl]\n\n", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "  %sOptions%s\n", s.Primary, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "    %-20s %sParallel requests (default: 4)%s\n\n", "--concurrency <n>", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "  %sInput Format%s  JSONL with id, model, prompt fields\n", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "    %s{\"id\": \"1\", \"model\": \"llama3\", \"prompt\": \"Hello\"}%s\n\n", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "  %sExamples%s\n", s.Primary, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "    %s$%s offgrid batch process prompts.jsonl\n", s.Dim, s.Reset)
-		_, _ = fmt.Fprintf(env.Stdout, "    %s$%s offgrid batch process in.jsonl out.jsonl --concurrency 8\n\n", s.Dim, s.Reset)
+		help := p
+		help.JSON = false
+		help.Heading("OffGrid / Batch processing")
+		help.Example("offgrid batch process INPUT.jsonl [OUTPUT.jsonl] [--concurrency N]")
+		help.Note("Process JSONL records with id, model and prompt fields. Use an installed model ID from offgrid list.")
+		help.Example(`{"id":"1","model":"INSTALLED_MODEL_ID","prompt":"Hello"}`)
+		help.Detail("Concurrency", "4 requests by default")
+		help.Detail("Output", "batch-results.jsonl unless specified")
 		return nil
 	}
 	if args[0] != "process" {

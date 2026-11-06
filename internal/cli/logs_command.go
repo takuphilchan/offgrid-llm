@@ -19,9 +19,6 @@ type LogDependencies struct {
 }
 
 func RunLogsCommand(ctx context.Context, args []string, env Environment) error {
-	if env.Logs.HomeDir == nil || env.Logs.Stat == nil {
-		return fmt.Errorf("logs host adapter unavailable")
-	}
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
 		args = nil
 	}
@@ -40,6 +37,9 @@ func RunLogsCommand(ctx context.Context, args []string, env Environment) error {
 	if len(args) == 0 || (len(args) == 1 && args[0] == "") {
 		printLogsHelp(env)
 		return nil
+	}
+	if env.Logs.HomeDir == nil || env.Logs.Stat == nil {
+		return fmt.Errorf("logs host adapter unavailable")
 	}
 	// The preexisting command accepted arbitrary integers; the process boundary
 	// now refuses unreasonable tail/journalctl counts before spawning anything.
@@ -96,22 +96,15 @@ func RunLogsCommand(ctx context.Context, args []string, env Environment) error {
 }
 
 func printLogsHelp(env Environment) {
-	s := env.Style
-	fmt.Fprintln(env.Stdout)
-	fmt.Fprintf(env.Stdout, "  %s%s Logs%s\n", s.Primary+s.Bold, s.Circle, s.Reset)
-	fmt.Fprintf(env.Stdout, "  %sView server logs%s\n", s.Dim, s.Reset)
-	fmt.Fprintln(env.Stdout)
-	fmt.Fprintf(env.Stdout, "  %sUsage%s  offgrid logs [options]\n", s.Dim, s.Reset)
-	fmt.Fprintln(env.Stdout)
-	fmt.Fprintf(env.Stdout, "  %sOptions%s\n", s.Primary, s.Reset)
-	fmt.Fprintf(env.Stdout, "    %-20s %sFollow log output (like tail -f)%s\n", "-f, --follow", s.Dim, s.Reset)
-	fmt.Fprintf(env.Stdout, "    %-20s %sNumber of lines to show (default: 50)%s\n", "-n, --lines <num>", s.Dim, s.Reset)
-	fmt.Fprintln(env.Stdout)
-	fmt.Fprintf(env.Stdout, "  %sExamples%s\n", s.Primary, s.Reset)
-	fmt.Fprintf(env.Stdout, "    %s$%s offgrid logs                   %s# Show recent logs%s\n", s.Dim, s.Reset, s.Muted, s.Reset)
-	fmt.Fprintf(env.Stdout, "    %s$%s offgrid logs -f                %s# Follow logs in real-time%s\n", s.Dim, s.Reset, s.Muted, s.Reset)
-	fmt.Fprintf(env.Stdout, "    %s$%s offgrid logs -n 100            %s# Show last 100 lines%s\n", s.Dim, s.Reset, s.Muted, s.Reset)
-	fmt.Fprintln(env.Stdout)
+	p := Presenter{Stdout: env.Stdout, Style: env.Style}
+	p.Heading("OffGrid / Logs")
+	p.Note("Read the configured service log. Log content is displayed as recorded.")
+	p.ModernSection("Read and follow", [][]string{
+		{"offgrid logs -n 50", "Show the last 50 lines"},
+		{"offgrid logs -n 100", "Choose the number of lines"},
+		{"offgrid logs --follow", "Follow new output; Ctrl+C leaves"},
+	})
+	p.Note("Options: -f / --follow, -n / --lines N.")
 }
 
 func logsCommand(ctx context.Context, args []string, env Environment) error {

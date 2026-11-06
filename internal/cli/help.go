@@ -1,9 +1,6 @@
 package cli
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // Help puts the first useful local workflow ahead of the full command catalog.
 // Keep HelpAll available for scripts and experienced users looking for a family.
@@ -13,15 +10,10 @@ func (p Presenter) Help(version string) {
 	fmt.Fprintf(p.Stdout, "  %sRun local models. Downloads and connected tools may use the network.%s\n", p.Style.Muted, p.Style.Reset)
 	fmt.Fprintln(p.Stdout)
 	fmt.Fprintf(p.Stdout, "  %sStart here%s\n", p.Style.Primary, p.Style.Reset)
-	fmt.Fprintln(p.Stdout, "    offgrid model list          See models already installed")
-	fmt.Fprintln(p.Stdout, "    offgrid agent               Start a conversation")
-	fmt.Fprintln(p.Stdout, "    offgrid doctor              Check service and runtime readiness")
+	p.rows([]presentationRow{{"offgrid agent", "Start a conversation"}, {"offgrid model list", "See models already installed"}, {"offgrid doctor", "Check service and runtime readiness"}})
 	fmt.Fprintln(p.Stdout)
 	fmt.Fprintf(p.Stdout, "  %sWhen you need more%s\n", p.Style.Primary, p.Style.Reset)
-	fmt.Fprintln(p.Stdout, "    offgrid model discover      Review models available to install")
-	fmt.Fprintln(p.Stdout, "    offgrid kb help             Work with local documents")
-	fmt.Fprintln(p.Stdout, "    offgrid agent help          Agent tools and saved work")
-	fmt.Fprintln(p.Stdout, "    offgrid help all            Every command family")
+	p.rows([]presentationRow{{"offgrid model catalog", "Review models available to install"}, {"offgrid kb help", "Work with local documents"}, {"offgrid agent help", "Agent tools and saved work"}, {"offgrid help all", "Every command family"}})
 	fmt.Fprintln(p.Stdout)
 	fmt.Fprintf(p.Stdout, "  %sUsage%s  offgrid %s<command>%s %s[options]%s\n", p.Style.Bold, p.Style.Reset, p.Style.Primary, p.Style.Reset, p.Style.Muted, p.Style.Reset)
 	fmt.Fprintf(p.Stdout, "  %sUse --json for automation or --no-color for plain output.%s\n", p.Style.Muted, p.Style.Reset)
@@ -87,7 +79,7 @@ func (p Presenter) HelpAll(version string) {
 			cmds: []cmdEntry{
 				{"init", "First-time setup wizard"},
 				{"doctor", "Run system diagnostics"},
-				{"info", "System information"},
+				{"info", "Local configuration and model files"},
 				{"logs", "View server logs (-f to follow)"},
 				{"config <action>", "Manage configuration"},
 				{"peers", "P2P network status & model sharing"},
@@ -118,24 +110,13 @@ func (p Presenter) HelpAll(version string) {
 		},
 	}
 
-	// Use fixed column width of 22 chars for command column
-	const columnWidth = 22
-
 	for _, s := range sections {
 		fmt.Fprintf(p.Stdout, "  %s%s%s\n", p.Style.Primary, s.title, p.Style.Reset)
+		rows := make([]presentationRow, 0, len(s.cmds))
 		for _, c := range s.cmds {
-			// Calculate padding needed to reach fixed column width
-			paddingNeeded := columnWidth - len(c.name)
-			if paddingNeeded < 2 {
-				paddingNeeded = 2
-			}
-			padding := strings.Repeat(" ", paddingNeeded)
-
-			fmt.Fprintf(p.Stdout, "    %s%s%s%s%s%s\n",
-				p.Style.Bold, c.name, p.Style.Reset,
-				padding,
-				p.Style.Muted, c.desc)
+			rows = append(rows, presentationRow{c.name, c.desc})
 		}
+		p.rows(rows)
 		fmt.Fprintln(p.Stdout)
 	}
 
@@ -144,7 +125,7 @@ func (p Presenter) HelpAll(version string) {
 	fmt.Fprintf(p.Stdout, "  %sQuick Start%s\n", p.Style.Primary, p.Style.Reset)
 	fmt.Fprintf(p.Stdout, "    %s$%s offgrid model list               %s# See installed models%s\n", p.Style.Muted, p.Style.Reset, p.Style.Muted, p.Style.Reset)
 	fmt.Fprintf(p.Stdout, "    %s$%s offgrid agent                    %s# Start a conversation%s\n", p.Style.Muted, p.Style.Reset, p.Style.Muted, p.Style.Reset)
-	fmt.Fprintf(p.Stdout, "    %s$%s offgrid model discover           %s# Review install choices%s\n", p.Style.Muted, p.Style.Reset, p.Style.Muted, p.Style.Reset)
+	fmt.Fprintf(p.Stdout, "    %s$%s offgrid model catalog           %s# Review install choices%s\n", p.Style.Muted, p.Style.Reset, p.Style.Muted, p.Style.Reset)
 	fmt.Fprintf(p.Stdout, "    %s$%s offgrid doctor                   %s# Check readiness%s\n", p.Style.Muted, p.Style.Reset, p.Style.Muted, p.Style.Reset)
 	fmt.Fprintln(p.Stdout)
 

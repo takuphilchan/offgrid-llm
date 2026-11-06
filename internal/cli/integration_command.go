@@ -59,22 +59,24 @@ func RunIntegrationCommand(ctx context.Context, args []string, env Environment) 
 }
 
 func printIntegrationHelp(env Environment) {
-	s := env.Style
-	w := env.Stdout
-	fmt.Fprintln(w)
-	fmt.Fprintf(w, "  %sExternal agent integrations%s\n", s.Primary+s.Bold, s.Reset)
-	fmt.Fprintf(w, "  %sInstall OffGrid as a native provider in supported agent runtimes%s\n\n", s.Muted, s.Reset)
-	fmt.Fprintf(w, "  %-34s %sShow service/model compatibility%s\n", "offgrid integrations list", s.Dim, s.Reset)
-	fmt.Fprintf(w, "  %-34s %sGenerate provider configuration%s\n", "offgrid integrations setup <id>", s.Dim, s.Reset)
-	fmt.Fprintf(w, "  %-34s %sInstall the first-party provider plugin%s\n", "offgrid integrations install <id>", s.Dim, s.Reset)
-	fmt.Fprintf(w, "  %-34s %sConfigure and verify a host integration%s\n", "offgrid integrations configure <id>", s.Dim, s.Reset)
-	fmt.Fprintf(w, "  %-34s %sInspect host preflight without inference%s\n", "offgrid integrations status <id>", s.Dim, s.Reset)
-	fmt.Fprintf(w, "  %-34s %sVerify a model reply%s\n", "offgrid integrations test <id>", s.Dim, s.Reset)
-	fmt.Fprintf(w, "  %-34s %sRun the external agent%s\n", "offgrid integrations run <id> [task]", s.Dim, s.Reset)
-	fmt.Fprintf(w, "\n  %sDiscover integration IDs with offgrid integrations list%s\n", s.Muted, s.Reset)
-	fmt.Fprintf(w, "  %sOptions%s    --model <id> --base-url <url> --force\n\n", s.Muted, s.Reset)
-	fmt.Fprintln(w, "  Experimental run-only file verification: --verify-contract <file.json>")
-	fmt.Fprintln(w, "  Hermes hook bundle (explicit install/enable): offgrid integrations install hermes-verifier")
+	p := Presenter{Stdout: env.Stdout, Stderr: env.Stderr, Style: env.Style}
+	p.Heading("OffGrid / External agents")
+	p.Note("Use OffGrid models with a separately installed agent runtime.")
+	p.ModernSection("Inspect", [][]string{
+		{"offgrid integrations list", "Service and model compatibility"},
+		{"offgrid integrations status ID", "Host preflight without inference"},
+		{"offgrid integrations test ID", "Verify a model reply"},
+	})
+	p.ModernSection("Set up and run", [][]string{
+		{"offgrid integrations setup ID", "Show provider configuration"},
+		{"offgrid integrations install ID", "Install the first-party provider plugin"},
+		{"offgrid integrations configure ID", "Configure and verify the host integration"},
+		{"offgrid integrations run ID [task]", "Launch the external agent"},
+	})
+	p.Note("Choose an ID from integrations list. Options: --model ID, --base-url URL, --force.")
+	p.Heading("Advanced verification")
+	p.Note("Experimental run-only file verification: --verify-contract FILE.json")
+	p.Example("offgrid integrations install hermes-verifier")
 }
 
 func integrationOptions(args []string, env Environment) (integrations.HostOptions, error) {
@@ -116,16 +118,21 @@ func integrationList(ctx context.Context, args []string, env Environment) error 
 	if env.Options.JSON {
 		return localJSON(env, response)
 	}
-	fmt.Fprintln(env.Stdout, "\n  External agents: service/model compatibility (host installation and workflow unverified)")
+	p := Presenter{Stdout: env.Stdout, Style: env.Style}
+	p.Heading("OffGrid / External agents")
+	p.Note("Service/model compatibility only; host installation and workflow remain unverified.")
 	for _, item := range response.Integrations {
 		state := "compatible"
 		if !item.Ready {
 			state = "blocked"
 		}
-		fmt.Fprintf(env.Stdout, "  %-14s %-18s %s\n", item.ID, item.Name, state)
-		fmt.Fprintf(env.Stdout, "    model=%s context=%d minimum=%d\n", emptyIntegrationFallback(item.ModelID, "none"), item.ContextWindow, item.MinimumContext)
+		p.Heading(item.Name)
+		p.Detail("Integration", item.ID)
+		p.Detail("Compatibility", state)
+		p.Detail("Model", emptyIntegrationFallback(item.ModelID, "none"))
+		p.Detail("Context", fmt.Sprintf("%s tokens; minimum %s", formatCount(item.ContextWindow), formatCount(item.MinimumContext)))
 		for _, warning := range item.Warnings {
-			fmt.Fprintf(env.Stdout, "    %s\n", warning)
+			p.Note(warning)
 		}
 	}
 	return nil

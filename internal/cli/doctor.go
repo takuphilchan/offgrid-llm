@@ -40,61 +40,54 @@ func doctorCommand(ctx context.Context, args []string, env Environment) error {
 }
 
 func (p Presenter) Doctor(snapshot DoctorSnapshot) {
-	s := p.Style
-	_, _ = fmt.Fprintln(p.Stdout)
-	_, _ = fmt.Fprintf(p.Stdout, "  %s%s System Diagnostics%s\n\n", s.Primary+s.Bold, s.Search, s.Reset)
-	allPassed, checks, passed := true, 0, 0
-	printCheck := func(success, optional bool, name, detail string) {
-		checks++
-		icon, color := s.Check, s.Success
-		if !success {
-			if optional {
-				icon, color = "○", s.Muted
-			} else {
-				icon, color = s.Cross, s.Error
-				allPassed = false
-			}
-		} else {
-			passed++
+	p.Heading("OffGrid / Diagnostics")
+	p.Note("Observed checks only; model generation and storage writes are not tested.")
+	problems := 0
+	check := func(name, value string, ok bool) {
+		state := "ready"
+		if !ok {
+			state = "needs attention"
+			problems++
 		}
-		_, _ = fmt.Fprintf(p.Stdout, "    %s%s%s  %-12s %s%s%s\n", color, icon, s.Reset, name, s.Muted, detail, s.Reset)
+		p.Detail(name, state)
+		p.Note(value)
 	}
 	if snapshot.ResourcesError != nil {
-		printCheck(false, false, "Resources", fmt.Sprintf("Failed (%v)", snapshot.ResourcesError))
+		check("Resources", snapshot.ResourcesError.Error(), false)
 	} else {
-		printCheck(true, false, "Resources", fmt.Sprintf("%s/%s · %d cores · %s RAM", snapshot.OS, snapshot.Arch, snapshot.CPUCores, FormatBytes(snapshot.RAMBytes)))
+		check("Resources", fmt.Sprintf("%s/%s | %d cores | %s RAM", snapshot.OS, snapshot.Arch, snapshot.CPUCores, FormatBytes(snapshot.RAMBytes)), true)
 		if snapshot.GPUName != "" {
-			_, _ = fmt.Fprintf(p.Stdout, "              %s└─ GPU: %s (%s)%s\n", s.Muted, snapshot.GPUName, FormatBytes(snapshot.GPUMemoryBytes), s.Reset)
+			p.Detail("GPU", fmt.Sprintf("%s (%s)", snapshot.GPUName, FormatBytes(snapshot.GPUMemoryBytes)))
 		}
 	}
 	if snapshot.ConfigPresent {
-		printCheck(true, false, "Config", snapshot.ConfigPath)
+		p.Detail("Configuration", snapshot.ConfigPath)
 	} else {
-		printCheck(true, true, "Config", "Using defaults")
+		p.Detail("Configuration", "Using defaults")
 	}
 	if snapshot.StoragePresent {
-		printCheck(true, false, "Storage", fmt.Sprintf("%s (present; writability not tested)", snapshot.ModelsDir))
-		if snapshot.ModelScanError == nil {
-			_, _ = fmt.Fprintf(p.Stdout, "              %s└─ %d model(s) installed%s\n", s.Muted, snapshot.ModelCount, s.Reset)
+		check("Storage", fmt.Sprintf("%s (present; writability not tested)", snapshot.ModelsDir), true)
+		if snapshot.ModelScanError != nil {
+			check("Model scan", snapshot.ModelScanError.Error(), false)
+		} else {
+			p.Note(fmt.Sprintf("%d model(s) installed", snapshot.ModelCount))
 		}
 	} else {
-		printCheck(false, false, "Storage", fmt.Sprintf("Missing %s", snapshot.ModelsDir))
+		check("Storage", "Missing "+snapshot.ModelsDir, false)
 	}
 	if snapshot.NetworkOnline {
-		printCheck(true, false, "Network", "Online (HuggingFace reachable)")
+		p.Detail("Model downloads", "Hugging Face reachable")
 	} else {
-		printCheck(true, true, "Network", "Offline mode")
+		p.Detail("Model downloads", "Offline mode; local work does not require downloads")
 	}
 	if snapshot.ServerOnline {
-		printCheck(true, false, "Server", fmt.Sprintf("Running on port %d", snapshot.ServerPort))
+		check("Service", fmt.Sprintf("Responding on port %d", snapshot.ServerPort), true)
 	} else {
-		printCheck(true, true, "Server", "Not running")
+		check("Service", "Not reachable. Check the configured endpoint; open OffGrid Desktop or start the intended service with offgrid serve.", false)
 	}
-	_, _ = fmt.Fprintln(p.Stdout)
-	if allPassed {
-		_, _ = fmt.Fprintf(p.Stdout, "    %s%s All checks passed%s (%d/%d)\n", s.Success, s.Check, s.Reset, passed, checks)
+	if problems == 0 {
+		p.Heading("Observed checks ready")
 	} else {
-		_, _ = fmt.Fprintf(p.Stdout, "    %s%s Some checks failed%s (%d/%d passed)\n", s.Error, s.Cross, s.Reset, passed, checks)
+		p.Heading(fmt.Sprintf("%d check(s) need attention", problems))
 	}
-	_, _ = fmt.Fprintln(p.Stdout)
 }

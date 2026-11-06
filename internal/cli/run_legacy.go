@@ -31,39 +31,26 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 	}
 
 	if len(args) < 1 {
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sInteractive Chat%s\n", brandPrimary+colorBold, colorReset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sUsage%s  offgrid run %s<model>%s %s[options]%s\n", colorBold, colorReset, brandPrimary, colorReset, brandMuted, colorReset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sQuick Start (auto-downloads if needed)%s\n", colorBold, colorReset)
-		fmt.Fprintf(env.Stdout, "    %s$%s offgrid run %sllama3%s       %s# Llama 3.2 3B (~4GB RAM)%s\n", brandMuted, colorReset, brandPrimary, colorReset, colorDim, colorReset)
-		fmt.Fprintf(env.Stdout, "    %s$%s offgrid run %sqwen%s         %s# Qwen 2.5 3B (~4GB RAM)%s\n", brandMuted, colorReset, brandPrimary, colorReset, colorDim, colorReset)
-		fmt.Fprintf(env.Stdout, "    %s$%s offgrid run %smistral%s      %s# Mistral 7B (~8GB RAM)%s\n", brandMuted, colorReset, brandPrimary, colorReset, colorDim, colorReset)
-		fmt.Fprintf(env.Stdout, "    %s$%s offgrid run %stiny%s         %s# TinyLlama 1.1B (~2GB RAM)%s\n", brandMuted, colorReset, brandPrimary, colorReset, colorDim, colorReset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sOptions%s\n", colorBold, colorReset)
-		fmt.Fprintf(env.Stdout, "    %s--save%s <name>      Save conversation to session\n", brandPrimary, colorReset)
-		fmt.Fprintf(env.Stdout, "    %s--load%s <name>      Load and continue existing session\n", brandPrimary, colorReset)
-		fmt.Fprintf(env.Stdout, "    %s--image%s <path>     Attach PNG/JPEG (2 MiB each; repeat for up to four)\n", brandPrimary, colorReset)
-		fmt.Fprintln(env.Stdout, "                       In chat: /image PATH, /images, /remove-image [N|all]")
-		fmt.Fprintln(env.Stdout, "    --file PATH        Attach a document through the connected service (repeat up to eight)")
-		fmt.Fprintln(env.Stdout, "    --prompt QUESTION  Answer once with --file; otherwise open file chat")
-		fmt.Fprintln(env.Stdout, "                       File chat: /attach PATH, /attachments, /remove-attachment N")
-		fmt.Fprintf(env.Stdout, "    %s--rag%s              Enable knowledge base (RAG)\n", brandPrimary, colorReset)
-		fmt.Fprintf(env.Stdout, "    %s--allow-embedding-chat%s  Force chat with an embedding-like model\n", brandPrimary, colorReset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sMore Aliases%s\n", colorBold, colorReset)
-		fmt.Fprintf(env.Stdout, "    %sphi%s, %sgemma%s, %sqwen2.5-coder%s, %scodellama%s, %sllava%s (vision)\n", brandPrimary, colorReset, brandPrimary, colorReset, brandPrimary, colorReset, brandPrimary, colorReset, brandPrimary, colorReset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sTip:%s Run %soffgrid alias list%s to see all shortcuts\n", brandMuted, colorReset, colorBold, colorReset)
-		fmt.Fprintln(env.Stdout)
+		presenter.Heading("OffGrid / Interactive chat")
+		presenter.Example("offgrid run MODEL [options]")
+		presenter.Note("Choose an installed model ID with offgrid list. Use offgrid agent for tool-enabled work.")
+		presenter.ModernSection("Conversation", [][]string{
+			{"--save NAME", "Save the conversation"},
+			{"--load NAME", "Continue a saved conversation"},
+			{"--rag", "Use the configured Knowledge index"},
+		})
+		presenter.ModernSection("Attachments", [][]string{
+			{"--image PATH", "PNG/JPEG; up to four images, 2 MiB each"},
+			{"--file PATH", "Prepare a document on the connected service; up to eight"},
+			{"--prompt QUESTION", "Answer once with --file"},
+		})
+		presenter.Note("In chat: /help, /image PATH, /images, /remove-image N|all. File chat also supports /attach PATH, /attachments and /remove-attachment N.")
+		presenter.Note("Advanced: --allow-embedding-chat overrides the embedding-model warning. Vision requires a compatible model and projector.")
 		if helpRequested {
 			return nil
 		}
 		return ReportedError{}
 	}
-
 	modelName := args[0]
 	var sessionName string
 	var loadSession bool
@@ -302,7 +289,7 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 			fmt.Fprintln(env.Stdout)
 			presenter.Error("Failed to start OffGrid server")
 			presenter.Info("Please start the server manually:")
-			presenter.Item("Start server", "offgrid serve &")
+			presenter.Item("Start server", "offgrid serve")
 			fmt.Fprintln(env.Stdout)
 			return ReportedError{}
 		}
@@ -433,7 +420,6 @@ func runInteractive(ctx context.Context, args []string, env Environment) error {
 		fmt.Fprintln(env.Stdout)
 		fmt.Fprintf(env.Stdout, "  %sStart server:%s\n", colorBold, colorReset)
 		fmt.Fprintf(env.Stdout, "    %s$%s offgrid serve\n", brandMuted, colorReset)
-		fmt.Fprintf(env.Stdout, "    %s$%s sudo systemctl start offgrid-llm\n", brandMuted, colorReset)
 		fmt.Fprintln(env.Stdout)
 		return ReportedError{}
 	}

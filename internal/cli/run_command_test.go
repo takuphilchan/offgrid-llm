@@ -46,7 +46,7 @@ func TestRunHelpAndMissingModelStayInsideInjectedBoundary(t *testing.T) {
 		EmbeddingChatError: func(string) string { t.Fatal("unexpected embedding error"); return "" },
 		DetectResources:    func() (*resource.SystemResources, error) { t.Fatal("unexpected hardware probe"); return nil, nil },
 	}
-	if code := Execute(context.Background(), []string{"run", "--help"}, env); code != 0 || !strings.Contains(out.String(), "Interactive Chat") {
+	if code := Execute(context.Background(), []string{"run", "--help"}, env); code != 0 || !strings.Contains(out.String(), "Interactive chat") {
 		t.Fatalf("help failed: code=%d stdout=%q stderr=%q", code, out.String(), errOut.String())
 	}
 	out.Reset()

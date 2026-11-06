@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/takuphilchan/offgrid-llm/internal/output"
@@ -64,10 +65,19 @@ func RunList(ctx context.Context, args []string, p Presenter, serverURL, apiKey 
 		if p.JSON {
 			return json.NewEncoder(p.Stdout).Encode(result)
 		}
-		_, _ = fmt.Fprintf(p.Stdout, "Catalog · %s\n", TerminalSafe(serverURL))
+		p.Heading(fmt.Sprintf("OffGrid / Model catalog (%d)", len(result.Models)))
+		p.Detail("Service", serverURL)
+		p.Note("Catalog entries are not necessarily installed.")
+		sort.SliceStable(result.Models, func(i, j int) bool { return result.Models[i].ID < result.Models[j].ID })
+		rows := make([]presentationRow, 0, len(result.Models))
 		for _, item := range result.Models {
-			_, _ = fmt.Fprintf(p.Stdout, "  %-36s %s\n", TerminalSafe(item.ID), TerminalSafe(item.Quant))
+			rows = append(rows, presentationRow{item.ID, item.Quant})
 		}
+		p.rows(rows)
+		if len(rows) == 0 {
+			p.Note("No catalog entries available from this service.")
+		}
+		fmt.Fprintln(p.Stdout)
 		return nil
 	}
 	var result api.ModelListResponse
@@ -81,13 +91,23 @@ func RunList(ctx context.Context, args []string, p Presenter, serverURL, apiKey 
 	if p.JSON {
 		return json.NewEncoder(p.Stdout).Encode(map[string]any{"server": serverURL, "models": items, "count": len(items)})
 	}
-	_, _ = fmt.Fprintf(p.Stdout, "Installed models · %s\n", TerminalSafe(serverURL))
+	p.Heading(fmt.Sprintf("OffGrid / Installed models (%d)", len(items)))
+	p.Detail("Service", serverURL)
+	fmt.Fprintln(p.Stdout)
+	sort.SliceStable(items, func(i, j int) bool { return items[i].Name < items[j].Name })
+	rows := make([]presentationRow, 0, len(items))
 	for _, item := range items {
-		_, _ = fmt.Fprintf(p.Stdout, "  %-42s %s\n", TerminalSafe(item.Name), item.Size)
+		rows = append(rows, presentationRow{item.Name, item.Size})
 	}
+	p.rows(rows)
 	if len(items) == 0 {
-		_, _ = fmt.Fprintln(p.Stdout, "  No models installed on this service. Use offgrid list --catalog or offgrid search <query>.")
+		p.Note("No models installed on this service. Use offgrid list --catalog or offgrid search <query>.")
+	} else {
+		p.Heading("Start a conversation")
+		p.Note("offgrid agent")
+		p.Note("Or use an exact model ID above: offgrid run MODEL")
 	}
+	fmt.Fprintln(p.Stdout)
 	return nil
 }
 

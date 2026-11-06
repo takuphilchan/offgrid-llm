@@ -34,7 +34,7 @@ func RunSearch(ctx context.Context, args []string, p Presenter, httpClient *http
 		return errors.New("missing search HTTP client")
 	}
 	if !p.JSON {
-		_, _ = fmt.Fprintln(p.Stderr, "Searching Hugging Face Hub…")
+		_, _ = fmt.Fprintln(p.Stderr, "Searching Hugging Face Hub...")
 	}
 	results, err := models.NewHuggingFaceClient().WithHTTPClient(httpClient).SearchModelsContext(ctx, filters)
 	if err != nil {
@@ -81,18 +81,18 @@ func RunSearch(ctx context.Context, args []string, p Presenter, httpClient *http
 		_, _ = fmt.Fprintf(p.Stdout, "    %sTry:%s offgrid search llama --ram 4\n\n", p.Style.Muted, p.Style.Reset)
 		return nil
 	}
-	_, _ = fmt.Fprintf(p.Stdout, "    %s%d model(s) found%s\n\n", p.Style.Muted, len(results), p.Style.Reset)
+	p.Heading("OffGrid / Model discovery")
+	p.Note(fmt.Sprintf("%d results from Hugging Face. These models are not necessarily installed.", len(results)))
 	for i, result := range results {
 		model := result.Model
-		_, _ = fmt.Fprintf(p.Stdout, "  %s%d.%s %s%s%s", p.Style.Muted, i+1, p.Style.Reset, p.Style.Bold, model.ID, p.Style.Reset)
+		p.Heading(fmt.Sprintf("%d. %s", i+1, model.ID))
 		if result.IsRecommended {
-			_, _ = fmt.Fprintf(p.Stdout, " %s★%s", p.Style.Success, p.Style.Reset)
+			p.Note("Recommended by the discovery catalog")
 		}
 		if result.IsTrusted {
-			_, _ = fmt.Fprintf(p.Stdout, " %s✓%s", p.Style.Primary, p.Style.Reset)
+			p.Note("Recognized publisher; runtime compatibility still requires verification")
 		}
-		_, _ = fmt.Fprintln(p.Stdout)
-		infoParts := []string{fmt.Sprintf("↓ %s", compactNumber(model.Downloads)), fmt.Sprintf("♥ %s", compactNumber(int64(model.Likes)))}
+		infoParts := []string{fmt.Sprintf("%s downloads", compactNumber(model.Downloads)), fmt.Sprintf("%s likes", compactNumber(int64(model.Likes)))}
 		if result.BestVariant != nil {
 			infoParts = append(infoParts, result.BestVariant.Quantization)
 			if result.BestVariant.SizeGB > 0 {
@@ -101,11 +101,11 @@ func RunSearch(ctx context.Context, args []string, p Presenter, httpClient *http
 				infoParts = append(infoParts, fmt.Sprintf("~%.0fGB RAM", estimatedRAM))
 			}
 		}
-		_, _ = fmt.Fprintf(p.Stdout, "     %s%s%s\n", p.Style.Dim, strings.Join(infoParts, " · "), p.Style.Reset)
+		p.Note(strings.Join(infoParts, " | "))
 		if showFiles {
 			for _, file := range result.GGUFFiles {
-				_, _ = fmt.Fprintf(p.Stdout, "     %s · %.2f GB · %s\n", TerminalSafe(file.Filename), file.SizeGB, file.Quantization)
-				_, _ = fmt.Fprintf(p.Stdout, "       offgrid download %q --file %q\n", TerminalSafe(model.ID), TerminalSafe(file.Filename))
+				p.Detail(file.Filename, fmt.Sprintf("%.2f GB | %s", file.SizeGB, file.Quantization))
+				p.Example(fmt.Sprintf("offgrid download %q --file %q", terminalLine(model.ID), terminalLine(file.Filename)))
 			}
 		}
 		if i < len(results)-1 {
@@ -113,31 +113,28 @@ func RunSearch(ctx context.Context, args []string, p Presenter, httpClient *http
 		}
 	}
 	_, _ = fmt.Fprintln(p.Stdout)
-	_, _ = fmt.Fprintf(p.Stdout, "  %sTip: add --files to choose a quantization; use offgrid download owner/repo --file model.gguf%s\n\n", p.Style.Muted, p.Style.Reset)
+	p.Note("RAM values are estimates, not compatibility guarantees. Add --files to review variants and exact download commands.")
 	return nil
 }
 
 func (p Presenter) searchHelp() {
-	s := p.Style
-	_, _ = fmt.Fprintln(p.Stdout)
-	_, _ = fmt.Fprintf(p.Stdout, "  %s%s Search HuggingFace%s\n\n", s.Primary+s.Bold, s.Search, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "  %sUsage%s  offgrid search %s[query]%s %s[options]%s\n\n", s.Bold, s.Reset, s.Primary, s.Reset, s.Muted, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "  %sOptions%s\n", s.Bold, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    %s-a, --author%s <name>    Filter by author (e.g., 'TheBloke')\n", s.Primary, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    %s-q, --quant%s <type>     Filter by quantization (e.g., 'Q4_K_M')\n", s.Primary, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    %s-r, --ram%s <GB>         Filter by max RAM (e.g., 4, 8, 16)\n", s.Primary, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    %s-s, --sort%s <field>     Sort by: downloads, likes, created\n", s.Primary, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    %s-l, --limit%s <n>        Limit results (default: 20)\n", s.Primary, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    %s--all%s                  Include gated models\n", s.Primary, s.Reset)
-	_, _ = fmt.Fprintln(p.Stdout, "    --files                Show individual GGUF files and download commands")
-	_, _ = fmt.Fprintln(p.Stdout, "    No RAM limit is applied unless --ram is supplied; estimates are not a compatibility guarantee.")
-	_, _ = fmt.Fprintln(p.Stdout)
-	_, _ = fmt.Fprintf(p.Stdout, "  %sExamples%s\n", s.Bold, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    %s$%s offgrid search llama\n", s.Muted, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    %s$%s offgrid search llama --ram 4\n", s.Muted, s.Reset)
-	_, _ = fmt.Fprintf(p.Stdout, "    %s$%s offgrid search mistral --author TheBloke --quant Q4_K_M\n\n", s.Muted, s.Reset)
+	p.Heading("OffGrid / Model discovery")
+	p.Example("offgrid search [query] [options]")
+	p.Note("Searches Hugging Face over the network. It does not install a model.")
+	p.ModernSection("Filter results", [][]string{
+		{"--author NAME", "Filter by publisher"},
+		{"--quant TYPE", "Filter GGUF quantization, for example Q4_K_M"},
+		{"--ram GB", "Filter by estimated memory requirement"},
+		{"--sort FIELD", "downloads, likes, or created"},
+		{"--limit N", "Maximum results (default 20)"},
+		{"--all", "Include gated models"},
+		{"--files", "Show exact GGUF filenames and download commands"},
+	})
+	p.Note("No RAM limit is applied unless --ram is supplied; estimates are not a compatibility guarantee.")
+	p.Heading("Examples")
+	p.Example("offgrid search llama")
+	p.Example("offgrid search llama --ram 8 --files")
 }
-
 func compactNumber(n int64) string {
 	if n >= 1000000 {
 		return fmt.Sprintf("%.1fM", float64(n)/1000000)

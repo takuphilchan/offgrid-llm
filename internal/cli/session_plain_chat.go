@@ -245,7 +245,7 @@ func conversationChatLoop(ctx context.Context, client *serviceclient.Client, sav
 	name := saved.Name
 	files := &ServiceFileConversation{Context: ctx, Client: client, Name: name, Saved: saved}
 	pendingText, hasPending := "", false
-	fmt.Fprintf(out, "OffGrid / Chat\n  %s\n  %s\n\n/attach PATH · /attachments · /remove-attachment N · /exit\n", TerminalSafe(name), TerminalSafe(model))
+	fmt.Fprintf(out, "Chat\n  %s\n  %s\n\n/attach PATH · /attachments · /remove-attachment N · /exit\n", TerminalSafe(name), TerminalSafe(model))
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 4096), 64<<10)
 	for {

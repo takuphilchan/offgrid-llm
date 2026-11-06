@@ -114,7 +114,7 @@ func importModelCommand(_ context.Context, args []string, env Environment) error
 				p.Warning(fmt.Sprintf("Could not auto-reload server: %v", err))
 				fmt.Fprintln(env.Stdout)
 				p.Info("Manually restart the server:")
-				p.Item("Restart service", "sudo systemctl restart llama-server")
+				p.Item("Restart service", "Restart the intended OffGrid service after active work finishes")
 				fmt.Fprintln(env.Stdout)
 			}
 		}
@@ -147,7 +147,7 @@ func importModelCommand(_ context.Context, args []string, env Environment) error
 			p.Warning(fmt.Sprintf("Could not auto-reload server: %v", err))
 			fmt.Fprintln(env.Stdout)
 			p.Info("Manually restart the server:")
-			p.Item("Restart service", "sudo systemctl restart llama-server")
+			p.Item("Restart service", "Restart the intended OffGrid service after active work finishes")
 			fmt.Fprintln(env.Stdout)
 		}
 	}

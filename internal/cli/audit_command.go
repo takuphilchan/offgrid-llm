@@ -21,30 +21,9 @@ func auditCommand(_ context.Context, args []string, env Environment) error {
 
 	// Check for help flag or no args
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %s◈ Audit Log%s\n", env.Style.Primary+env.Style.Bold, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "  %sSecurity audit logging for compliance and monitoring%s\n", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sCommands%s\n", env.Style.Bold, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-22s %sShow recent audit events%s\n", "show", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-22s %sExport to JSON (compliance format)%s\n", "export-json <file>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-22s %sExport to CSV (spreadsheet format)%s\n", "export-csv <file>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-22s %sShow audit statistics%s\n", "stats", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-22s %sVerify log chain integrity%s\n", "verify", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sFilters%s\n", env.Style.Bold, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-22s %sFilter by event type (AUTH, QUERY, MODEL, etc.)%s\n", "--type <type>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-22s %sFilter by severity (INFO, WARNING, CRITICAL)%s\n", "--severity <level>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-22s %sFilter by username%s\n", "--user <name>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-22s %sStart date (YYYY-MM-DD)%s\n", "--from <date>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-22s %sEnd date (YYYY-MM-DD)%s\n", "--to <date>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-22s %sLimit number of results%s\n", "--limit <n>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sExamples%s\n", env.Style.Bold, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %s$%s offgrid audit show --type AUTH --limit 50\n", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %s$%s offgrid audit export-csv report.csv --from 2025-01-01\n", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %s$%s offgrid audit stats --severity CRITICAL\n", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
+		help := presenter
+		help.JSON = false
+		help.auditHelp()
 		return nil
 	}
 
@@ -123,41 +102,17 @@ func auditCommand(_ context.Context, args []string, env Environment) error {
 			return nil
 		}
 
-		// Print table header
-		fmt.Fprintf(env.Stdout, "    %s%-20s  %-8s  %-8s  %-20s  %-15s%s\n",
-			env.Style.Muted, "TIMESTAMP", "TYPE", "SEVERITY", "ACTION", "USER", env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %s%s%s\n", env.Style.Muted, strings.Repeat("─", 75), env.Style.Reset)
-
+		rows := make([]presentationRow, 0, len(events))
 		for _, event := range events {
-			// Parse and format timestamp
-			ts := event.Timestamp
-			if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
-				ts = t.Format("01-02 15:04:05")
-			}
-
-			// Color code severity
-			sevColor := env.Style.Muted
-			switch event.Severity {
-			case audit.SeverityWarning:
-				sevColor = env.Style.Accent
-			case audit.SeverityCritical:
-				sevColor = env.Style.Error
-			}
-
-			// Truncate action if needed
-			action := event.Action
-			if len(action) > 20 {
-				action = action[:17] + "..."
-			}
-
 			user := event.User
 			if user == "" {
 				user = "-"
 			}
-
-			fmt.Fprintf(env.Stdout, "    %-20s  %-8s  %s%-8s%s  %-20s  %-15s\n",
-				ts, event.Type, sevColor, event.Severity, env.Style.Reset, action, user)
+			rows = append(rows, presentationRow{event.Timestamp, fmt.Sprintf("%s | %s | %s | %s", event.Type, event.Severity, event.Action, user)})
 		}
+		display := presenter
+		display.JSON = false
+		display.rows(rows)
 		fmt.Fprintln(env.Stdout)
 
 	case "export-json":

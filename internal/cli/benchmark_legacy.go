@@ -170,7 +170,6 @@ func runBenchmarkLegacy(ctx context.Context, args []string, env Environment) err
 		totalLatency      time.Duration
 		totalTokens       int
 		totalPromptTokens int
-		firstTokenTimes   []time.Duration
 		tokensPerSec      []float64
 	)
 
@@ -178,7 +177,6 @@ func runBenchmarkLegacy(ctx context.Context, args []string, env Environment) err
 		fmt.Fprintf(env.Stdout, "%s  [%d/%d]%s Testing... ", colorDim, i+1, iterations, colorReset)
 
 		startTime := time.Now()
-		var firstTokenTime time.Duration
 		tokenCount := 0
 		promptTokens := 0
 
@@ -226,13 +224,9 @@ func runBenchmarkLegacy(ctx context.Context, args []string, env Environment) err
 			}
 		}
 
-		// Estimate first token time (roughly 10% of total for most models)
-		firstTokenTime = latency / 10
-
 		totalLatency += latency
 		totalTokens += tokenCount
 		totalPromptTokens += promptTokens
-		firstTokenTimes = append(firstTokenTimes, firstTokenTime)
 
 		tps := float64(tokenCount) / latency.Seconds()
 		tokensPerSec = append(tokensPerSec, tps)
@@ -249,11 +243,6 @@ func runBenchmarkLegacy(ctx context.Context, args []string, env Environment) err
 	avgLatency := totalLatency / time.Duration(len(tokensPerSec))
 	avgTokens := float64(totalTokens) / float64(len(tokensPerSec))
 	avgPromptTokens := float64(totalPromptTokens) / float64(len(tokensPerSec))
-	avgFirstToken := time.Duration(0)
-	for _, ft := range firstTokenTimes {
-		avgFirstToken += ft
-	}
-	avgFirstToken /= time.Duration(len(firstTokenTimes))
 
 	avgTPS := 0.0
 	minTPS := tokensPerSec[0]
@@ -274,7 +263,7 @@ func runBenchmarkLegacy(ctx context.Context, args []string, env Environment) err
 	fmt.Fprintf(env.Stdout, "  %sResults%s\n", brandPrimary, colorReset)
 	fmt.Fprintln(env.Stdout)
 	fmt.Fprintf(env.Stdout, "    Speed       %s%.1f tok/s%s %s(%.1f - %.1f)%s\n", colorBold, avgTPS, colorReset, colorDim, minTPS, maxTPS, colorReset)
-	fmt.Fprintf(env.Stdout, "    Latency     %s%s%s %s(first token: ~%s)%s\n", colorBold, benchmarkFormatDuration(avgLatency), colorReset, colorDim, benchmarkFormatDuration(avgFirstToken), colorReset)
+	fmt.Fprintf(env.Stdout, "    Latency     %s%s%s (complete response; first-token latency not measured)\n", colorBold, benchmarkFormatDuration(avgLatency), colorReset)
 	fmt.Fprintf(env.Stdout, "    Tokens      %s%.0f prompt, %.0f generated%s %s(avg)%s\n", colorBold, avgPromptTokens, avgTokens, colorReset, colorDim, colorReset)
 	fmt.Fprintf(env.Stdout, "    Throughput  %s~%d queries/hour%s\n", colorBold, int(3600.0/avgLatency.Seconds()), colorReset)
 

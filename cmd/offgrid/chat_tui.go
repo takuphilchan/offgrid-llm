@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/takuphilchan/offgrid-llm/internal/cli"
 	"github.com/takuphilchan/offgrid-llm/internal/resource"
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
@@ -298,9 +299,9 @@ func (m chatTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.viewport.Width = maxInt(20, msg.Width)
-		m.viewport.Height = maxInt(6, msg.Height-8)
-		m.input.Width = maxInt(20, msg.Width-4)
+		m.viewport.Width = max(1, msg.Width)
+		m.viewport.Height = max(1, msg.Height-8)
+		m.input.Width = max(1, msg.Width-4)
 		m.refreshViewport()
 
 	case tea.KeyMsg:
@@ -397,9 +398,16 @@ func (m chatTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m chatTUIModel) View() string {
-	header := chatTitleStyle.Render("◆ OffGrid") + "  " + chatMuteStyle.Render("Private workspace") + "  " + chatFaintStyle.Render(m.rt.ResolvedModel)
+	width := m.width
+	if width <= 0 {
+		width = 80
+	}
+	header := chatTitleStyle.Render("Chat")
+	modelWidth := max(1, width-4)
+	model := ansi.Truncate(cli.TerminalSafe(m.rt.ResolvedModel), modelWidth, "...")
+	header += "\n" + chatMuteStyle.Render(model)
 	if m.rt.UseKnowledgeBase {
-		header += "  " + chatReadyStyle.Render("● Knowledge on")
+		header = chatTitleStyle.Render("Chat with Knowledge") + "\n" + chatMuteStyle.Render(model)
 	}
 
 	status := m.statusText
@@ -411,8 +419,14 @@ func (m chatTUIModel) View() string {
 	if m.busy {
 		statusStyle = chatTitleStyle
 	}
-	footer := statusStyle.Render("● "+status) + chatFaintStyle.Render("   /help  /status  /clear  /rag  /exit   ↑↓ history")
-	return chatHeaderStyle.Width(maxInt(20, m.width-2)).Render(header) + "\n\n" + m.viewport.View() + "\n\n" + m.input.View() + "\n" + footer
+	hints := "  /help  /status  /exit  |  up/down: history"
+	if width < 72 {
+		hints = "  /help  /exit"
+	}
+	footer := statusStyle.Render(status) + chatMuteStyle.Render(hints)
+	footer = ansi.Truncate(footer, width, "...")
+	header = ansi.Hardwrap(header, max(1, width-2), false)
+	return chatHeaderStyle.Width(max(1, width-2)).Render(header) + "\n" + m.viewport.View() + "\n\n" + m.input.View() + "\n" + footer
 }
 
 func (m chatTUIModel) handleCommand(cmd string) (tea.Model, tea.Cmd) {
@@ -579,11 +593,4 @@ func shouldUseChatTUI() bool {
 	}
 	stdout, err := os.Stdout.Stat()
 	return err == nil && stdout.Mode()&os.ModeCharDevice != 0
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

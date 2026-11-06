@@ -12,6 +12,12 @@ import (
 
 func usersCommand(_ context.Context, args []string, env Environment) error {
 	presenter := Presenter{Stdout: env.Stdout, Stderr: env.Stderr, JSON: env.Options.JSON, Style: env.Style}
+	if len(args) > 0 && (args[0] == "help" || args[0] == "--help" || args[0] == "-h") {
+		help := presenter
+		help.JSON = false
+		help.usersHelp()
+		return nil
+	}
 	cfg, err := localConfig(env)
 	if err != nil {
 		return err
@@ -38,22 +44,9 @@ func usersCommand(_ context.Context, args []string, env Environment) error {
 	store := env.LocalAdmin.NewUserStore(cfg.DataDir)
 
 	if len(args) < 1 {
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %s◈ Users%s\n", env.Style.Primary+env.Style.Bold, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "  %sMulti-user management%s\n", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sUsage%s  offgrid users <command>\n", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sCommands%s\n", env.Style.Primary, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sList all users%s\n", "list", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sCreate a user%s\n", "create <name> <role>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sDelete a user%s\n", "delete <id>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sShow user info%s\n", "info <id>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sRegenerate API key%s\n", "reset-key <id>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintf(env.Stdout, "    %-24s %sShow quota usage%s\n", "quota <id>", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
-		fmt.Fprintf(env.Stdout, "  %sRoles%s  admin, user, viewer, guest\n", env.Style.Dim, env.Style.Reset)
-		fmt.Fprintln(env.Stdout)
+		help := presenter
+		help.JSON = false
+		help.usersHelp()
 		return nil
 	}
 
@@ -76,14 +69,15 @@ func usersCommand(_ context.Context, args []string, env Environment) error {
 			fmt.Fprintln(env.Stdout)
 			fmt.Fprintf(env.Stdout, "  %sCreate a user:%s offgrid users create <name> <role>\n", env.Style.Dim, env.Style.Reset)
 		} else {
-			fmt.Fprintf(env.Stdout, "  %s%-32s  %-10s  %-10s  %s%s\n", env.Style.Dim, "ID", "Username", "Role", "Created", env.Style.Reset)
+			rows := make([]presentationRow, 0, len(userList))
 			for _, u := range userList {
 				status := ""
 				if u.Disabled {
 					status = " (disabled)"
 				}
-				fmt.Fprintf(env.Stdout, "  %-32s  %-10s  %-10s  %s%s\n", u.ID[:16]+"...", u.Username, u.Role, u.CreatedAt.Format("2006-01-02"), status)
+				rows = append(rows, presentationRow{u.ID, fmt.Sprintf("%s | %s | %s%s", u.Username, u.Role, u.CreatedAt.Format("2006-01-02"), status)})
 			}
+			presenter.rows(rows)
 		}
 		fmt.Fprintln(env.Stdout)
 
