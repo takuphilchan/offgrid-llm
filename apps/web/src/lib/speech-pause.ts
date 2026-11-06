@@ -24,7 +24,7 @@ export class SpeechPauseGate {
   }
 }
 
-export function observeSpeechPause(stream: MediaStream, onPause: () => void): () => void {
+export function observeSpeechPause(stream: MediaStream, onPause: () => void, onLevel?: (level: number) => void): () => void {
   const AudioContextCtor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!AudioContextCtor) return () => {};
   let context: AudioContext | undefined;
@@ -41,7 +41,9 @@ export function observeSpeechPause(stream: MediaStream, onPause: () => void): ()
       analyser.getFloatTimeDomainData(samples);
       let energy = 0;
       for (const sample of samples) energy += sample * sample;
-      if (gate.sample(Math.sqrt(energy / samples.length), performance.now())) {
+      const level = Math.sqrt(energy / samples.length);
+      onLevel?.(level);
+      if (gate.sample(level, performance.now())) {
         if (timer !== undefined) window.clearInterval(timer);
         timer = undefined;
         onPause();

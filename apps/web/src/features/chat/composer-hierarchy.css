@@ -12,13 +12,16 @@
   .composer.composer-compact .composer-footer > .composer-utilities { grid-column: 1; grid-row: 1; flex-wrap: nowrap; gap: 2px; }
   .composer.composer-compact .composer-footer > .composer-actions { grid-column: 3; grid-row: 1; display: flex; flex-wrap: nowrap; gap: 4px; margin: 0; }
   .composer.composer-compact .composer-actions > .talk-controls { display: flex; gap: 4px; }
-  .composer.composer-compact .composer-actions .talk-control { width: auto; min-width: 56px; min-height: 40px; border-radius: 999px; padding-inline: 12px; background: var(--surface-2); color: var(--text); font-size: var(--type-meta); white-space: nowrap; }
-  .composer.composer-compact .composer-actions .talk-control[aria-pressed=true] { color: var(--text); }
+  .composer.composer-compact .composer-actions .talk-control { width: auto; min-height: 40px; border: 0; border-radius: 999px; padding-inline: 10px; background: transparent; color: var(--muted); font-size: var(--type-meta); white-space: nowrap; }
+  .composer.composer-compact .composer-actions .talk-toggle { display: inline-flex; align-items: center; justify-content: center; width: 40px; padding: 0; background: var(--text); color: var(--surface-1); }
+  .composer.composer-compact .composer-actions .talk-control:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+  .composer.composer-compact .composer-actions .talk-control[aria-pressed=true] { background: var(--surface-2); color: var(--text); }
+  .composer.composer-compact .composer-actions .talk-toggle:hover:not(:disabled) { background: var(--text); color: var(--surface-1); opacity: .85; }
   .composer.composer-compact > .talk-status { grid-column: 1 / -1; padding-inline: 8px; color: var(--muted); font-size: var(--type-meta); }
   /* Files need a full-width reading area, not the narrow single-line input slot. */
-  .composer.composer-compact:has(.file-attachments, .document-scan) > .composer-input { grid-column: 1 / -1; grid-row: 1; padding-inline: 6px; }
-  .composer.composer-compact:has(.file-attachments, .document-scan) .composer-footer > .composer-utilities,
-  .composer.composer-compact:has(.file-attachments, .document-scan) .composer-footer > .composer-actions { grid-row: 2; }
+  .composer.composer-compact:has(.file-attachments, .image-attachments, .document-scan) > .composer-input { grid-column: 1 / -1; grid-row: 1; padding-inline: 6px; }
+  .composer.composer-compact:has(.file-attachments, .image-attachments, .document-scan) .composer-footer > .composer-utilities,
+  .composer.composer-compact:has(.file-attachments, .image-attachments, .document-scan) .composer-footer > .composer-actions { grid-row: 2; }
   .composer.composer-compact .composer-utilities > .utility-popover { flex: none; }
   .composer.composer-compact .composer-utilities > .utility-popover > button,
   .composer.composer-compact .composer-actions > button,
@@ -26,21 +29,59 @@
   .composer.composer-compact .composer-voice-recovery > button { width: 40px; height: 40px; min-height: 40px; padding: 0; border-radius: 50%; flex: none; }
   .composer.composer-compact .composer-utilities > .utility-popover > button { border-color: transparent; background: transparent; color: var(--muted); }
   .composer.composer-compact .composer-utilities > .utility-popover > button:hover { background: var(--surface-2); color: var(--text); }
-  .composer.composer-compact .composer-attachments-menu .utility-popover-content { display: grid; gap: 4px; }
+  .composer.composer-compact .composer-attachments-menu .utility-popover-content { display: grid; gap: 2px; }
   .composer.composer-compact .composer-attachments-menu .utility-popover-content > button,
   .composer.composer-compact .saved-file-picker > button { justify-content: start; width: 100%; text-align: start; }
+  .composer-attachments-menu .utility-popover-content > button,
+  .composer-attachments-menu .saved-file-picker > button { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 8px 10px; font-size: var(--type-ui); font-weight: var(--weight-regular); line-height: 1.35; border-radius: 6px; }
+  .composer-attachments-menu button > svg { flex: 0 0 17px; color: var(--muted); }
+  .composer-attachments-menu .saved-file-picker { border-block-start: 1px solid var(--line); margin-block-start: 4px; padding-block-start: 4px; }
   .composer.composer-compact .composer-context { display: grid; gap: 10px; }
   .composer.composer-compact .composer-context .model-select { max-width: 100%; }
   .composer.composer-compact > .composer-active-context { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; padding-inline: 8px; color: var(--muted); font-size: var(--type-meta); }
   .composer.composer-compact > .chat-speech-controls { grid-column: 1 / -1; padding-inline: 8px; }
   .composer-active-agent { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow-wrap: anywhere; }
   .composer.composer-compact .voice-input-compact { position: relative; }
-  .composer.composer-compact .voice-input-compact > small { position: absolute; inset-inline-end: 0; bottom: calc(100% + 8px); width: max-content; max-width: min(240px, 65vw); padding: 8px 12px; border-radius: var(--radius-md); background: var(--surface-2); color: var(--text); }
+  .composer.composer-compact .voice-input-compact > small { position: absolute; inset-inline-end: 0; bottom: calc(100% + 12px); width: max-content; max-width: min(240px, 65vw); padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-1); color: var(--text); box-shadow: var(--shadow); font-size: var(--type-meta); line-height: 1.4; }
   .composer-voice-recovery .utility-popover-content { display: grid; gap: 12px; }
-  .composer.composer-compact .voice-button.recording { background: var(--surface-2); color: var(--text); }
-  .composer.composer-compact .voice-button.recording svg { animation: recording-pulse 1.4s ease-in-out infinite; }
-  @keyframes recording-pulse { 50% { opacity: .45; } }
-  @media (prefers-reduced-motion: reduce) { .composer.composer-compact .voice-button.recording svg { animation: none; } }
+  .composer.composer-compact:has(.voice-input-compact:not([data-capture-phase='idle'])) > .composer-input { grid-column: 1 / -1; grid-row: 1; padding-inline: 6px; }
+  .composer.composer-compact:has(.voice-input-compact:not([data-capture-phase='idle'])) .composer-footer > .composer-actions { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
+  .composer.composer-compact:has(.voice-input-compact:not([data-capture-phase='idle'])) .composer-utilities,
+  .composer.composer-compact:has(.voice-input-compact:not([data-capture-phase='idle'])) .talk-controls:has([aria-pressed='false']) { display: none; }
+  .composer.composer-compact:has(.voice-input-compact:not([data-capture-phase='idle'])) .composer-submit:disabled { display: none; }
+  .composer.composer-compact .voice-input-compact:not([data-capture-phase='idle']) { display: flex; flex-direction: row; align-items: center; flex: 1; min-width: 0; max-width: none; gap: 6px; }
+  .voice-capture-feedback { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding-inline: 8px; color: var(--muted); font-size: var(--type-meta); }
+  .voice-capture-feedback > [role='status'] { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+  .voice-wave { display: flex; align-items: center; gap: 3px; height: 26px; flex: none; color: var(--text); }
+  .voice-wave i { display: block; width: 3px; min-height: 3px; border-radius: 2px; background: currentColor; transition: height 90ms linear; }
+  .speech-orb { position: relative; display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; color: var(--text); }
+  .speech-orb::before { content: ''; width: 22px; height: 22px; background: currentColor; border-radius: 50%; transform: scale(var(--speech-scale, 1)); transition: transform 120ms ease-out; }
+  .speech-orb[data-phase='transcribing']::before { animation: speech-settle 1.4s ease-in-out infinite; }
+  .speech-orb .voice-progress { position: absolute; inset: 0; width: 32px; height: 32px; border-width: 1px; }
+  @keyframes speech-settle { 50% { transform: scale(.65); opacity: .55; } }
+  .voice-duration { font-variant-numeric: tabular-nums; direction: ltr; flex: none; }
+  .voice-progress { width: 16px; height: 16px; flex: none; border: 2px solid var(--line-strong); border-block-start-color: var(--text); border-radius: 50%; animation: voice-progress .8s linear infinite; }
+  .composer.composer-compact .voice-input-compact .voice-discard { color: var(--muted); background: transparent; border-color: transparent; }
+  .composer.composer-compact .voice-button.recording { background: var(--accent-strong); color: var(--on-accent); box-shadow: none; }
+  /* Finishing dictation is the primary action during capture. Sending an
+     existing typed draft stays available, with a quieter visual treatment. */
+  .composer.composer-compact:has([data-capture-phase='recording']) .composer-submit[data-generating='false'] { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  @keyframes voice-progress { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .voice-progress { animation: none; }
+    .speech-orb::before { animation: none !important; transform: none; transition: none; }
+    .voice-wave { display: none; }
+  }
+  @media (max-width: 500px) {
+    .voice-capture-feedback { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 2px 6px; padding-inline: 2px; }
+    .voice-capture-feedback > .speech-orb { grid-row: 1 / 3; }
+    .voice-wave { grid-column: 2 / -1; height: 24px; gap: 2px; }
+    .voice-capture-feedback > [role='status'] { grid-column: 2; }
+    .voice-capture-feedback:has(.voice-progress) { display: flex; }
+  }
+  @media (max-width: 700px) and (max-height: 700px) {
+    .composer.composer-compact .composer-footer > .composer-actions { position: static; background: transparent; padding-block: 0; }
+  }
   @media (max-width: 600px) {
     .chat-page .composer.composer-compact { grid-template-columns: minmax(0, 1fr) auto; border-radius: 22px; }
     .composer.composer-compact > .composer-input { grid-column: 1 / -1; grid-row: 1; padding-inline: 6px; }

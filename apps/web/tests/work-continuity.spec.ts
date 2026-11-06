@@ -381,7 +381,8 @@ test('switching from a live turn cannot let its late error replace another conve
   await expect(page.locator('.message.assistant')).toContainText('Other saved answer');
   await expect(page.locator('.streaming-response')).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Talk', exact: true })).toBeEnabled();
   expect(base.writes).toEqual([]);
 });
 

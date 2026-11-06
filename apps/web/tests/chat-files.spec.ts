@@ -202,3 +202,35 @@ for(const locale of ['en','fr','de','es','ar','sw','sn','nd','zu'] as LocaleCode
  await expect(page.locator('.composer-attachments-menu > button')).toBeFocused();
  await expect(page.locator('.composer textarea')).toHaveValue('Keep this question');
 });
+
+
+test('attachment actions form a compact aligned menu in light, dark and RTL layouts', async ({page}, info) => {
+  await fixture(page);
+  for (const [locale,theme,width] of [['en','light',1280],['ar','dark',390]] as const) {
+    await page.setViewportSize({width:1280,height:800});
+    await page.locator('.workspace-options > button').click();
+    await page.locator('.workspace-options-panel select').nth(0).selectOption(locale);
+    await page.locator('.workspace-options-panel select').nth(1).selectOption(theme);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('html')).toHaveAttribute('lang',locale);
+    await expect(page.locator('html')).toHaveAttribute('data-theme',theme);
+    await page.setViewportSize({width,height:800});
+    const trigger=page.locator('.composer-attachments-menu > button');
+    await trigger.click();
+    const panel=page.locator('.composer-attachments-menu > .utility-popover-panel');
+    await expect(panel).toBeInViewport();
+    const bounds=await panel.boundingBox();
+    expect(bounds!.width).toBeLessThanOrEqual(240);
+    const actions=panel.locator('.utility-popover-content > button, .saved-file-picker > button');
+    await expect(actions).toHaveCount(3);
+    for (const button of await actions.all()) {
+      await expect(button.locator('svg')).toHaveCount(1);
+      const box=await button.boundingBox();
+      expect(box!.width).toBeGreaterThan(bounds!.width-25);
+    }
+    await page.screenshot({path:info.outputPath('attachment-menu-'+locale+'-'+theme+'.png')});
+    await page.keyboard.press('Escape');
+    await expect(panel).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+  }
+});

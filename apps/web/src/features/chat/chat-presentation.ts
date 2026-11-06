@@ -39,3 +39,11 @@ export function visibleSessionTitle(session: ChatSession): string {
   }
   return visibleSessionName(session.name);
 }
+// Metrics describe committed output, never an older answer or an in-flight
+// preview. Chat clears the associated metrics when changing conversations.
+export function conversationOutputState(messages: readonly { role: string; turn_id?: string }[], turnId?: string) {
+  return {
+    lastAssistant: messages.reduce((last, message, index) => message.role === 'assistant' ? index : last, -1),
+    linkedOutputSaved: !!turnId && messages.some(message => message.turn_id === turnId && message.role === 'assistant'),
+  };
+}

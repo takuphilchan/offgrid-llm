@@ -28,14 +28,18 @@ type I18nValue = { locale: LocaleCode; setLocale: (locale: LocaleCode) => void; 
 const I18nContext = createContext<I18nValue | null>(null);
 
 function initialLocale(): LocaleCode {
-  const saved = readPreference('offgrid.locale') ?? window.electron?.presentation?.locale;
-  if (saved && saved in locales) return saved as LocaleCode;
-  const language = navigator.language.toLowerCase().split('-')[0];
-  return language in locales ? language as LocaleCode : 'en';
+  const candidates = [readPreference('offgrid.locale'), window.electron?.presentation?.locale,
+    ...navigator.languages, navigator.language];
+  for (const candidate of candidates) {
+    const language = candidate?.trim().toLowerCase().replace('_', '-').split('-')[0];
+    if (language && Object.hasOwn(locales, language)) return language as LocaleCode;
+  }
+  return 'en';
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<LocaleCode>(initialLocale);
+  const [locale, updateLocale] = useState<LocaleCode>(initialLocale);
+  const setLocale = (next: LocaleCode) => { if (Object.hasOwn(locales, next)) updateLocale(next); };
   const definition = locales[locale];
   useEffect(() => {
     writePreference('offgrid.locale', locale);

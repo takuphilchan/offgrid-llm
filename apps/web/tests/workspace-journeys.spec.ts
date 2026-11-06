@@ -112,7 +112,7 @@ test('04 synthetic dictation is editable, chosen speech models persist and playb
   await page.route('**/v1/audio/speech',r=>r.fulfill({contentType:'audio/wav',body:wav}));
   await page.goto('/ui/#/chat');await page.getByRole('button',{name:'Response settings',exact:true}).click();
   await chooseModel(page, 'Recognition model', 'asr@r1');await chooseModel(page, 'Speech model', 'tts@r1');await page.keyboard.press('Escape');
-  await page.getByRole('button',{name:'Use microphone',exact:true}).click();await page.locator('.voice-input-control[data-capture-phase="recording"] button').click();
+  await page.getByRole('button',{name:'Use microphone',exact:true}).click();await page.getByRole('button',{name:'Stop recording',exact:true}).click();
   await expect(page.locator('.composer textarea')).toHaveValue('Dictated draft.');expect(s.turns).toEqual([]);
   await page.getByRole('button',{name:'Response settings',exact:true}).click();
   await page.getByRole('checkbox',{name:'Speak responses',exact:true}).click();await expect(page.getByRole('checkbox',{name:'Speak responses',exact:true})).toBeChecked();await page.keyboard.press('Escape');await send(page,'Edited dictated draft.');

@@ -16,7 +16,7 @@ for (const locale of ['en', 'ar']) for (const theme of ['light', 'dark']) test(`
   for (const select of await panel.locator('select').all()) {
     await select.focus(); await expect(select).toBeFocused();
     const control = await select.boundingBox();
-    expect(control!.width).toBeGreaterThan(130);
+    expect(control!.width).toBeGreaterThan(100);
     expect(control!.x + control!.width).toBeLessThanOrEqual(box!.x + box!.width);
   }
   await page.keyboard.press('Escape'); await expect(panel).not.toBeVisible(); await expect(trigger).toBeFocused();

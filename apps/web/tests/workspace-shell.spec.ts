@@ -36,6 +36,26 @@ async function fixture(page: Page, desktop = false) {
   return state;
 }
 
+test('rail labels dismiss on activation instead of covering New chat after a click', async ({page}) => {
+  await fixture(page);
+  const chat = page.locator('.primary-nav').getByRole('link', {name:'Chat',exact:true});
+  const label = chat.locator('span');
+  await chat.hover();
+  await expect(label).toHaveCSS('opacity','1');
+  await expect(chat).not.toHaveAttribute('title');
+  await chat.click();
+  await expect(chat).toBeFocused();
+  await expect(label).toHaveCSS('opacity','0');
+  await page.mouse.move(700,400);
+  await expect(label).toHaveCSS('opacity','0');
+  await page.keyboard.press('Tab');
+  const next = page.locator('.primary-nav .nav-link:focus');
+  await expect(next.locator('span')).toHaveCSS('opacity','1');
+  await page.keyboard.press('Escape');
+  await expect(next.locator('span')).toHaveCSS('opacity','0');
+  await expect(next).toBeFocused();
+});
+
 test('compact shell preserves a draft across navigation layout, preferences, and refresh', async ({ page }, info) => {
   const state = await fixture(page);
   const editor = page.locator('.composer textarea');
@@ -43,12 +63,12 @@ test('compact shell preserves a draft across navigation layout, preferences, and
   await expect(page.locator('.topbar h1')).toHaveText('Chat');
   await expect(page.locator('.workspace-kicker')).toHaveCount(0);
   expect((await page.locator('.topbar').boundingBox())!.height).toBeLessThanOrEqual(74);
-  await expect(page.locator('.sidebar')).toHaveCSS('width', '248px');
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '304px');
   for (const name of ['Chat', 'Agents', 'Knowledge', 'Models', 'Activity']) {
     await expect(page.locator('.sidebar').getByRole('link', { name, exact: true })).toBeVisible();
   }
   await expect(page.locator('.primary-nav').getByRole('group', { name: 'Work' }).locator('a').first()).toHaveAttribute('href', '#/chat');
-  await expect(page.locator('.primary-nav').getByRole('group', { name: 'Work' }).locator('a')).toHaveCount(3);
+  await expect(page.locator('.primary-nav').getByRole('group', { name: 'Work' }).locator('.nav-link')).toHaveCount(3);
   await expect(page.locator('.primary-nav').getByRole('group', { name: 'Library' }).locator('a')).toHaveCount(2);
   await expect(page.locator('.sidebar').getByRole('link', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
   const options = page.getByRole('button', { name: 'Workspace options', exact: true });
@@ -69,9 +89,14 @@ test('compact shell preserves a draft across navigation layout, preferences, and
   await expect.poll(() => state.reads).toBeGreaterThan(before);
   await expect(editor).toHaveValue('Keep this draft — لا ترسل');
   expect(state.writes).toEqual([]);
+  await page.getByRole('button',{name:workspaceShell.de.collapse,exact:true}).click();
+  await expect(page.locator('.sidebar')).toHaveCSS('width','64px');
+  await expect(page.locator('.sidebar-create .new-chat-button')).toBeInViewport();
+  await expect(editor).toHaveValue('Keep this draft — لا ترسل');
+  await page.getByRole('button',{name:workspaceShell.de.expand,exact:true}).click();
   await page.screenshot({ path: info.outputPath('shell-collapsed-light.png') });
   await page.reload();
-  await expect(page.locator('.sidebar')).toHaveCSS('width', '248px');
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '304px');
   await expect(editor).toHaveValue('Keep this draft — لا ترسل');
   await expect(page.locator('.navigation-trigger')).toBeHidden();
 });
@@ -144,7 +169,76 @@ test('expanded navigation remains usable in a short desktop viewport', async ({ 
   await expect(page.locator('.sidebar-foot')).toBeInViewport();
   const positions = await page.locator('.primary-nav .nav-link').evaluateAll(links => links.map(link => link.getBoundingClientRect().x));
   expect(new Set(positions).size).toBe(1);
-  const knowledge = page.locator('.primary-nav a[href="#/knowledge"] span');
-  expect(await knowledge.evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(30);
+  const knowledge = page.locator('.primary-nav a[href="#/knowledge"]');
+  await knowledge.focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(knowledge.locator('span')).toHaveCSS('opacity','1');
+  await expect(knowledge.locator('span')).toBeInViewport();
   await page.screenshot({ path: info.outputPath('shell-expanded-desktop.png') });
+});
+
+test('new chat docks its editor at the bottom and gives history the remaining sidebar space', async ({ page }, info) => {
+  const state = await fixture(page);
+  await page.route('**/v1/sessions', route => route.fulfill({ json: { sessions: Array.from({ length: 80 }, (_, index) => ({
+    name: `Research notes ${index + 1}`, model_id: 'local-chat-model', messages: [], updated_at: '2026-11-06T00:00:00Z',
+  })) } }));
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(theme => localStorage.setItem('offgrid.theme', theme), theme);
+    await page.reload();
+    for (const height of [900, 480]) {
+      await page.setViewportSize({ width: 1440, height });
+      await expect(page.locator('.history-row').first()).toBeVisible();
+      const heading = await page.locator('.empty-chat h2').boundingBox();
+      const composer = await page.locator('.composer').boundingBox();
+      expect(composer!.y - heading!.y - heading!.height).toBeGreaterThanOrEqual(16);
+      expect(height - composer!.y - composer!.height).toBeGreaterThanOrEqual(8);
+      expect(height - composer!.y - composer!.height).toBeLessThanOrEqual(32);
+      await expect(page.locator('.composer textarea')).toBeInViewport();
+      const history = page.locator('.sidebar-context .history-list');
+      const rail = await page.locator('.primary-nav').boundingBox();
+      const list = await history.boundingBox();
+      expect(list!.x).toBeGreaterThan(rail!.x + rail!.width);
+      expect(list!.y + list!.height).toBeLessThanOrEqual(height);
+      expect(await history.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+      await history.evaluate(el => { el.scrollTop = el.scrollHeight; });
+      await expect(page.locator('.sidebar-foot')).toBeInViewport();
+      for (const link of await page.locator('.nav-section-library a').all()) await expect(link).toBeInViewport();
+      await page.screenshot({ path: info.outputPath(`new-chat-history-${theme}-${height}.png`) });
+    }
+  }
+  expect(state.writes).toEqual([]);
+});
+
+
+test('locale recovery ignores inherited keys and accepts regional language preferences', async ({ page }) => {
+  await fixture(page);
+  await page.addInitScript(() => Object.defineProperty(navigator, 'languages', { value: ['fr-CA', 'en-US'], configurable: true }));
+  for (const [saved, expected, direction] of [['constructor','fr','ltr'], ['__proto__','fr','ltr'], ['ar-SA','ar','rtl']]) {
+    await page.evaluate(saved => localStorage.setItem('offgrid.locale', saved), saved);
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('lang', expected);
+    await expect(page.locator('html')).toHaveAttribute('dir', direction);
+    await expect(page.locator('.composer textarea')).toBeVisible();
+  }
+});
+
+test('Help topics remain keyboard reachable and localized across all UI languages', async ({ page }) => {
+  const state = await fixture(page);
+  for (const locale of Object.keys(locales) as LocaleCode[]) {
+    await page.evaluate(locale => localStorage.setItem('offgrid.locale', locale), locale);
+    await page.reload();
+    await page.locator('.help-trigger').click();
+    const dialog = page.locator('.workspace-help');
+    await expect(dialog).toBeVisible();
+    const summaries = dialog.locator('summary');
+    await expect(summaries).toHaveCount(6);
+    await summaries.nth(1).focus();
+    await page.keyboard.press('Enter');
+    await expect(dialog.locator('details').nth(1).locator('p')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await expect(page.locator('.help-trigger')).toBeFocused();
+  }
+  expect(state.writes).toEqual([]);
 });

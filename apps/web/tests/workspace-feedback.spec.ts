@@ -244,7 +244,8 @@ for (const locale of ['en', 'ar'] as const) for (const theme of ['light', 'dark'
     await page.addInitScript(({ locale, theme }) => { localStorage.setItem('offgrid.locale', locale); localStorage.setItem('offgrid.theme', theme); }, { locale, theme });
     await page.goto('/ui/#/chat');
     const copy = locales[locale].messages;
-    await expect(page.getByText(copy.chat.emptyBody, { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: copy.chat.emptyTitle, exact: true })).toBeVisible();
+    await expect(page.getByText(copy.chat.emptyBody, { exact: true })).toHaveCount(0);
     await expect(page.locator('.sidebar-foot')).not.toContainText('100%');
     await expect(page.getByRole('link', { name: copy.common.serviceDetails, exact: true })).toHaveCount(0);
     await openSettings(page);

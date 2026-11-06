@@ -10,7 +10,8 @@ for(const theme of ['light','dark']) test(`shared action weights remove redundan
   await page.mouse.move(0,0);
   const controls=page.locator('.page-content :is(.secondary-button,.text-button,.utility-button):visible');
   for(const control of await controls.all()) {
-   await expect(control).toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
+   const border = await control.evaluate(el => { const style=getComputedStyle(el); return style.borderTopWidth==='0px'||style.borderTopColor==='rgba(0, 0, 0, 0)'; });
+   expect(border).toBe(true);
    if(await control.isEnabled()){await control.focus();await expect(control).toHaveCSS('outline-width','2px');}
   }
  }

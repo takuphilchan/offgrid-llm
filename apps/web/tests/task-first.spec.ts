@@ -448,9 +448,9 @@ test("all nine interface locales keep the task-first composer usable, including 
       page.locator('.composer textarea'),
     ).toBeVisible();
     await expect(
-      page.locator('.composer-actions > button'),
+      page.locator('.composer-actions .talk-toggle'),
     ).toBeVisible();
-    await expect(page.locator('.composer-actions > button')).toHaveAccessibleName(/\S/);
+    await expect(page.locator('.composer-actions .talk-toggle')).toHaveAccessibleName(/\S/);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,

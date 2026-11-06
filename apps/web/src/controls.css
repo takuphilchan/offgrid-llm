@@ -1,7 +1,7 @@
 /* Shared web/Electron control contract. Feature styles own layout; this layer
    owns control geometry and states. Composite editors have explicit exceptions. */
 @layer controls {
-  /* Last composer action is Send/Stop; the microphone remains secondary. */
+  /* The primary composer action changes with the draft; dictation stays secondary. */
   .primary-button:not(:disabled), .composer-actions > button:last-child:not(:disabled) { background-image: var(--gradient-primary); }
   :root {
     --control-height: 40px;
@@ -31,7 +31,7 @@
     color: var(--text);
     background: var(--surface-1);
     cursor: pointer;
-    transition: transform var(--motion-press) var(--ease-move), opacity var(--motion-press) var(--ease-move);
+    transition: transform var(--motion-press) var(--ease-move), opacity var(--motion-press) var(--ease-move), background-color var(--motion-press) ease, border-color var(--motion-press) ease, color var(--motion-press) ease;
     transform: none;
   }
   :where(.primary-button, .composer-actions > button) {

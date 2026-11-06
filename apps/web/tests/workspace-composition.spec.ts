@@ -62,7 +62,7 @@ test('sidebar collapse preserves the live composer and exposes labelled navigati
   await expect(editor).toHaveValue('Keep this unsent café 日本語 draft');
   await expect(page.locator('.primary-nav').getByRole('link', { name: 'Agents', exact: true })).toBeVisible();
   await page.locator('.sidebar-collapse').click();
-  await expect(page.locator('.sidebar')).toHaveCSS('width', '248px');
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '304px');
   await expect(page.locator('.history-open')).toBeVisible();
   expect(state.writes).toEqual([]);
 });

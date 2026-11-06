@@ -49,6 +49,18 @@ export function voiceText(locale: LocaleCode): VoiceCopy {
   return locale === 'en' ? english : voiceLocales[locale];
 }
 
+export const voiceSilenceText: Record<LocaleCode, string> = {
+  en: 'No speech was detected. Try again or type your message. Your draft is unchanged.',
+  fr: 'Aucune parole détectée. Réessayez ou saisissez votre message. Votre brouillon est inchangé.',
+  es: 'No se detectó voz. Inténtalo de nuevo o escribe tu mensaje. Tu borrador no ha cambiado.',
+  de: 'Keine Sprache erkannt. Versuche es erneut oder tippe deine Nachricht. Dein Entwurf bleibt unverändert.',
+  ar: 'لم يتم اكتشاف كلام. حاول مجدداً أو اكتب رسالتك. لم تتغير مسودتك.',
+  sw: 'Hakuna sauti ya maneno iliyotambuliwa. Jaribu tena au andika ujumbe. Rasimu yako haijabadilika.',
+  sn: 'Hapana mashoko anzwika aonekwa. Edza zvakare kana kunyora meseji. Gwaro rako harina kuchinja.',
+  nd: 'Akutholakalanga amazwi. Zama futhi kumbe ubhale umlayezo. Umbhalo wakho awutshintshanga.',
+  zu: 'Akutholakalanga amazwi. Zama futhi noma ubhale umlayezo. Umbhalo wakho awushintshanga.',
+};
+
 const runtimeCopy: Record<LocaleCode, { available: string; tested: string; unavailable: string }> = {
   en: { available: 'Runtime available; this model has not been tested yet.', tested: 'Speech request passed this session. Quality and latency are not qualified.', unavailable: 'The matching speech runtime is unavailable.' },
   fr: { available: 'Moteur disponible ; ce modèle n’a pas encore été testé.', tested: 'Requête vocale réussie pendant cette session. Qualité et latence non qualifiées.', unavailable: 'Le moteur vocal correspondant est indisponible.' },

@@ -15,6 +15,7 @@ import './tokens.css';
 import './workspace.css';
 import './components/workspace-presentation.css';
 import './components/shell/workspace-shell.css';
+import './components/shell/sidebar-conversations.css';
 import './controls.css';
 import './features/agents/task-workspace.css';
 

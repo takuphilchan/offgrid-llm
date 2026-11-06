@@ -29,7 +29,7 @@ async function fixture(page: Page, theme = 'light') {
 
 test('one contextual sidebar preserves draft and selection through drawer transitions', async ({ page }) => {
   const writes = await fixture(page);
-  await expect(page.locator('.sidebar')).toHaveCSS('width', '248px');
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '304px');
   await expect(page.locator('.sidebar #conversation-history')).toHaveCount(1);
   await expect(page.locator('.chat-workspace #conversation-history')).toHaveCount(0);
   const editor = page.locator('.composer textarea');
@@ -83,7 +83,7 @@ for (const theme of ['light', 'dark']) test(`six-page visual matrix ${theme}`, a
       await expect(page.locator('.page-failure')).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       if (route === 'chat') {
-        await expect(page.locator('.composer-actions > button')).toBeInViewport({ ratio: 1 });
+        await expect(page.locator('.composer-actions .talk-toggle')).toBeInViewport({ ratio: 1 });
         await expect(page.getByRole('button', { name: 'Response settings', exact: true })).toBeInViewport({ ratio: 1 });
       }
       await page.screenshot({ path: info.outputPath(`${route}-${width}-${theme}.png`), fullPage: true });

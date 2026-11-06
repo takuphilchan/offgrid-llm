@@ -55,7 +55,7 @@ import { TaskAccessPolicy, type TaskComputerPolicy } from '../agents/TaskAccessP
 import { conversationWorkText } from '../../i18n/conversation-work';
 import { ExecutionWorkspace } from './ExecutionWorkspace';
 import { executionWorkspaceText } from '../../i18n/execution-workspace';
-import { messageText, newSessionName, readPreferences, copyChatMessage } from './chat-presentation';
+import { messageText, newSessionName, readPreferences, copyChatMessage, conversationOutputState } from './chat-presentation';
 import { ConversationHistory } from './ConversationHistory';
 import './composer-hierarchy.css';
 import { ComposerKnowledgeReadiness, ComposerResponseLimits } from './ComposerOptions';
@@ -520,10 +520,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     setErrorAction(null);
     await copyChatMessage(key,content,setCopiedMessage,setError,text.common.error);
   };
-  // Metrics describe the just-committed turn, never an older answer or a new
-  // in-flight response. They are cleared when starting/selecting a conversation.
-  const lastAssistant = conversation.reduce((last, message, index) => message.role === 'assistant' ? index : last, -1);
-  const linkedOutputSaved = !!linkedTurn && conversation.some(message => 'turn_id' in message && message.turn_id === linkedTurn.id && message.role === 'assistant');
+  const { lastAssistant, linkedOutputSaved } = conversationOutputState(conversation, linkedTurn?.id);
+  const talkRunning = talkState !== 'off' && talkState !== 'needs_attention';
+  const showTalkAction = !agent && (talkRunning || (!busy && !draft.trim() && !imageDraft.images.length && !fileDraft.files.length));
   return <DocumentWorkspace scope={`${draftScope}:${activeName}`}><div className="chat-workspace">
     {deleteItems && <ChatHistoryDelete items={deleteItems} onDeleted={historyDeleted} onClose={() => setDeleteItems(null)} />}
     <SidebarSlot action><button className="new-chat-button" title={text.chat.newChat} aria-label={text.chat.newChat} disabled={!!deleteItems} onClick={() => { sidebar.close(); startNew(); }}><Icon name="plus" size={18} /><span>{text.chat.newChat}</span></button></SidebarSlot>
@@ -532,7 +531,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       {!agent && (!model || unavailableModel || onboardingPending) && <div className="setup-inline" role="status"><span>{unavailableModel ? chatReadiness[locale].unavailable : model ? text.onboarding.firstReplyHint : chatReadiness[locale].setup}</span>{(!model || unavailableModel) && <button className="secondary-button" onClick={() => { handoff.begin({ origin: '#/chat', destination: 'models', draft: { kind: 'chat', id: activeName } }); onOpenModels(); }}>{text.onboarding.chooseModel}</button>}</div>}
 <div ref={conversationPane} className="conversation" tabIndex={0} onWheel={event => { userScrollUntil.current = performance.now() + 1200; if (event.deltaY < 0) followOutput.current = false; }} onTouchStart={() => { userScrollUntil.current = performance.now() + 1200; }} onKeyDown={event => { if (['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) userScrollUntil.current = performance.now() + 1200; }} onScroll={event => { const el = event.currentTarget; const distance = el.scrollHeight - el.scrollTop - el.clientHeight; const atBottom = distance < 100; if (performance.now() <= userScrollUntil.current) followOutput.current = atBottom; else if (followOutput.current && distance > 1) followConversation(); setShowLatest(!atBottom && !followOutput.current); }}>
         <div ref={conversationContent} className="conversation-content">
-        {conversation.length === 0 && !loading && !error && <div className="empty-chat"><div className="orb"><Icon name="models" size={28} /></div><h2>{text.chat.emptyTitle}</h2><p>{text.chat.emptyBody}</p></div>}
+        {conversation.length === 0 && !loading && !error && <div className="empty-chat"><h2>{text.chat.emptyTitle}</h2></div>}
         {conversation.map((message, index) => {
           const content = messageText(message.content);
           const messageKey = `${index}-${'timestamp' in message ? message.timestamp : content.slice(0, 24)}`;
@@ -570,7 +569,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         {selectedSources.length > 0 ? <div className="composer-source-scope"><strong>{scopeCopy.selected}</strong><span>{selectedSources.map(source => source.name).join(' · ')}</span><button type="button" className="icon-button" disabled={busy} onClick={clearSources} aria-label={scopeCopy.clear} title={scopeCopy.clear}><Icon name="close" size={16} /></button>{!scopedReady && <p role="status">{scopeCopy.unsupported}</p>}</div> : !agent && knowledge && <p className="composer-retrieval-scope">{workspaceManagement(locale).retrievalScope}</p>}
         <div className="composer-footer">
           <div className="composer-utilities">
-          <UtilityPopover label={composerAttachmentLabel(locale)} trigger={<Icon name="plus" size={20}/>} triggerClassName="icon-button" className="composer-attachments-menu">{fileDraft.control}{imageDraft.control}{fileDraft.saved}</UtilityPopover>
+          <UtilityPopover label={composerAttachmentLabel(locale)} trigger={<Icon name="plus" size={20}/>} triggerClassName="icon-button" className="composer-attachments-menu" compact>{fileDraft.control}{imageDraft.control}{fileDraft.saved}</UtilityPopover>
           <UtilityPopover label={text.chatStreaming.options} trigger={<Icon name="sliders" size={18} />} triggerClassName="icon-button" className="composer-context-menu" defaultOpen={responseSettingsOpen} onOpenChange={setResponseSettingsOpen}>
         <div className="composer-context">
           <AgentSelector value={agent} onChange={value => { setAgent(value); setAgentResources({ profile: value ? `${value.id}:${value.revision}` : '', restrictions: {} }); }} disabled={busy} />
@@ -584,8 +583,8 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
           </div>
       <div className="composer-actions">
         {talkState === 'listening' || talkState === 'transcribing' ? <VoiceInputButton key={`talk-${talkCycle}`} compact autoStart contextKey={composerDraftKey} disabled={loading || checkingTurn || busy} onTranscript={onTalkTranscript} onFailure={message => talk.fail(message, setSpeechError)} onPhaseChange={talk.capturePhase} /> : talkState === 'off' || talkState === 'needs_attention' ? <VoiceInputButton compact contextKey={composerDraftKey} disabled={loading || checkingTurn || busy} onTranscript={value => { const previous = readDraft(composerDraftKey); setDraft(previous ? `${previous} ${value}` : value); }} /> : null}
-        {!agent && <span className="talk-controls"><button type="button" className="talk-control" aria-pressed={talkState !== 'off' && talkState !== 'needs_attention'} disabled={talkState === 'off' && (loading || checkingTurn || busy || !effectiveModel || unavailableModel || linkedUnsettled)} onClick={talkState === 'off' || talkState === 'needs_attention' ? () => void startTalk() : () => stopTalk(true)}>{talkState === 'off' || talkState === 'needs_attention' ? talkCopy.start : talkCopy.stop}</button>{talkState === 'speaking' && !busy && <button type="button" className="talk-control" onClick={speakAgain}>{talkCopy.again}</button>}</span>}
-        <button aria-label={busy ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} disabled={busy ? false : loading || checkingTurn || missingSession || (!draft.trim()&&!imageDraft.images.length&&!fileDraft.files.length) || fileDraft.processing || !!fileDraft.blocker || imageDraft.processing || !!imageDraft.blocker || !effectiveModel || unavailableModel || (linkedUnsettled && !canSendInstruction)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Icon name="close" size={18} /> : <><span className="sr-only">{canSendInstruction ? jobCopy.update : text.chat.send}</span><Icon name="send" size={18} /></>}</button>
+        {showTalkAction && <span className="talk-controls"><button type="button" className="talk-control talk-toggle" aria-label={talkState === 'off' || talkState === 'needs_attention' ? talkCopy.start : talkCopy.stop} title={talkState === 'off' || talkState === 'needs_attention' ? talkCopy.start : talkCopy.stop} aria-pressed={talkState !== 'off' && talkState !== 'needs_attention'} disabled={talkState === 'off' && (loading || checkingTurn || busy || !effectiveModel || unavailableModel || linkedUnsettled)} onClick={talkState === 'off' || talkState === 'needs_attention' ? () => void startTalk() : () => stopTalk(true)}><Icon name={talkState === 'off' || talkState === 'needs_attention' ? 'waveform' : 'stop'} size={19} /></button>{talkState === 'speaking' && !busy && <button type="button" className="talk-control" onClick={speakAgain}>{talkCopy.again}</button>}</span>}
+        {!showTalkAction && <button className="composer-submit" data-generating={busy} title={busy ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} aria-label={busy ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} disabled={busy ? false : loading || checkingTurn || missingSession || (!draft.trim()&&!imageDraft.images.length&&!fileDraft.files.length) || fileDraft.processing || !!fileDraft.blocker || imageDraft.processing || !!imageDraft.blocker || !effectiveModel || unavailableModel || (linkedUnsettled && !canSendInstruction)} onClick={busy ? () => void stop() : () => void send()}>{busy ? <Icon name="stop" size={18} /> : <><span className="sr-only">{canSendInstruction ? jobCopy.update : text.chat.send}</span><Icon name="arrow-up" size={18} /></>}</button>}
       </div>
         </div>
         <ComposerSpeech presentation="status" enabled={speakResponses} checking={checkingSpeech} busy={busy} state={speechState} error={speechError} toggle={toggleSpeech} stop={stopSpeech} />

@@ -4,13 +4,17 @@ Use voice to draft a message or agent task, or listen to a Chat answer. These
 controls are experimental and require a compatible speech runtime and model in
 the connected OffGrid service. Typed Chat and Agents work without speech.
 
-The development renderer groups **Voice settings** beside the selected language
-model below the Chat/Agents prompt. **Speak responses** stays beside Chat's
-microphone and Send/Stop controls; changing voice settings does not start capture
-or playback. This placement requires a matching rebuilt renderer, not merely a
-service restart. Released builds may retain the earlier composer layout.
-The optional Talk control supports a spoken Chat exchange; ordinary dictation
-still leaves text in the editor for review.
+In Chat, the primary button offers **Talk** when the draft is empty and changes
+to **Send** when you type or attach a file. While an answer runs, **Stop** remains
+available. Talk has its own **Stop Talk** control throughout the spoken exchange.
+The quieter microphone button dictates into the editor for review; it does not
+send automatically. Voice settings and **Speak responses** are in Response
+settings. Changing settings does not start capture or playback.
+
+During recording, the orb and waveform respond to microphone levels. A separate
+settling indicator means transcription is running, not that the microphone is
+still listening. Reduced-motion settings use a static indicator with text status.
+Cancel discards the recording or pending transcription and preserves typed text.
 
 ## Before you start
 

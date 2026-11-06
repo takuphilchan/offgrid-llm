@@ -11,6 +11,7 @@ for (const locale of ['en', 'ar'] as const) for (const width of [390, 1440]) tes
   const management = workspaceManagement(locale), order = workspaceOrder(locale);
   for (const route of ['models', 'knowledge', 'settings', 'activity']) {
     await page.goto(`/ui/#/${route}`);
+    await expect(page.locator('.models-workspace, .knowledge-workspace, .settings-page, .activity-page')).toBeVisible();
     const layout = await page.locator('.page-content').evaluate(el => {
       const child = el.querySelector('.models-workspace, .knowledge-workspace, .settings-page, .activity-page')!;
       const outer = el.getBoundingClientRect(), inner = child.getBoundingClientRect(), style = getComputedStyle(el);

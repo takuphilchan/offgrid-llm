@@ -7,7 +7,8 @@ for (const theme of ['light', 'dark']) test(`tonal gradients preserve contrast a
   await craftFixture(page, 'en', theme);
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('A test draft');
-  const treatments=['.app-shell > .sidebar','.chat-workspace .composer'];
+  const treatments=['.chat-workspace .composer'];
+  await expect(page.locator('.app-shell > .sidebar')).toHaveCSS('background-image','none');
   for (const selector of treatments) await expect(page.locator(selector)).toHaveCSS('background-image', /linear-gradient/);
   await expect(page.locator('.composer-actions > button:last-child')).toHaveCSS('background-image', 'none');
   await expect(page.locator('.composer-actions .voice-button')).toHaveCSS('background-image','none');

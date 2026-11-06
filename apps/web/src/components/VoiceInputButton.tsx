@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api } from '../api/client';
 import { Icon } from './Icon';
 import { useI18n } from '../i18n';
-import { voiceText } from '../i18n/voice';
+import { voiceText, voiceSilenceText } from '../i18n/voice';
 import { operationFeedback } from '../i18n/operation-feedback';
 import { spokenProse, stopSpeechEvent } from '../lib/response-speech';
 import { selectSpeech, SpeechSetupRequired, useVoicePreferences } from '../lib/voice-preferences';
@@ -41,18 +41,30 @@ type CapturePhase = 'idle' | 'checking' | 'permission' | 'recording' | 'transcri
 
 export function VoiceInputButton({ onTranscript, onFailure, onPhaseChange, autoStart = false, contextKey, disabled = false, compact = false }: { onTranscript: (text: string) => void; onFailure?: (message: string) => void; onPhaseChange?: (phase: 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing') => void; autoStart?: boolean; contextKey: string; disabled?: boolean; compact?: boolean }) {
   const { preferences } = useVoicePreferences();
-  const { locale } = useI18n();
-  const copy = voiceText(locale);
+  const { locale, messages } = useI18n();
+  const copy = { ...voiceText(locale), silence: voiceSilenceText[locale] };
   const feedback = operationFeedback(locale);
   const [phase, setPhase] = useState<CapturePhase>('idle');
+  const [levels, setLevels] = useState<number[]>(Array(12).fill(0));
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    if (phase !== 'recording') return;
+    const started = performance.now();
+    setSeconds(0);
+    const timer = window.setInterval(() => setSeconds(Math.floor((performance.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [phase]);
   useEffect(() => onPhaseChange?.(phase), [phase, onPhaseChange]);
-  const [error, setError] = useState('');
+  const [failure, setFailure] = useState<{ key?: 'failed' | 'permission' | 'unsupported' | 'silence'; message?: string } | null>(null);
+  const error = failure?.key ? copy[failure.key] : failure?.message ?? '';
+  const currentCopy = useRef(copy); currentCopy.current = copy;
   const [setupRequired, setSetupRequired] = useState(false);
   const current = useRef<RecordingWork | null>(null);
   // Use the current draft callback, but never deliver a result to another composer.
   const target = useRef({ contextKey, onTranscript, onFailure });
   target.current = { contextKey, onTranscript, onFailure };
-  const fail = (message: string) => { setError(message); target.current.onFailure?.(message); };
+  const fail = (message: string) => { setFailure({ message }); target.current.onFailure?.(message); };
+  const failKnown = (key: 'failed' | 'permission' | 'unsupported' | 'silence') => { setFailure({ key }); target.current.onFailure?.(currentCopy.current[key]); };
   const cancel = () => {
     const work = current.current;
     current.current = null;
@@ -64,7 +76,7 @@ export function VoiceInputButton({ onTranscript, onFailure, onPhaseChange, autoS
     work.stream?.getTracks().forEach(track => track.stop());
   };
   useEffect(() => {
-    setPhase('idle'); setError(''); setSetupRequired(false);
+    setPhase('idle'); setFailure(null); setSetupRequired(false);
     return cancel;
   }, [contextKey]);
   const stop = () => {
@@ -80,10 +92,11 @@ export function VoiceInputButton({ onTranscript, onFailure, onPhaseChange, autoS
 
   const start = async () => {
     if (current.current || disabled) return;
-    setError('');
+    setFailure(null);
     setSetupRequired(false);
+    setLevels(Array(12).fill(0));
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      fail(copy.unsupported);
+      failKnown('unsupported');
       return;
     }
     const work: RecordingWork = { controller: new AbortController() };
@@ -108,10 +121,10 @@ export function VoiceInputButton({ onTranscript, onFailure, onPhaseChange, autoS
       next.ondataavailable = event => {
         if (!active() || !event.data.size) return;
         bytes += event.data.size;
-        if (bytes > 12 * 1024 * 1024) { cancel(); setPhase('idle'); fail(copy.failed); return; }
+        if (bytes > 12 * 1024 * 1024) { cancel(); setPhase('idle'); failKnown('failed'); return; }
         chunks.push(event.data);
       };
-      next.onerror = () => { if (active()) { cancel(); fail(copy.failed); setPhase('idle'); } };
+      next.onerror = () => { if (active()) { cancel(); failKnown('failed'); setPhase('idle'); } };
       next.onstop = async () => {
         clearTimeout(work.timer);
         work.stopPause?.();
@@ -120,26 +133,28 @@ export function VoiceInputButton({ onTranscript, onFailure, onPhaseChange, autoS
         setPhase('transcribing');
         try {
           const blob = new Blob(chunks, { type: next.mimeType || 'audio/webm' });
-          if (!blob.size) { if (autoStart) fail(copy.failed); return; }
+          if (!blob.size) { failKnown('silence'); return; }
           const wav = await toWav(blob);
           if (!active()) return;
           const result = await api.transcribeAudio(wav, 'offgrid-recording.wav', work.controller.signal, selection);
           if (active() && result.text.trim()) target.current.onTranscript(result.text.trim());
-          else if (active() && autoStart) fail(copy.failed);
+          else if (active()) failKnown('silence');
         } catch (reason) {
-          if (active()) fail(reason instanceof Error ? reason.message : copy.failed);
+          if (active()) fail(reason instanceof Error ? reason.message : currentCopy.current.failed);
         } finally { if (active()) { current.current = null; setPhase('idle'); } }
       };
       next.start(1000);
-      work.stopPause = observeSpeechPause(input, () => { if (active()) stop(); });
+      work.stopPause = observeSpeechPause(input, () => { if (active()) stop(); }, level => {
+        if (active()) setLevels(previous => [...previous.slice(1), Math.min(1, Math.sqrt(Math.max(0, level)) * 2.5)]);
+      });
       work.timer = window.setTimeout(() => { if (active()) stop(); }, 120_000);
       setPhase('recording');
     } catch (reason) {
       if (!active()) return;
       cancel(); setPhase('idle');
       setSetupRequired(reason instanceof SpeechSetupRequired);
-      if ((reason as DOMException)?.name === 'NotAllowedError') fail(copy.permission);
-      else fail(reason instanceof Error ? reason.message : copy.failed);
+      if ((reason as DOMException)?.name === 'NotAllowedError') failKnown('permission');
+      else fail(reason instanceof Error ? reason.message : currentCopy.current.failed);
     }
   };
   useEffect(() => { if (autoStart) void start(); }, [autoStart, contextKey]);
@@ -154,11 +169,18 @@ export function VoiceInputButton({ onTranscript, onFailure, onPhaseChange, autoS
     </UtilityPopover>
   </span>;
   return <span className={`voice-input-control${compact ? ' voice-input-compact' : ''}`} data-capture-phase={phase}>
-    <button type="button" className={phase === 'recording' ? 'voice-button recording' : 'voice-button'} disabled={disabled && !current.current} onClick={current.current ? stop : () => void start()} aria-label={label} aria-pressed={phase === 'recording'} title={label}>
-      <Icon name="mic" size={18} />
+    {compact && phase !== 'idle' && <span className="voice-capture-feedback">
+      <span className="speech-orb" data-phase={phase} aria-hidden="true" style={{ '--speech-scale': 1 + (levels.at(-1) ?? 0) * .4 } as CSSProperties}>{phase !== 'recording' && <span className="voice-progress" />}</span>
+      {phase === 'recording' && <span className="voice-wave" aria-hidden="true">{levels.map((level, index) => <i key={index} style={{ height: `${3 + level * 21}px` }} />)}</span>}
+      <span role="status">{phase === 'recording' ? copy.recording : status}</span>
+      {phase === 'recording' && <span className="voice-duration" aria-hidden="true">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</span>}
+    </span>}
+    {compact && phase === 'recording' && <button type="button" className="voice-discard" aria-label={messages.models.cancel} title={messages.models.cancel} onClick={() => { cancel(); setPhase('idle'); }}><Icon name="close" size={17} /></button>}
+    <button type="button" className={phase === 'recording' ? 'voice-button recording' : 'voice-button'} disabled={disabled && !current.current} onClick={current.current ? stop : () => void start()} aria-label={label} aria-pressed={phase === 'recording'} aria-busy={phase === 'checking' || phase === 'permission' || phase === 'transcribing'} title={label}>
+      <Icon name={phase === 'recording' ? 'check' : phase !== 'idle' ? 'close' : 'mic'} size={18} />
       <span className={compact ? 'sr-only' : undefined}>{phase === 'recording' ? copy.recording : label}</span>
     </button>
-    {status && <small role="status">{status}</small>}
+    {status && !compact && <small role="status">{status}</small>}
     {error && <small className="voice-error" role="status">{error}</small>}
     {setupRequired && <VoiceSettings subtle />}
   </span>;

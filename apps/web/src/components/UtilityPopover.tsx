@@ -22,6 +22,10 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
     const position = () => {
       if (!button.current || !panel.current) return;
       const anchor = button.current.getBoundingClientRect();
+      // Composer utilities belong beside the editor, including nested menus.
+      // Anchoring a submenu to a control inside its parent can otherwise cover
+      // the draft and prevent outside-click dismissal in a centered new chat.
+      const verticalAnchor = button.current.closest('.composer')?.getBoundingClientRect() ?? anchor;
       const viewport = window.visualViewport;
       const left = viewport?.offsetLeft ?? 0, top = viewport?.offsetTop ?? 0;
       const width = viewport?.width ?? window.innerWidth, height = viewport?.height ?? window.innerHeight;
@@ -38,8 +42,8 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
       const areaRight = besideTerminal ? Math.min(left + width, sidebar.right) : left + width;
       const panelWidth = Math.min(compact ? 240 : 340, Math.max(0, areaRight - areaLeft - 2 * margin));
       panel.current.toggleAttribute('data-narrow-panel', panelWidth < 280);
-      const above = Math.max(0, anchor.top - top - margin - gap);
-      const below = Math.max(0, top + height - anchor.bottom - margin - gap);
+      const above = Math.max(0, verticalAnchor.top - top - margin - gap);
+      const below = Math.max(0, top + height - verticalAnchor.bottom - margin - gap);
       // Composite panels scroll internally; their clipped outer height is not
       // their desired height and must not flip placement after layout shrinks.
       const upwards = below < Math.min(preferredHeight ?? panel.current.scrollHeight, 360) && above > below;
@@ -50,8 +54,8 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
       const start = rightAligned ? anchor.right - panelWidth : anchor.left;
       Object.assign(panel.current.style, {
         width: `${panelWidth}px`, left: `${Math.max(areaLeft + margin, Math.min(start, areaRight - panelWidth - margin))}px`,
-        top: overlay ? `${top + margin}px` : upwards ? 'auto' : `${anchor.bottom + gap}px`,
-        bottom: !overlay && upwards ? `${window.innerHeight - anchor.top + gap}px` : 'auto',
+        top: overlay ? `${top + margin}px` : upwards ? 'auto' : `${verticalAnchor.bottom + gap}px`,
+        bottom: !overlay && upwards ? `${window.innerHeight - verticalAnchor.top + gap}px` : 'auto',
         maxHeight: `min(${overlay ? Math.max(0, height - 2 * margin) : upwards ? above : below}px, var(--utility-panel-max-height, 100vh))`,
       });
     };

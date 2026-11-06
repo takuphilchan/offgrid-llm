@@ -8,7 +8,13 @@
   .brand strong { font-size: var(--type-body); font-weight: var(--weight-heading); letter-spacing: var(--tracking-title); }
   .brand img { display: block; flex: none; }
   .sidebar-create { flex-shrink: 0; }
-  .sidebar-create .new-chat-button { --control-justify: flex-start; width: 100%; text-decoration: none; }
+  .sidebar-chat-row { display: flex; align-items: center; gap: 4px; }
+  .sidebar-chat-row > .nav-link { flex: 1; min-width: 0; }
+  .sidebar-create .new-chat-button { --control-justify: center; width: 34px; height: 34px; min-height: 34px; padding: 0; border: 0; background: transparent; color: var(--muted); text-decoration: none; }
+  .sidebar-create .new-chat-button:hover { background: var(--surface-2); color: var(--text); }
+  .sidebar-create .new-chat-button span { display: none; }
+  .sidebar-collapsed .sidebar-chat-row { flex-direction: column; }
+  .sidebar-collapsed .sidebar-chat-row > .nav-link { flex: none; }
   .sidebar-collapsed .brand, .sidebar-collapsed .sidebar-context, .sidebar-collapsed .nav-link span, .sidebar-collapsed .new-chat-button span, .sidebar-collapsed .workspace-options > button span, .sidebar-collapsed .service-state span, .sidebar-collapsed .workspace-options > button > svg:last-child { display: none; }
   .sidebar-collapsed .sidebar { padding-inline: 10px; }
   .sidebar-collapsed .sidebar-heading { justify-content: center; }
@@ -16,9 +22,13 @@
   .sidebar-collapsed :is(.nav-link, .new-chat-button, .workspace-options > button) { --control-justify: center; justify-content: center; padding-inline: 0; }
   .sidebar-collapsed .service-state { justify-content: center; padding-inline: 0; }
   .sidebar-toggle, .navigation-trigger { display: none; }
-  .primary-nav { display: grid; gap: var(--space-1); flex-shrink: 0; }
+  .primary-nav { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
+  .nav-section-work { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .nav-section-library { flex-shrink: 0; }
+  .sidebar-collapsed .primary-nav { flex: none; }
+  .sidebar-collapsed .nav-section-work { flex: none; }
   .nav-group { display: grid; gap: 2px; }
-  .nav-group + .nav-group { margin-block-start: var(--space-2); }
+  .nav-group + .nav-group { margin-block-start: 4px; }
   .nav-group-label { padding: var(--space-2) var(--space-3) var(--space-1); color: var(--muted); font-size: var(--type-meta); font-weight: var(--weight-medium); line-height: var(--leading-ui); }
   .sidebar-collapsed .nav-group-label { display: none; }
   .nav-link { position: relative; display: flex; width: 100%; align-items: center; min-height: 40px; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--control-radius); color: var(--muted); text-decoration: none; text-align: start; transition: transform var(--motion-press) var(--ease-move); }
@@ -34,12 +44,14 @@
   .sidebar-context .history-list::-webkit-scrollbar-track { background: transparent; }
   .sidebar-context .history-list::-webkit-scrollbar-thumb { background: var(--faint); border-radius: 999px; border: 2px solid var(--surface-0); }
   .sidebar-context .history-list::-webkit-scrollbar-button { display: none; }
+  .sidebar-context .history-empty { min-height: 0; padding: 12px 10px; text-align: start; }
   @media (forced-colors: active) { .sidebar-context .history-list { scrollbar-color: auto; scrollbar-width: auto; } }
   .sidebar-context .history-row { min-height: 40px; gap: 0; border-radius: 7px; }
   .sidebar-context .history-open { min-height: 40px; text-align: start; padding: 8px 10px; }
   .sidebar-context .history-open strong { font-size: var(--type-meta); font-weight: var(--weight-regular); line-height: var(--leading-ui); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
   .sidebar-context .history-row.active strong { font-weight: 500; color: var(--text); }
-  .sidebar-foot { flex-shrink: 0; margin-block-start: auto; border-block-start: 1px solid var(--line); padding-block-start: 8px; display: grid; gap: 4px; }
+  .sidebar-foot { flex-shrink: 0; margin-block-start: 0; border-block-start: 1px solid var(--line); padding-block-start: 8px; display: grid; gap: 4px; }
+  .sidebar-collapsed .sidebar-foot { margin-block-start: auto; }
   .sidebar-foot .workspace-options > button { --control-justify: flex-start; width: 100%; }
   .service-state { display: flex; align-items: center; gap: 8px; padding: 4px 10px 0; color: var(--faint); font-size: 12px; }
   .service-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--text); flex: none; }
@@ -48,7 +60,12 @@
   .topbar { min-height: var(--header-height); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px var(--page-gutter); border-block-end: 1px solid var(--line); }
   .topbar-leading { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .topbar h1 { min-width: 0; margin: 0; font-size: var(--type-section); font-weight: var(--weight-heading); line-height: var(--leading-ui); letter-spacing: var(--tracking-title); overflow-wrap: anywhere; }
-  .topbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .topbar-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .topbar-actions > .icon-button, .topbar-actions > .command-trigger { width: 40px; height: 40px; padding: 8px; justify-content: center; color: var(--muted); border: 0; background: transparent; border-radius: 9px; }
+  .topbar-actions > .command-trigger > span, .topbar-actions > .command-trigger > kbd { display: none; }
+  .topbar-actions > button:hover { background: var(--surface-2); color: var(--text); }
+  .topbar-actions button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  .topbar-actions .known-work > button { font-size: var(--type-meta); font-weight: var(--weight-medium); padding-inline: 10px; min-height: 32px; border: 0; background: var(--surface-2); border-radius: 999px; }
   .command-trigger { min-height: 40px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 7px; font-size: 13px; cursor: pointer; }
   .command-trigger:hover { background: var(--surface-2); color: var(--text); }
   .command-trigger kbd { padding: 2px 4px; font: var(--type-caption)/var(--leading-ui) var(--mono); color: var(--faint); }
@@ -72,7 +89,14 @@
   .chat-page .chat-workspace { display: flex; flex-direction: column; height: auto; min-height: 0; flex: 1; }
   .chat-page .chat-layout { flex: 1; min-height: 0; position: relative; }
   .chat-page .conversation { padding: 8px max(0px, calc((100% - 800px) / 2)) 24px; }
+  .document-workspace:not(.has-document) .conversation-content:has(> .empty-chat) { min-height: 100%; display: flex; align-items: center; justify-content: center; }
+  .document-workspace:not(.has-document) .empty-chat { min-height: 0; width: 100%; max-width: 38rem; padding: 24px 12px 48px; }
+  .document-workspace:not(.has-document) .empty-chat h2 { margin: 0; font-size: clamp(24px, 2.6vw, 30px); font-weight: 450; letter-spacing: -.025em; line-height: 1.25; text-wrap: balance; }
   .chat-page .composer { width: min(800px, 100%); margin-inline: auto; }
+  /* Keep the editor in the same bottom slot before and after the first reply.
+     Only the conversation scrolls; changing speech state must not move the dock. */
+  .chat-page .chat-layout > .composer { margin-block-start: auto; flex-shrink: 0; }
+  .document-workspace:not(.has-document) .empty-chat { padding-block: 16px 28px; }
   .chat-latest { position: absolute; inset-inline-end: 16px; inset-block-start: 8px; z-index: 2; box-shadow: var(--shadow); }
   .nav-link:active { transform: translateY(var(--press-distance)); }
   .sidebar :is(.brand, .nav-link, .sidebar-foot), .topbar { user-select: none; }
@@ -112,4 +136,5 @@
     .navigation-trigger span { display: none; }
     .topbar h1 { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
   }
+  @media (pointer: coarse) { .sidebar-create .new-chat-button { width: 44px; height: 44px; min-height: 44px; } }
 }

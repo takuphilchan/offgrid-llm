@@ -50,6 +50,8 @@ for (const state of ['empty', 'populated', 'busy', 'blocked', 'error', 'complete
       for (const route of ['chat', 'agents', 'models', 'knowledge', 'activity', 'settings']) {
         await page.goto(`/ui/#/${route === 'agents' && populated ? `agents/task/${id}` : route}`);
         await expect(page.locator('.page-content')).toBeVisible();
+        await expect(page.locator('.deferred-page')).toHaveCount(0);
+        await expect(page.locator('.skeleton-card')).toHaveCount(0);
         await expect(page.locator('.page-failure')).toHaveCount(0);
         await expect(page.getByText(/Cannot read properties|undefined.*filter/)).toHaveCount(0);
         await page.evaluate(() => document.fonts.ready);
