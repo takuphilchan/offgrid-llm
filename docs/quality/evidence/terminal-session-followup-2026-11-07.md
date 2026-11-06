@@ -105,3 +105,14 @@ The final browser and sidebar source corrections postdate the installed candidat
 identified above. They do not claim a newer installed payload. Exact-revision
 remote CI and release-asset production remain separate gates. The build's existing
 chunk-size warning and unavailable human/native-platform checks remain disclosed.
+
+## Remote CI fixture correction
+
+CI run `42269334837` exposed an environment dependency in the simulated terminal
+supervisor failure test on both macOS runners. After Agent was moved inside
+PowerShell, that fixture needed a Windows system root and executable-presence
+stub before it could reach its intended rejected-spawn path. It now supplies
+and restores those prerequisites explicitly. The production launcher and shutdown
+assertions are unchanged. The six terminal-session tests passed on Windows and
+Linux; the Windows desktop suite passed 139 tests with one platform skip.
+Remote CI must be rerun on the corrected revision before release.

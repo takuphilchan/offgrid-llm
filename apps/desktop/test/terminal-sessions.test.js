@@ -45,8 +45,13 @@ test('normal stop waits for confirmation before releasing ownership',async()=>{
  const pending=manager.stop();assert.equal(manager.sessions.size,1);assert.deepEqual(frames,[{action:'stop'}]);
  confirm(true);await pending;assert.equal(manager.sessions.size,0);
 });
-test('a supervisor that never started does not strand application shutdown',async()=>{
+test('a supervisor that never started does not strand application shutdown',async(t)=>{
  const {EventEmitter}=require('node:events'),{PassThrough}=require('node:stream');
+ // This is a supervisor failure fixture, not a native PowerShell launch. Keep
+ // its Windows prerequisites explicit on Linux/macOS contract-test runners.
+ const systemRoot=process.env.SystemRoot;process.env.SystemRoot='C:\\Windows';
+ t.after(()=>{if(systemRoot===undefined)delete process.env.SystemRoot;else process.env.SystemRoot=systemRoot;});
+ t.mock.method(require('node:fs'),'existsSync',()=>true);
  const child=new EventEmitter();Object.assign(child,{stdin:new PassThrough(),stdout:new PassThrough(),stderr:new PassThrough()});
  const manager=new TerminalSessions({choose:async()=>process.cwd(),cli:process.execPath,service:()=> 'http://127.0.0.1:1',send:()=>{},spawnProcess:()=>{queueMicrotask(()=>{child.emit('error',Error('spawn rejected'));child.emit('close');});return child;}});
  await assert.rejects(manager.create({kind:'offgrid',cols:80,rows:24}),/spawn rejected/);
