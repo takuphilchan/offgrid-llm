@@ -32,7 +32,7 @@ for (const theme of ['light', 'dark']) test(`library selection remains visible i
   await page.goto('/ui/#/models');
   const installed = page.getByRole('tab', { name: 'Installed', exact: true });
   const discover = page.getByRole('tab', { name: 'Discover models', exact: true });
-  const background = (control: typeof installed) => control.evaluate(el => getComputedStyle(el).backgroundColor);
+  const background = (control: typeof installed) => control.evaluate(el => el.getAttribute('role') === 'tab' ? getComputedStyle(el).borderBottomColor : getComputedStyle(el).backgroundColor);
   await expect(installed).toHaveAttribute('aria-selected', 'true');
   await expect.poll(async () => (await background(installed)) !== (await background(discover))).toBe(true);
   await installed.hover();
@@ -223,3 +223,23 @@ test('legacy verification remains attached to its model after navigating away an
   await expect(page.locator('.installed-model')).toContainText('Fixture integrity evidence'); expect(checks).toBe(1);
 });
 import { refreshWorkspace } from './helpers/workspace-actions';
+
+for (const theme of ['light', 'dark']) test(`model library separates view and category navigation in ${theme}`, async ({ page }, info) => {
+  const state = await fixture(page);
+  await page.addInitScript(theme => localStorage.setItem('offgrid.theme', theme), theme);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ui/#/models');
+  await expect(page.locator('.installed-model')).toBeVisible();
+  const categories = await page.locator('.model-category-picker').boundingBox();
+  const panel = await page.locator('#model-library-panel').boundingBox();
+  expect(categories!.x + categories!.width).toBeLessThan(panel!.x);
+  await page.screenshot({ path: info.outputPath(`models-installed-${theme}.png`) });
+  await page.getByRole('button', { name: 'Speech recognition', exact: true }).click();
+  await expect(page.locator('.installed-package-list')).toContainText('Matching runtime is unavailable');
+  await page.screenshot({ path: info.outputPath(`models-speech-${theme}.png`) });
+  await page.setViewportSize({ width: 390, height: 740 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.getByRole('button', { name: 'Speech recognition', exact: true })).toBeInViewport();
+  await page.screenshot({ path: info.outputPath(`models-mobile-${theme}.png`), fullPage: true });
+  expect(state.mutations).toEqual([]);
+});

@@ -4,6 +4,8 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { supportsChat } from '../src/api/model-capabilities';
+import type { InstalledTypedModel } from '../src/api/client';
+import { speechRuntimeText } from '../src/i18n/voice';
 
 test('positive model capabilities preserve legacy and vision chat, excluding speech', () => {
   for (const model of [{}, { type: 'llm' }, { type: 'chat' }, { type: 'vlm', capabilities: ['chat'] }]) expect(supportsChat(model)).toBe(true);
@@ -29,7 +31,14 @@ test('real service imports, verifies and removes a package without making it a c
     await section.getByRole('button', { name: 'Import package', exact: true }).click();
     const card = page.getByRole('region', { name: 'Installed', exact: true }).locator('article').filter({ hasText: id });
     await expect(card.getByText('Integrity checked', { exact: true })).toBeVisible();
-    await expect(card.getByText('Install the whisper.cpp speech runtime for this model.', { exact: true })).toBeVisible();
+    // A packaged-service fixture can discover its bundled runtime. Assert the
+    // reported readiness rather than assuming every test machine lacks it.
+    const inventory = await request.get('/api/v2/models');
+    const model = ((await inventory.json()).models as InstalledTypedModel[]).find(item => item.id === id)!;
+    const state = model.package ?? model.readiness;
+    expect(state).toBeTruthy();
+    expect(state.smoke_tested).toBeFalsy(); // Synthetic bytes were never inferred.
+    await expect(card.locator('.model-readiness')).toHaveText(state.issue || speechRuntimeText('en')[state.runtime_compatible ? 'available' : 'unavailable']);
     await page.screenshot({ path: testInfo.outputPath('speech-package-inventory.png'), fullPage: true });
     const legacy = await request.get('/v1/models');
     expect((await legacy.json()).data.some((model: { id: string }) => model.id === id)).toBe(false);

@@ -106,6 +106,7 @@ for(const locale of ['en','fr','de','es','ar','sw','sn','nd','zu'] as const) tes
 });
 
 test('real isolated service stores exact uploaded bytes without selecting or loading the model',async({page})=>{
+ test.skip(!process.env.OFFGRID_E2E_URL,'Requires an explicitly configured disposable real service, never the installed workspace');
  await page.addInitScript(()=>{localStorage.setItem('offgrid.onboarding.complete','true');localStorage.setItem('offgrid.locale','en');});
  await page.goto('/ui/#/models');
  const data=Buffer.alloc(1024**2);let p=0;

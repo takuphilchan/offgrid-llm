@@ -137,17 +137,16 @@ export function PackageModels({ category, view, onDiscover }: { category: ModelC
   </div>;
 
   return <>
-    <div className="model-info-banner" role="status"><strong>{category === 'speech_recognition' ? copy.speech_recognition : copy.speech_generation}</strong><span>{copy.runtimeNotice ?? 'Choose a reviewed package to download it. Runtime readiness is shown before installation.'}</span></div>
+    {view === 'discover' && <p className="model-search-hint">{copy.runtimeNotice}</p>}
     {error && <div className="inline-error" role="alert">{error}<button className="secondary-button" disabled={busy} onClick={() => void refreshInventory()}>{feedback.checkStatus}</button></div>}
     {inventoryError && <div className="inline-error" role="alert">{inventoryError}<button className="secondary-button" disabled={busy} onClick={() => void refreshInventory()}>{text.common.refresh}</button></div>}
     {operationsError && <div className="inline-error" role="alert">{copy.operations}: {operationsError}<button className="secondary-button" disabled={busy} onClick={() => void refreshInventory()}>{feedback.checkStatus}</button></div>}
     {metadata.failure && <div className="inline-error" role="alert">{metadata.failure.message}<button className="secondary-button" disabled={mutating} onClick={() => { if (metadata.failure) void metadata.run(metadata.failure.action); }}>{metadata.failure.action.label}</button></div>}
     {view === 'installed' && <section className="model-section" aria-label={text.models.installed} aria-busy={loading}>
-      <SectionHeading title={`${text.models.installed} · ${installed.length}`} />
+      <SectionHeading title={`${text.models.installed} · ${installed.length}`} actions={!!installed.length && <SearchField id="package-model-search" className="model-installed-search" label={modelLibrary(locale).filterInstalled} value={filter} onChange={setFilter} />} />
       {!loading && !inventoryError && !installed.length && <EmptyState title={text.models.empty} action={<button type="button" className="secondary-button" onClick={onDiscover}>{text.models.discover}</button>} />}
-      {!!installed.length && <SearchField id="package-model-search" className="model-installed-search" label={modelLibrary(locale).filterInstalled} value={filter} onChange={setFilter} />}
       {!!installed.length && !filtered.length && <EmptyState title={modelLibrary(locale).noMatches} action={<button type="button" className="secondary-button" onClick={() => { setFilter(''); document.getElementById('package-model-search')?.focus(); }}>{workspaceRefinement[locale].clear}</button>} />}
-      <div className="catalog-grid">{filtered.map(item => {
+      <div className="catalog-grid installed-package-list">{filtered.map(item => {
         const source = operations.find(o => o.state === 'complete' && !o.discarded && packageOf(o)?.id === item.id && packageOf(o)?.revision === item.revision);
         const state = item.package ?? item.readiness;
         const inUse = !!item.package?.in_use || !!item.package?.operation;

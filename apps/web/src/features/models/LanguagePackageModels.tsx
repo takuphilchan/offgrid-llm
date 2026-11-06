@@ -48,7 +48,7 @@ export function LanguagePackageModels() {
   };
   return <section className="model-section" aria-busy={loading}>
     {error && <div className="inline-error" role="alert">{error}<button className="secondary-button" onClick={() => void load()}>{text.common.retry}</button></div>}
-    {packages.length > 0 && <div className="catalog-grid">{packages.map(item => <article className="catalog-card package-card" key={`${item.id}/${item.revision}`}>
+    {packages.length > 0 && <div className="catalog-grid installed-package-list">{packages.map(item => <article className="catalog-card package-card" key={`${item.id}/${item.revision}`}>
       <ModelIdentity model={packageDisplay(item)} />
       <p className="model-runtime-meta">{[item.engine, item.format, item.backend].filter(Boolean).join(' · ')}</p>
       <p className="model-readiness">{details.qualified}: {item.readiness.qualified ? details.yes : details.no}</p>
