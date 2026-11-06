@@ -1,5 +1,30 @@
 # API reference
 
+## Compact Activity metadata
+
+Services advertising `work-summary-v1` expose `GET /api/v2/work`. It returns
+`items`, authorized root-job `counts` (attention/running/history/all),
+`removable_count`, `has_more` and an optional `next_cursor`. Transcripts,
+results, tool arguments and credentials are excluded. Counts are scoped to
+the authenticated actor's permitted jobs, not all users or all conversations.
+
+Use `bucket=attention|running|history|all`, `limit=1..100` (default 20),
+optional `query` (bounded title search), and the returned opaque `cursor` for
+the next page. `id` selects exact root-job metadata for an inspector. Counts
+remain independent of the filter. Pages use creation time and identity for
+stable ordering; they are live views, not immutable database snapshots.
+Refresh from the first page after a change. Responses are not cached.
+
+`deletable` and `protection` explain current cleanup eligibility. They do not
+grant authority: existing job DELETE/control endpoints recheck state and
+ownership. Children remain subordinate, including retained child records
+whose parent history was removed. Unknown effects and unsettled execution
+remain protected. Existing `/api/v2/jobs` clients remain compatible.
+
+The UI collects a bounded, explicit selection for bulk review before deletion;
+new arrivals are excluded after confirmation. Reviews over 5,000 records ask
+for a narrower search. Partial failures remain selected for inspection/retry.
+
 OffGrid exposes a local HTTP API at `http://127.0.0.1:11611`. The stable core
 contract is [pkg/api/openapi.yaml](../../pkg/api/openapi.yaml) and is also
 available from a running instance:

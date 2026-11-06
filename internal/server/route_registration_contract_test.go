@@ -86,7 +86,7 @@ func serverRouteManifest() (string, error) {
 			return "", fmt.Errorf("route group runtime call order differs from source registration order at %d: %s/%s", i, routeCalls[i], routeDefinitions[i])
 		}
 	}
-	if len(routes) != 150 || len(middleware) != 5 {
+	if len(routes) != 151 || len(middleware) != 5 {
 		return "", fmt.Errorf("unexpected baseline manifest shape: %d routes, %d outer middleware", len(routes), len(middleware))
 	}
 	return "# ordered route registrations\n" + strings.Join(routes, "\n") +

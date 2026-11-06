@@ -305,6 +305,7 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux, guards routeGuards) {
 	mux.HandleFunc("/v1/agents/tasks/", adminOnly(s.handleAgentTaskAction))
 	mux.HandleFunc("/api/v2/jobs/", chatOnly(s.profileJobAccess(s.handleJobRead)))
 	mux.HandleFunc("/api/v2/jobs", chatOnly(s.handleJobSubmit))
+	mux.HandleFunc("/api/v2/work", chatOnly(s.handleWorkSummary))
 	mux.HandleFunc("/api/v2/execution/workspaces", chatOnly(s.handleExecutionWorkspaces))
 	mux.HandleFunc("/api/v2/execution/pairing", chatOnly(s.handleExecutionPairing))
 	mux.HandleFunc("/api/v2/execution/revoke", chatOnly(s.handleExecutionRevoke))

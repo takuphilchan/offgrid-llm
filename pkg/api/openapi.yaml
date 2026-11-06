@@ -1696,6 +1696,26 @@ paths:
                   id: { type: string }
                   archived: { type: boolean, enum: [true] }
         '409': { $ref: '#/components/responses/Error' }
+  /api/v2/work:
+    get:
+      operationId: listWorkSummary
+      description: Authorized root-job metadata and complete actor-job counts, without transcripts or tool arguments. Requires work-summary-v1. Stable newest-first pagination within the chosen bucket; counts do not include ordinary text-only conversation turns. Deletion eligibility is advisory and rechecked by the mutation endpoint.
+      parameters:
+        - { name: bucket, in: query, schema: { type: string, enum: [all, attention, running, history], default: all } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, schema: { type: string, maxLength: 512 } }
+        - { name: query, in: query, schema: { type: string, maxLength: 512 }, description: Case-insensitive search of the bounded title. }
+        - { name: id, in: query, schema: { type: string }, description: Exact root job identity for inspector metadata; does not alter scoped counts. }
+      responses:
+        '200':
+          description: One authorized metadata page and unfiltered counts for the same actor scope.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkPage' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
   /api/v2/jobs:
     get:
       operationId: listDurableJobs
@@ -3941,6 +3961,42 @@ components:
         request_id: { type: string }
         text: { type: string }
         at: { type: string, format: date-time }
+    WorkItem:
+      type: object
+      required: [id, title, status, created_at, deletable]
+      properties:
+        id: { type: string }
+        title: { type: string, maxLength: 180 }
+        status: { type: string }
+        created_at: { type: string, format: date-time }
+        model: { type: string }
+        outcome: { type: string, enum: [answer_only] }
+        deletable: { type: boolean }
+        protection: { type: string, enum: [unknown_effects, pending_approval, unsettled_action, recovery_checkpoint, active_work, child_work, ownership] }
+        origin:
+          type: object
+          required: [workspace, conversation, turn_id]
+          properties:
+            workspace: { type: string }
+            conversation: { type: string }
+            turn_id: { type: string }
+    WorkPage:
+      type: object
+      required: [items, counts, removable_count, has_more, scope]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/WorkItem' } }
+        counts:
+          type: object
+          required: [attention, running, history, all]
+          properties:
+            attention: { type: integer, minimum: 0 }
+            running: { type: integer, minimum: 0 }
+            history: { type: integer, minimum: 0 }
+            all: { type: integer, minimum: 0 }
+        removable_count: { type: integer, minimum: 0, description: Eligible items matching the current bucket and search across all pages. }
+        next_cursor: { type: string }
+        has_more: { type: boolean }
+        scope: { type: string, enum: [actor_jobs] }
     AgentTask:
       type: object
       required: [id, prompt, status, created_at]

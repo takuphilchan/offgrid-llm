@@ -1261,6 +1261,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/work": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Authorized root-job metadata and complete actor-job counts, without transcripts or tool arguments. Requires work-summary-v1. Stable newest-first pagination within the chosen bucket; counts do not include ordinary text-only conversation turns. Deletion eligibility is advisory and rechecked by the mutation endpoint. */
+        get: operations["listWorkSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/jobs": {
         parameters: {
             query?: never;
@@ -3167,6 +3184,39 @@ export interface components {
             text: string;
             /** Format: date-time */
             at: string;
+        };
+        WorkItem: {
+            id: string;
+            title: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+            model?: string;
+            /** @enum {string} */
+            outcome?: "answer_only";
+            deletable: boolean;
+            /** @enum {string} */
+            protection?: "unknown_effects" | "pending_approval" | "unsettled_action" | "recovery_checkpoint" | "active_work" | "child_work" | "ownership";
+            origin?: {
+                workspace: string;
+                conversation: string;
+                turn_id: string;
+            };
+        };
+        WorkPage: {
+            items: components["schemas"]["WorkItem"][];
+            counts: {
+                attention: number;
+                running: number;
+                history: number;
+                all: number;
+            };
+            /** @description Eligible items matching the current bucket and search across all pages. */
+            removable_count: number;
+            next_cursor?: string;
+            has_more: boolean;
+            /** @enum {string} */
+            scope: "actor_jobs";
         };
         AgentTask: {
             workflow?: components["schemas"]["WorkflowVerification"];
@@ -6006,6 +6056,38 @@ export interface operations {
                 };
             };
             409: components["responses"]["Error"];
+        };
+    };
+    listWorkSummary: {
+        parameters: {
+            query?: {
+                bucket?: "all" | "attention" | "running" | "history";
+                limit?: number;
+                cursor?: string;
+                /** @description Case-insensitive search of the bounded title. */
+                query?: string;
+                /** @description Exact root job identity for inspector metadata; does not alter scoped counts. */
+                id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One authorized metadata page and unfiltered counts for the same actor scope. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkPage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
     listDurableJobs: {
