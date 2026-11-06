@@ -197,9 +197,13 @@ export class BrowserDriver {
       await mkdir(this.downloadDir, {recursive:true, mode:0o700});
       const suggested = await handle.getAttribute('download') || await handle.getAttribute('aria-label') || 'download';
       const safeName = basename(String(suggested)).replace(/[^\p{L}\p{N}._ -]/gu, '_').slice(0, 160) || 'download';
-      const downloadPromise = this.page.waitForEvent('download', {timeout: 15000});
-      await handle.click();
-      const download = await downloadPromise;
+      // Observe both promises immediately: either the click or the download
+      // wait can fail first. A late rejection must not crash the companion.
+      // Dispatch once; failure still leaves the action for reconciliation.
+      const [download] = await Promise.all([
+        this.page.waitForEvent('download', {timeout: 15000}),
+        handle.click(),
+      ]);
       if (await download.failure()) throw Error('Download failed.');
       const target = join(this.downloadDir, `${Date.now()}-${safeName}`);
       await download.saveAs(target);
