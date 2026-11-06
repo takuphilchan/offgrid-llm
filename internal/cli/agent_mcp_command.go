@@ -28,31 +28,21 @@ func legacyMCPCommand(args []string, env Environment) error {
 	path := filepath.Join(cfg.DataDir, "tools.json")
 	s := env.Style
 	w := env.Stdout
-	if len(args) == 0 {
-		fmt.Fprintln(w)
-		fmt.Fprintf(w, "  %s◈ MCP Servers%s\n", s.Primary+s.Bold, s.Reset)
-		fmt.Fprintf(w, "  %sConnect external tools via Model Context Protocol%s\n", s.Dim, s.Reset)
-		fmt.Fprintln(w)
-		fmt.Fprintf(w, "  %sUsage%s  offgrid agent mcp <command>\n", s.Dim, s.Reset)
-		fmt.Fprintln(w)
-		fmt.Fprintf(w, "  %sCommands%s\n", s.Primary, s.Reset)
-		fmt.Fprintf(w, "    %-20s %sAdd an MCP server%s\n", "add <url>", s.Dim, s.Reset)
-		fmt.Fprintf(w, "    %-20s %sList configured servers%s\n", "list", s.Dim, s.Reset)
-		fmt.Fprintf(w, "    %-20s %sRemove a server%s\n", "remove <name>", s.Dim, s.Reset)
-		fmt.Fprintf(w, "    %-20s %sEnable a server%s\n", "enable <name>", s.Dim, s.Reset)
-		fmt.Fprintf(w, "    %-20s %sDisable a server%s\n", "disable <name>", s.Dim, s.Reset)
-		fmt.Fprintln(w)
-		fmt.Fprintf(w, "  %sOptions%s\n", s.Primary, s.Reset)
-		fmt.Fprintf(w, "    %-20s %sServer name (auto-derived from URL)%s\n", "--name <name>", s.Dim, s.Reset)
-		fmt.Fprintf(w, "    %-20s %sAPI key for authentication%s\n", "--api-key <key>", s.Dim, s.Reset)
-		fmt.Fprintln(w)
-		fmt.Fprintf(w, "  %sExamples%s\n", s.Primary, s.Reset)
-		fmt.Fprintf(w, "    %s$%s offgrid agent mcp add http://localhost:3100 --name my-tools\n", s.Dim, s.Reset)
-		fmt.Fprintf(w, "    %s$%s offgrid agent mcp list\n", s.Dim, s.Reset)
-		fmt.Fprintf(w, "    %s$%s offgrid agent mcp disable my-tools\n", s.Dim, s.Reset)
-		fmt.Fprintln(w)
+	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+		p := Presenter{Stdout: w, Style: s}
+		p.Heading("OffGrid / MCP servers")
+		p.Note("Configure external tools. A connection does not grant a task permission to use every tool.")
+		p.ModernSection("Connections", [][]string{
+			{"offgrid agent mcp list", "Inspect configured servers"},
+			{"offgrid agent mcp add URL", "Add a server"},
+			{"offgrid agent mcp enable NAME", "Enable a server"},
+			{"offgrid agent mcp disable NAME", "Disable a server"},
+			{"offgrid agent mcp remove NAME", "Remove a server"},
+		})
+		p.Note("Add options: --name NAME (otherwise derived from URL), --api-key KEY. Keep credentials private.")
 		return nil
 	}
+
 	deps := env.LegacyAgent.MCP
 	if deps.ReadFile == nil || deps.MkdirAll == nil || deps.WriteFile == nil || deps.Now == nil {
 		return fmt.Errorf("agent MCP file adapters unavailable")

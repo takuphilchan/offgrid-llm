@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/takuphilchan/offgrid-llm/internal/agentcontext"
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
@@ -48,12 +49,12 @@ func TestSessionCommandsNeverSubmitOrAcquireAuthority(t *testing.T) {
 	if strings.Contains(out.String(), "\x1b") || !strings.Contains(out.String(), "Saved conversation and context are unchanged") {
 		t.Fatal("clear changed plain output or history", out.String())
 	}
-	for _, want := range []string{"bumblebee", "local-model", "reviewed-skill (revision 3)", "researcher", "owned-provider / lookup", "No message was submitted", "--resume conversation --profile profile-fixture --profile-revision 7"} {
+	for _, want := range []string{"bumblebee", "local-model", "reviewed-skill (revision 3)", "researcher", "owned-provider / lookup", "No message was submitted", "--resume conversation", "--profile profile-fixture --profile-revision 7"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatal("missing", want, out.String())
 		}
 	}
-	if strings.Count(out.String(), "OffGrid  /  Agent chat") != 1 || strings.Contains(out.String(), "\x1b") {
+	if strings.Count(out.String(), "OffGrid  -  bumblebee") != 1 || strings.Contains(out.String(), "\x1b") {
 		t.Fatal("duplicate banner or nonterminal escape", out.String())
 	}
 }
@@ -85,5 +86,40 @@ func TestClearUsesDisplayAdapterWithoutChangingProfile(t *testing.T) {
 	}
 	if p.Profile.Revision != 7 || !strings.Contains(out.String(), "Bumblebee") || !strings.Contains(out.String(), "local-model") {
 		t.Fatal("session changed or header missing", out.String())
+	}
+}
+
+func TestSessionHelpHasShortDefaultAndCompleteOnDemand(t *testing.T) {
+	var short, full bytes.Buffer
+	p := agentSessionPresentation{}
+	if !renderAgentSessionCommand(&short, "/help", "saved", p) || !renderAgentSessionCommand(&full, "/help all", "saved", p) {
+		t.Fatal("help command was not recognized")
+	}
+	if !strings.Contains(short.String(), "/help all") || !strings.Contains(short.String(), "/agent") || strings.Contains(short.String(), "/recover") {
+		t.Fatal("default help is not focused", short.String())
+	}
+	if !strings.Contains(full.String(), "/recover") || !strings.Contains(full.String(), "/default") || !knownAgentSlashCommand("/help all") {
+		t.Fatal("complete help is unavailable", full.String())
+	}
+	if suggestions := AgentCommandSuggestions(); len(suggestions) < 5 || suggestions[0].Command != "/help" || suggestions[1].Command != "/agent" || suggestions[2].Command != "/status" {
+		t.Fatal("unexpected command palette order", suggestions)
+	}
+}
+
+func TestSessionHelpReflowsAndGroupsRecoveryCommands(t *testing.T) {
+	for _, width := range []int{32, 48, 80, 120} {
+		var out bytes.Buffer
+		p := agentSessionPresentation{Style: PresentationStyle{Columns: width}}
+		renderAgentSessionCommand(&out, "/help all", "saved", p)
+		for _, group := range []string{"Explore", "Session", "Work"} {
+			if !strings.Contains(out.String(), group) {
+				t.Fatal("missing group", group)
+			}
+		}
+		for _, line := range strings.Split(out.String(), "\n") {
+			if ansi.StringWidth(line) > width {
+				t.Fatalf("%d columns: %q", width, line)
+			}
+		}
 	}
 }

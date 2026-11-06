@@ -51,6 +51,14 @@ func osCLIEnvironment() cli.Environment {
 	env.Service = sessionEnvironment().Service
 	env.Service.ReadAgentLine = newAgentSessionInput()
 	env.Service.ClearAgentDisplay = clearAgentDisplay
+	env.Service.PickAgentProfile = pickAgentProfile
+	env.Service.AgentDefaults = agentDefaultFiles{directory: func() (string, error) {
+		root, err := os.UserConfigDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(root, "offgrid", "agent-defaults"), nil
+	}}
 	env.Service.ControlClient = func() (*serviceclient.Client, error) {
 		return serviceclient.New(commandServerURL(), os.Getenv("OFFGRID_API_KEY"), httpClient)
 	}

@@ -120,7 +120,11 @@ func renderAgentStreamMode(w, progress io.Writer, body io.Reader, terminal, anim
 					label = cli.AgentActionLabel(p.Tool)
 				}
 				display.phase(label, !draft.open)
-				fmt.Fprintf(progress, "  %s%s%s\n", style.Muted, label, style.Reset)
+				// An interactive terminal already animates the current phase in
+				// place. Keep only actual tool actions in the transcript.
+				if !animate || p.Tool != "" || p.Phase == "approval" {
+					fmt.Fprintf(progress, "  %s%s%s\n", style.Muted, label, style.Reset)
+				}
 				lastPhase = phase
 			}
 		}

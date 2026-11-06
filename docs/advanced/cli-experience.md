@@ -105,6 +105,29 @@ of faster or correct answers.
 
 ### Persistent agent sessions
 
+`offgrid agent` offers a searchable agent picker. Type a name, purpose, model or
+ID, use Up/Down to move, and Enter to select. Escape returns without starting
+work. Plain terminals accept a number, exact name or ID; partial text filters
+the list, `/all` resets it, and invalid or ambiguous input can be corrected.
+`--model MODEL` narrows selection to matching profiles rather than overriding
+their saved models.
+
+Use `/default` inside a session to explicitly remember its exact profile
+revision for the connected service, workspace and user. `/default show` inspects
+that preference and `/default clear` forgets it. Nothing is remembered merely
+by selecting an agent. A changed revision, archived profile, different account
+or workspace cannot silently reuse or upgrade a default. The preference stores
+no credentials or permissions; local file and computer access remain separate.
+
+`offgrid agent chat --resume NAME` uses the saved turn's profile revision.
+Explicit conflicting profile/model flags are rejected. An empty or legacy
+conversation without saved agent identity still needs `--profile ID` (and its
+revision when known). `/session` retains a complete explicit resume command for
+that case. `/agent` selects an agent for a **separate conversation**, closing
+this invocation's owned folder lease before starting it. Existing work is saved
+and access is not transferred. Active, uncertain or unreconciled work must first
+be resolved; cancelling the picker leaves the current conversation open.
+
 Start `offgrid agent` or `offgrid agent chat --profile PROFILE_ID` and enter
 successive requests at the prompt. The session shows one welcome with the pinned
 profile and model. `/session` exposes revision, budget and the exact resume
@@ -113,6 +136,9 @@ not repeat internal turn/run IDs. Failures and approvals remain visible.
 
 In supported terminals, `/` opens command suggestions. Up/Down selects, Tab
 completes, Enter runs the selected command and Escape dismisses suggestions.
+The palette shows a bounded selection and its current position, with the common
+conversation actions first. `/help` shows the short command set; `/help all`
+shows recovery and configuration controls without crowding the prompt.
 Outside that menu, Up/Down recalls this invocation's last 50 inputs and restores
 an unfinished draft when moving back down. This input history is not saved to a
 separate file. Unicode editing and bracketed multiline paste share the existing
@@ -148,6 +174,44 @@ color escapes, or terminal-dependent symbols by default. JSON output must not
 be mixed with human-readable banners.
 
 ## Quality gates
+
+### Human-readable inventories and agent entry
+
+`offgrid info` labels its output **Local configuration**: context and memory
+values are configured limits, not measurements of the running service. Zero
+threads displays as **Automatic**. Its model inventory comes from the local
+folder; `offgrid list` explicitly identifies the service it queried. Neither
+screen treats installed files as proof of runtime readiness; use `offgrid doctor`
+for readiness diagnostics.
+
+Inventories, root help, agent help and session headers share compact headings
+and readable values. Rows use measured terminal columns (80 when unavailable),
+with display-cell-aware alignment for Unicode. When identifiers and details
+cannot fit together, details move below the identifier. Exact IDs remain
+unabbreviated and copyable; very long IDs may soft-wrap in the terminal. Local
+inventory summaries omit filename-derived quantization guesses; their existing
+JSON projection is unchanged. No model identity or stored metadata is rewritten.
+
+Profile selection separates the profile name, model and revision. Session
+headers label the active profile and model; `/session` still provides the full
+resume command. Short `agent --help` introduces in-session commands before the
+complete reference. This presentation does not introduce a new agent loop,
+automatic permissions, downloads or simulated progress.
+
+Recovery guidance avoids assuming Linux or blaming a generic timeout on a
+remote provider. It directs users to the configured endpoint, diagnostics and
+saved work without recommending blind retries of uncertain effects.
+
+The same human presentation covers discovery, downloads, diagnostics, Knowledge,
+speech, integrations, configuration, users, audit, batch work, logs and model
+preferences. Family help groups common actions before administration and recovery.
+Advanced record/preview commands retain their structured output and exact field
+names. This is deliberate: presentation never rewrites tool results or API data.
+
+Interactive chat adapts its header and shortcuts to terminal width. Download
+progress updates one line only in a real terminal; redirected output gets a
+completion line without cursor-control bytes. Benchmark latency reports complete
+response time; it does not fabricate first-token measurements.
 
 Run the CLI and shared-runtime checks after presentation changes:
 

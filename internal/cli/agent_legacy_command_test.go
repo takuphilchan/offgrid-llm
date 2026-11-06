@@ -57,10 +57,10 @@ func TestLegacyAgentRoutesThroughInjectedBoundary(t *testing.T) {
 		args []string
 		want string
 	}{
-		{[]string{"agent", "templates"}, "Agent Templates"},
+		{[]string{"agent", "templates"}, "Agent personas"},
 		{[]string{"agent", "list"}, "fixture task"},
 		{[]string{"agent", "workflows"}, "fixture workflow"},
-		{[]string{"agent", "tools"}, "Read file contents"},
+		{[]string{"agent", "tools"}, "fixture"},
 	} {
 		out.Reset()
 		errOut.Reset()
@@ -163,7 +163,7 @@ func TestInteractiveAgentUsesCanonicalConversationAndExplicitProfileModel(t *tes
 			if resume {
 				expectedCreates = 0
 			}
-			if created != expectedCreates || submitted != 2 || workspaceLookups != 1 || strings.Count(out.String(), "OffGrid  /  Agent chat") != 1 || !strings.Contains(out.String(), "explicit-model") {
+			if created != expectedCreates || submitted != 2 || workspaceLookups != 1 || strings.Count(out.String(), "OffGrid  -  General") != 1 || !strings.Contains(out.String(), "explicit-model") {
 				t.Fatalf("created=%d turns=%d output=%s", created, submitted, out.String())
 			}
 		})

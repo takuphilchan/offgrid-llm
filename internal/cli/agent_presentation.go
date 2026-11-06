@@ -10,12 +10,14 @@ import (
 // fixed-width frame or truncated model identity is needed for narrow terminals.
 func AgentHeader(w io.Writer, style PresentationStyle, model, profile string) {
 	fmt.Fprintf(w, "\n%sOffGrid Agent%s\n", style.Bold, style.Reset)
+	p := Presenter{Stdout: w, Style: style}
 	if model != "" {
-		fmt.Fprintf(w, "  %sModel%s  %s\n", style.Muted, style.Reset, TerminalSafe(model))
+		p.Detail("Model", model)
 	} else if profile != "" {
-		fmt.Fprintf(w, "  %sProfile%s  %s\n", style.Muted, style.Reset, TerminalSafe(profile))
+		p.Detail("Profile", profile)
 	}
-	fmt.Fprintf(w, "  %sWorking | Ctrl+C to stop%s\n\n", style.Muted, style.Reset)
+	p.Note("Working | Ctrl+C to stop")
+	fmt.Fprintln(w)
 }
 
 // A friendly label describes the proposed operation, never its success. Unknown

@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agentcontext"
+	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
 )
 
@@ -21,6 +22,8 @@ type ServiceDependencies struct {
 	Chat                    func(context.Context, *serviceclient.Client, []string, io.Reader, io.Writer, bool) error
 	ReadAgentLine           func(*bufio.Reader, io.Writer, PresentationStyle, []AgentCommandSuggestion) (string, error)
 	ClearAgentDisplay       func(io.Writer) bool
+	PickAgentProfile        func(*bufio.Reader, io.Writer, PresentationStyle, []agents.AgentProfile) (agents.AgentProfile, error)
+	AgentDefaults           AgentDefaultStore
 	CreateArtifactFile      func(string) (ArtifactFile, error)
 	OpenProfileFile         func(string) (io.ReadCloser, error)
 	ReadSkillDirectory      func(string) ([]agentcontext.SkillFile, error)
@@ -101,11 +104,8 @@ func knowledgeServiceCommand(ctx context.Context, args []string, env Environment
 		if env.Options.JSON {
 			return json.NewEncoder(env.Stdout).Encode(map[string]string{"usage": KnowledgeUsage})
 		}
-		if _, err := fmt.Fprintln(env.Stdout, KnowledgeUsage); err != nil {
-			return err
-		}
-		_, err := fmt.Fprintln(env.Stdout, "Uses OFFGRID_SERVER_URL and OFFGRID_API_KEY. --json emits one result; Ctrl+C cancels the request.")
-		return err
+		Presenter{Stdout: env.Stdout, Style: env.Style}.knowledgeHelp()
+		return nil
 	}
 	client, err := serviceClient(env)
 	if err != nil {

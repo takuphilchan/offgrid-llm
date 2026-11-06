@@ -3,10 +3,13 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/term"
 	"github.com/takuphilchan/offgrid-llm/internal/cli"
 )
 
@@ -54,13 +57,31 @@ func (d *agentLiveDisplay) tick() {
 	if !d.active {
 		return
 	}
-	label := []rune(d.label)
-	if len(label) > 18 {
-		label = label[:18]
+	columns := 80
+	if file, ok := cli.AgentOutputTarget(d.progress).(*os.File); ok {
+		if width, _, err := term.GetSize(file.Fd()); err == nil && width > 0 {
+			columns = width
+		}
 	}
-	fmt.Fprintf(d.progress, "\r\x1b[2K%c %s %ds", []byte{'|', '/', '-', '\\'}[d.frame%4], string(label), int(time.Since(d.started).Seconds()))
+	frames := []string{"|", "/", "-", "\\"}
+	if terminalSupportsUnicode() {
+		frames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	}
+	fmt.Fprint(d.progress, "\r\x1b[2K", agentProgressLine(frames[d.frame%len(frames)], d.label, time.Since(d.started), columns))
 	d.frame++
 	d.visible = true
+}
+
+// Reserve the last terminal cell to avoid wrapping into the next prompt row.
+// Measure display cells, not bytes or runes, and retain useful action labels.
+func agentProgressLine(frame, label string, elapsed time.Duration, columns int) string {
+	label = strings.Join(strings.Fields(cli.TerminalSafe(label)), " ")
+	suffix := fmt.Sprintf(" %ds", int(elapsed.Seconds()))
+	budget := columns - ansi.StringWidth(frame) - ansi.StringWidth(suffix) - 2
+	if budget < 4 {
+		return ansi.Truncate(frame+suffix, max(0, columns-1), "")
+	}
+	return frame + " " + ansi.Truncate(label, budget, "...") + suffix
 }
 func (d *agentLiveDisplay) phase(label string, active bool) {
 	d.mu.Lock()
@@ -116,7 +137,7 @@ func (d *agentDraft) update(w io.Writer, iteration int, text string) {
 		d.end(w, "Earlier draft replaced; not a completed answer.")
 	}
 	if !d.open {
-		fmt.Fprint(w, "\nOffGrid (streaming draft)\n\n")
+		fmt.Fprint(w, "\nReply in progress\n\n")
 		d.open = true
 		d.iteration = iteration
 		d.text = ""

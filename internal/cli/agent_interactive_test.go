@@ -54,6 +54,33 @@ func TestInteractiveDefaultSelectsProfileWithoutLegacyTask(t *testing.T) {
 	}
 }
 
+func TestProfileChoiceSeparatesIdentityAndPreservesBufferedPrompt(t *testing.T) {
+	client, err := serviceclient.New("http://fixture:11611", "", &http.Client{Transport: localRoundTrip(func(req *http.Request) (*http.Response, error) {
+		if req.Method != http.MethodGet || req.URL.Path != "/api/v2/agent-profiles" {
+			t.Fatalf("picker changed state: %s %s", req.Method, req.URL)
+		}
+		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"profiles":[{"id":"profile-a","revision":2,"settings":{"name":"Researcher","model":"model-a"}},{"id":"profile-b","revision":8,"settings":{"name":"Writer","model":"model-b"}}]}`))}, nil
+	})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	input := bufio.NewReader(strings.NewReader("2\nhello\n"))
+	profile, err := selectInteractiveProfile(context.Background(), client, interactiveAgentOptions{}, input, &out, PresentationStyle{Columns: 32})
+	if err != nil || profile.ID != "profile-b" || profile.Revision != 8 {
+		t.Fatal(profile, err)
+	}
+	remaining, _ := io.ReadAll(input)
+	if string(remaining) != "hello\n" {
+		t.Fatal("picker consumed the next prompt", string(remaining))
+	}
+	for _, want := range []string{"1. Researcher", "2. Writer", "Model", "model-a", "model-b", "Revision", "Choose a profile number"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatal(want, out.String())
+		}
+	}
+}
+
 func TestInteractiveModelMismatchDoesNotCreateOrSubmit(t *testing.T) {
 	var out, errOut bytes.Buffer
 	env := testEnvironment(&out, &errOut, &fakeRunner{})
@@ -103,7 +130,7 @@ func TestInitialProfileSetupRequiresConsentAndAddsNoAuthority(t *testing.T) {
 				return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}, nil
 			})}
 			client, _ := serviceclient.New("http://fixture:11611", "", httpClient)
-			_, err := setupInteractiveProfile(context.Background(), client, "actual-model", bufio.NewReader(strings.NewReader(answer)), io.Discard)
+			_, err := setupInteractiveProfile(context.Background(), client, "actual-model", bufio.NewReader(strings.NewReader(answer)), io.Discard, PresentationStyle{})
 			if answer == "y\n" {
 				if err != nil || creates != 1 {
 					t.Fatal(err, creates)

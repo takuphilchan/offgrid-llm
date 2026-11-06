@@ -93,11 +93,19 @@ func runConversationChatWithAccess(ctx context.Context, client *serviceclient.Cl
 			continue
 		}
 		if text == "/exit" || text == "/quit" {
-			fmt.Fprintf(stdout, "\nConversation saved. Exiting does not cancel saved work.\nResume: offgrid agent chat --resume %s --profile %s --profile-revision %d\n", TerminalSafe(args[1]), TerminalSafe(req.ProfileID), req.ProfileRevision)
+			fmt.Fprintf(stdout, "\nConversation saved. Exiting does not cancel saved work.\nResume: offgrid agent chat --resume %s\nBefore the first turn, also pass --profile %s --profile-revision %d.\n", TerminalSafe(args[1]), TerminalSafe(req.ProfileID), req.ProfileRevision)
 			return nil
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if isAgentDefaultCommand(text) {
+			if presentation.Default != nil {
+				presentation.Default(text, stdout)
+			} else {
+				fmt.Fprintln(stdout, "Use offgrid agent chat to manage a default agent.")
+			}
+			continue
 		}
 		if renderAgentSessionCommand(stdout, text, args[1], presentation) {
 			continue
@@ -109,6 +117,32 @@ func runConversationChatWithAccess(ctx context.Context, client *serviceclient.Cl
 		var saved LinkedTurnResponse
 		if err := client.JSON(ctx, http.MethodGet, "/v1/sessions/"+url.PathEscape(args[1])+"/turn", nil, &saved); err != nil {
 			return err
+		}
+		if text == "/agent" {
+			if agentSwitchBlocked(saved) {
+				fmt.Fprintln(stdout, "Resolve or stop the current work before switching agents. Use /status; no work or access has changed.")
+				continue
+			}
+			if presentation.Switch == nil {
+				fmt.Fprintln(stdout, "Start offgrid agent chat to choose another agent.")
+				continue
+			}
+			if err := presentation.Switch(args[1], stdout); err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+				if errors.Is(err, ErrAgentSelectionCancelled) {
+					fmt.Fprintln(stdout, "Agent selection cancelled. Continuing this conversation.")
+				} else {
+					fmt.Fprintf(stdout, "Agent not changed: %s\n", TerminalSafe(err.Error()))
+				}
+				continue
+			}
+			fmt.Fprintf(stdout, "Conversation saved. Resume: offgrid agent chat --resume %s\nBefore the first turn, also pass --profile %s --profile-revision %d.\n", TerminalSafe(args[1]), TerminalSafe(req.ProfileID), req.ProfileRevision)
+			return nil
 		}
 		if text == "/status" {
 			if saved.Job != nil {
@@ -184,6 +218,16 @@ func runConversationChatWithAccess(ctx context.Context, client *serviceclient.Cl
 			return errors.Join(err, stopInteractiveTurn(ctx, client, args[1], requestID, stdout))
 		}
 	}
+}
+
+func agentSwitchBlocked(saved LinkedTurnResponse) bool {
+	if saved.RecoveryRequired || saved.Turn != nil && saved.Turn.Active() {
+		return true
+	}
+	if job := saved.Job; job != nil {
+		return job.UncertainCallID != "" || job.CanRecoverExecution || job.PendingApproval != nil || job.PendingInput != nil || job.Status != "completed" && job.Status != "failed" && job.Status != "cancelled"
+	}
+	return false
 }
 
 // Share the reader with on-demand consent. A second Scanner could consume

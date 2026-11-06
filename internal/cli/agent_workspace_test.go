@@ -127,6 +127,9 @@ func TestInteractiveCancellationUnblocksOwnedInput(t *testing.T) {
 		if r.URL.Path == "/api/v2/agent-profiles/owned" {
 			body = `{"id":"owned","revision":1,"settings":{"model":"model","max_iterations":30}}`
 		}
+		if r.URL.Path == "/v1/sessions/saved" {
+			body = `{"name":"saved","created_at":"2026-11-01T00:00:00Z","updated_at":"2026-11-01T00:00:00Z","turn":{"agent":{"id":"owned","revision":1},"model":"model","status":"completed"}}`
+		}
 		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}, nil
 	})}
 	env.Service.Client = func() (*serviceclient.Client, error) { return serviceclient.New("http://fixture:11611", "", env.HTTP) }
@@ -142,7 +145,13 @@ func TestInteractiveCancellationUnblocksOwnedInput(t *testing.T) {
 	go func() {
 		done <- Execute(ctx, []string{"agent", "chat", "--profile", "owned", "--resume", "saved"}, env)
 	}()
-	<-started
+	select {
+	case <-started:
+	case code := <-done:
+		t.Fatalf("chat failed before input opened: %d %s", code, errOut.String())
+	case <-time.After(5 * time.Second):
+		t.Fatal("chat did not open input")
+	}
 	cancel()
 	select {
 	case <-done:

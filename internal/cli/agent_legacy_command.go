@@ -131,35 +131,21 @@ func legacyAgentTasks(ctx context.Context, client *serviceclient.Client, env Env
 	if env.Options.JSON {
 		return localJSON(env, tasks)
 	}
-	s := env.Style
-	w := env.Stdout
-	fmt.Fprintln(w)
-	fmt.Fprintf(w, "  %s◈ Recent Tasks%s\n", s.Primary+s.Bold, s.Reset)
-	fmt.Fprintln(w)
+	p := Presenter{Stdout: env.Stdout, Style: env.Style}
+	p.Heading("OffGrid / Recent tasks")
 	if len(tasks) == 0 {
-		fmt.Fprintf(w, "  %sNo tasks yet%s\n", s.Dim, s.Reset)
-		fmt.Fprintln(w)
-		fmt.Fprintf(w, "  %sRun your first task:%s\n", s.Dim, s.Reset)
-		fmt.Fprintf(w, "    %s$%s offgrid agent run \"Your task here\" --model <name>\n", s.Dim, s.Reset)
+		p.Note("No tasks yet. Start with offgrid agent, or offgrid agent run TASK --model MODEL.")
 	} else {
 		for _, task := range tasks {
 			id, _ := task["id"].(string)
 			status, _ := task["status"].(string)
 			prompt, _ := task["prompt"].(string)
-			icon, color := "○", s.Accent
-			switch status {
-			case "completed":
-				icon, color = "✓", s.Success
-			case "failed":
-				icon, color = "✗", s.Error
-			case "running":
-				icon, color = "›", s.Primary
-			}
-			prompt = truncateLegacyText(TerminalSafe(prompt), 50)
-			fmt.Fprintf(w, "  %s%s%s %s%-10s%s  %s%s%s  %s\n", color, icon, s.Reset, color, status, s.Reset, s.Dim, id, s.Reset, prompt)
+			p.Heading(truncateLegacyText(terminalLine(prompt), 120))
+			p.Detail("Run", id)
+			p.Detail("Status", status)
 		}
+		p.Note("Inspect a run: offgrid agent status RUN_ID")
 	}
-	fmt.Fprintln(w)
 	return nil
 }
 
@@ -209,74 +195,39 @@ func legacyToolsOutput(tools []struct {
 	Parameters  map[string]interface{} `json:"parameters,omitempty"`
 	Type        string                 `json:"type"`
 }, count int, env Environment) {
-	s := env.Style
-	w := env.Stdout
-	fmt.Fprintln(w)
-	fmt.Fprintf(w, "  %s◈ Agent Tools%s\n", s.Primary+s.Bold, s.Reset)
-	fmt.Fprintf(w, "  %s%d tools available for agent use%s\n", s.Dim, count, s.Reset)
-	fmt.Fprintln(w)
-	if len(tools) == 0 {
-		fmt.Fprintf(w, "  %sNo tools available%s\n", s.Dim, s.Reset)
-		fmt.Fprintln(w)
-		fmt.Fprintf(w, "  %sAdd MCP tools:%s offgrid agent mcp add <url>\n", s.Dim, s.Reset)
-	} else {
-		for _, typ := range []string{"builtin", "mcp"} {
-			group := make([]struct{ Name, Description string }, 0)
-			for _, tool := range tools {
-				isMCP := tool.Type == "mcp" || tool.Type == "external"
-				if (typ == "mcp") == isMCP {
-					group = append(group, struct{ Name, Description string }{tool.Name, tool.Description})
-				}
-			}
-			if len(group) == 0 {
-				continue
-			}
-			if typ == "mcp" {
-				fmt.Fprintln(w)
-			}
-			title := "Built-in Tools"
-			if typ == "mcp" {
-				title = "MCP Tools"
-			}
-			fmt.Fprintf(w, "  %s%s%s\n", s.Dim, title, s.Reset)
-			short := map[string]string{"read_file": "Read file contents", "write_file": "Write to a file", "list_files": "List directory contents", "shell": "Execute shell commands", "http_get": "Make HTTP GET requests", "current_time": "Get current date/time", "calculator": "Evaluate math expressions", "search": "Search the web", "memory": "Store/retrieve info"}
-			for _, tool := range group {
-				desc := tool.Description
-				if typ == "builtin" {
-					if value, ok := short[tool.Name]; ok {
-						desc = value
-					}
-				}
-				if len(desc) > 40 {
-					desc = desc[:37]
-					if idx := strings.LastIndex(desc, " "); idx > 20 {
-						desc = desc[:idx]
-					}
-				}
-				fmt.Fprintf(w, "    %-16s  %s%s%s\n", tool.Name, s.Dim, desc, s.Reset)
+	p := Presenter{Stdout: env.Stdout, Style: env.Style}
+	p.Heading("OffGrid / Agent tools")
+	p.Note(fmt.Sprintf("%d tools reported. Availability in a run depends on its profile, permissions and connected resources.", count))
+	for _, group := range []string{"Built-in tools", "MCP tools"} {
+		rows := []presentationRow{}
+		for _, tool := range tools {
+			external := tool.Type == "mcp" || tool.Type == "external"
+			if external == (group == "MCP tools") {
+				rows = append(rows, presentationRow{tool.Name, tool.Description})
 			}
 		}
+		if len(rows) > 0 {
+			p.Heading(group)
+			p.rows(rows)
+		}
 	}
-	fmt.Fprintln(w)
-	fmt.Fprintf(w, "  %sAdd MCP tools:%s offgrid agent mcp add <url>\n", s.Dim, s.Reset)
-	fmt.Fprintln(w)
+	if len(tools) == 0 {
+		p.Note("No tools available.")
+	}
+	p.Note("Manage connections: offgrid agent mcp help")
 }
 
 func legacyAgentTemplates(env Environment) error {
-	s := env.Style
-	w := env.Stdout
-	fmt.Fprintln(w)
-	fmt.Fprintf(w, "  %s◈ Agent Templates%s\n", s.Primary+s.Bold, s.Reset)
-	fmt.Fprintf(w, "  %sPre-configured AI personas with specialized system prompts%s\n", s.Dim, s.Reset)
-	fmt.Fprintln(w)
+	p := Presenter{Stdout: env.Stdout, Style: env.Style}
+	p.Heading("OffGrid / Agent personas")
+	p.Note("Reference personas for reusable profiles. Task commands do not apply --template.")
 	for _, t := range agents.BuiltInTemplates() {
-		fmt.Fprintf(w, "    %s%s %s%s\n", t.Icon, s.Bold, t.Name, s.Reset)
-		fmt.Fprintf(w, "       %sID:%s %s%s%s\n", s.Dim, s.Reset, s.Primary, t.ID, s.Reset)
-		fmt.Fprintf(w, "       %s%s%s\n", s.Dim, t.Description, s.Reset)
-		fmt.Fprintf(w, "       %sStyle:%s %s  %sTools:%s %s\n", s.Dim, s.Reset, t.Config.ReasoningStyle, s.Dim, s.Reset, strings.Join(t.Tools, ", "))
-		fmt.Fprintln(w)
+		p.Heading(t.Name)
+		p.Detail("ID", t.ID)
+		p.Note(t.Description)
+		p.Detail("Style", t.Config.ReasoningStyle)
+		p.Detail("Tools", strings.Join(t.Tools, ", "))
 	}
-	fmt.Fprintf(w, "  %sUsage:%s offgrid agent run \"your task\" --template researcher --model llama3\n", s.Dim, s.Reset)
-	fmt.Fprintln(w)
+	p.Note("Configure a reusable agent: offgrid agent profiles help")
 	return nil
 }

@@ -16,13 +16,28 @@ type agentSessionPresentation struct {
 	Style        PresentationStyle
 	ReadLine     func(*bufio.Reader, io.Writer, PresentationStyle, []AgentCommandSuggestion) (string, error)
 	ClearDisplay func(io.Writer) bool
+	Default      func(string, io.Writer)
+	Switch       func(string, io.Writer) error
 }
 
 type AgentCommandSuggestion struct{ Command, Description string }
 
 func AgentCommandSuggestions() []AgentCommandSuggestion {
 	result := make([]AgentCommandSuggestion, 0, len(agentSlashCommands))
+	// The short palette leads with actions people use during a conversation.
+	// The complete command catalog remains available through /help all.
+	for _, name := range []string{"help", "agent", "status", "skills", "clear"} {
+		for _, command := range agentSlashCommands {
+			if command.Name == name {
+				result = append(result, AgentCommandSuggestion{"/" + command.Name, command.Description})
+				break
+			}
+		}
+	}
 	for _, command := range agentSlashCommands {
+		if command.Name == "help" || command.Name == "agent" || command.Name == "status" || command.Name == "skills" || command.Name == "clear" {
+			continue
+		}
 		result = append(result, AgentCommandSuggestion{"/" + command.Name, command.Description})
 	}
 	return result
@@ -51,6 +66,8 @@ var agentSlashCommands = []agentSlashCommand{
 	{"skills", "Explore", "Inspect this profile's attached skills"},
 	{"agents", "Explore", "Inspect configured collaborators"},
 	{"tools", "Explore", "Inspect configured tool attachments"},
+	{"agent", "Session", "Choose an agent for a new conversation"},
+	{"default", "Session", "Remember this agent; /default show or /default clear"},
 	{"session", "Session", "Profile, model and exact resume command"},
 	{"clear", "Session", "Clear display; saved conversation and context remain"},
 	{"status", "Work", "Inspect the latest saved work"},
@@ -63,14 +80,15 @@ var agentSlashCommands = []agentSlashCommand{
 
 func agentSessionHeader(w io.Writer, p agentSessionPresentation) {
 	s := p.Style
-	fmt.Fprintf(w, "\n%sOffGrid%s  /  Agent chat\n", s.Bold, s.Reset)
-	if p.Profile.Settings.Name != "" {
-		fmt.Fprintf(w, "  %s%s%s\n", s.Bold, TerminalSafe(p.Profile.Settings.Name), s.Reset)
+	name := p.Profile.Settings.Name
+	if name == "" {
+		name = "Agent"
 	}
+	fmt.Fprintf(w, "\n  %sOffGrid%s  -  %s\n", s.Bold, s.Reset, terminalLine(name))
 	if p.Profile.Settings.Model != "" {
-		fmt.Fprintf(w, "  %s%s%s\n", s.Muted, TerminalSafe(p.Profile.Settings.Model), s.Reset)
+		fmt.Fprintf(w, "  %s%s%s\n", s.Muted, terminalLine(p.Profile.Settings.Model), s.Reset)
 	}
-	fmt.Fprintf(w, "\n  Ask a question or describe a task.\n  %s/ commands  /session details  /exit leave%s\n\n", s.Muted, s.Reset)
+	fmt.Fprintln(w, "\n  Ask a question or describe a task. Type / for commands.")
 }
 
 func agentSessionPrompt(w io.Writer, style PresentationStyle) {
@@ -107,17 +125,39 @@ func renderAgentSessionCommand(w io.Writer, text, name string, p agentSessionPre
 		} else {
 			fmt.Fprintln(w, "Display clearing is available in an interactive terminal. Saved conversation and context are unchanged.")
 		}
-	case "/", "/help":
-		heading("Session commands")
-		for _, group := range []string{"Explore", "Work", "Session"} {
-			fmt.Fprintf(w, "\n  %s%s%s\n", s.Muted, group, s.Reset)
-			for _, command := range agentSlashCommands {
-				if command.Group == group {
-					fmt.Fprintf(w, "  /%s\n    %s\n", command.Name, command.Description)
-				}
+	case "/", "/help", "/help all":
+		heading("Commands")
+		presentation := Presenter{Stdout: w, Style: s}
+		commands := agentSlashCommands
+		if text != "/help all" {
+			commands = []agentSlashCommand{
+				{"agent", "", "Choose another agent"},
+				{"status", "", "Inspect current work"},
+				{"skills", "", "View attached skills"},
+				{"clear", "", "Clear the screen"},
+				{"exit", "", "Leave; keep saved work"},
 			}
 		}
-		fmt.Fprintln(w, "\nUse commands at the input prompt. Ctrl+C interrupts foreground work.")
+		if text == "/help all" {
+			for _, group := range []string{"Explore", "Session", "Work"} {
+				var rows [][]string
+				for _, command := range commands {
+					if command.Group == group {
+						rows = append(rows, []string{"/" + command.Name, command.Description})
+					}
+				}
+				presentation.ModernSection(group, rows)
+			}
+		} else {
+			var rows []presentationRow
+			for _, command := range commands {
+				rows = append(rows, presentationRow{"/" + command.Name, command.Description})
+			}
+			presentation.rows(rows)
+		}
+		if text != "/help all" {
+			presentation.Note("All commands and recovery controls: /help all")
+		}
 	case "/session":
 		heading("Current session")
 		fmt.Fprintf(w, "  Conversation: %s\n  Profile: %s (revision %d)\n", TerminalSafe(name), TerminalSafe(p.Profile.ID), p.Profile.Revision)
@@ -127,7 +167,8 @@ func renderAgentSessionCommand(w io.Writer, text, name string, p agentSessionPre
 		if p.Profile.Settings.MaxIterations > 0 {
 			fmt.Fprintf(w, "  Budget: %d decisions per turn\n", p.Profile.Settings.MaxIterations)
 		}
-		fmt.Fprintf(w, "\nResume this conversation:\n  offgrid agent chat --resume %s --profile %s --profile-revision %d\n", TerminalSafe(name), TerminalSafe(p.Profile.ID), p.Profile.Revision)
+		fmt.Fprintf(w, "\nResume after a saved turn:\n  offgrid agent chat --resume %s\n", TerminalSafe(name))
+		fmt.Fprintf(w, "Before the first turn, also pass --profile %s --profile-revision %d.\n", TerminalSafe(p.Profile.ID), p.Profile.Revision)
 	case "/skills":
 		heading("Attached skills")
 		for _, ref := range p.Profile.Settings.Skills {
@@ -163,6 +204,9 @@ func renderAgentSessionCommand(w io.Writer, text, name string, p agentSessionPre
 
 func knownAgentSlashCommand(text string) bool {
 	if text == "/cancel" {
+		return true
+	}
+	if text == "/help all" {
 		return true
 	}
 	for _, command := range agentSlashCommands {

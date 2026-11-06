@@ -64,8 +64,8 @@ func readAgentSessionLineWithHistory(input *bufio.Reader, out io.Writer, style c
 	rows := 0
 	draw := func(final bool) {
 		// Re-measure between keys so a resized terminal cannot retain stale width.
-		if w, _, e := term.GetSize(file.Fd()); e == nil && w > 4 {
-			width = w
+		if w, h, e := term.GetSize(file.Fd()); e == nil && w > 4 {
+			width, height = w, h
 		}
 		fmt.Fprint(out, "\r\x1b[2K")
 		for i := 0; i < rows; i++ {
@@ -78,15 +78,12 @@ func readAgentSessionLineWithHistory(input *bufio.Reader, out io.Writer, style c
 		fmt.Fprintf(out, "%s>%s %s", style.Primary, style.Reset, text)
 		rows = 0
 		if !final && editor.menuOpen() {
-			matches := editor.matches()
-			start := editor.selected / 4 * 4
-			for i := start; i < len(matches) && i < start+4; i++ {
-				prefix := "  "
-				if i == editor.selected {
-					prefix = "> "
+			for _, row := range agentCommandMenu(editor.matches(), editor.selected, width, height) {
+				color := style.Muted
+				if row.selected {
+					color = style.Primary + style.Bold + style.Selected
 				}
-				label := prefix + matches[i].Command + "  " + matches[i].Description
-				fmt.Fprintf(out, "\r\n%s%s%s", style.Muted, ansi.Truncate(label, width-1, "..."), style.Reset)
+				fmt.Fprintf(out, "\r\n%s%s%s", color, row.text, style.Reset)
 				rows++
 			}
 		}
@@ -177,7 +174,11 @@ func (e *agentInputEditor) matches() []cli.AgentCommandSuggestion {
 	var result []cli.AgentCommandSuggestion
 	for _, c := range e.commands {
 		if strings.HasPrefix(c.Command, string(e.text)) {
-			result = append(result, c)
+			if c.Command == string(e.text) {
+				result = append([]cli.AgentCommandSuggestion{c}, result...)
+			} else {
+				result = append(result, c)
+			}
 		}
 	}
 	return result

@@ -38,6 +38,10 @@ const server = createServer(async (request, response) => {
       const name=decodeURIComponent(pathname.split('/')[3]);if(pathname.endsWith('/generate'))submittedTurns++;
       response.setHeader('Content-Type','application/json');response.end(JSON.stringify(savedSessions.get(name)||{}));return;
     }
+    if(/^\/api\/v2\/agent-profiles\/profile-0+[12]$/.test(pathname)) {
+      const id=pathname.split('/').at(-1),n=Number(id.slice(-1));
+      response.setHeader('Content-Type','application/json');response.end(JSON.stringify({id,revision:1,settings:{name:'Terminal fixture '+n,model:'theme-fixture'}}));return;
+    }
     const data = {
       '/api/v2/system': {product:'offgrid',version,api_version:2,workspace_id:'packaged-theme-fixture',ui_build_id:uiBuild,desktop_bridge:{status:'ready',schema_version:1,protocol:1,ui_build_id:uiBuild},capabilities:['sessions-v1','chat-streaming-v1','durable-agent-runs-v1','task-first-agents-v2','agent-profiles-v1','agent-conversations-v1']},
       '/health': {status:'healthy'}, '/v1/users/me': {authenticated:false,auth_required:false,user:null},
@@ -57,7 +61,10 @@ const server = createServer(async (request, response) => {
   } catch { response.statusCode = 500; response.end('{}'); }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const env = {...process.env,OFFGRID_DESKTOP_HOME:evidence,OFFGRID_PORT:String(server.address().port)};
+const env = {...process.env,OFFGRID_DESKTOP_HOME:evidence,OFFGRID_PORT:String(server.address().port),APPDATA:join(evidence,'config'),XDG_CONFIG_HOME:join(evidence,'config')};
+// Capture the normal styled terminal, even when the test runner disables color
+// for its own logs. Plain/no-color behavior has separate CLI contract tests.
+env.NO_COLOR='';env.FORCE_COLOR='1';
 delete env.ELECTRON_RUN_AS_NODE;
 let app;
 // Some OS-owned UI blocks Electron's protocol rather than rejecting a call.
@@ -193,16 +200,42 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('SERVICE:http://127.0.0.1:'+server.address().port);
  await terminal.getByTitle('Open OffGrid Agent and choose a profile').click();
  await expect(terminal.getByRole('tab',{name:'Agent',exact:true})).toHaveCount(1);
- await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Profile number:',{timeout:15000});
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Search or number:',{timeout:15000});
+	await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1440,900));
+	await expect.poll(()=>terminal.evaluate(()=>innerWidth)).toBeGreaterThan(1100);
+	assert.equal(await terminal.evaluate(()=>{const pane=document.querySelector('.pane:not([hidden])'),surface=pane.querySelector('.terminal-surface');const a=pane.getBoundingClientRect(),b=surface.getBoundingClientRect();return b.width<=1041&&b.left>a.left+24&&Math.abs((b.left+b.right)/2-(a.left+a.right)/2)<2;}),true,'terminal content is not centered at wide width');
+ await terminal.screenshot({path:join(evidence,'agent-profile-picker.png')});
+	await terminal.evaluate(()=>appearance({theme:'dark'}));
+	await terminal.screenshot({path:join(evidence,'agent-profile-picker-dark.png')});
+	await terminal.evaluate(()=>appearance({theme:'light'}));
  await input.pressSequentially('0');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Choose a listed profile number');
+ const closedAgentTab=await terminal.evaluate(()=>current);
  await terminal.getByRole('button',{name:'Close Agent',exact:true}).click();
  await terminal.getByTitle('Open OffGrid Agent and choose a profile').click();
- await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Profile number:');
- await input.pressSequentially('1');await input.press('Enter');
- await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Agent chat');
+ await expect.poll(()=>terminal.evaluate(()=>current)).not.toBe(closedAgentTab);
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Search or number:');
+ await expect(input).toBeFocused();
+ await input.pressSequentially('fixture 1');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Search or number: fixture 1');
+ await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Ask a question or describe a task.');
+	await input.pressSequentially('/');
+	await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Tab complete');
+	await expect.poll(()=>terminal.evaluate(()=>{
+	 const buffer=tabs.get(current).term.buffer.active;
+	 for(let y=0;y<buffer.length;y++){
+	  const line=buffer.getLine(y);if(!line?.translateToString().includes('> /help'))continue;
+	  for(let x=0;x<line.length;x++)if(line.getCell(x)?.isInverse())return true;
+	 }
+	 return false;
+	})).toBe(true);
+	await terminal.screenshot({path:join(evidence,'agent-slash-menu.png')});
+	await input.press('Escape');
+	await input.pressSequentially('help');await input.press('Enter');
+	await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('All commands and recovery controls');
  await input.pressSequentially('/clear');await input.press('Enter');
- await expect.poll(()=>terminal.evaluate(()=>{const t=tabs.get(current).term;return Array.from({length:t.buffer.active.length},(_,i)=>t.buffer.active.getLine(i)?.translateToString()).join('\n');})).not.toContain('Profile number:');
+ await expect.poll(()=>terminal.evaluate(()=>{const t=tabs.get(current).term;return Array.from({length:t.buffer.active.length},(_,i)=>t.buffer.active.getLine(i)?.translateToString()).join('\n');})).not.toContain('Search or number:');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Terminal fixture 1');
  await input.pressSequentially('/ses');
  await terminal.getByRole('tab',{name:'PowerShell',exact:true}).click();
@@ -210,9 +243,25 @@ try {
  await expect(input).toBeFocused();await input.pressSequentially('sion');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Current session');
  assert.equal(savedSessions.size,1);assert.equal(submittedTurns,0);
+ await input.pressSequentially('/default');await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Remembered Terminal fixture 1');
+ await input.pressSequentially('/agent');await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Search or number:');
+ await input.press('Escape');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Continuing this conversation');
+ assert.equal(savedSessions.size,1);
+ await input.pressSequentially('/agent');await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Search or number:');
+ await input.press('ArrowDown');await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Starting a separate conversation');
+ await expect.poll(()=>savedSessions.size).toBe(2);assert.equal(submittedTurns,0);
+ await input.pressSequentially('/default clear');await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Default forgotten');
+ await terminal.screenshot({path:join(evidence,'agent-profile-continuity.png')});
  await input.pressSequentially('/exit');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Conversation saved');
  await terminal.getByRole('button',{name:'Close Agent',exact:true}).click();
+	await expect(input).toBeFocused();
 
  await input.pressSequentially("$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 300' -WindowStyle Hidden -PassThru; [Console]::WriteLine(('QUIT' + 'PID:' + $p.Id))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText(/QUITPID:[0-9]+/);

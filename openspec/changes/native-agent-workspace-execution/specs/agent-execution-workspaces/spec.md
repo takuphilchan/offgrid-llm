@@ -194,3 +194,32 @@ MUST NOT conceal changes to the decoded schema or bypass schema validation.
 #### Scenario: Ambiguous schema JSON
 - **WHEN** retained schema input contains repeated object keys or malformed Unicode
 - **THEN** decoding rejects it rather than validating one interpretation and forwarding another
+
+### Requirement: Low-friction pinned agent selection
+Interactive CLI selection SHALL support searchable keyboard navigation and a
+recoverable plain-input equivalent. An explicit model SHALL filter choices.
+Selection SHALL NOT submit work or grant file, process or desktop authority.
+
+#### Scenario: Interactive presentation and fallback
+- **WHEN** a supported interactive terminal shows the picker or a running agent
+- **THEN** search has a visible caret, selection has a distinct focus state, and transient phases update in place without flooding saved progress
+- **AND** narrow, plain or animation-disabled output remains readable, with tool actions and failures retained in the transcript
+
+#### Scenario: Invalid or ambiguous selection
+- **WHEN** input matches no eligible profile or multiple profile names
+- **THEN** the picker explains the issue and remains available without creating a conversation
+
+#### Scenario: Remembered default
+- **WHEN** the user explicitly saves a default for the current service/workspace/actor
+- **THEN** later matching launches may reuse only that exact available profile revision
+- **AND** changed scope, stale records or revoked profiles require selection rather than fallback
+
+#### Scenario: Resume pinned work
+- **WHEN** a saved agent conversation is resumed without explicit profile flags
+- **THEN** its persisted agent identity and revision are resolved through authenticated APIs
+- **AND** conflicting explicit selections fail before work is submitted
+
+#### Scenario: Select another agent inside chat
+- **WHEN** the user selects another agent through `/agent`
+- **THEN** a separate conversation starts with its pinned profile while the previous conversation and jobs remain unchanged
+- **AND** owned workspace leases close without being inherited and cancellation retains the current conversation

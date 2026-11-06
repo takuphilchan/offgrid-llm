@@ -30,37 +30,40 @@ func agentWorkspaceHelp(env Environment) {
 
 func legacyAgentHelp(env Environment) {
 	p := Presenter{Stdout: env.Stdout, Stderr: env.Stderr, Style: env.Style}
-	p.SectionHeader("Agent workspace")
-	fmt.Fprintln(env.Stdout, `  Start a conversation
-    offgrid agent --model MODEL
-
-  Run one request
-    offgrid agent run "your task" --model MODEL
-
-  Continue a conversation
-    offgrid agent chat --resume NAME --profile ID
-
-  Inspect or stop saved work
-    offgrid agent status RUN_ID
-    offgrid agent cancel RUN_ID
-
-  Configure your agent
-    offgrid agent profiles help
-    offgrid agent tools
-    offgrid agent workspace help
-
-  Common run options
-    --model MODEL              Select an installed model
-    --workspace-folder FOLDER  Offer a local folder when needed
-    --wait                     Follow a piped/nonterminal run
-    --detach                   Submit in the background
-
-  Conversation needs no folder approval. Local work asks when needed.
-  Ctrl+C stops the current run. Stopping does not undo earlier actions.
-
-  Full reference: offgrid agent help all`)
+	p.Heading("OffGrid / Agent workspace")
+	p.Note("A conversation that can use tools when your task needs them.")
+	p.Heading("Start here")
+	p.rows([]presentationRow{
+		{"offgrid agent", "Choose a profile and start chatting"},
+		{"offgrid agent run \"your task\" --model MODEL", "Run one request"},
+		{"offgrid agent chat --resume NAME", "Continue with its saved agent"},
+	})
+	p.Heading("During a conversation")
+	p.rows([]presentationRow{
+		{"/help", "Commands, skills, collaborators and tools"},
+		{"/agent", "Choose an agent for a new conversation"},
+		{"/default", "Remember this agent; /default clear to forget"},
+		{"/clear", "Clear the display; keep history and context"},
+		{"/exit", "Leave the session; saved work remains"},
+	})
+	p.Heading("Common run options")
+	p.rows([]presentationRow{
+		{"--model MODEL", "Select an installed model"},
+		{"--workspace-folder FOLDER", "Offer a local folder when needed"},
+		{"--wait", "Follow a piped/nonterminal run"},
+		{"--detach", "Submit in the background"},
+	})
+	p.Heading("Saved work")
+	p.rows([]presentationRow{
+		{"offgrid agent status RUN_ID", "Inspect a saved run"},
+		{"offgrid agent cancel RUN_ID", "Stop work; earlier actions are not undone"},
+	})
+	fmt.Fprintln(env.Stdout)
+	p.Note("Conversation needs no folder approval. Local work asks when needed.")
+	p.Note("Ctrl+C stops foreground work. Stopping does not undo earlier actions.")
+	p.Note("Full reference: offgrid agent help all")
+	fmt.Fprintln(env.Stdout)
 }
-
 func legacyAgentHelpAll(env Environment) {
 	p := Presenter{Stdout: env.Stdout, Stderr: env.Stderr, Style: env.Style}
 	groups := []struct {

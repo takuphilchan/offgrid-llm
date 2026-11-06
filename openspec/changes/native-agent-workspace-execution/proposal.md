@@ -57,3 +57,14 @@ Keep session IDs and exact resume commands in `/session` and the exit receipt.
 Commands inspect pinned skills, collaborators and tool attachments; they never
 submit model prompts or silently attach resources. Preserve foreground streaming,
 on-demand consent, cancellation, plain output and shared input ownership.
+
+### Approved CLI continuity refinement (2026-11-05)
+
+Replace the repeated numeric-only profile gate with searchable keyboard selection
+and a recoverable plain-input fallback. Explicit model selection narrows eligible
+profiles. Offer an explicit remembered default pinned to the exact profile
+revision and scoped to service origin, workspace identity and actor. Resolve
+resume from the saved conversation's agent identity, never a current default.
+Provide in-session agent selection that starts a separate conversation without
+mutating, replaying or transferring grants from the old one. Keep configuration
+inspectable, removable and optional; preserve scripts and explicit flags.

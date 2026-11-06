@@ -20,6 +20,7 @@ type interactiveAgentOptions struct {
 	model, profile, resume, workspace string
 	folder, access                    string
 	revision                          int
+	picker                            func(*bufio.Reader, io.Writer, PresentationStyle, []agents.AgentProfile) (agents.AgentProfile, error)
 }
 
 func parseInteractiveAgent(args []string) (interactiveAgentOptions, error) {
@@ -95,14 +96,61 @@ func runInteractiveAgent(ctx context.Context, args []string, env Environment) (r
 		return err
 	}
 	input := bufio.NewReader(env.Stdin)
-	profile, err := selectInteractiveProfile(ctx, client, options, input, env.Stdout)
+	options, err = resolveAgentResume(ctx, client, options)
+	if err != nil {
+		return err
+	}
+	options = rememberedAgent(ctx, client, env, options)
+	options.picker = env.Service.PickAgentProfile
+	profile, err := selectInteractiveProfile(ctx, client, options, input, env.Stdout, env.Style)
+	if errors.Is(err, ErrAgentSelectionCancelled) || errors.Is(err, io.EOF) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
 	if options.model != "" && options.model != profile.Settings.Model {
 		return Usage("The selected model does not match this profile's pinned model. Choose a matching profile or save a new profile revision before starting work")
 	}
-	ctx = context.WithValue(ctx, agentSessionKey{}, agentSessionPresentation{Profile: profile, Style: env.Style, ReadLine: env.Service.ReadAgentLine, ClearDisplay: env.Service.ClearAgentDisplay})
+	for {
+		var next *agents.AgentProfile
+		// Navigation is separate from the return error, so a lease-close error
+		// cannot be swallowed as a successful agent switch.
+		presentation := agentSessionPresentation{Profile: profile, Style: env.Style, ReadLine: env.Service.ReadAgentLine, ClearDisplay: env.Service.ClearAgentDisplay}
+		presentation.Default = func(text string, out io.Writer) {
+			agentDefaultCommand(ctx, client, env.Service.AgentDefaults, profile, text, out)
+		}
+		presentation.Switch = func(name string, out io.Writer) error {
+			choice, pickErr := selectInteractiveProfile(ctx, client, interactiveAgentOptions{picker: env.Service.PickAgentProfile}, input, out, env.Style)
+			if pickErr == nil {
+				// Selection can take time. Another client may have started work
+				// since the first check; do not detach its workspace connection.
+				var current LinkedTurnResponse
+				if err := client.JSON(ctx, http.MethodGet, "/v1/sessions/"+url.PathEscape(name)+"/turn", nil, &current); err != nil {
+					return err
+				}
+				if agentSwitchBlocked(current) {
+					return fmt.Errorf("Work changed while choosing an agent. Resolve it with /status before switching")
+				}
+				next = &choice
+			}
+			return pickErr
+		}
+		sessionCtx := context.WithValue(ctx, agentSessionKey{}, presentation)
+		if err := runInteractiveAgentSession(sessionCtx, client, options, profile, input, env); err != nil {
+			return err
+		}
+		if next == nil {
+			return nil
+		}
+		profile = *next
+		options = interactiveAgentOptions{profile: profile.ID, revision: profile.Revision}
+		fmt.Fprintln(env.Stdout, "Starting a separate conversation. Previous work is saved; access is not transferred.")
+	}
+}
+
+func runInteractiveAgentSession(ctx context.Context, client *serviceclient.Client, options interactiveAgentOptions, profile agents.AgentProfile, input *bufio.Reader, env Environment) (result error) {
+	var err error
 	var owned ExecutionLease
 	var demand *conversationWorkspace
 	if options.workspace == "" && env.Execution.OnDemand != nil {
@@ -174,7 +222,7 @@ func runInteractiveAgent(ctx context.Context, args []string, env Environment) (r
 	return RunConversationChat(ctx, client, chatArgs, input, env.Stdout, false, env.Service.RenderStream)
 }
 
-func selectInteractiveProfile(ctx context.Context, client *serviceclient.Client, o interactiveAgentOptions, input *bufio.Reader, out io.Writer) (agents.AgentProfile, error) {
+func selectInteractiveProfile(ctx context.Context, client *serviceclient.Client, o interactiveAgentOptions, input *bufio.Reader, out io.Writer, style PresentationStyle) (agents.AgentProfile, error) {
 	if o.profile != "" {
 		var p agents.AgentProfile
 		path := "/api/v2/agent-profiles/" + url.PathEscape(o.profile)
@@ -206,28 +254,40 @@ func selectInteractiveProfile(ctx context.Context, client *serviceclient.Client,
 		profiles = append(profiles, p)
 	}
 	if len(profiles) == 0 {
-		return setupInteractiveProfile(ctx, client, o.model, input, out)
+		return setupInteractiveProfile(ctx, client, o.model, input, out, style)
+	}
+	if o.model != "" {
+		matching := []agents.AgentProfile{}
+		for _, p := range profiles {
+			if p.Settings.Model == o.model {
+				matching = append(matching, p)
+			}
+		}
+		profiles = matching
+		if len(profiles) == 0 {
+			return agents.AgentProfile{}, Usage("No agent profile uses the selected model. Choose another --model or create a matching profile with offgrid agent profiles help")
+		}
 	}
 	if len(profiles) == 1 {
 		return profiles[0], nil
 	}
-	fmt.Fprintln(out, "Choose an agent profile:")
-	for i, p := range profiles {
-		fmt.Fprintf(out, "  %d. %s - %s (revision %d)\n", i+1, TerminalSafe(p.Settings.Name), TerminalSafe(p.Settings.Model), p.Revision)
+	if o.picker != nil {
+		choice, err := o.picker(input, out, style, profiles)
+		if err != nil {
+			return agents.AgentProfile{}, err
+		}
+		for _, p := range profiles {
+			if p.ID == choice.ID && p.Revision == choice.Revision {
+				return p, nil
+			}
+		}
+		return agents.AgentProfile{}, fmt.Errorf("The selected profile is not in the available catalog")
 	}
-	fmt.Fprint(out, "Profile number: ")
-	line, err := input.ReadString('\n')
-	if err != nil {
-		return agents.AgentProfile{}, err
-	}
-	n, err := strconv.Atoi(strings.TrimSpace(line))
-	if err != nil || n < 1 || n > len(profiles) {
-		return agents.AgentProfile{}, Usage("Choose a listed profile number or use --profile ID")
-	}
-	return profiles[n-1], nil
+	return PickAgentProfilePlain(input, out, style, profiles)
 }
 
-func setupInteractiveProfile(ctx context.Context, client *serviceclient.Client, model string, input *bufio.Reader, out io.Writer) (agents.AgentProfile, error) {
+func setupInteractiveProfile(ctx context.Context, client *serviceclient.Client, model string, input *bufio.Reader, out io.Writer, style PresentationStyle) (agents.AgentProfile, error) {
+	presentation := Presenter{Stdout: out, Style: style}
 	var catalog struct {
 		Data []struct {
 			ID   string `json:"id"`
@@ -247,11 +307,12 @@ func setupInteractiveProfile(ctx context.Context, client *serviceclient.Client, 
 		return agents.AgentProfile{}, fmt.Errorf("No installed chat model is available; no model was downloaded")
 	}
 	if model == "" {
-		fmt.Fprintln(out, "Choose an installed model for a new General profile:")
+		presentation.Heading("OffGrid / Set up your agent")
+		presentation.Note("Choose an installed model for a new General profile.")
 		for i, id := range models {
-			fmt.Fprintf(out, "  %d. %s\n", i+1, TerminalSafe(id))
+			presentation.Heading(fmt.Sprintf("%d. %s", i+1, id))
 		}
-		fmt.Fprint(out, "Model number: ")
+		fmt.Fprint(out, "\nChoose a model number: ")
 		line, err := input.ReadString('\n')
 		if err != nil {
 			return agents.AgentProfile{}, err
@@ -270,7 +331,11 @@ func setupInteractiveProfile(ctx context.Context, client *serviceclient.Client, 
 			return agents.AgentProfile{}, fmt.Errorf("Selected model is not installed")
 		}
 	}
-	fmt.Fprintf(out, "Create General with %s and a 30-decision budget? No file, terminal or computer authority is granted. [y/N] ", TerminalSafe(model))
+	presentation.Heading("Create General")
+	presentation.Detail("Model", model)
+	presentation.Detail("Budget", "30 decisions per turn")
+	presentation.Note("No file, terminal or computer authority is granted.")
+	fmt.Fprint(out, "\nCreate this profile? [y/N] ")
 	line, err := input.ReadString('\n')
 	if err != nil {
 		return agents.AgentProfile{}, err

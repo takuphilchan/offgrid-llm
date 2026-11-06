@@ -200,3 +200,45 @@ Governed historical calls should use the same discriminator-first ordering as
 fresh decisions. Neither projection grants authority or turns prose into calls.
 The public test bridge must exercise this boundary rather than claiming that
 preserving order in its own proxy alone reproduces production inference.
+
+### Approved CLI profile continuity
+
+Use the existing authenticated conversation executor. A process-supplied picker
+owns the same buffered input as chat/consent, restores raw mode before returning,
+and supports search, arrows, Enter and cancellation. Plain mode accepts a number,
+exact name or ID, supports filtering and retries invalid input without consuming
+future prompts. Do not sort or truncate identities into ambiguous selectors.
+
+An explicit default stores only profile ID/revision and scope, never grants,
+credentials or model paths. Scope derives from verified OffGrid workspace identity,
+service origin and authenticated actor (local-admin only when authentication is
+explicitly disabled). Missing/stale/archived/revoked defaults return to selection;
+read failure never creates a profile or chooses another model. Explicit flags
+and saved conversation identity take precedence. Save atomically in process-owned
+configuration; bounds and version checks reject malformed records. `/default`
+remembers the current revision; `/default clear` forgets it.
+
+Resume reads the authorized conversation and resolves its saved turn's Agent
+selection. Blank legacy conversations with no saved selection require an explicit
+profile instead of guessing. Explicit conflicting resume profile/model is rejected
+before submission. `/agent` offers a new selection and returns a typed navigation
+request to the outer session loop. The previous conversation stays saved; owned
+workspace leases close normally and are never inherited. Selection cancellation
+and lookup failures retain the existing session and do not submit model work.
+
+Acceptance includes narrow/Unicode terminal rendering, malformed choices, buffered
+input preservation, scope isolation, pinned stale revisions, unavailable actors,
+resume conflicts, active/uncertain old jobs, cancellation and zero implicit grants.
+
+The terminal presentation keeps a live caret in search, a clear selected row and
+one compact set of profile details. Wide embedded terminals constrain and center
+the transcript; narrow terminals keep their full width. A transient model phase
+uses a bounded in-place spinner in interactive terminals, while actual actions,
+approvals, errors and completed answers remain durable transcript output. Plain
+or reduced-animation modes keep readable progress without terminal control codes.
+Closing a terminal tab restores focus to the remaining session before new input
+can be lost.
+The slash palette keeps common commands first, bounds visible rows to terminal
+height and shows the selection position. Short `/help` stays scannable; `/help all`
+retains every recovery command. These are presentation-only changes and never
+submit a command or change the pinned profile merely by opening the palette.

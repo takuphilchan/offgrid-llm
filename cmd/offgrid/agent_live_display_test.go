@@ -9,8 +9,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/takuphilchan/offgrid-llm/internal/cli"
 )
+
+func TestAgentProgressUsesAvailableCellsWithoutWrapping(t *testing.T) {
+	label := "Waiting for a command to finish"
+	if got := agentProgressLine("*", label, 12*time.Second, 80); !strings.Contains(got, label) {
+		t.Fatal(got)
+	}
+	for _, width := range []int{8, 20, 32, 80} {
+		got := agentProgressLine("*", "Reading 日本語 document\n\x1b[2J", time.Hour, width)
+		if ansi.StringWidth(got) >= width || strings.ContainsAny(got, "\n\r\x1b") {
+			t.Fatalf("width %d: %q", width, got)
+		}
+	}
+}
 
 func TestAgentDraftStreamsBeforeCompletionWithoutRepeatingAnswer(t *testing.T) {
 	reader, writer := io.Pipe()
@@ -87,4 +101,48 @@ func TestAgentSpinnerClearsBeforeOtherOutputAndStops(t *testing.T) {
 	}
 	quiet := newAgentLiveDisplay(io.Discard, true)
 	quiet.close()
+}
+
+func TestAnimatedAgentProgressKeepsTransientPhasesOutOfTranscript(t *testing.T) {
+	stream := strings.Join([]string{
+		`data: {"type":"status","run_id":"run-1","status":"running","progress":{"phase":"queued","iteration":1}}`,
+		`data: {"type":"status","run_id":"run-1","status":"running","progress":{"phase":"loading","iteration":1}}`,
+		`data: {"type":"status","run_id":"run-1","status":"running","progress":{"phase":"tool","iteration":1,"tool":"workspace_list"}}`,
+		`data: {"type":"done","run_id":"run-1","status":"completed","output":"Files listed."}`,
+	}, "\n") + "\n"
+	var out, progress bytes.Buffer
+	if err := renderAgentStreamMode(&out, &progress, strings.NewReader(stream), true, true, cli.PresentationStyle{}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(progress.String(), "Waiting for inference") || strings.Contains(progress.String(), "Loading model") {
+		t.Fatal("transient phases were printed as durable history", progress.String())
+	}
+	if !strings.Contains(progress.String(), "Listing files") || !strings.Contains(out.String(), "Files listed.") {
+		t.Fatal(out.String(), progress.String())
+	}
+}
+
+func TestAgentProgressAnimatesInPlace(t *testing.T) {
+	t.Setenv("OFFGRID_UNICODE", "1")
+	var out bytes.Buffer
+	d := newAgentLiveDisplay(&out, true)
+	d.phase("Loading model", true)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		d.mu.Lock()
+		shown := strings.Contains(out.String(), "Loading model")
+		d.mu.Unlock()
+		if shown {
+			break
+		}
+		if time.Now().After(deadline) {
+			d.close()
+			t.Fatal("loading animation did not render")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	d.close()
+	if !strings.Contains(out.String(), "⠋ Loading model") || !strings.HasSuffix(out.String(), "\r\x1b[2K") {
+		t.Fatal("animation did not clear before returning to the prompt", out.String())
+	}
 }
