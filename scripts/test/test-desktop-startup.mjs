@@ -91,6 +91,7 @@ try {
   assert.match(await page.locator('#status-title').innerText(), /service needs an update/);
   assert.equal(await page.evaluate(async () => { try { await window.electron.launchComputerApplication({id:'invalid'}); return 'allowed'; } catch(error) { return error.message; } }), "Error invoking remote method 'computer-launch-app': Error: Desktop workspace access is not ready");
   await capture('version-recovery.png');
+  await page.locator('#technical > summary').click();
   await page.locator('#separate').click();
   await page.locator('#local').click();
   await page.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/ui\//, { timeout: 40000 });
@@ -114,6 +115,7 @@ try {
   const resumed = await app.firstWindow();
   await resumed.locator('#recovery:not([hidden])').waitFor();
   assert.equal((await resumed.evaluate(() => window.electron.getBackendInfo())).managedByDesktop, false);
+  await resumed.locator('#technical > summary').click();
   await resumed.locator('#separate').click();
   await resumed.locator('#local').click();
   await resumed.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/ui\//, { timeout: 40000 });
@@ -182,6 +184,7 @@ try {
     app = await launch(join(evidence, 'mixed-bundle-profile'));
     const mixed = await app.firstWindow();
     await mixed.locator('#recovery:not([hidden])').waitFor();
+    await mixed.locator('#technical > summary').click();
     await mixed.locator('#separate').click(); await mixed.locator('#local').click();
     await mixed.waitForFunction(() => document.getElementById('status-title').textContent === 'Desktop files need repair');
     assert.equal((await mixed.evaluate(() => window.electron.getBackendInfo())).code, 'bundle_inconsistent');

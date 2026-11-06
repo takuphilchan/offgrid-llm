@@ -42,11 +42,15 @@ test('startup shows recovery and subscribes once without authorizing navigation'
   assert.equal(elements.get('status-text').textContent, translations.en.serviceUpdateBody);
   subscription({state:'incompatible', code:'bundle_inconsistent',managedByDesktop:true});
   assert.equal(elements.get('status-title').textContent, translations.en.bundleRepairTitle);
+  assert.equal(elements.get('retry').hidden, true);
+  assert.equal(elements.get('repair').hidden, false);
   assert.equal(elements.get('technical').hidden, false);
   assert.equal(elements.get('separate').hidden, true);
   subscription({state:'incompatible',code:'service_not_offgrid'});
   assert.equal(elements.get('status-title').textContent, translations.en.addressConflictTitle);
   subscription({state:'unavailable'});
+  assert.equal(elements.get('retry').hidden, false);
+  assert.equal(elements.get('repair').hidden, true);
   assert.equal(elements.get('status-text').textContent, translations.en.unavailableBody);
   assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '../loading.html'), 'utf8'), /id="guidance"/);
 });

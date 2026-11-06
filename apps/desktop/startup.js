@@ -44,6 +44,9 @@ function render(state) {
   byId('timing').textContent = state.elapsedMs ? `${(state.elapsedMs / 1000).toFixed(1)}s` : '';
   byId('recovery').hidden = busy || ready;
   byId('technical').hidden = busy || ready;
+  byId('retry').hidden = recoveryKind === 'bundleRepair';
+  byId('repair').hidden = recoveryKind !== 'bundleRepair';
+  byId('help').hidden = recoveryKind === 'bundleRepair';
   byId('browser').hidden = !state.canOpenBrowser;
   byId('separate').hidden = Boolean(state.managedByDesktop);
 }
@@ -69,6 +72,7 @@ byId('retry').addEventListener('click', () => void perform(() => bridge.retrySta
 byId('local').addEventListener('click', () => void perform(() => bridge.startDesktopWorkspace()));
 byId('browser').addEventListener('click', () => void perform(() => bridge.openExistingWorkspace()));
 byId('help').addEventListener('click', () => void perform(() => bridge.openStartupHelp()));
+byId('repair').addEventListener('click', () => void perform(() => bridge.openStartupHelp()));
 if (bridge?.getBackendInfo && bridge?.onStartupState) {
   const unsubscribe = bridge.onStartupState(render);
   window.addEventListener('pagehide', unsubscribe, { once: true });
