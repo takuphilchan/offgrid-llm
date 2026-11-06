@@ -5,11 +5,13 @@
   .workspace-help header { position: sticky; top: 0; z-index: 1; background: var(--surface-1); }
   .workspace-help h2 { margin: 0; font-size: var(--type-title); line-height: var(--leading-ui); }
   .workspace-help-body { padding: 0 24px; }
-  .workspace-help section { padding-block: 16px; border-block-start: 1px solid var(--line); }
+  .workspace-help details { padding-block: 12px; border-block-start: 1px solid var(--line); }
+  .workspace-help summary { padding-block: 6px; font-size: var(--type-ui); font-weight: var(--weight-medium); cursor: pointer; }
+  .workspace-help details[open] summary { margin-block-end: 8px; }
   .workspace-help h3 { margin: 0 0 8px; font-size: var(--type-section); line-height: var(--leading-ui); }
   .workspace-help p { margin: 0 0 8px; font-size: var(--type-body); line-height: var(--leading-prose); }
   .workspace-help .workspace-help-example { padding: 12px; border-radius: 8px; background: var(--surface-2); font-size: var(--type-ui); }
-  .workspace-help section > a { margin-inline-start: -10px; }
+  .workspace-help details > a { margin-inline-start: -10px; }
   .agent-settings-summary { display: grid; gap: 4px; min-width: 0; }
   .agent-settings-summary strong { font-size: var(--type-ui); line-height: var(--leading-ui); }
   .agent-settings-summary span, .agent-settings-summary code { font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--muted); overflow-wrap: anywhere; }

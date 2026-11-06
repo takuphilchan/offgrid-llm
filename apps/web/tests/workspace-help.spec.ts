@@ -14,8 +14,8 @@ for(const locale of Object.keys(workspaceHelp) as LocaleCode[]) test(`Help prese
   await expect(help.getByRole('button',{name:workspaceHelp[locale].close})).toBeFocused();
   await page.keyboard.press('Control+k');await expect(page.locator('dialog[open]')).toHaveCount(1);
   const box=await help.boundingBox();expect(box!.x).toBeGreaterThanOrEqual(0);expect(box!.x+box!.width).toBeLessThanOrEqual(390);expect(box!.y+box!.height).toBeLessThanOrEqual(640);
-  expect(await help.locator('section p').first().evaluate(el=>getComputedStyle(el).fontSize)).toBe('16px');
-  expect(await help.locator('h3').first().evaluate(el=>getComputedStyle(el).fontSize)).toBe('18px');
+  expect(await help.locator('details[open] p').first().evaluate(el=>getComputedStyle(el).fontSize)).toBe('16px');
+  expect(await help.locator('details summary').first().evaluate(el=>getComputedStyle(el).fontSize)).toBe('14px');
   if(['en','ar'].includes(locale))await page.screenshot({path:info.outputPath(`help-${locale}.png`)});
   await page.keyboard.press('Escape');await expect(help).toHaveCount(0);await expect(trigger).toBeFocused();await expect(editor).toHaveValue('Unsent — café 日本語');
   expect(state.writes).toEqual([]);
@@ -29,6 +29,7 @@ test('Help navigation and Quick actions never submit work or lose a returning dr
   const help=page.getByRole('dialog',{name:'Help',exact:true});await expect(help).toBeVisible();
   await page.keyboard.press('Escape');await expect(page.locator('.composer textarea')).toBeFocused();
   await page.locator('.help-trigger').click();
+  await help.locator('summary').filter({hasText:/^Activity$/}).click();
   await help.getByRole('link',{name:'Activity',exact:true}).click();await expect(help).toHaveCount(0);await expect(page).toHaveURL(/#\/activity$/);
   await page.locator('.primary-nav a[href="#/chat"]').click();await expect(page.locator('.composer textarea')).toHaveValue('Keep my draft');
   expect(state.writes).toEqual([]);
