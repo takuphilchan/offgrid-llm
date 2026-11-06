@@ -1,5 +1,13 @@
 # Tasks
 
+## 25. Approved Activity and attention redesign
+
+- [x] 25.1 Reproduce stale/terminal preview items, attention starvation, duplicate identities and stop/delete response races; preserve failing evidence. See `docs/quality/evidence/activity-reconciliation-2026-11-05.md`.
+- [x] 25.2 Add authorized compact work metadata, complete scoped counts and bounded stable history pagination without full transcript copies; keep legacy APIs compatible and regenerate clients. Same evidence: Go, 1,005-job fixture, authorization and generated-client checks passed.
+- [x] 25.3 Share summary ownership and reconcile command/deletion results immediately; reject stale reads, deduplicate linked conversation/jobs and preserve unavailable/unknown states. Verified by all 29 work-continuity tests, including newer-count ownership and ordinary-chat coverage; see the Activity evidence follow-up.
+- [x] 25.4 Present compact attention-first preview and actionable Activity rows with consistent counts, explicit history, clear protection reasons and fixed-snapshot bulk cleanup with partial failures. The same suite covers fixed selections, partial removal, attention prioritization and narrow English/Arabic layouts.
+- [ ] 25.5 Verify large histories, delayed responses, reconnect/restart, actor/workspace changes, linked children, no automatic mutations, keyboard/narrow/RTL and existing API/renderer suites. Record installed evidence separately and retain human gaps.
+
 ## 22. Approved defaults-first workflow redesign
 
 - [ ] 22.1 Freeze ordinary first-use, returning-user, document import/answer, offline/low-memory and error-recovery journeys with current action/configuration counts; capture isolated real-state screenshots and retain existing human gates.

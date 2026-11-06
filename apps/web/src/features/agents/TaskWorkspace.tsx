@@ -19,6 +19,7 @@ import { useTaskRun } from './useTaskRun';
 import { ConversationWork } from '../chat/ConversationWork';
 import { useTaskStatus } from './useTaskStatus';
 import { taskPresentation } from '../../i18n/task-presentation';
+import {WorkHistory} from './WorkHistory';
 
 export function taskFromLocation() {
   return window.location.hash.match(/^#\/(?:agents|activity)\/task\/(run-[a-f0-9]{32})$/)?.[1] ?? '';
@@ -46,11 +47,12 @@ export function TaskWorkspace({ scope, workspace }: { scope: string; workspace: 
   const currentID = useRef(id); currentID.current = id;
   const refreshHistory = async () => {
     if (!admin) { setLoading(false); return; }
+    if (known.compact && !id) { setLoading(false); return; }
     const attempt = ++generation.current;
     try {
-      const next = await api.jobs();
+      const next: AgentTask[] = known.compact ? (await api.workSummary({id,limit:1})).items.map(item=>({...item,prompt:item.title,updated_at:item.created_at})) : await api.jobs();
       if (attempt !== generation.current) return;
-      work.seedJobs(next);
+      if (!known.compact) work.seedJobs(next);
       setTasks([...next].sort((a,b) => Date.parse(b.created_at) - Date.parse(a.created_at)));
       setHistoryError('');
     } catch (reason) {
@@ -58,10 +60,12 @@ export function TaskWorkspace({ scope, workspace }: { scope: string; workspace: 
     } finally { if (attempt === generation.current) setLoading(false); }
   };
   useEffect(() => {
-    void refreshHistory();
-    const timer = setInterval(() => void refreshHistory(), 5000);
-    return () => { generation.current++; clearInterval(timer); };
-  }, [scope, workspace, admin]);
+    let disposed=false;
+    let timer:ReturnType<typeof setTimeout>;
+    const poll=async()=>{if(disposed)return;await refreshHistory();if(!disposed)timer=setTimeout(()=>void poll(),5000);};
+    queueMicrotask(()=>void poll());
+    return () => { disposed=true;generation.current++; clearTimeout(timer); };
+  }, [scope, workspace, admin, known.compact, id]);
   useWorkspaceRefresh(refreshHistory);
   useEffect(() => {
     const changed = () => {
@@ -107,7 +111,7 @@ export function TaskWorkspace({ scope, workspace }: { scope: string; workspace: 
       {run ? <ConversationWork key={run.run_id} run={run} refresh={() => { refresh(); void refreshHistory(); }} connection={connection} readError={readError} outputSaved={false} recover={async () => {}} recoveryNeeded={false} inspector childStatus={childID => { const child = tasks.find(task => task.id === childID); return child ? status(child) : taskPresentation(locale).unavailable; }} />
         : readError ? <ScopedNotice kind="error" action={<button className="secondary-button" onClick={refresh}>{text.common.retry}</button>}>{readError}</ScopedNotice>
         : <p role="status">{text.common.loading}</p>}
-    </section> : !admin ? <PermissionNotice /> : <section className="task-list" aria-label={text.agentRuntime.history}>
+    </section> : !admin ? <PermissionNotice /> : known.compact ? <WorkHistory/> : <section className="task-list" aria-label={text.agentRuntime.history}>
       <h2>{text.agentRuntime.history}</h2>
       {!!counts.all && <div className="work-state-filters" role="group" aria-label={text.nav.activity}>{(['attention','running','history','all'] as const).map(value => <button key={value} className="secondary-button" aria-pressed={filter === value} onClick={() => { setChoice(value); setLimit(20); setScroll(0); window.history.replaceState(null, '', `#/activity/${value}`); }}>{filterNames[value]} <span>{counts[value]}</span></button>)}</div>}
       <HistoryToolbar visibleClear query={query} onQuery={value => { setQuery(value); setLimit(20); setScroll(0); }} searchLabel={text.history.searchTasks} title={text.agentRuntime.history} count={tasks.length} refresh={() => void refreshHistory()} clearLabel={text.history.clearTasks} clearDisabled={!filtered.some(task => task.deletable)} clear={() => setDeleting(filtered.filter(task => task.deletable).map(task => ({id:task.id,label:task.prompt})))} protection={text.history.protectedTasks} />

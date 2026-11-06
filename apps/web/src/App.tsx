@@ -80,6 +80,7 @@ export function App() {
   const [loadError, setLoadError] = useState('');
   const [workspaceID, setWorkspaceID] = useState('');
   const [taskFirst, setTaskFirst] = useState(false);
+  const [workSummary, setWorkSummary] = useState(false);
   const [workSearch, setWorkSearch] = useState(false);
   const [offlineImport, setOfflineImport] = useState(false);
   const [onboardingPending, setOnboardingPending] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true');
@@ -133,6 +134,7 @@ export function App() {
     lastIdentity.current = { actor: identityActor, workspace, taskFirst: supported };
     setWorkspaceID(workspace); setTaskFirst(supported);
     setWorkSearch(identityResult.status === 'fulfilled' && identityResult.value.capabilities?.includes('work-search-v1') === true);
+    setWorkSummary(identityResult.status === 'fulfilled' && identityResult.value.capabilities?.includes('work-summary-v1') === true);
     setOfflineImport(identityResult.status === 'fulfilled' && identityResult.value.capabilities?.includes('gguf-offline-import-v1') === true);
     setAgentReplayScope(JSON.stringify([identityActor, workspace]));
     setAuthUser(userResult.value.authenticated ? userResult.value.user : null);
@@ -221,7 +223,7 @@ export function App() {
   const admin = !authRequired || authUser?.role === 'admin';
   const actor = authUser?.id ?? (authRequired && guest ? 'guest' : 'local');
   const workspaceScope = JSON.stringify([actor, workspaceID, admin, authUser?.role]);
-  return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><ActiveWorkProvider taskFirst={taskFirst}><WorkSearchNavigation><SidebarContext.Provider value={{ target: historyTarget, actionTarget, close: closeNavigation }}><div className={`app-shell${collapsed && !narrow ? ' sidebar-collapsed' : ''}`}>
+  return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><ActiveWorkProvider taskFirst={taskFirst} compact={workSummary}><WorkSearchNavigation><SidebarContext.Provider value={{ target: historyTarget, actionTarget, close: closeNavigation }}><div className={`app-shell${collapsed && !narrow ? ' sidebar-collapsed' : ''}`}>
     <WorkspaceNavigation page={page} health={health} open={navigationOpen} narrow={narrow} collapsed={collapsed && !narrow} onToggle={toggleSidebar} onClose={closeNavigation} historyRef={setHistoryTarget} actionRef={setActionTarget} footer={<WorkspaceOptions refreshing={refreshing} onRefresh={() => void refreshCurrentWorkspace()} theme={theme.choice} onThemeChange={theme.setChoice} username={authUser?.username} onLogout={() => void logout()} />} />
     {narrow && navigationOpen && <button className="navigation-scrim" tabIndex={-1} aria-label={text.models.cancel} onClick={closeNavigation} />}
 

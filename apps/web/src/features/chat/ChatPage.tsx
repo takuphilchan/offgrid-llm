@@ -173,7 +173,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     setLinkedTurn(turn); setRecoveryNeeded(false); setBusy(false); setStreamed(''); setInterrupted(false);
     const saved = session.messages.some(message => message.turn_id === turn.id && message.role === 'user');
     setConversation(saved ? session.messages : [...session.messages, { role: 'user', content: turn.prompt }]);
-    work.rememberChat(session.name, turn.status);
+    work.rememberChat(session.name, turn.status, turn.job_id);
   };
   const refreshLinkedConversation = async (turn: SessionTurn, explicitRecovery = false) => {
     const revision = selectionRevision.current, name = activeName;
@@ -192,7 +192,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
   };
   useEffect(() => {
     if (!linkedRun || !linkedTurn) return;
-    work.rememberChat(activeName, linkedRun.status);
+    work.rememberChat(activeName, linkedRun.status, linkedRun.run_id);
     if (workSettled(linkedRun.status)) {
       void refreshLinkedConversation(linkedTurn).catch(reason => { if (currentLinked.current?.id === linkedTurn.id) setError(reason instanceof Error ? reason.message : text.common.error); });
       if (spokenJob.current === linkedRun.run_id) {

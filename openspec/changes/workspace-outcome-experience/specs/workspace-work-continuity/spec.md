@@ -4,6 +4,39 @@ Keep current work, meaningful progress and useful results understandable across 
 
 ## ADDED Requirements
 
+### Requirement: Consistent bounded work summaries
+The service SHALL provide actor-authorized compact work summaries and bounded
+history pages without exporting transcripts or tool arguments for counting.
+Attention, running and history counts SHALL apply to the same authorized scope.
+Ordering SHALL be deterministic and prioritize attention before preview limits.
+The UI SHALL reconcile linked conversation and job identities without double
+counting, retain children under their parent, and preserve legacy API clients.
+
+#### Scenario: Large mixed history
+- **WHEN** thousands of completed jobs precede an older job awaiting approval
+- **THEN** the attention summary includes the waiting job and accurate scoped counts
+- **AND** history pages are bounded and deterministically ordered without full task payloads
+
+#### Scenario: Resolved work and delayed reads
+- **WHEN** a stop or confirmed deletion completes while an older read is in flight
+- **THEN** that older response cannot restore the obsolete attention/history entry
+- **AND** failures or unavailable snapshots remain explicit instead of claiming success
+
+### Requirement: Distinct work control and history cleanup
+Activity SHALL distinguish stopping live work, removing eligible history and
+reconciling unknown effects. Cleanup SHALL review an explicit fixed selection,
+explain protected work, retain failures for review and never replay actions.
+
+#### Scenario: Partial bulk cleanup
+- **WHEN** some confirmed records are removed and another becomes protected
+- **THEN** removed records leave all current views and only unresolved records remain in the review
+- **AND** newly arrived records are neither stopped nor deleted
+
+#### Scenario: Reconnect with uncertain work
+- **WHEN** the service reconnects with an unresolved external effect
+- **THEN** the work remains discoverable with its permitted reconciliation path
+- **AND** no timeout, dismissal, refresh or history cleanup silently repeats the effect
+
 ### Requirement: Conversation navigation during generation
 Accepted work SHALL continue independently of conversation selection. Navigation
 SHALL NOT cancel, resubmit or attach output to another conversation. Returning

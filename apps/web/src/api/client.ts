@@ -1,4 +1,5 @@
 import { validateRetention } from './retention';
+import { notifyWorkChanged } from '../lib/work-changes';
 import type { components, operations } from './schema.generated';
 import { readSessionStream, type SessionEvent } from './session-stream';
 import { readAgentStream } from './agent-stream';
@@ -34,6 +35,8 @@ export type PublicUser = components['schemas']['PublicUser'];
 export type ToolApproval = components['schemas']['ToolApproval'];
 export type AgentStep = components['schemas']['AgentStep'];
 export type AgentTask = components['schemas']['AgentTask'];
+export type WorkItem = components['schemas']['WorkItem'];
+export type WorkPage = components['schemas']['WorkPage'];
 export type AgentRun = components['schemas']['AgentRunResponse'];
 export type AgentProfile = components['schemas']['AgentProfile'];
 export type AgentProfileSettings = components['schemas']['AgentProfileSettings'];
@@ -317,7 +320,17 @@ export const api = {
   checkComputerModel: (model: string, signal: AbortSignal, driver='browser') => request<ComputerModelCheck>('/api/v2/computer/model-check', { method: 'POST', body: JSON.stringify({model,driver}), signal }, 600_000),
   job: (id: string, signal?: AbortSignal) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}`, { signal }),
   jobs: async (signal?: AbortSignal) => (await request<AgentTask[] | null>('/api/v2/jobs', { signal })) ?? [],
-  deleteJob: (id: string) => request<{ success: boolean }>(`/api/v2/jobs/${encodeURIComponent(id)}`, {method: 'DELETE'}),
+  workSummary: (options: {bucket?: string; query?: string; cursor?: string; limit?: number; id?: string} = {}, signal?: AbortSignal) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(options)) if (value !== undefined && value !== '') query.set(key, String(value));
+    return request<WorkPage>(`/api/v2/work?${query}`, {signal});
+  },
+  deleteJob: async (id: string) => {
+    const generation = agentReplayGeneration;
+    const result = await request<{success: boolean}>(`/api/v2/jobs/${encodeURIComponent(id)}`, {method:'DELETE'});
+    if (result.success && generation === agentReplayGeneration) notifyWorkChanged({id, deleted:true});
+    return result;
+  },
   exportJob: (id: string) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/export`),
   taskArtifact: (id: string, digest: string, signal: AbortSignal) => request<Blob>(`/api/v2/jobs/${encodeURIComponent(id)}/artifact?digest=${encodeURIComponent(digest)}`, { signal }, 30_000, async response => {
     // Matches the existing bounded task-artifact contract, not arbitrary URLs.
@@ -334,7 +347,12 @@ export const api = {
       return new Blob(chunks, { type: 'application/octet-stream' });
     } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
   }),
-  jobAction: (id: string, action: 'approve' | 'deny' | 'cancel' | 'pause' | 'resume' | 'takeover' | 'steer' | 'reconnect' | 'reconcile', data: {approval_id?: string; call_id?: string; result?: string; request_id?: string; instruction?: string} = {}) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/${action}`, {method: 'POST', body: JSON.stringify(data)}),
+  jobAction: async (id: string, action: 'approve' | 'deny' | 'cancel' | 'pause' | 'resume' | 'takeover' | 'steer' | 'reconnect' | 'reconcile', data: {approval_id?: string; call_id?: string; result?: string; request_id?: string; instruction?: string} = {}) => {
+    const generation = agentReplayGeneration;
+    const result = await request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/${action}`, {method:'POST', body:JSON.stringify(data)});
+    if (generation === agentReplayGeneration) notifyWorkChanged({id, status:result.status});
+    return result;
+  },
   submitJob: (prompt: string, model: string, request_id: string, computer_approval_mode?: ComputerSession['approval_mode'],computer_scope?:'desktop'|'selected_window') => request<AgentRun>('/api/v2/jobs', {method: 'POST', body: JSON.stringify({prompt, model, request_id, computer_approval_mode,computer_scope})}),
   // Default admission: 5 min, then tool check: 3 min, optional vision: 90 s.
   // Do not abort a cold load using the ordinary short API request deadline.

@@ -50,7 +50,10 @@
     background: transparent;
     border: 1px solid transparent;
     border-radius: .5rem;
+    color: var(--text);
+    text-decoration: none;
   }
+  .task-list-item:hover { background: var(--surface-2); }
   .task-list-item[aria-current="true"] {
     background: var(--surface-2);
     border-color: var(--line-strong);

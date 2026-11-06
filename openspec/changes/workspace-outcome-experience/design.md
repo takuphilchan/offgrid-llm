@@ -1,5 +1,31 @@
 # Design
 
+## Activity and attention reconciliation (2026-11-05)
+
+The existing header truncates unordered jobs before prioritizing them, includes
+terminal chat references in its popup, and polls full task histories separately
+from Activity. Replace this with a compact metadata projection, deterministic
+attention/running/history classification, and stable identity-based pagination.
+The service enforces actor/source visibility before counting or returning rows;
+summary metadata never authorizes mutation. Avoid copying transcripts or tool
+payloads merely to calculate a badge. Legacy list endpoints remain compatible.
+
+A workspace-scoped coordinator owns current summary reads and invalidation.
+History pages request bounded results; commands trigger immediate revalidation.
+Abort or generation-check superseded requests, prevent pre-mutation responses
+from restoring removed records, and mark unavailable snapshots stale without
+reclassifying real tasks as failed or silently hiding unknown effects. A linked
+conversation and root job represent one work item; children remain subordinate.
+
+Keep the header preview compact and attention-first with an explicit full-list
+destination. Activity separates attention, running and history, explains the
+next safe action and cleanup eligibility, and uses one scroll owner. Bulk removal
+reviews a fixed snapshot and reports partial failures; stopping is never implied
+by history removal. Preserve keyboard focus, locale/RTL, narrow layouts, saved
+filters and drafts. Large-history checks measure payload, request count and UI
+feedback independently from inference performance. Unavailable human/native
+qualification remains unverified.
+
 ## Approved defaults-first interaction redesign (2026-11-01)
 
 The default product journey is open, ask or add documents, receive a useful

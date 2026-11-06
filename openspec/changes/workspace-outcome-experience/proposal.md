@@ -1,5 +1,18 @@
 # Proposal
 
+## Approved Activity and attention reconciliation (2026-11-05)
+
+Replace the fragmented attention/history projection with a shared, actor-scoped
+work summary and bounded paginated history. Prioritize actionable work before
+limiting the preview. Counts and rows must describe the same scope. Resolved
+work leaves attention promptly; retained history remains available separately.
+Stop, delete-history and reconcile-unknown-outcome remain distinct operations.
+Bulk cleanup reviews an explicit snapshot, explains protected records, and
+retains partial failures without deleting newly arrived work. Additive service
+contracts must preserve older clients. Test delayed responses, duplicate
+conversation/job references, reconnect/restart, large histories and deletion.
+No background cleanup may stop, delete, replay or dismiss uncertain work.
+
 ## Approved defaults-first product workflow (2026-11-01)
 
 The owner approved a deeper interaction redesign after finding the application

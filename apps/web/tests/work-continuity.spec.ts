@@ -3,6 +3,193 @@ import { openSettings } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 const id = 'run-' + 'a'.repeat(32);
 
+async function summaryFixture(page: Page, total = 65) {
+  const legacy=await fixture(page);
+  const state={rows:Array.from({length:total},(_,i)=>({id:'run-'+String(i).padStart(32,'0'),title:`Saved work ${i}`,status:i===0?'uncertain':'completed',created_at:'2026-11-05T00:00:00Z',deletable:i!==0,protection:i===0?'unknown_effects':undefined})),reads:[] as string[],deleted:[] as string[],fail:''};
+  await page.route('**/api/v2/system',r=>r.fulfill({json:{product:'offgrid',api_version:2,workspace_id:'one',capabilities:['task-first-agents-v2','work-summary-v1']}}));
+  await page.route('**/api/v2/work?*',r=>{
+    const q=new URL(r.request().url()).searchParams;state.reads.push(q.toString());
+    const bucket=(status:string)=>['completed','cancelled','failed'].includes(status)?'history':['running','pending'].includes(status)?'running':'attention';
+    const counts={all:state.rows.length,attention:0,running:0,history:0};state.rows.forEach(row=>counts[bucket(row.status)]++);
+    const matching=state.rows.filter(row=>(!q.get('id')||row.id===q.get('id'))&&(!q.get('bucket')||q.get('bucket')==='all'||bucket(row.status)===q.get('bucket'))&&row.title.toLowerCase().includes((q.get('query')??'').toLowerCase()));
+    const start=Number(q.get('cursor')??0),limit=Number(q.get('limit')??20),items=matching.slice(start,start+limit),has_more=start+limit<matching.length;
+    return r.fulfill({json:{items,counts,has_more,next_cursor:has_more?String(start+limit):undefined,removable_count:matching.filter(row=>row.deletable).length,scope:'actor_jobs'}});
+  });
+  await page.route(/\/api\/v2\/jobs\/run-[a-f0-9]+$/,r=>{
+    const taskID=new URL(r.request().url()).pathname.split('/').at(-1)!;
+    if(r.request().method()!=='DELETE')return r.fallback();
+    state.deleted.push(taskID);
+    if(taskID===state.fail)return r.fulfill({status:409,json:{error:{message:'Work became protected'}}});
+    state.rows=state.rows.filter(row=>row.id!==taskID);return r.fulfill({json:{success:true}});
+  });
+  return {state,legacy};
+}
+
+test('compact Activity pages history and counts without fetching task transcripts',async({page})=>{
+  const {state,legacy}=await summaryFixture(page,205);
+  await page.goto('/ui/#/activity/history');
+  await expect(page.locator('.task-history-row')).toHaveCount(20);
+  await expect(page.getByRole('button',{name:'History 204',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Show more',exact:true}).click();
+  await expect(page.locator('.task-history-row')).toHaveCount(40);
+  await page.getByRole('button',{name:'Needs attention 1',exact:true}).click();
+  await expect(page.locator('.task-history-row')).toHaveCount(1);
+  await page.locator('.task-history-row .history-item-menu').click();
+  await expect(page.getByText('Review unknown effects before removing this record.')).toBeVisible();
+  expect(legacy.reads.filter(path=>path==='/api/v2/jobs')).toEqual([]);
+  expect(state.deleted).toEqual([]);
+  expect(state.reads.some(query=>query.includes('cursor=20'))).toBeTruthy();
+});
+
+test('bulk cleanup reviews a fixed selection and retains only failed removals',async({page})=>{
+  const {state}=await summaryFixture(page,45);state.fail=state.rows[2].id;
+  await page.goto('/ui/#/activity/all');
+  await page.getByRole('button',{name:'Review removable history'}).click();
+  const dialog=page.getByRole('dialog');await expect(dialog).toContainText('44');
+  state.rows.push({id:'run-'+'f'.repeat(32),title:'New arrival after review',status:'completed',created_at:'2026-11-05T00:00:01Z',deletable:true,protection:undefined});
+  await dialog.getByRole('button',{name:'Confirm delete',exact:true}).click();
+  await expect(dialog.locator('li')).toHaveCount(1);
+  await expect(dialog).toContainText('Saved work 2');
+  expect(state.deleted).toHaveLength(44);
+  expect(state.deleted).not.toContain('run-'+'0'.repeat(32));
+  expect(state.deleted).not.toContain('run-'+'f'.repeat(32));
+  await expect(page.getByRole('button',{name:'All work 3',exact:true})).toBeVisible();
+  await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
+  await expect(page.locator('.task-history-row')).toHaveCount(3);
+});
+
+test('header count remains exact beyond the preview limit',async({page})=>{
+  const {state}=await summaryFixture(page,35);state.rows.forEach(row=>{row.status='waiting_for_approval';row.deletable=false;});
+  await page.goto('/ui/#/models');
+  const trigger=page.getByRole('button',{name:'Known work',exact:true});await expect(trigger).toContainText('Needs attention · 35');await trigger.click();
+  await expect(page.locator('.known-work-list li')).toHaveCount(16);
+  expect(state.deleted).toEqual([]);
+});
+
+test('Activity and header share counts even when an older page arrives last',async({page})=>{
+  const {state}=await summaryFixture(page,21);
+  let release!:()=>void;const held=new Promise<void>(resolve=>release=resolve);let started=false;
+  await page.route('**/api/v2/work?*',async r=>{
+    const q=new URL(r.request().url()).searchParams;
+    if(q.get('bucket')==='history'&&!started){
+      started=true;const old=state.rows.filter(row=>row.status==='completed');await held;
+      await r.fulfill({json:{items:old,counts:{attention:1,running:0,history:20,all:21},removable_count:20,has_more:false,scope:'actor_jobs'}}).catch(()=>{});
+    }else await r.fallback();
+  });
+  await page.goto('/ui/#/activity/history');await expect.poll(()=>started).toBeTruthy();
+  state.rows.push({id:'run-'+'f'.repeat(32),title:'New approval',status:'waiting_for_approval',created_at:'2026-11-05T00:00:01Z',deletable:false,protection:'pending_approval'});
+  const header=page.getByRole('button',{name:'Known work',exact:true});
+  await expect(header).toContainText('Needs attention · 2',{timeout:10000});
+  release();await expect(page.locator('.task-history-row')).toHaveCount(20);
+  await expect(page.getByRole('button',{name:'Needs attention 2',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'All work 22',exact:true})).toBeVisible();
+});
+
+test('ordinary chat attention is visible and counted in both work surfaces',async({page})=>{
+  await summaryFixture(page,1);
+  await page.route('**/v1/sessions/First%20conversation/turn',r=>r.fulfill({json:{turn:{id:'turn',status:'interrupted',prompt:'Read-only chat',output:''}}}));
+  await page.goto('/ui/#/chat');
+  await expect(page.getByRole('button',{name:'Known work',exact:true})).toContainText('Needs attention · 2');
+  await page.getByRole('button',{name:'Known work',exact:true}).click();
+  await page.getByRole('region',{name:'Known work'}).getByRole('link',{name:'Activity',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Needs attention 2',exact:true})).toBeVisible();
+  await expect(page.locator('.activity-known-chats')).toContainText('First conversation');
+});
+
+for(const locale of ['en','ar']) test(`compact Activity fits narrow ${locale} and supports keyboard navigation`,async({page},info)=>{
+  const {state}=await summaryFixture(page,21);
+  state.rows[0].title='Review this long task title without hiding its current state. '.repeat(4);
+  await page.addInitScript(locale=>localStorage.setItem('offgrid.locale',locale),locale);
+  await page.setViewportSize({width:540,height:800});
+  await page.goto('/ui/#/activity/attention');
+  await expect(page.locator('.task-history-row')).toHaveCount(1);
+  const link=page.locator('.task-list-item');await link.focus();await expect(link).toBeFocused();
+  const bounds=await page.locator('.task-list').evaluate(element=>({width:element.scrollWidth,client:element.clientWidth}));
+  expect(bounds.width).toBeLessThanOrEqual(bounds.client+1);
+  await page.screenshot({path:info.outputPath(`activity-narrow-${locale}.png`)});
+  await link.press('Enter');await expect(page).toHaveURL(/#\/activity\/task\//);
+  expect(state.deleted).toEqual([]);
+});
+
+test('linked conversation and job appear once in compact attention',async({page})=>{
+  const {state}=await summaryFixture(page,1);
+  state.rows[0].id=id;state.rows[0].title='Linked work';state.rows[0].status='interrupted';
+  await page.route('**/v1/sessions/First%20conversation/turn',r=>r.fulfill({json:{turn:{id:'turn',status:'interrupted',prompt:'Linked work',job_id:id,agent:{profile_id:'profile',profile_revision:1}}}}));
+  await page.goto('/ui/#/chat');await expect(page.locator('.conversation-work')).toBeVisible();
+  await page.locator('.sidebar a[href="#/models"]').click();
+  const trigger=page.getByRole('button',{name:'Known work',exact:true});await expect(trigger).toContainText('Needs attention · 1');await trigger.click();
+  await expect(page.locator('.known-work-list li')).toHaveCount(1);
+});
+
+test('a late summary cannot restore attention after Stop succeeds',async({page})=>{
+  const {state}=await summaryFixture(page,1);state.rows[0].id=id;state.rows[0].status='waiting_for_approval';
+  await page.route(`**/api/v2/jobs/${id}/cancel`,r=>{state.rows[0].status='cancelled';state.rows[0].deletable=true;return r.fulfill({json:{run_id:id,status:'cancelled',steps:[],event_cursor:'2'}});});
+  await page.goto(`/ui/#/activity/task/${id}`);
+  await expect(page.getByRole('button',{name:'Known work',exact:true})).toBeVisible();
+  let release!:()=>void;const held=new Promise<void>(resolve=>release=resolve);let started=false;
+  await page.route('**/api/v2/work?bucket=attention*',async r=>{if(!started){started=true;await held;await r.fulfill({json:{items:[{...state.rows[0],status:'waiting_for_approval'}],counts:{attention:1,running:0,history:0,all:1},removable_count:0,has_more:false,scope:'actor_jobs'}}).catch(()=>{});}else await r.fallback();});
+  await expect.poll(()=>started,{timeout:10000}).toBeTruthy();
+  await page.getByRole('button',{name:'Stop',exact:true}).click();
+  release();
+  await expect(page.getByRole('button',{name:'Known work',exact:true})).toHaveCount(0);
+});
+
+test('a delayed history read cannot restore a confirmed deletion',async({page})=>{
+  const {state}=await summaryFixture(page,2);
+  await page.goto('/ui/#/activity/history');
+  await page.getByRole('button',{name:'Review removable history'}).click();
+  const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible();
+  const old={...state.rows[1]};
+  let release!:()=>void;const held=new Promise<void>(resolve=>release=resolve);let started=false;
+  await page.route('**/api/v2/work?*',async r=>{
+    const q=new URL(r.request().url()).searchParams;
+    if(q.get('bucket')==='history' && q.get('limit')==='20' && !started){
+      started=true;await held;await r.fulfill({json:{items:[old],counts:{all:2,attention:1,history:1,running:0},removable_count:1,has_more:false,scope:'actor_jobs'}}).catch(()=>{});
+    } else await r.fallback();
+  });
+  await expect.poll(()=>started,{timeout:15000}).toBeTruthy();
+  await dialog.getByRole('button',{name:'Confirm delete',exact:true}).click();
+  await expect(dialog).toHaveCount(0);release();
+  await expect(page.locator('.task-history-row')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'History 0',exact:true})).toBeVisible();
+  expect(state.deleted).toEqual([old.id]);
+});
+
+test('attention is prioritized before the bounded header preview', async ({page}) => {
+  const state=await fixture(page);
+  await page.route('**/api/v2/jobs',r=>r.fulfill({json:[
+    ...Array.from({length:24},(_,i)=>({id:'run-'+String(i).padStart(32,'0'),prompt:`Running ${i}`,status:'running',created_at:'2026-10-08T00:00:00Z'})),
+    {id,prompt:'Approval must not disappear',status:'waiting_for_approval',created_at:'2026-10-07T00:00:00Z'},
+  ]}));
+  await page.goto('/ui/#/models');
+  const trigger=page.getByRole('button',{name:'Known work',exact:true});
+  await expect(trigger).toContainText('Needs attention');await trigger.click();
+  const panel=page.getByRole('region',{name:'Known work'});
+  await expect(panel.locator('.known-work-link').first()).toHaveText('Approval must not disappear');
+  await expect(panel.locator('li')).toHaveCount(16);
+  expect(state.writes).toEqual([]);
+});
+
+test('completed conversations do not linger beside an unfinished task',async({page})=>{
+  const state=await fixture(page);await page.goto('/ui/#/chat');
+  await expect(page.locator('.message.assistant')).toContainText('First conversation');
+  await page.locator('.sidebar a[href="#/models"]').click();
+  await page.getByRole('button',{name:'Known work',exact:true}).click();
+  const panel=page.getByRole('region',{name:'Known work'});
+  await expect(panel.getByRole('link',{name:'Keep the same task'})).toBeVisible();
+  await expect(panel.getByRole('button',{name:'First conversation',exact:true})).toHaveCount(0);
+  expect(state.writes).toEqual([]);
+});
+
+test('filtered Activity has one metadata polling owner',async({page})=>{
+  const state=await fixture(page);await page.clock.install();await page.goto('/ui/#/activity/attention');
+  await expect(page.locator('.task-list-item')).toContainText('Keep the same task');
+  expect(state.reads.filter(path=>path==='/api/v2/jobs')).toHaveLength(1);
+  await page.clock.fastForward(5100);
+  await expect.poll(()=>state.reads.filter(path=>path==='/api/v2/jobs').length).toBe(2);
+  expect(state.writes).toEqual([]);
+});
+
 test('attention list keeps long task titles compact and links to activity', async ({page},info) => {
   const state = await fixture(page, 16);
   const title = 'Open Microsoft Edge and search for public tourism sources. Summarize the findings with links without signing in or changing profiles. '.repeat(3);
@@ -110,8 +297,10 @@ for (const field of ['actor', 'workspace', 'role'] as const) test(`${field} chan
   expect(state.writes).toEqual([]);
 });
 
-test('known chat selection returns to that conversation without scanning other turns or speaking', async ({ page }) => {
-  const state = await fixture(page); await page.goto('/ui/#/chat');
+test('known unfinished chat selection returns without scanning other turns or speaking', async ({ page }) => {
+  const state = await fixture(page);
+  await page.route('**/v1/sessions/First%20conversation/turn',r=>r.fulfill({json:{turn:{id:'turn',status:'interrupted',prompt:'',output:''}}}));
+  await page.goto('/ui/#/chat');
   await expect(page.locator('.message.assistant')).toContainText('First conversation');
   await page.getByRole('button', { name: 'Second conversation', exact: true }).click();
   await expect(page.locator('.message.assistant')).toContainText('Second conversation');
