@@ -86,19 +86,44 @@
   .task-management a { color: var(--muted); text-decoration: none; padding: .5rem .75rem; border-radius: .5rem; line-height: 1.4; min-height: 40px; display: inline-flex; align-items: center; }
   .task-management a[aria-current="page"] { background: var(--surface-2); color: var(--text); font-weight: 500; }
   .task-management a:hover { background: var(--surface-2); }
-  .agent-management-page { gap: 1.5rem; }
+  .agent-management-page { display: grid; gap: 1.5rem; max-width: 72rem; width: 100%; container-type: inline-size; container-name: agent-management; }
   .agent-management-page .runtime-panel { padding: 0; border: 0; border-radius: 0; background: transparent; }
-  .agent-management-page .tool-list { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,22rem),1fr)); gap: 1rem; max-height: none; overflow: visible; border: 0; margin-block-start: 1.5rem; }
+  .agent-management-page .tool-list { display: grid; grid-template-columns: minmax(0,1fr); gap: 0; max-height: none; overflow: visible; border: 0; margin-block-start: .75rem; }
   .agent-management-page .tool-list article { padding: 1rem 0; border: 0; border-block-end: 1px solid var(--line); border-radius: 0; align-items: start; }
   .agent-management-page .tool-list strong, .agent-management-page .connector-list strong { font-size: 1rem; overflow-wrap: anywhere; }
-  .agent-management-page .tool-list p { font-size: .9rem; line-height: 1.6; margin-block: .5rem; }
+  .agent-management-page .tool-list p { font-size: var(--type-ui); line-height: 1.6; margin-block: .25rem; max-width: 72ch; }
   .agent-management-page .tool-list small, .agent-management-page .connector-list small { font-size: .8rem; line-height: 1.5; }
-  .agent-management-page .connector-panel { grid-template-columns: minmax(0,1fr) minmax(0,1fr); align-items: start; gap: 2rem; }
-  .agent-management-page .connector-panel form { gap: 1.25rem; border-inline-start: 1px solid var(--line); padding-inline-start: 2rem; }
+  .agent-management-page .connector-panel { grid-template-columns: minmax(0,1fr); align-items: start; gap: 2rem; }
+  .agent-management-page .connector-panel form { gap: 1rem; padding: 1rem; width: 100%; max-width: 22rem; border: 1px solid var(--line); border-radius: 10px; background: transparent; }
   .agent-management-page .connector-panel label { display: grid; gap: .5rem; font-size: .9rem; }
-  .agent-management-page .connector-panel input { min-height: 2.75rem; font-size: 1rem; }
+  .agent-management-page .connector-panel input { font-size: var(--type-ui); }
   .agent-management-page .connector-panel form > div { flex-wrap: wrap; }
   .agent-management-page .connector-list > p, .agent-management-page .connection-success { font-size: .9rem; line-height: 1.6; }
+  .agent-management-page .connector-list article { grid-template-columns: 7px minmax(0,1fr) auto; align-items: center; padding-block: 1rem; }
+  .agent-management-page .connector-list i { margin: 0; }
+  .agent-management-page .external-providers { margin: 0; padding: 0; border: 0; }
+  .agent-management-page .provider-grid { align-items: stretch; gap: 16px; }
+  .agent-management-page .provider-card { display: flex; flex-direction: column; padding: 24px; gap: 20px; border: 1px solid var(--line); border-radius: 16px; background: transparent; }
+  .agent-management-page .provider-card header p { margin: 8px 0 0; color: var(--muted); max-width: 48ch; }
+  .agent-management-page .provider-card .provider-readiness { padding-block: 16px 0; border-block-start: 1px solid var(--line); }
+  .agent-management-page .provider-card .provider-readiness-label { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text); font-weight: var(--weight-medium); }
+  .agent-management-page .provider-readiness-label svg { flex-shrink: 0; }
+  .agent-management-page .provider-card .provider-host-note { margin: 8px 0 0; color: var(--muted); font-size: var(--type-caption); }
+  .agent-management-page .provider-card ul { padding-inline-start: 18px; margin-block: 8px 0; }
+  .agent-management-page .provider-card footer { margin-block-start: auto; display: flex; justify-content: flex-start; }
+  .agent-management-page .provider-card footer button { display: inline-flex; align-items: center; gap: 10px; font-weight: var(--weight-medium); }
+  .agent-management-page .provider-card > p { color: var(--muted); margin: 0; }
+  .agent-management-page .provider-card details { margin: 0; }
+  .agent-management-page .connector-panel:not(:has(form)) { grid-template-columns: minmax(0,1fr); }
+  .agent-management-page .management-empty { margin-block: 16px 24px; color: var(--muted); font-size: var(--type-ui); }
+  .agent-management-page .provider-card h3 { margin: 0; font-size: 18px; font-weight: var(--weight-medium); }
+  .agent-management-page .provider-card :is(p,dt,dd,ul) { font-size: var(--type-ui); line-height: 1.6; }
+  .agent-management-page .provider-card dl div { display: grid; grid-template-columns: 5rem minmax(0,1fr); gap: 12px; }
+  .agent-management-page .provider-card dd { font-family: inherit; }
+  .agent-management-page .provider-setup pre { background: var(--surface-2); color: var(--text); font-size: 13px; line-height: 1.6; border: 0; }
+  @container agent-management (min-width: 760px) {
+    .agent-management-page .connector-panel { grid-template-columns: minmax(0,1fr) minmax(18rem,22rem); }
+  }
   .activity-history-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
   .activity-history-heading h2 { font-size: 1.1rem; margin: 0; }
   .activity-history-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; border-block-end: 1px solid var(--line); padding-inline-end: .5rem; }
@@ -190,7 +215,9 @@
     .task-workspace > .task-surface { grid-row: 2; }
     .task-management a { padding: .6rem .75rem; }
     .agent-management-page .connector-panel { grid-template-columns: 1fr; }
-    .agent-management-page .connector-panel form { border-inline-start: 0; border-block-start: 1px solid var(--line); padding-inline-start: 0; padding-block-start: 1.5rem; }
+    .agent-management-page .connector-panel form { padding: 1rem; }
+    .agent-management-page .connector-list article { grid-template-columns: 7px minmax(0,1fr); }
+    .agent-management-page .connector-remove { grid-column: 2; justify-self: start; }
     .task-list {
       gap: 0.75rem;
     }

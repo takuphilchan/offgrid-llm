@@ -11,7 +11,7 @@ import { ModelSearch } from './ModelSearch';
 import { PackageModels } from './PackageModels';
 import { modelAcquisition } from '../../i18n/model-acquisition';
 import { ModelIdentity } from './ModelIdentity';
-import { catalogDisplay, legacyDisplay } from './model-display';
+import { catalogDisplay, legacyDisplay, readableModelName } from './model-display';
 import { modelLibrary } from '../../i18n/model-library';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { workflow } from '../../i18n/workflow';
@@ -82,6 +82,8 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
   const categoryModels = models.filter(model => category === 'embeddings' ? model.type === 'embedding' : supportsChat(model));
   const visibleModels = categoryModels.filter(model => model.id.toLocaleLowerCase(locale).includes(filter.trim().toLocaleLowerCase(locale)));
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
+  const progressRevision = useRef(0);
+  const [discarding, setDiscarding] = useState<DownloadProgress | null>(null);
   const [progress, setProgress] = useState<Record<string, DownloadProgress>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -104,11 +106,12 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
   const load = async () => {
     setLoading(true);
     setError('');
+    const revision = progressRevision.current;
     const [catalogResult, progressResult] = await Promise.allSettled([api.catalog(), admin ? api.downloadProgress() : Promise.resolve({})]);
     if (catalogResult.status === 'fulfilled') setCatalog(catalogResult.value);
     else setError(catalogResult.reason instanceof Error ? catalogResult.reason.message : text.common.error);
-    if (progressResult.status === 'fulfilled') { setProgress(progressResult.value); setProgressError(''); }
-    else setProgressError(progressResult.reason instanceof Error ? progressResult.reason.message : text.common.error);
+    if (progressResult.status === 'fulfilled' && revision === progressRevision.current) { setProgress(progressResult.value); setProgressError(''); }
+    else if (progressResult.status === 'rejected') setProgressError(progressResult.reason instanceof Error ? progressResult.reason.message : text.common.error);
     setLoading(false);
   };
 
@@ -121,8 +124,9 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
       if (polling || controller.signal.aborted) return;
       polling = true;
       try {
+        const revision = progressRevision.current;
         const next = await api.downloadProgress(controller.signal);
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || revision !== progressRevision.current) return;
         setProgress(next);
         setProgressError('');
         const newlyComplete = Object.values(next).filter(item => item.status === 'complete' && !completed.current.has(item.file_name));
@@ -166,6 +170,17 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
     } finally { setOperation(''); }
   };
 
+  const discard = async () => {
+    if (!discarding) return;
+    progressRevision.current++;
+    setOperation('discard:' + discarding.file_name);
+    try {
+      await api.discardDownload(discarding.file_name);
+      progressRevision.current++;
+      setProgress(old => { const next = { ...old }; delete next[discarding.file_name]; return next; });
+    } finally { setOperation(''); }
+  };
+
   const remove = async (model: Model) => {
     setOperation(`delete:${model.id}`);
     setError('');
@@ -191,6 +206,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
 
   const transfers = Object.values(progress).filter(item => item.status !== 'complete' && !(view === 'discover' && discoverySource === 'curated' && filteredCatalog.some(model => `${model.id}.gguf` === item.file_name)));
   return <div className="stack models-workspace">
+    {discarding && <ConfirmDialog title={categoryCopy.discard} body={`${discarding.file_name}\n\n${categoryCopy.discardConfirm}`} confirmLabel={categoryCopy.discard} confirm={discard} close={() => setDiscarding(null)} />}
     <div className="model-library-toolbar"><LibraryNavigation view={view} change={setView} />
     <div className="model-category-picker" role="group" aria-label={categoryCopy.category}>{categories.map(value => <button key={value} className="secondary-button" aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryCopy[value]}</button>)}</div></div>
     <p className="model-search-hint">{view === 'discover' ? text.guidance.discovery : category === 'language' ? text.guidance.languageModels : category === 'embeddings' ? text.guidance.embeddingModels : text.guidance.speechModels}</p>
@@ -199,22 +215,17 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
     {confirmDelete && <ConfirmDialog title={confirmDelete} body={workflow[locale].deleteModel} close={() => setConfirmDelete('')} confirm={async () => { const item = models.find(model => model.id === confirmDelete); if (item) await remove(item); }} />}
     {needsChatModel && !importDestination && <div className="setup-guidance" role="status"><strong>{text.onboarding.chooseModel}</strong><p>{text.onboarding.modelHint}</p></div>}
     {readyForFirstChat && <div className="setup-guidance"><p>{text.onboarding.firstReplyHint}</p><a className="primary-button" href="#/chat">{text.onboarding.startChat}</a></div>}
-    {admin && offlineImport && category === 'language' && <OfflineModelImport onRefresh={onImportRefresh} />}
+    {admin && offlineImport && category === 'language' && importDestination && <OfflineModelImport onRefresh={onImportRefresh} />}
     {view === 'discover' && <div className="model-discovery-sources" role="group" aria-label={text.models.discover}>
       {(['curated', 'search'] as const).map(source => <button key={source} type="button" className="secondary-button" aria-pressed={discoverySource === source} onClick={() => setDiscoverySources(old => ({ ...old, [category]: source }))}>{modelLibrary(locale)[source]}</button>)}
     </div>}
     {view === 'discover' && discoverySource === 'search' && (admin ? <ModelSearch key={category} bundles={bundles} category={category} models={models} progress={progress} busy={operation !== ''} download={download} cancel={cancel} /> : <p className="permission-notice">{interaction[locale].adminOnly}</p>)}
     {error && <div className="inline-error" role="alert">{error}<button disabled={loading} onClick={() => void load()}>{text.common.refresh}</button></div>}
     {progressError && <div className="inline-error" role="alert">{progressError}<button onClick={() => void load()}>{text.common.retry}</button></div>}
-    {!!transfers.length && <details className="model-transfers" open={transfers.some(item => isActiveDownload(item) || item.status === 'failed')}><summary>{workspaceAudit(locale).downloads} · {transfers.length}</summary><div className="stack">{transfers.map(item => {
-      const catalogItem = catalog.find(model => `${model.id}.gguf` === item.file_name);
-      const source = item.repository && item.source_file && item.model_id ? { id: item.model_id, repo: item.repository, file: item.source_file, quant: item.quantization ?? '' } : catalogItem;
-      return <article className="catalog-card" key={item.file_name}><h3>{catalogItem?.name ?? item.file_name}</h3><ModelDownloadProgress download={item} /><div className="catalog-actions">{isActiveDownload(item) ? <button className="danger-button" disabled={!admin || operation !== ''} onClick={() => void cancel(item)}>{text.models.cancel}</button> : <button className="primary-button" disabled={!admin || operation !== '' || !source} onClick={() => { if (source) void download(source, item.enable_knowledge === true); }}>{text.models.resume}</button>}</div></article>;
-    })}</div></details>}
     {view === 'installed' && <section className="model-section" aria-label={text.models.installed}>
       <SectionHeading title={`${text.models.installed} · ${categoryModels.length}`} actions={!!categoryModels.length && <SearchField id="installed-model-search" className="model-installed-search" label={modelLibrary(locale).filterInstalled} value={filter} onChange={value => setFilters(old => ({ ...old, [category]: value }))} />} />
       {visibleModels.length === 0 ? <EmptyState title={categoryModels.length ? modelLibrary(locale).noMatches : text.models.empty} action={<button type="button" className="secondary-button" onClick={() => { if (categoryModels.length) { setFilters(old => ({ ...old, [category]: '' })); document.getElementById('installed-model-search')?.focus(); } else discover(); }}>{categoryModels.length ? workspaceRefinement[locale].clear : text.models.discover}</button>} /> : <div className="installed-models">{visibleModels.map(model => <article className={selected === model.id ? 'installed-model selected' : 'installed-model'} key={model.id}>
-        <ModelIdentity model={legacyDisplay(model, catalog.find(item => installedCatalogModel(item, [model])))} />
+        <ModelIdentity model={{ ...legacyDisplay(model, catalog.find(item => installedCatalogModel(item, [model]))), name: readableModelName(model.id) }} />
         {verifications[model.id] && <div className="verification model-verification" role="status"><strong>{verifications[model.id].file_name}</strong><span>{verifications[model.id].message}</span><span>{verifications[model.id].sha256}</span></div>}
         <div className="model-actions">
           {supportsChat(model) && <button className="text-button" disabled={!chatAvailable(model)} aria-pressed={selected === model.id} onClick={() => setSelected(model.id)}>{selected === model.id && <Icon name="check" size={16} />}{selected === model.id ? workspaceAudit(locale).selected : workspaceOrder(locale).selectModel}</button>}
@@ -229,7 +240,13 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
         </div>
       </article>)}</div>}
     </section>}
+    {!!transfers.length && <details className="model-transfers" open={transfers.some(item => isActiveDownload(item) || item.status === 'failed')}><summary>{workspaceAudit(locale).downloads} · {transfers.length}</summary><div className="stack">{transfers.map(item => {
+      const catalogItem = catalog.find(model => `${model.id}.gguf` === item.file_name);
+      const source = item.repository && item.source_file && item.model_id ? { id: item.model_id, repo: item.repository, file: item.source_file, quant: item.quantization ?? '' } : catalogItem;
+      return <article className="catalog-card" key={item.file_name}><h3>{catalogItem?.name ?? item.file_name}</h3><ModelDownloadProgress download={item} /><div className="catalog-actions">{isActiveDownload(item) ? <button className="danger-button" disabled={!admin || operation !== ''} onClick={() => void cancel(item)}>{text.models.cancel}</button> : <button className="primary-button" disabled={!admin || operation !== '' || !source} onClick={() => { if (source) void download(source, item.enable_knowledge === true); }}>{text.models.resume}</button>}{!isActiveDownload(item) && <button className="text-button" disabled={!admin || operation !== ''} onClick={() => setDiscarding(item)}><Icon name="trash" size={16} />{categoryCopy.discard}</button>}</div></article>;
+    })}</div></details>}
     {view === 'installed' && category === 'language' && <LanguagePackageModels />}
+    {admin && offlineImport && category === 'language' && !importDestination && <OfflineModelImport onRefresh={onImportRefresh} />}
     {view === 'discover' && discoverySource === 'curated' && <section className="model-section">
       <div className="section-heading"><div><span className="eyebrow">{text.models.catalog}</span><h2>{text.models.discover}</h2></div></div>
       {!!sortedCatalog.length && <>
@@ -248,7 +265,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
           <div className="model-meta"><span>{model.parameters}</span>{model.min_ram_gb > 0 && <span>{model.min_ram_gb} GB RAM</span>}</div>
           {review === model.id && !installed && <LegacyDownloadReview bundles={bundles} repository={model.repo} file={model.file} bytes={model.size_bytes} license={model.license} />}
           {current && current.status !== 'complete' && <ModelDownloadProgress download={current} />}
-          <div className="catalog-actions">{installed ? <span className="installed-status" role="status"><Icon name="check" size={15} />{text.models.installed}</span> : current && isActiveDownload(current) ? <button className="danger-button" disabled={!admin || operation !== ''} onClick={() => void cancel(current)}>{text.models.cancel}</button> : current && ['cancelled', 'failed'].includes(current.status) || review === model.id ? <button className="primary-button" disabled={!admin || !model.repo || operation !== ''} onClick={() => void download(model)}>{operation === `download:${model.id}` ? text.common.loading : current && ['cancelled', 'failed'].includes(current.status) ? text.models.resume : text.models.download}</button> : <button className="primary-button" aria-expanded="false" disabled={!admin || !model.repo || operation !== ''} onClick={() => setReview(model.id)}>{categoryCopy.preview}</button>}</div>
+          <div className="catalog-actions">{installed ? <span className="installed-status" role="status"><Icon name="check" size={15} />{text.models.installed}</span> : current && isActiveDownload(current) ? <button className="danger-button" disabled={!admin || operation !== ''} onClick={() => void cancel(current)}>{text.models.cancel}</button> : current && ['cancelled', 'failed'].includes(current.status) || review === model.id ? <button className="primary-button" disabled={!admin || !model.repo || operation !== ''} onClick={() => void download(model)}>{operation === `download:${model.id}` ? text.common.loading : current && ['cancelled', 'failed'].includes(current.status) ? text.models.resume : text.models.download}</button> : <button className="primary-button" aria-expanded="false" disabled={!admin || !model.repo || operation !== ''} onClick={() => setReview(model.id)}>{categoryCopy.preview}</button>}{current && ['cancelled', 'failed', 'interrupted'].includes(current.status) && <button className="text-button" disabled={!admin || operation !== ''} onClick={() => setDiscarding(current)}><Icon name="trash" size={16} />{categoryCopy.discard}</button>}</div>
         </article>;
       })}</div>}
     </section>}

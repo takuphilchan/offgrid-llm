@@ -71,7 +71,7 @@ test('empty search in Knowledge clears only its filter and keeps document identi
 
 test('empty tool inventory links to connection setup without granting or running tools',async({page})=>{
  const state=await craftFixture(page,'en','light');await page.goto('/ui/#/agents/tools');
- await page.locator('.workspace-empty').getByRole('link',{name:'MCP connections',exact:true}).click();
+ await page.locator('#agent-connections-panel').getByRole('button',{name:'Connect',exact:true}).click();
  await expect(page.getByRole('form',{name:'Connect',exact:true})).toBeVisible();expect(state.writes).toEqual([]);
 });
 

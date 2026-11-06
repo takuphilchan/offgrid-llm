@@ -69,10 +69,11 @@ test('installed history controls and management panels work without mutating liv
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.getByRole('dialog').getByRole('button', {name:'Cancel', exact:true}).click();
   }
-  await page.getByRole('link', {name:'Available tools', exact:true}).click();
+  await page.getByRole('link', {name:'Tools & MCP', exact:true}).click();
   await expect(page.locator('.tool-list article').first()).toBeVisible();
   await page.screenshot({path:testInfo.outputPath('installed-tools.png'), fullPage:true});
-  await page.getByRole('link', {name:'Connections', exact:true}).click();
+  await page.getByRole('link', {name:'Tools & MCP', exact:true}).click();
+  await page.getByRole('button', {name:'Connect', exact:true}).click();
   await expect(page.locator('.connector-panel form')).toBeVisible();
   const mcp = await (await page.request.get('/v1/agents/mcp')).json();
   await expect(page.locator('.connector-remove')).toHaveCount(mcp.servers.length);

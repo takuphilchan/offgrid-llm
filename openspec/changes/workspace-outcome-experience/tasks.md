@@ -253,3 +253,23 @@ Evidence for this increment: [document workspace verification](../../../docs/qua
 - [x] 24.1 Implement compact citation references and an authenticated pinned-passage read path, preserving legacy histories, exact UTF-8 content and source access. Run `go test ./internal/sessions ./internal/server -count=1`, API generation/check and `attachment-citations.spec.ts`; reject ambiguous, stale, revoked and out-of-selection references without guessing pages.
 - [x] 24.2 Show selected models explicitly, collapse cancelled transfer history, and prioritize attention through shared Activity filters/header navigation without mutations. Clarify library versus conversation attachment scope in nine locales. Run `installed-audit-followup.spec.ts`, model-library, work-continuity and Knowledge suites in both themes and narrow layout.
 - [x] 24.3 Record applicable full renderer, API, CLI, desktop, structural and documentation checks; inspect candidate screenshots against the recorded installed baseline. Keep unavailable installed/native/human evidence distinct and do not claim release readiness from fixture checks.
+
+## 26. Inactive Activity archival
+
+- [x] 26.1 Persist owner-scoped archive/restore for inactive roots without altering evidence; test races, children, legacy ownership and restart.
+- [x] 26.2 Add bounded Archived view, separate counts, confirmation and immediate reconciliation; verify normal work and deletion protections.
+- [x] 26.3 Back up and archive only the seven identified historical test runs through the authenticated service API; verify records and counts.
+
+## 27. Approved OffGrid public branding
+
+- [x] 27.1 Separate public OffGrid labels from stable package/storage/executable identities and verify the compatibility contract.
+- [x] 27.2 Align desktop artifact names, release/reuse/finalization checks and current/legacy installer download selection across supported platforms.
+- [x] 27.3 Update current download guidance, CLI presentation and release title; test release fixtures, installer consumers and packaged Windows upgrade preservation, recording unavailable native platforms.
+
+## 28. Management follow-up requested on 2026-11-06
+
+- [x] 28.1 Align Activity cleanup, compact Knowledge management, position MCP ahead of tools and present provider setup in a focus-restoring dialog; verify narrow/wide interaction and unchanged permissions.
+- [x] 28.2 Implement authenticated stopped-GGUF discard with explicit confirmation, active-worker rejection, exact partial-file removal, storage-error retry and persisted progress reconciliation; run models/server contracts and browser interaction tests.
+- [ ] 28.3 Complete current full renderer and packaged Windows terminal checks, inspect the candidate, then install under the owner's existing authorization with rollback and data/payload verification. Record unavailable platform and human gates separately.
+
+Windows candidate installed and verified. The earlier intermittent import-limit failure is retained in `docs/quality/evidence/management-refinement-2026-11-06.md`. The November 7 built-service full renderer rerun passed 1,115 tests with 32 skips, including the sidebar follow-up. That final source follow-up has not yet been installed; keep this combined installation task open until the matching release candidate is verified. See `docs/quality/evidence/terminal-session-followup-2026-11-07.md`.

@@ -23,6 +23,21 @@ async function setup(page:Page,locale:LocaleCode='en',theme:'light'|'dark'='ligh
  await expect(page.locator('.file-attachments')).toContainText(file.name);
 }
 
+test('document search uses a single subtle focus boundary and high-contrast fallback', async ({page}) => {
+ await setup(page);
+ await page.getByRole('button',{name:'Open document',exact:true}).click();
+ const search=page.locator('.document-search input'), field=page.locator('.document-search');
+ await search.fill('result');
+ await expect(search).toBeFocused();
+ await expect(search).toHaveCSS('outline-style','none');
+ await expect(field).toHaveCSS('border-top-width','1px');
+ await expect(field).toHaveCSS('outline-style','none');
+ await page.emulateMedia({forcedColors:'active'});
+ await expect(field).toHaveCSS('outline-style','solid');
+ await expect(search).toHaveCSS('outline-style','none');
+ await expect(search).toHaveValue('result');
+});
+
 for(const width of [390,1280]) test(`ready attachment never collapses into a vertical strip: ${width}`,async({page})=>{
  await page.setViewportSize({width,height:1000});
  await setup(page,'en','dark',{...file,status:'ready',error_code:'',coverage:'native_text_only'} as typeof file);

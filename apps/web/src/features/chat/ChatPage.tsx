@@ -482,6 +482,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       clearTimeout(flush); flush = undefined;
       if (!currentView()) return false;
       setStreamed(partial); setInterrupted(true);
+      if (requestController.signal.aborted) setErrorAction('history');
       setError(requestController.signal.aborted ? text.chatStreaming.cancelled : reason instanceof Error ? reason.message : text.common.error, reason instanceof SessionResponseError ? reason.code : reason instanceof APIError ? reason.data?.error?.code : '');
       if (sessionName) {
         try {
@@ -504,7 +505,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     setErrorAction('cancel');
     const target = activeTurn.current, watch = controller.current, revision = selectionRevision.current;
     if (!target) { watch?.abort(); return; }
-    try { await api.cancelTurn(target.name, target.id); watch?.abort(); }
+    try { await api.cancelTurn(target.name, target.id); if (mounted.current && revision === selectionRevision.current) setErrorAction('history'); watch?.abort(); }
     catch (reason) { if (mounted.current && revision === selectionRevision.current) setError(reason instanceof Error ? reason.message : text.common.error); }
   };
   const stopTalk = (cancelTurn = false) => {
@@ -588,7 +589,7 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
       </div>
         </div>
         <ComposerSpeech presentation="status" enabled={speakResponses} checking={checkingSpeech} busy={busy} state={speechState} error={speechError} toggle={toggleSpeech} stop={stopSpeech} />
-        {talkState !== 'off' && <div className="talk-status" role="status">{talkState === 'checking' ? talkCopy.checking : talkState === 'listening' ? talkCopy.listening : talkState === 'transcribing' ? talkCopy.transcribing : talkState === 'thinking' ? talkCopy.thinking : talkState === 'speaking' ? talkCopy.speaking : talkCopy.attention}</div>}
+        {talkState !== 'off' && talkState !== 'listening' && talkState !== 'transcribing' && <div className="talk-status" role="status">{talkState === 'checking' ? talkCopy.checking : talkState === 'thinking' ? talkCopy.thinking : talkState === 'speaking' ? talkCopy.speaking : <>{!speechError && talkCopy.attention}{!draft.trim() && !busy && <button type="button" className="text-button" onClick={() => void startTalk()}>{talkCopy.again}</button>}</>}</div>}
         {agent && <div className="composer-active-context"><span className="composer-active-agent"><Icon name="agents" size={15}/>{agent.settings.name}</span>
           {(!executionRequestable || executionWorkspace) && <ExecutionWorkspace value={executionWorkspace} onChange={setExecutionWorkspace} disabled={busy || linkedUnsettled} onReady={setExecutionReady} ceiling={restrictions.execution??agent.settings.execution} />}
           {agent.settings.computer && restrictions.computer !== false && <TaskAccessPolicy value={computerPolicy} onChange={setComputerPolicy} disabled={busy} scope="desktop" workspace={permissions.workspace} />}

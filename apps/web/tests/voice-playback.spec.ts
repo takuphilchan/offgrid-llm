@@ -85,7 +85,9 @@ test('read aloud immediately shows preparation, stops pending work and shows act
   await fixture(page);
   await page.getByRole('button', { name: 'Read aloud', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as any).speechRequests.length)).toBe(1);
-  await expect(page.getByRole('button', { name: 'Stop reading' })).toHaveText('Preparing audio · Stop');
+  await expect(page.getByRole('button', { name: 'Stop reading' })).toHaveText('Stop reading');
+  await expect(page.locator('.message-speech [role="status"]')).toContainText('Generating speech');
+  await expect(page.locator('.speech-preparing-indicator')).toBeVisible();
   await page.getByRole('button', { name: 'Stop reading' }).click();
   await expect(page.getByRole('button', { name: 'Read aloud', exact: true })).toBeVisible();
   expect(await page.evaluate(() => (window as any).speechAborts)).toBe(1);
@@ -95,6 +97,28 @@ test('read aloud immediately shows preparation, stops pending work and shows act
   await expect(page.getByRole('alert')).toContainText('Base is unsupported');
   expect(await page.evaluate(() => (window as any).speechRequests.length)).toBe(2);
 });
+
+for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
+  test(`read-aloud preparation stays in a compact action row at ${width} ${theme}`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(theme => localStorage.setItem('offgrid.theme', theme), theme);
+    await fixture(page);
+    const row = page.locator('.message-actions');
+    const before = await row.boundingBox();
+    await page.getByRole('button', { name: 'Read aloud', exact: true }).click();
+    const stop = page.getByRole('button', { name: 'Stop reading', exact: true });
+    await expect(stop).toBeVisible();
+    expect((await row.boundingBox())!.height).toBe(before!.height);
+    const copy = await row.locator('.message-copy').first().boundingBox();
+    expect((await stop.boundingBox())!.y).toBe(copy!.y);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath('speech-toolbar.png') });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(page.locator('.speech-preparing-indicator')).toHaveCSS('animation-name', 'none');
+    await stop.click();
+    await expect(page.getByRole('button', { name: 'Read aloud', exact: true })).toBeVisible();
+  });
+}
 
 test('long answers start with a bounded chunk, prefetch one chunk, and cancel on navigation', async ({ page }) => {
   await fixture(page, 'This is the first sentence. ' + 'Another useful sentence to read aloud. '.repeat(20));
@@ -743,4 +767,39 @@ test('changing language during microphone permission keeps one request and local
   await expect(page.getByText(voiceText('ar').permission,{exact:true})).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('dir','rtl');
   expect(await page.evaluate(()=>(window as any).micTest.permissions)).toBe(1);
+});
+
+
+test('Talk survives three replies, shows one transcription status and recovers from silence without model setup', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.getByRole('button', { name: 'Talk', exact: true }).click();
+  for (let turn = 1; turn <= 3; turn++) {
+    await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(turn);
+    await page.evaluate(() => (window as any).micTest.allow());
+    await expect.poll(() => page.evaluate(() => (window as any).micTest.starts)).toBe(turn);
+    await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(turn);
+    await expect(page.getByText('Transcribing\u2026', { exact: true })).toHaveCount(1);
+    await expect(page.locator('.talk-status')).toHaveCount(0);
+    await page.evaluate(() => { (window as any).emitText = null; (window as any).micTest.finish(); });
+    await expect.poll(() => page.evaluate(() => typeof (window as any).emitText)).toBe('function');
+    await page.evaluate(() => { (window as any).emitText('Hello again.'); (window as any).finishText(); });
+    await expect.poll(() => page.evaluate(() => (window as any).speechRequests.length)).toBe(turn);
+    await page.evaluate(() => (window as any).finishSpeech(false));
+    await expect.poll(() => page.evaluate(() => Boolean((window as any).player?.onended))).toBe(true);
+    await page.evaluate(() => (window as any).player.onended());
+  }
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(4);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(4);
+  await page.evaluate(() => (window as any).micTest.finish(''));
+  await expect(page.locator('.chat-speech-controls [role=alert]')).toContainText('No speech was detected');
+  await expect(page.locator('.chat-speech-controls a[href="#/models"]')).toHaveCount(0);
+  await expect(page.locator('.composer textarea')).toHaveValue('');
+  expect(await page.evaluate(() => (window as any).speechRequests.length)).toBe(3);
+  await page.getByRole('button', { name: 'Speak again', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(5);
+  await expect(page.locator('.chat-speech-controls [role=alert]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Stop Talk', exact: true }).click();
 });

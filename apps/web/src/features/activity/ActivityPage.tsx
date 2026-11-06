@@ -34,7 +34,7 @@ export function ActivityPage({ health, taskFirst = false }: { health: Health; ta
   const [view, setView] = useWorkspaceState<'work' | 'schedules'>('activity.view', 'work');
   const [schedulesVisited, setSchedulesVisited] = useState(view === 'schedules');
   useEffect(() => {
-    const changed = () => { setInspecting(!!taskFromLocation()); if (/^#\/activity\/(attention|running|history|all)$/.test(window.location.hash)) setView('work'); };
+    const changed = () => { setInspecting(!!taskFromLocation()); if (/^#\/activity\/(attention|running|history|all|archived)$/.test(window.location.hash)) setView('work'); };
     changed();
     window.addEventListener('hashchange', changed);
     return () => window.removeEventListener('hashchange', changed);

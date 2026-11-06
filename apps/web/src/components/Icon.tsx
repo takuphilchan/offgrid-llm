@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 
-export type IconName = 'image' | 'folder' | 'terminal' | 'arrow-up' | 'arrow-down' | 'download' | 'chevron-left' | 'chevron-right' | 'file' | 'sliders' | 'help' | 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings' | 'send' | 'upload' | 'refresh' | 'plus' | 'trash' | 'check' | 'copy' | 'search' | 'menu' | 'close' | 'mic' | 'waveform' | 'stop' | 'speaker' | 'more' | 'sidebar';
+export type IconName = 'power' | 'warning' | 'image' | 'folder' | 'terminal' | 'arrow-up' | 'arrow-down' | 'download' | 'chevron-left' | 'chevron-right' | 'file' | 'sliders' | 'help' | 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings' | 'send' | 'upload' | 'refresh' | 'plus' | 'trash' | 'check' | 'copy' | 'search' | 'menu' | 'close' | 'mic' | 'waveform' | 'stop' | 'speaker' | 'more' | 'sidebar';
 
 const paths: Record<IconName, string[]> = {
+  power: ['M12 2v10', 'M6 5a9 9 0 1 0 12 0'],
+  warning: ['M12 3 2 21h20L12 3z', 'M12 9v5', 'M12 17h.01'],
   image: ['M3 3h18v18H3z', 'M3 16l6-6 5 5 3-3 4 4', 'M16 7h.01'],
   folder: ['M3 6h7l2 3h9v11H3z', 'M3 6V4h7l2 2h9v3'],
   terminal: ['M4 5l6 7-6 7', 'M13 19h7'],
@@ -20,10 +22,10 @@ const paths: Record<IconName, string[]> = {
   speaker: ['M11 4 6 8H3v8h3l5 4V4z', 'M15 8a6 6 0 0 1 0 8', 'M18 5a10 10 0 0 1 0 14'],
   chat: ['M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z'],
   knowledge: ['M4 19.5A2.5 2.5 0 0 1 6.5 17H20', 'M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z'],
-  agents: ['M12 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M19 13a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M5 13a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M12 9v4m-4 3h8'],
+  agents: ['M12 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M19 13a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M5 13a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M12 9v7m-4 0h8'],
   models: ['M21 7 12 2 3 7l9 5 9-5z', 'm3 12 9 5 9-5', 'm3 17 9 5 9-5'],
-  activity: ['M4 19V9m5 10V5m5 14v-7m5 7V3'],
-  settings: ['M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z', 'M12 2v3m0 14v3M4.93 4.93l2.12 2.12m9.9 9.9 2.12 2.12M2 12h3m14 0h3M4.93 19.07l2.12-2.12m9.9-9.9 2.12-2.12'],
+  activity: ['M3 11a9 9 0 1 1 2.6 7.4', 'M3 4v7h7', 'M12 7v5l3 2'],
+  settings: ['M9.5 2h5l.5 2.5 2 1.2 2.4-.8 2.5 4.2-1.9 1.7v2.4l1.9 1.7-2.5 4.2-2.4-.8-2 1.2-.5 2.5h-5L9 19.5l-2-1.2-2.4.8-2.5-4.2L4 13.2v-2.4l-1.9-1.7 2.5-4.2 2.4.8 2-1.2.5-2.5z', 'M15.5 12a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0'],
   send: ['m4 4 16 8-16 8 3-8-3-8z', 'M7 12h13'],
   upload: ['M12 16V4m-5 5 5-5 5 5', 'M5 20h14'],
   refresh: ['M20 6v5h-5', 'M4 18v-5h5', 'M18.5 9A7 7 0 0 0 6 6.5L4 11', 'M5.5 15A7 7 0 0 0 18 17.5l2-4.5'],

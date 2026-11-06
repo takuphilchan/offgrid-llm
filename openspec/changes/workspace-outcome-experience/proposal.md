@@ -248,3 +248,19 @@ legacy byte citations and ordinary Markdown. Make the selected model explicit,
 collapse cancelled transfer history, prioritize attention in Activity, and
 clarify that conversation attachments and the reusable Knowledge library differ.
 No automatic source publication, downloads, grants, execution or deletion.
+
+## Approved follow-up: Activity archival (2026-11-06)
+
+Allow an owner to explicitly archive inactive unresolved root jobs from everyday Activity without deleting evidence, changing outcomes, stopping processes or replaying work. Archived records remain inspectable and restorable in an Archived view. Archive the seven user-identified historical test runs only after backup and verification.
+
+## Approved public branding and download clarity (2026-11-06)
+
+Present the product as OffGrid in installed application/shortcut labels, CLI headings,
+release titles and current onboarding documentation. Desktop release files identify
+version, operating system, architecture and setup/portable format. Keep technical
+application/package IDs, internal executables where upgrade compatibility depends
+on them, repository URLs and stored workspace paths stable. Update consumers and
+preserve downloads of older releases; do not rename published historical assets.
+
+## User-requested management follow-up (2026-11-06)
+Keep history cleanup within its search toolbar, place MCP connections before the growing tool inventory, use compact Knowledge management and focused external-provider setup instructions. Add explicit discard for stopped partial GGUF transfers, preserving installed models and unrelated partials. Desktop Chat/New chat navigation must return from Terminal even on the same route without terminating sessions. This follow-up is authorized by the owner's reported defects and installation request.

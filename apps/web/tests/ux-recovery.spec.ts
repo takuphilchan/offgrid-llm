@@ -48,7 +48,7 @@ test('knowledge activation survives leaving its setup page',async({page})=>{
  });
  await page.goto('/ui/#/knowledge');await page.getByRole('button',{name:'Install and enable'}).click();await expect(page.locator('.knowledge-setup')).toContainText('10.0%');
  await page.locator('.sidebar a[href="#/models"]').click();await page.locator('.sidebar a[href="#/knowledge"]').click();await expect(page.locator('.knowledge-setup-controls .primary-button')).toBeDisabled();
- complete=true;await page.getByRole('button',{name:'Manage Knowledge',exact:true}).click();await expect(page.getByText(/Active embedding model: bge-m3/)).toBeVisible();
+ complete=true;await page.getByRole('button',{name:'Manage Knowledge',exact:true}).click();await expect(page.locator(".knowledge-menu-status").getByText("bge-m3",{exact:true})).toBeVisible();
 });
 
 test('disabled knowledge keeps source inspection and confirmed deletion available',async({page})=>{

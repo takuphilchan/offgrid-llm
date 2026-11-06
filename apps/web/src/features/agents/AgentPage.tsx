@@ -11,10 +11,10 @@ import { AgentProfiles } from './AgentProfiles';
 import { agentProfilesText } from '../../i18n/agent-profiles';
 import { ScopedNotice } from '../../components/WorkspacePresentation';
 
-type AgentView = 'home' | 'workspace' | 'profiles' | 'tools' | 'connections';
+type AgentView = 'home' | 'workspace' | 'profiles' | 'tools' | 'connections' | 'external';
 function viewFromLocation(): AgentView {
   const candidate = window.location.hash.split('/')[2];
-  return candidate === 'tools' || candidate === 'connections' || candidate === 'profiles' ? candidate : candidate ? 'workspace' : 'home';
+  return candidate === 'tools' || candidate === 'connections' || candidate === 'external' || candidate === 'profiles' ? candidate : candidate ? 'workspace' : 'home';
 }
 
 export function AgentPage({ models, model }: { models: Model[]; model: string }) {

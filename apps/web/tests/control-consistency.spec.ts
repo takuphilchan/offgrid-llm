@@ -116,7 +116,7 @@ test('search, chat agent and document controls share sizing and keyboard focus',
   const controls = ['Add document', 'Ask using Knowledge', 'Manage Knowledge'].map(name => page.getByRole('button', { name, exact: true }));
   for (const control of controls) {
     await expect(control).toBeVisible();
-    await expect(control).toHaveCSS('min-height', await control.evaluate(el => el.classList.contains('primary-button') ? '36px' : '32px'));
+    await expect(control).toHaveCSS('min-height', await control.evaluate(el => el.classList.contains('library-create-action') ? '36px' : '32px'));
     await control.focus();
     await expect(control).toBeFocused();
   }
@@ -199,7 +199,7 @@ for (const profile of [
     }).map(element => element.className || element.tagName));
     expect(overflow).toEqual([]);
     if (route === 'agents') {
-      await page.locator('#agent-connections-tab').click();
+      await page.locator('#agent-tools-tab').click();
       await expect(page.locator('.connector-panel')).toBeVisible();
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }

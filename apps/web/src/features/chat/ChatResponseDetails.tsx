@@ -5,7 +5,7 @@ import {workspaceExperience} from '../../i18n/workspace-experience';
 
 export function ChatResponseDetails({metrics}:{metrics:ChatMetrics}){
  const {messages:text,locale}=useI18n();
- return <UtilityPopover label={workspaceExperience[locale].responseDetails} className="response-details">
+ return <UtilityPopover label={workspaceExperience[locale].responseDetails} className="response-details" compact panelClassName="response-details-panel">
   <dl className="response-metrics">
    <div><dt>{text.chatStreaming.firstText}</dt><dd>{(metrics.first_text_ms/1000).toLocaleString(locale,{maximumFractionDigits:2})} s</dd></div>
    {!!metrics.tokens_per_second&&<div><dt>{text.chatStreaming.tokensPerSecond}</dt><dd>{metrics.tokens_per_second.toLocaleString(locale,{maximumFractionDigits:1})}</dd></div>}

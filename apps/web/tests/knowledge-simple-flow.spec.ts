@@ -17,7 +17,7 @@ for (const locale of ['en', 'fr', 'de', 'es', 'ar', 'sw', 'sn', 'nd', 'zu'] as L
     });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/ui/#/knowledge');
-    await expect(page.locator('.knowledge-import-actions .primary-button')).toBeEnabled();
+    await expect(page.locator('.knowledge-heading-import button')).toBeEnabled();
     await expect(page.locator('.knowledge-document-options > summary')).toHaveText(knowledgeOptions(locale));
     await expect(page.locator('.knowledge-format-details > summary')).not.toBeVisible();
     await expect(page.locator('.knowledge-ocr-setup > summary')).not.toBeVisible();

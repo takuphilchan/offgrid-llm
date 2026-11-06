@@ -1,5 +1,5 @@
 @layer components {
-  .agent-schedules { min-width: 0; border-block-start: 1px solid var(--line); padding-block: 1.5rem; overflow-wrap: anywhere; }
+  .agent-schedules { min-width: 0; padding-block: .5rem 1.5rem; overflow-wrap: anywhere; }
   .schedule-list, .schedule-history ul { list-style: none; margin: 0; padding: 0; }
   .schedule-list > li { display: grid; gap: 1rem; padding-block: 1rem; border-block-end: 1px solid var(--line); }
   .schedule-list h3, .schedule-review h4 { margin: 0; font-size: 1rem; }

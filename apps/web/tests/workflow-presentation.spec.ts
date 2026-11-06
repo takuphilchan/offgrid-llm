@@ -122,7 +122,7 @@ test('agent navigation supports keyboard links and tool switches have names', as
   await expect(page.getByRole('checkbox', { name: 'calculator', exact: true })).toBeChecked();
   await page.locator('#agent-tools-tab').focus();
   await page.keyboard.press('Tab');
-  await expect(page.locator('#agent-connections-tab')).toBeFocused();
+  await expect(page.locator('#agent-external-tab')).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('.navigation-trigger').click();
   for (const link of await page.locator('.sidebar .nav-link').all()) await expect(link).toBeInViewport();

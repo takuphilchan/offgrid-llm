@@ -21,8 +21,9 @@ for(const theme of ['light','dark']) test(`shared action weights remove redundan
 test('Knowledge primary, secondary and management roles remain distinct and reachable',async({page})=>{
  const state=await craftFixture(page,'en','light');await page.goto('/ui/#/knowledge');
  const add=page.getByRole('button',{name:'Add document',exact:true}),ask=page.getByRole('button',{name:'Ask using Knowledge',exact:true}),manage=page.getByRole('button',{name:'Manage Knowledge',exact:true});
- const colors=await Promise.all([add,ask,manage].map(control=>control.evaluate(el=>getComputedStyle(el).backgroundColor)));
- expect(new Set(colors).size).toBe(3);
+ await expect(page.locator(".workspace-section-heading").getByRole("button",{name:"Add document",exact:true})).toBeVisible();
+ await expect(page.locator(".knowledge-library-toolbar").getByRole("button",{name:"Ask using Knowledge",exact:true})).toBeVisible();
+ await expect(manage).toHaveClass(/icon-button/);
  await manage.focus();await manage.press('Enter');await expect(manage).toHaveAttribute('aria-expanded','true');await manage.press('Escape');await expect(manage).toBeFocused();
  expect(state.writes).toEqual([]);
 });

@@ -30,8 +30,7 @@
  .sidebar-context .history-more { width:auto; min-height:32px; margin:8px; padding:6px 8px; background:transparent; border-color:transparent; color:var(--muted); font-size:var(--type-meta); }
  .sidebar-foot { grid-column:1; grid-row:3; border:0; margin:0; padding:0; gap:8px; justify-items:center; }
  .sidebar-foot .workspace-options > button { --control-justify:center; width:40px; height:40px; padding:0; border:0; border-radius:10px; }
- .sidebar-foot .workspace-options > button span, .sidebar-foot .workspace-options > button > svg:last-child, .sidebar-foot .service-state span { display:none; }
- .sidebar-foot .service-state { padding:0; min-height:8px; }
+ .sidebar-foot .workspace-options > button span, .sidebar-foot .workspace-options > button > svg:last-child { display:none; }
  .sidebar-collapsed .sidebar { grid-template-columns:40px; padding:10px 12px; gap:8px; }
  .sidebar-collapsed .sidebar-conversations { display:contents; }
  .sidebar-collapsed .sidebar-create { grid-column:1; grid-row:2; align-self:start; z-index:1; }
@@ -44,6 +43,7 @@
  .sidebar-collapsed .nav-link span { display:block; }
  @media(min-width:1024px) { .app-shell:has(.sidebar:not([data-page=chat])) { --sidebar-width:64px; } .sidebar:not([data-page=chat]) { grid-template-columns:40px; padding-inline:12px; } .sidebar:not([data-page=chat]) .sidebar-conversations, .sidebar:not([data-page=chat]) .brand { display:none; } .sidebar:not([data-page=chat]) .sidebar-heading { grid-column:1; justify-content:center; } .sidebar:not([data-page=chat]) .sidebar-collapse { margin:0; } }
  @media(max-width:1023px) { .sidebar:not(.open) { display:none; } .sidebar { width:min(304px,calc(100vw - 16px)); } .sidebar.open { display:grid; } .sidebar-heading .sidebar-toggle { margin-inline-start:auto; } }
+ @media(min-width:1024px) { .app-shell .sidebar:not([data-page=chat]) .brand { display:flex; padding:0; } .sidebar:not([data-page=chat]) .brand strong { display:none; } }
  @media(max-height:540px) { .sidebar { padding-block:6px; gap:4px 14px; } .primary-nav { gap:10px; padding-block-start:0; } .nav-group { gap:4px; } .nav-section-library { padding-block-start:10px; } .sidebar-conversations { gap:12px; } }
  @media(pointer:fine) { .sidebar-context .history-row:not(:hover):not(:focus-within) .history-item-actions > button { opacity:0; } }
  @media(pointer:coarse) { .sidebar .nav-link, .sidebar-foot .workspace-options > button { width:44px; height:44px; min-height:44px; } }

@@ -10,7 +10,7 @@
   .profile-library-list ul { list-style: none; padding: var(--space-1); margin-block: var(--space-2); display: grid; gap: var(--space-1); max-height: 65vh; overflow: auto; scrollbar-width: thin; }
   .profile-library-list ul::-webkit-scrollbar { width: 8px; }
   .profile-list-item { display: grid; gap: var(--space-1); width: 100%; text-align: start; background: transparent; color: var(--text); border: 1px solid transparent; padding: var(--space-3); border-radius: var(--radius-sm); }
-  .profile-list-item[aria-current="true"] { background: var(--surface-2); border-color: var(--line-strong); }
+  .profile-list-item[aria-current="true"] { background: var(--surface-2); }
   .profile-list-item span { color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui); }
   .profile-list-item :is(strong, span) { overflow-wrap: anywhere; }
   .profile-editor { display: grid; gap: 1.5rem; padding: 0; background: transparent; border: 0; width: 100%; max-width: 44rem; }

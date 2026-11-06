@@ -1,13 +1,15 @@
 import { expect, test } from '@playwright/test';
 import { craftFixture } from './helpers/craft-fixture';
 
-test('native tools do not depend on optional external integration or connection reads',async({page})=>{
+test('native tools remain usable when MCP fails and do not request external integrations',async({page})=>{
  const state=await craftFixture(page,'en','light'), unrelated:string[]=[];
  await page.route('**/v1/agents/tools?all=true',r=>r.fulfill({json:{tools:[{name:'workspace_read',description:'Read an approved file',enabled:true,source:'native'}],enabled_count:1}}));
  await page.route(/\/(?:v1\/integrations|v1\/agents\/mcp)(?:\?|$)/,r=>{unrelated.push(r.request().url());return r.fulfill({status:503,json:{error:'Optional provider unavailable'}});});
  await page.goto('/ui/#/agents/tools');
  await expect(page.getByRole('heading',{name:'workspace_read',exact:true})).toBeVisible();
- await expect(page.getByRole('alert')).toHaveCount(0);expect(unrelated).toEqual([]);expect(state.writes).toEqual([]);
+ await expect(page.locator('#agent-tools-panel').getByRole('alert')).toHaveCount(0);
+ await expect(page.locator('#agent-connections-panel').getByRole('alert')).toContainText('Optional provider unavailable');
+ expect(unrelated.every(url=>url.includes('/agents/mcp'))).toBe(true);expect(state.writes).toEqual([]);
 });
 
 test('external provider failure has scoped retry and does not hide connected MCP servers',async({page})=>{
@@ -16,11 +18,14 @@ test('external provider failure has scoped retry and does not hide connected MCP
  await page.route('**/v1/integrations*',r=>{reads++;return r.fulfill(failed?{status:503,json:{error:'Provider readiness unavailable'}}:{json:{integrations:[]}});});
  await page.goto('/ui/#/agents/connections');
  await expect(page.getByRole('heading',{name:'Research source',exact:true})).toBeVisible();
+ expect(reads).toBe(0);
+ await page.getByRole('link',{name:'External agents',exact:true}).click();
  const providers=page.locator('.external-providers');
  await expect(providers.getByRole('alert')).toContainText('Provider readiness unavailable');
  await expect(providers).not.toContainText('No external-agent providers are available.');
  failed=false;await providers.getByRole('button',{name:'Try again',exact:true}).click();
  await expect(providers.getByRole('alert')).toHaveCount(0);expect(reads).toBeGreaterThan(1);
+ await page.getByRole('link',{name:'Tools & MCP',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Research source',exact:true})).toBeVisible();expect(state.writes).toEqual([]);
 });
 

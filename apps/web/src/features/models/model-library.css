@@ -73,8 +73,6 @@
   }
 }
 @layer controls {
-  .models-workspace .model-library-tabs > button { border: 0; border-radius: 0; background: transparent; padding: 10px 0; border-block-end: 2px solid transparent; color: var(--muted); }
-  .models-workspace .model-library-tabs > button[aria-selected=true] { background: transparent; border-block-end-color: var(--text); color: var(--text); }
   .models-workspace .model-category-picker > button { justify-content: start; text-align: start; border: 0; background: transparent; font-size: var(--type-ui); font-weight: var(--weight-regular); }
   .models-workspace .model-category-picker > button[aria-pressed=true] { background: var(--surface-2); color: var(--text); font-weight: var(--weight-heading); }
 }

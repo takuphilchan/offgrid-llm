@@ -16,7 +16,7 @@ for(const theme of ['light','dark']) for(const locale of ['en','ar']) for(const 
     Object.defineProperty(window,'electron',{value:{
       presentation:{locale,effectiveTheme:theme,copy},
       getBackendInfo:async()=>({state:'starting',desktopVersion:'fixture',url:'http://isolated-fixture.invalid',elapsedMs:1200}),
-      onStartupState:()=>()=>{}
+      onStartupState:(listener: (state: object) => void)=>{Object.assign(window,{fixtureStartupState:listener});return ()=>{};}
     }});
   },{theme,locale,copy:copy[locale]});
   await page.route('**/*',r=>{
@@ -30,10 +30,13 @@ for(const theme of ['light','dark']) for(const locale of ['en','ar']) for(const 
     await expect(page.locator('html')).toHaveAttribute('data-theme',theme);
     await expect(page.locator('#status-title')).toHaveText(copy[locale].starting);
     await expect(page.locator('#desktop-version')).toBeHidden();
-    await page.locator('#technical summary').click();
+    await expect(page.locator('#technical')).toBeHidden();
+    await page.screenshot({path:resolve(dir,phase+'-loading.png'),fullPage:true,animations:'disabled'});
+    await page.evaluate(()=>{(window as unknown as {fixtureStartupState:(state:object)=>void}).fixtureStartupState({state:'unavailable',desktopVersion:'fixture',url:'http://isolated-fixture.invalid',elapsedMs:1200});});
+    await page.locator('#technical > summary').click();
     await expect(page.locator('#desktop-version')).toHaveText('fixture');
     await expect(page.locator('#address')).toHaveText('http://isolated-fixture.invalid');
-    await page.locator('#technical summary').click();
+    await page.locator('#technical > summary').click();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({path:resolve(dir,`${phase}.png`),fullPage:true,animations:'disabled'});
     await expect(page.locator('body')).toHaveCSS('background-image','none');

@@ -8,6 +8,13 @@
   }
   .composer.composer-compact > .composer-input { grid-column: 2; grid-row: 1; min-width: 0; }
   .composer.composer-compact .composer-input textarea { display: block; width: 100%; min-height: 40px; padding: 8px 4px; font-size: var(--type-body, 16px); }
+  /* The editor has one boundary: focus belongs to the enclosing composer,
+     not a second bright rectangle inside the text area. */
+  .chat-page .composer.composer-compact:has(textarea:focus-visible) { border-color: var(--muted); }
+  .composer.composer-compact textarea:focus-visible { outline: none; }
+  @media (forced-colors: active), (prefers-contrast: more) {
+    .chat-page .composer.composer-compact:has(textarea:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; }
+  }
   .composer.composer-compact .composer-footer { display: contents; }
   .composer.composer-compact .composer-footer > .composer-utilities { grid-column: 1; grid-row: 1; flex-wrap: nowrap; gap: 2px; }
   .composer.composer-compact .composer-footer > .composer-actions { grid-column: 3; grid-row: 1; display: flex; flex-wrap: nowrap; gap: 4px; margin: 0; }

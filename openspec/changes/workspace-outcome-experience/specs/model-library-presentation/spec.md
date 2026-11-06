@@ -73,3 +73,16 @@ history by default while retaining its explicit recovery controls.
 - **WHEN** installed models coexist with a cancelled transfer
 - **THEN** the installed inventory and selected-model state remain visible
 - **AND** expanding Downloads reveals the retained transfer without restarting it
+
+### Requirement: Explicit stopped-transfer discard
+Model managers SHALL be able to confirm discard of stopped GGUF download partials without deleting installed model data or another transfer.
+
+#### Scenario: Active or incomplete removal
+- **WHEN** a worker remains active or storage removal cannot complete
+- **THEN** the service rejects the active removal or reports the storage failure and retains a retryable progress record
+- **AND** the UI does not claim the model was deleted or restart acquisition
+
+#### Scenario: Successful discard
+- **WHEN** a stopped transfer is explicitly discarded
+- **THEN** only its exact temporary artifacts and saved transfer record are removed
+- **AND** installed weights, projectors and unrelated transfers remain unchanged after reload

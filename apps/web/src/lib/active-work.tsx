@@ -58,7 +58,7 @@ export function ActiveWorkProvider({ children, taskFirst, compact = false }: { c
       },
       seedJobs(jobs) {
         if (!workspace || !admin || !taskFirst || !alive.current) return;
-        const active = jobs.filter(job => !job.parent_id && !terminal(job.status)).sort((a,b) =>
+        const active = jobs.filter(job => !job.parent_id && !job.archived_at && !terminal(job.status)).sort((a,b) =>
           Number(workBucket(b.status) === 'attention') - Number(workBucket(a.status) === 'attention') ||
           b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
         // Read-only link identities from the already-fetched permitted snapshot,
@@ -126,10 +126,10 @@ export function ActiveWorkProvider({ children, taskFirst, compact = false }: { c
       check.current?.abort(); check.current = null;
       counts.current = undefined;
       summaryOrder.current.accepted=++summaryOrder.current.next;
-      model.current.jobs = model.current.jobs.flatMap(job => job.id !== change.id ? [job] : change.deleted ? [] : [{...job,status:change.status ?? job.status}]);
-      if(change.deleted)model.current.taskIDs=model.current.taskIDs.filter(id=>id!==change.id);
+      model.current.jobs = model.current.jobs.flatMap(job => job.id !== change.id ? [job] : (change.deleted || change.archived) ? [] : [{...job,status:change.status ?? job.status}]);
+      if(change.deleted || change.archived)model.current.taskIDs=model.current.taskIDs.filter(id=>id!==change.id);
       for (const [name, chat] of model.current.chats) if (chat.jobID === change.id) {
-        if (change.deleted) model.current.chats.delete(name); else actions.rememberChat(name,change.status ?? chat.status,change.id);
+        if (change.deleted || change.archived) model.current.chats.delete(name); else actions.rememberChat(name,change.status ?? chat.status,change.id);
       }
       setState(current=>({...current,counts:undefined,entries:[...model.current.jobs,...model.current.chats.values()].filter(entry=>!compact || !entry.jobID)}));
       clearTimeout(timer);timer=setTimeout(()=>void tick(),150);

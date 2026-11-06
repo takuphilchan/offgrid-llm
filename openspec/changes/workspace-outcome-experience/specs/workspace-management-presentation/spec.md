@@ -146,3 +146,17 @@ Tools and connections SHALL remain reachable through clearly labelled administra
 - **WHEN** an authorized user leaves a draft to inspect or configure a connection
 - **THEN** the draft remains available on return and the connection shows its actual status
 - **AND** connection availability alone does not grant task execution permission
+
+### Requirement: Consistent public product and download identity
+The application SHALL present itself as OffGrid. Desktop release filenames SHALL
+identify the version, operating system, architecture and installation format.
+
+#### Scenario: Existing desktop upgrade
+- **WHEN** an existing installation upgrades to the renamed public product
+- **THEN** workspace files, model/runtime locations, application ID and uninstall identity are preserved
+- **AND** visible shortcuts and application labels say OffGrid without creating a new workspace
+
+#### Scenario: Choosing a platform download
+- **WHEN** a user chooses a release asset or uses a maintained installer
+- **THEN** the selected filename matches the published platform/architecture/format
+- **AND** older published release names remain supported without rewriting historical assets

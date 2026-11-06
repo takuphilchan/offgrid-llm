@@ -150,7 +150,8 @@ tool execution is **not** governed by this runner's approval broker. See
 
 ## Start and inspect work
 
-Available tools and Connections remain separate, labelled administration views.
+Tools & MCP and External agents are labelled administration sections, separate
+from task execution and Activity.
 
 For an application request, the agent searches the full installed catalog by
 name before launching. It must use the matching application, not a nearby entry
@@ -467,6 +468,14 @@ cannot be deleted. Child history stays until its parent is removed, and a parent
 with unresolved children cannot be removed. Audit records, existing backups and
 files created by tools are retained; this is history cleanup, not secure erasure.
 
+For inactive work you want out of the everyday list, open its menu and choose
+**Archive from Activity**. This also works for unresolved historical outcomes:
+the original outcome and recovery evidence stay intact under **Archived**, while
+the run leaves the everyday attention count. Active workers, active children and
+pending approvals must settle first. **Restore to Activity** puts a record back
+without resuming it. Archiving never stops a process, undoes an action or makes
+an uncertain outcome successful.
+
 Old task history without a checkpoint remains visible but is not resumable.
 A damaged or unwritable task store disables task operations with an explicit
 error. Preserve the data directory, repair the cause, and restart. Do not delete
@@ -517,11 +526,17 @@ changed. A selected model still needs reliable structured tool calling.
 
 ## Tools and MCP
 
-**Agents → Available tools** shows actual enabled tools and risk descriptors.
-Disable unneeded tools there; choices persist across service restarts.
-**Agents → Connections** tests and connects supported HTTP endpoints. Work,
-Available tools and Connections share the navigation at the top of Agents;
-management settings are separate from the task composer.
+**Agents → Tools & MCP** shows enabled tools and their risk descriptors alongside
+the MCP servers supplying additional tools. Disable unneeded tools there;
+choices persist across service restarts. Choose **Connect** to open the setup
+form and test a supported HTTP endpoint. The form stays out of the way until
+needed; an unfinished connection draft is preserved when switching sections.
+Existing Connections links still open this setup.
+
+**Agents → External agents** contains Hermes and OpenClaw setup and readiness.
+These applications use OffGrid inference; they are not MCP tool sources. Runtime
+identifiers and context information are under **Details**. Opening either section
+does not install a plugin, connect a server or grant tool access.
 Supply a server URL, not an `npx` command in the URL field. Successful connection
 configuration is persisted. External tools are still privileged, even when
 served locally; inspect their capabilities and restrict what the service can access.
@@ -536,7 +551,7 @@ The agent may research through MCP before observing an application, but it must
 observe before computer input and verify after completing computer work. A tool
 result from an external service cannot substitute for application verification.
 
-To remove an MCP server, open **Agents → Connections**, choose **Remove
+To remove an MCP server, open **Agents → Tools & MCP**, choose **Remove
 connection** beside its name, and confirm. This forgets the saved connection,
 closes its transport and removes its tools from discovery and execution. Saved
 connections that cannot reconnect are also listed so they can be removed.

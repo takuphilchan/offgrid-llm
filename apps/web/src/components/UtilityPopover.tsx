@@ -40,7 +40,7 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
       const besideTerminal = sidebar && sidebar.width >= 200;
       const areaLeft = besideTerminal ? Math.max(left, sidebar.left) : left;
       const areaRight = besideTerminal ? Math.min(left + width, sidebar.right) : left + width;
-      const panelWidth = Math.min(compact ? 240 : 340, Math.max(0, areaRight - areaLeft - 2 * margin));
+      const panelWidth = Math.min(compact ? 224 : 340, Math.max(0, areaRight - areaLeft - 2 * margin));
       panel.current.toggleAttribute('data-narrow-panel', panelWidth < 280);
       const above = Math.max(0, verticalAnchor.top - top - margin - gap);
       const below = Math.max(0, top + height - verticalAnchor.bottom - margin - gap);

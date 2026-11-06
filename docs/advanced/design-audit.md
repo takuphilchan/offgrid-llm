@@ -402,3 +402,39 @@ The installed-startup failure and its version-embedding fix are recorded in
 The final source review and complete-suite results, including failed assertions
 and their follow-ups, are recorded in
 [release verification](../quality/evidence/release-0.4.27-2026-11-06.md).
+
+### Cross-page controls and section consistency
+
+The subsequent screenshot review found three concrete inconsistencies: Agents
+used filled tab pills while Models used underlines; native disclosure triangles
+and heavy focus outlines varied by page; and two competing connection-grid rules
+stretched setup fields across most of the workspace. Shared navigation now uses
+one underline treatment. Native disclosures retain keyboard semantics with a
+small directional chevron, reduced-motion behavior and RTL orientation. Searches
+use one restrained focus boundary with a stronger forced-colors fallback.
+
+Connections now places its bounded setup form beside the connection list on wide
+screens and below it on narrow screens. Remove actions align with their owning
+connection, and adjacent primary/secondary actions share a height. Destructive
+actions retain their explicit labels and confirmation. The action audit covers
+Chat, Models, Knowledge, Activity, profiles, tools, connections and Settings at
+390/1440px in both themes, without issuing management mutations.
+
+Light Knowledge and dark wide/narrow Connections captures were inspected. This
+is a presentation and interaction consistency improvement, not evidence of
+human usability qualification; those checks remain open. Detailed commands,
+failures and installation evidence are recorded in the
+[branding, speech and chrome follow-up](../quality/evidence/branding-speech-chrome-2026-11-06.md).
+
+### Tools, external agents and response actions
+
+The next pass separates two different user goals: adding tools to OffGrid and
+using OffGrid inference from another agent application. Tools and MCP now share
+one section; Hermes and OpenClaw have a dedicated External agents tab. Setup
+forms appear on request, while low-level provider fields sit under Details.
+Legacy connection links and unfinished connection drafts remain supported.
+
+Read-aloud preparation now stays within the response action row, with a small
+progress indicator and an immediate Stop action. Its explanation is available
+to assistive technology without expanding the row. Response metrics use a
+compact label/value popover. This is source-level work until separately installed.

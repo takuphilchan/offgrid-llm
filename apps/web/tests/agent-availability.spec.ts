@@ -50,9 +50,9 @@ for (const desktop of [false, true]) {
     await expect(draft).toHaveValue('Keep this draft 日本語');
     await page.goto('/ui/#/agents/connections');
     await page.getByLabel('Connection name',{exact:true}).fill('Keep connection draft');
-    await page.getByRole('link',{name:'Available tools',exact:true}).click();
+    await page.getByRole('link',{name:'Tools & MCP',exact:true}).click();
     await expect(page.locator('#agent-tools-panel')).toBeVisible();
-    await page.getByRole('link',{name:'Connections',exact:true}).click();
+    await page.getByRole('link',{name:'Tools & MCP',exact:true}).click();
     await expect(page.getByLabel('Connection name',{exact:true})).toHaveValue('Keep connection draft');
     await page.goto('/ui/#/activity');
     await page.goto('/ui/#/chat');
@@ -76,7 +76,7 @@ test('cold unsupported service shows recovery and management, never a legacy tas
   const previous=state.reads;
   await page.getByRole('button',{name:'Try again',exact:true}).click();
   await expect.poll(()=>state.reads).toBeGreaterThan(previous);
-  await page.getByRole('link',{name:'Connections',exact:true}).click();
+  await page.getByRole('link',{name:'Tools & MCP',exact:true}).click();
   await expect(page.locator('.connector-panel')).toBeVisible();
   state.supported=true;
   await page.goto('/ui/#/activity');

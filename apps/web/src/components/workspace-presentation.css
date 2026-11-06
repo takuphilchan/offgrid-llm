@@ -52,7 +52,7 @@
   .connector-list article { gap: 12px; }
   .connector-list article > div { min-width: 0; display: grid; gap: 8px; }
   .workspace-search-field { min-height: 38px; padding: 0 10px; border-color: var(--line); background: var(--surface-1); }
-  .workspace-search-field:focus-within { border-color: var(--line-strong); outline: 2px solid var(--text); outline-offset: 1px; }
+  .workspace-search-field:focus-within { border-color: var(--muted); outline: none; }
   .workspace-search-field input { min-height: 36px; padding: 0; outline: 0; }
   .history-empty.workspace-empty { text-align: start; }
   .composer { max-width: 800px; padding: var(--space-4); gap: var(--space-3); grid-template-columns: minmax(0, 1fr) auto; }
@@ -86,11 +86,12 @@
   .knowledge-library-toolbar > .knowledge-selection { flex-basis: 100%; }
   .knowledge-scope-hint { max-width: min(100%, 720px); margin: 0; font-size: .875rem; line-height: 1.6; }
   .knowledge-actions > p { max-width: var(--measure-copy); margin: 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
-  .knowledge-documents { display: grid; gap: 12px; }
+  .knowledge-documents { display: grid; gap: 0; }
+  .knowledge-documents .resource-card { border: 0; border-block-end: 1px solid var(--line); border-radius: 0; background: transparent; padding: 20px 4px; }
   .knowledge-documents .resource-body { min-width: 0; }
   .knowledge-documents .resource-body h3 { font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
   .knowledge-documents .document-readiness { font-size: 14px; color: var(--text); }
-  .knowledge-documents .resource-actions { gap: 12px; flex-wrap: wrap; }
+  .knowledge-documents .resource-actions { gap: 8px; flex-wrap: wrap; }
   .knowledge-documents .utility-popover-content { display: grid; gap: 12px; }
   .composer .knowledge-readiness { display: grid; gap: 8px; margin: 0; font-size: 13px; }
   .chat-toolbar { padding: 0; }

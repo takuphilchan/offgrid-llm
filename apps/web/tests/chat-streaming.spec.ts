@@ -81,6 +81,7 @@ test('chat renders text before completion, decodes split UTF-8, then shows saved
   await details.click();
   await expect(metrics.getByText('0.25 s', { exact: true })).toBeVisible();
   await expect(metrics.getByText('8,192', { exact: true })).toBeVisible();
+  expect((await metrics.boundingBox())!.width).toBeLessThanOrEqual(224);
   await page.screenshot({ path: info.outputPath('answer-owned-details.png') });
   await page.keyboard.press('Escape');
   await expect(metrics).toBeHidden();
@@ -241,6 +242,8 @@ test('stop aborts generation and preserves the draft and partial text', async ({
   await streamingWorkspace(page);
   await page.locator('.composer-actions > button').click();
   await expect(page.getByRole('alert')).toContainText('Stopped');
+  await expect(page.getByRole('alert').getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('alert').getByRole('button', { name: 'Refresh history', exact: true })).toBeVisible();
   await expect(page.locator('.streaming-response')).toContainText('Hello 世界');
   await expect(page.locator('.composer textarea')).toHaveValue('Stream my answer');
 });

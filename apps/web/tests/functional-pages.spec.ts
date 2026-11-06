@@ -47,7 +47,7 @@ test('knowledge setup downloads one stable model and enables RAG', async ({ page
   await expect.poll(() => enabled).toBe(true);
   expect(enableRequests).toBe(0); // Activation belongs to the service worker.
   await page.getByRole('button', { name: 'Manage Knowledge', exact: true }).click();
-  await expect(page.getByText(/Active embedding model: bge-m3/)).toBeVisible();
+  await expect(page.locator(".knowledge-menu-status").getByText("bge-m3",{exact:true})).toBeVisible();
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('knowledge.png'), fullPage: true });
 });
 
@@ -93,17 +93,20 @@ test('agents page exposes runtime tools, durable tasks, MCP, and computer status
   await expect(page.getByText('Summarize the report')).toBeVisible();
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('agents-workspace.png'), fullPage: true });
   await page.locator('.primary-nav').getByRole('link', { name: 'Agents', exact: true }).click();
-  await page.getByRole('link', { name: 'Available tools', exact: true }).click();
+  await page.getByRole('link', { name: 'Tools & MCP', exact: true }).click();
   await expect(page.getByText('1/1 enabled').first()).toBeVisible();
   await expect(page.locator('.agent-metrics')).toHaveCount(0);
   await expect(page).toHaveURL(/#\/agents\/tools$/);
   await expect(page.getByText('Calculate an expression')).toBeVisible();
-  await page.getByRole('link', { name: 'Connections', exact: true }).click();
-  await expect(page).toHaveURL(/#\/agents\/connections$/);
+  await page.getByRole('link', { name: 'Tools & MCP', exact: true }).click();
+  await expect(page).toHaveURL(/#\/agents\/tools$/);
   await expect(page.getByText('local-docs')).toBeVisible();
+  await page.getByRole('link', { name: 'External agents', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Hermes Agent' })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('link', { name: 'Connections', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('link', { name: 'External agents', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.connector-panel')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Tools & MCP', exact: true }).click();
   await expect(page.getByText('local-docs')).toBeVisible();
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('agent-connections.png'), fullPage: true });
 });

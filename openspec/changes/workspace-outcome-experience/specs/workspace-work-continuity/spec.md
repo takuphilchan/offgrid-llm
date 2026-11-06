@@ -137,3 +137,19 @@ with a shared classification and actor/workspace-scoped filter preference.
 - **WHEN** the user opens Activity from Needs attention
 - **THEN** the attention filter is selected and completed history does not obscure pending work
 - **AND** filtering, navigation and inspection do not approve, delete, restart or cancel work
+
+### Requirement: Explicit archival without outcome erasure
+The owner SHALL be able to archive inactive unresolved root jobs. Archival SHALL preserve their original outcome and recovery evidence, exclude them from normal attention/history counts, and expose them in a bounded Archived view. Restore SHALL not execute work. Active workers, pending approvals and active children SHALL prevent archival.
+
+#### Scenario: Historical uncertain test run
+- **WHEN** its owner confirms archival of an inactive uncertain run
+- **THEN** it leaves normal Activity and attention counts, survives restart in Archived, and remains inspectable with unchanged receipts and outcome
+- **AND** archival neither deletes evidence nor stops or repeats any action
+
+#### Scenario: Unauthorized or racing archive
+- **WHEN** another actor requests archival or a worker is still active
+- **THEN** the request is rejected without changing the task or counts
+
+#### Scenario: Explicit restoration
+- **WHEN** the owner restores an archived record
+- **THEN** its original state reappears in normal Activity without scheduling execution

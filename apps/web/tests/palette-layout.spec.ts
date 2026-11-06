@@ -22,7 +22,14 @@ for (const profile of [
   const dialog = page.getByRole('dialog'), search = dialog.getByRole('combobox');
   await expect(search).toBeFocused();
   await expect(page.locator('.command-search')).toHaveCSS('outline-style', 'none');
-  expect(await page.locator('.command-search').evaluate(e => getComputedStyle(e).boxShadow)).not.toBe('none');
+  const focusBoundary = page.locator('.command-search');
+  await expect(focusBoundary).toHaveCSS('box-shadow', 'none');
+  await expect(focusBoundary).toHaveCSS('border-bottom-width', '1px');
+  const focusedColor = await focusBoundary.evaluate(e => getComputedStyle(e).borderBottomColor);
+  await dialog.getByRole('option').first().focus();
+  expect(await focusBoundary.evaluate(e => getComputedStyle(e).borderBottomColor)).not.toBe(focusedColor);
+  await search.focus();
+  await expect(focusBoundary).toHaveCSS('border-bottom-color', focusedColor);
   const box = await dialog.boundingBox();
   expect(box!.y).toBeGreaterThanOrEqual(8);
   expect(box!.y + box!.height).toBeLessThanOrEqual(profile.height - 8);

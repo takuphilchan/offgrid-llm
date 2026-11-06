@@ -3,6 +3,7 @@ import { APIError, api, type AgentProfile, type AgentProfileSettings, type Agent
 import { ModelSelect } from '../../components/ModelSelect';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { SearchField } from '../../components/SearchField';
+import { Icon } from '../../components/Icon';
 import { useI18n } from '../../i18n';
 import { modelProviderDetails } from '../../i18n/model-library';
 import { agentProfilesText, profileSelectionPrompt } from '../../i18n/agent-profiles';
@@ -115,7 +116,7 @@ export function AgentProfiles({ models, preferredModel = '' }: { models: Model[]
   const providerCopy = modelProviderDetails(locale);
   const visibleProfiles = profiles.filter(item => `${item.settings.name} ${item.settings.description ?? ''}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
   return <section className="agent-profiles" aria-label={copy.profiles}>
-    <header className="profile-library-header"><div><h2>{copy.profiles}</h2><p>{messages.guidance.profiles}</p></div><button type="button" className="primary-button" disabled={busy} onClick={() => choose(fresh(suggestedModel))}>{copy.create}</button></header>
+    <header className="profile-library-header"><div><h2>{copy.profiles}</h2><p>{messages.guidance.profiles}</p></div><button type="button" className="secondary-button library-create-action" disabled={busy} onClick={() => choose(fresh(suggestedModel))}><Icon name="plus" size={17}/>{copy.create}</button></header>
     {error && <div className="inline-error" role="alert"><p>{error}</p>{!conflict && <button type="button" className="secondary-button" onClick={() => void refresh()} disabled={loading || busy}>{messages.common.refresh}</button>}</div>}
     {notice && <p role="status">{notice}</p>}
     <div className={`profile-library-layout${profiles.length ? '' : ' profile-library-empty'}`}>

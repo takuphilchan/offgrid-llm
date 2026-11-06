@@ -36,8 +36,8 @@ for (const locale of ['en', 'ar'] as const) for (const width of [390, 1440]) tes
   await expect(page.getByRole('button', { name: workspaceAudit(locale).selected, exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.goto('/ui/#/activity');
   const views=page.locator('.model-library-tabs');
-  const selectedFill=await views.locator('[aria-pressed=true]').evaluate(el=>getComputedStyle(el).backgroundColor);
-  const idleFill=await views.locator('[aria-pressed=false]').evaluate(el=>getComputedStyle(el).backgroundColor);
+  const selectedFill=await views.locator('[aria-pressed=true]').evaluate(el=>getComputedStyle(el).borderBottomColor);
+  const idleFill=await views.locator('[aria-pressed=false]').evaluate(el=>getComputedStyle(el).borderBottomColor);
   expect(selectedFill).not.toBe(idleFill);
   const aligned=await page.locator('.activity-page').evaluate(el=>{
     const list=el.querySelector('.task-list')!.getBoundingClientRect(),parent=el.getBoundingClientRect();

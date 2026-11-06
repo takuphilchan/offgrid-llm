@@ -15,18 +15,23 @@ test('registry-defined providers use one setup flow and distinguish service from
     if (path === '/v1/models') return route.fulfill({ json: { data: [{ id: 'downloaded-model', type: 'llm' }] } });
     return route.fulfill({ json: { servers: [], tools: [], tasks: [], profiles: [], authenticated: false } });
   });
-  await page.goto('/ui/#/agents/connections');
+  await page.goto('/ui/#/agents/external');
   await expect(page.getByRole('heading', { name: 'Third fixture' })).toBeVisible();
-  await expect(page.getByText('Service/model compatible', { exact: true })).toBeVisible();
-  await expect(page.getByText('Host setup: not inspected', { exact: false })).toBeVisible();
+  await expect(page.getByText('Model compatible', { exact: true })).toBeVisible();
+  await expect(page.getByText('Setup on this computer has not been checked.', { exact: true })).toBeVisible();
+  await expect(page.locator('.provider-card .status-pill')).toHaveCount(0);
+  await page.locator('.provider-card summary').click();
   await expect(page.getByText('Tool workflow: unverified', { exact: false })).toBeVisible();
   await page.locator('.provider-card button').click();
   await expect(page.locator('.provider-setup')).toBeVisible();
   await expect(page.getByText('{"manual":true}', { exact: true })).not.toBeVisible();
-  await page.locator('.provider-setup .section-heading button').click();
+  await page.locator('.provider-command-heading button').click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { copied: string }).copied)).toBe('offgrid integrations configure fixture-third');
   await page.getByText('Manual configuration reference', { exact: true }).click();
   await expect(page.getByText('{"manual":true}', { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('.provider-card button')).toBeFocused();
 });
 
 test('external provider state labels exist in all nine locales', () => {

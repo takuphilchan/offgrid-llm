@@ -71,7 +71,12 @@
 .document-heading .workspace-secondary { font-size:var(--type-caption); }
 .document-header-actions { display:flex; gap:4px; flex:none; }
 .document-reader-tools { padding-block:0 8px; border-block-end:1px solid var(--line); }
-.document-search { min-height:36px; border-radius:8px; padding-inline:10px; background:var(--surface-2); color:var(--muted); }
+.document-search { min-height:36px; border:1px solid transparent; border-radius:8px; padding-inline:10px; background:var(--surface-2); color:var(--muted); }
+.document-search:focus-within { border-color:var(--muted); }
+.document-search input:focus-visible { outline:none; }
+@media (forced-colors:active) {
+  .document-search:focus-within { outline:2px solid Highlight; outline-offset:2px; }
+}
 .document-search input { border:0; box-shadow:none; background:transparent; padding:8px; font-size:var(--type-meta); }
 .document-page-tools { column-gap:8px; }
 .document-page-navigation { font-variant-numeric:tabular-nums; }

@@ -573,3 +573,26 @@ filters does not change jobs. Child work remains under its parent. Cancelled
 downloads are collapsed but recoverable, active/failed transfers stay visible,
 and the selected installed model has an explicit label. Knowledge explains its
 reusable-library scope without publishing conversation attachments implicitly.
+
+## Inactive work archival
+
+Persist an additive archived_at timestamp on the task snapshot. Serialize archival with runner admission and teardown; reject active workers, pending approvals, and active children. Permit uncertain, interrupted and terminal root jobs. Keep all receipts, checkpoints and original states. Normal work counts exclude archived records; a separate archived count and paginated bucket expose them. Restore is explicit and never resumes execution. Preserve owner and Knowledge authorization, legacy local-admin ownership, restart persistence and immediate summary invalidation.
+
+## Public brand and upgrade identity
+
+OffGrid is the public product name. Display names and artifact filenames are separate
+from package, bundle, uninstall, executable and storage identities. Retain the existing
+Windows executable name and app ID for running-process/upgrade compatibility; pin
+Electron userData before applying a display name. Keep CLI executable offgrid and
+repository/module URLs unchanged. Desktop assets use OffGrid-VERSION-OS-ARCH with
+Windows setup/portable suffixes. Linux package architecture conventions remain explicit.
+Release reuse/finalization, installer selection and documentation must agree. Legacy
+version downloads select their original names. macOS installation consumes the ZIP
+actually published, preserving the existing bundle ID and user data. Windows upgrade
+checks verify one install registration and updated shortcuts with existing data intact;
+other native platform checks remain unverified unless executed on that platform.
+
+## Management follow-up boundaries (2026-11-06)
+The model-manager-only discard endpoint serializes with download admission, rejects active workers, removes only exact legacy or digest-pinned temporary files, and persists removal of the progress record. Published weights/projectors and receipts are retained. Missing partials make retries safe; persistence failure keeps the record visible. The UI confirms removal and guards against stale progress responses.
+MCP connection management precedes tool discovery. External setup is a read-only modal with bounded scrolling and focus restoration to its initiating card; copying commands performs no setup. Knowledge uses a small menu with model identity and a separate action row. History cleanup aligns with search on wide layouts and wraps immediately below on narrow layouts.
+Desktop navigation observes explicit sidebar activation as well as route changes, hiding the native terminal surface without closing processes. The terminal welcome offers CLI and Agent entry using the existing scoped folder selection and host lifecycle.

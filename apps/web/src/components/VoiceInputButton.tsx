@@ -280,11 +280,12 @@ export function ReadAloudButton({ text }: { text: string }) {
       if (current.current === work) stop();
     }
   };
-  return <span className="voice-input-control">
-    <button type="button" className="message-copy voice-speak-button" onClick={() => void speak()} aria-label={state === 'idle' ? copy.speak : copy.stopSpeaking} aria-pressed={state !== 'idle'}>
-      {state === 'preparing' ? copy.preparing : state === 'playing' ? copy.stopSpeaking : copy.speak}
+  return <span className="voice-input-control message-speech" data-state={state}>
+    <button type="button" className="message-copy voice-speak-button" onClick={() => void speak()} aria-label={state === 'idle' ? copy.speak : copy.stopSpeaking} aria-pressed={state !== 'idle'} title={state === 'preparing' ? copy.preparingHint : undefined}>
+      {state === 'preparing' ? <span className="speech-preparing-indicator" aria-hidden="true" /> : <Icon name={state === 'playing' ? 'stop' : 'speaker'} size={14} />}
+      {state === 'idle' ? copy.speak : copy.stopSpeaking}
     </button>
-    {state === 'preparing' && <small role="status">{copy.preparingHint}</small>}
+    {state === 'preparing' && <small className="sr-only" role="status">{copy.preparingHint}</small>}
     {error && <small className="voice-error" role="alert">{error}</small>}
   </span>;
 }

@@ -59,7 +59,7 @@ test('MCP removal confirms the exact connection, refreshes tools, and stays remo
   expect(requests).toHaveLength(1);
   await page.reload();
   await expect(remove).toHaveCount(0);
-  await page.getByRole('link', {name: 'Available tools', exact: true}).click();
+  await page.getByRole('link', {name: 'Tools & MCP', exact: true}).click();
   await expect(page.getByRole('checkbox', {name: 'calculator', exact: true})).toBeVisible();
   await expect(page.getByRole('checkbox', {name: 'mcp__docs__search', exact: true})).toHaveCount(0);
 });

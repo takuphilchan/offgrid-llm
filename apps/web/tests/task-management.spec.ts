@@ -126,12 +126,13 @@ test('Activity clears removable task records through the shared deletion API', a
 test('management navigation stays at the top and settings remain responsive', async ({page},info) => {
   await fixture(page);await page.goto('/ui/#/agents/tools');
   const nav=page.locator('.task-management');
-  await expect(nav.getByRole('link',{name:'Available tools',exact:true})).toHaveAttribute('aria-current','page');
+  await expect(nav.getByRole('link',{name:'Tools & MCP',exact:true})).toHaveAttribute('aria-current','page');
   await expect(nav.getByRole('link',{name:'Agent activity',exact:true})).toHaveCount(0);
   await expect(page.getByRole('checkbox',{name:'calculator',exact:true})).toBeVisible();
   await expect(page.locator('.agent-metrics')).toHaveCount(0);
   await page.screenshot({path:info.outputPath('tools.png'),fullPage:true});
-  await nav.getByRole('link',{name:'Connections',exact:true}).click();
+  await nav.getByRole('link',{name:'Tools & MCP',exact:true}).click();
+  await page.getByRole('button',{name:'Connect',exact:true}).click();
   await page.setViewportSize({width:390,height:844});
   await expect(page.locator('.connector-panel form')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

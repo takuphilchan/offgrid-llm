@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { useI18n, type LocaleCode } from '../../i18n';
 import { workspaceShell } from '../../i18n/workspace-shell';
 import type { ThemeChoice } from '../../theme';
+import type { ServiceHealth } from '../../lib/navigation';
 import { Icon } from '../Icon';
 import { UtilityPopover } from '../UtilityPopover';
 import { KnownWork } from './KnownWork';
@@ -25,14 +26,15 @@ export function WorkspaceHeader({ title, shortcut, onCommands, onHelp, navigatio
   </header>;
 }
 
-export function WorkspaceOptions({ refreshing, onRefresh, theme, onThemeChange, username, onLogout }: {
-  refreshing: boolean; onRefresh: () => void;
+export function WorkspaceOptions({ refreshing, onRefresh, theme, onThemeChange, username, onLogout, health }: {
+  refreshing: boolean; onRefresh: () => void; health?: ServiceHealth;
   theme: ThemeChoice; onThemeChange: (theme: ThemeChoice) => void; username?: string; onLogout: () => void;
 }) {
   const { messages: text, locale, setLocale, available } = useI18n();
   const id = useId();
   return <UtilityPopover label={workspaceShell[locale].options} className="workspace-options" triggerClassName="utility-button" panelClassName="workspace-options-panel" trigger={<><Icon name="settings" size={18} /><span>{text.guidance.workspaceOptions}</span><Icon name="more" size={16} /></>}>
         {username !== undefined && <strong className="workspace-options-identity">{username}</strong>}
+        {health && <p className="workspace-secondary" role="status">{health === 'ready' ? text.status.ready : health === 'offline' ? text.status.offline : text.status.checking}</p>}
         <a className="secondary-button" href="#/settings" aria-current={location.hash === '#/settings' ? 'page' : undefined}><Icon name="settings" size={16} />{text.nav.settings}</a>
         <div className="field locale-picker"><label htmlFor={`${id}-locale`}>{text.common.language}</label><select id={`${id}-locale`} value={locale} onChange={event => setLocale(event.target.value as LocaleCode)}>{available.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</select></div>
         <div className="field"><label htmlFor={`${id}-theme`}>{text.shell.appearance}</label><select id={`${id}-theme`} value={theme} onChange={event => onThemeChange(event.target.value as ThemeChoice)}>

@@ -70,6 +70,9 @@ for(const locale of ['en','ar']) for(const theme of ['light','dark']) test(`mode
   const panel=page.locator('.model-select-panel'),search=panel.getByRole('searchbox'),list=panel.getByRole('listbox');
   await expect(search).toBeFocused();
   await expect(panel).toHaveCSS('opacity','1');
+  // Measure the fixed search after the entrance translation has finished.
+  // Opacity stays at one throughout this animation and is not a readiness check.
+  await panel.evaluate(async el=>{await Promise.all(el.getAnimations().map(animation=>animation.finished));});
   const top=(await search.boundingBox())!.y;
   const overflow=await panel.evaluate(el=>[el,...Array.from(el.querySelectorAll('*'))].filter(n=>n.scrollHeight>n.clientHeight+1&&['auto','scroll'].includes(getComputedStyle(n).overflowY)).map(n=>n.className));
   expect(overflow).toEqual(['model-select-options']);

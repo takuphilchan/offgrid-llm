@@ -75,6 +75,9 @@ test('file and batch limits are checked before upload', async ({ page }) => {
   await page.goto('/ui/#/knowledge');
   await page.locator('[data-knowledge-import]').setInputFiles([file('large.txt')]);
   await expect(page.locator('.knowledge-import-results')).toContainText(knowledgeImport('en').sizeLimit);
+  // Validation appears before the asynchronous library refresh unlocks import.
+  // A user cannot choose another batch until this control is enabled again.
+  await expect(page.locator('[data-knowledge-import]')).toBeEnabled();
   await page.locator('[data-knowledge-import]').setInputFiles(Array.from({ length: 21 }, (_, index) => file(`${index}.txt`)));
   await expect(page.locator('.knowledge-import [role="alert"]')).toContainText(knowledgeImport('en').batchLimit);
   expect(state.writes).toEqual([]);
@@ -104,7 +107,7 @@ test('a failed library refresh preserves the import acknowledgment', async ({ pa
   await page.locator('[data-knowledge-import]').setInputFiles(file('saved.txt'));
   await expect(page.locator('.knowledge-import-results [data-state="added"]')).toContainText('saved.txt');
   await expect(page.getByRole('alert')).toContainText('Status unavailable');
-  await expect(page.locator('.knowledge-import .primary-button')).toBeDisabled();
+  await expect(page.getByRole('button', {name:'Add document',exact:true})).toBeDisabled();
 });
 
 test('navigating away does not dispatch the rest of a batch', async ({ page }) => {
@@ -114,7 +117,7 @@ test('navigating away does not dispatch the rest of a batch', async ({ page }) =
   let attempts = 0;
   await page.route('**/v1/documents/ingest', async route => { attempts++; await gate; await route.fulfill({ json: { success: true, document: { id: 'one', index_status: 'ready' } } }); });
   await page.goto('/ui/#/knowledge');
-  await expect(page.locator('.knowledge-import-actions .primary-button')).toBeEnabled();
+  await expect(page.getByRole('button', {name:'Add document',exact:true})).toBeEnabled();
   await page.locator('[data-knowledge-import]').setInputFiles([file('one.txt'), file('two.txt')]);
   await expect.poll(() => attempts).toBe(1);
   await page.evaluate(() => { location.hash = '#/chat'; });

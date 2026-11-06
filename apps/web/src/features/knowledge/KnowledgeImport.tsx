@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api, APIError, type RAGStatus } from '../../api/client';
 import { Icon } from '../../components/Icon';
 import { useI18n } from '../../i18n';
@@ -12,11 +13,11 @@ import { runDocumentImport } from './import-progress';
 import { knowledgeOptions } from '../../i18n/knowledge-options';
 
 type Result = { name: string; state: 'pending' | 'importing' | 'added' | 'failed' | 'unknown'; detail?: string };
-type Props = { status: RAGStatus | null; disabled: boolean; setupDisabled?: boolean; refresh: () => Promise<void>; durable?: boolean };
+type Props = { status: RAGStatus | null; disabled: boolean; setupDisabled?: boolean; refresh: () => Promise<void>; durable?: boolean; actionTarget?: HTMLElement | null };
 
 // These are acknowledgments for this selection, not a second durable job store.
 // A lost response is never retried automatically: the service may have committed.
-export function KnowledgeImport({ status, disabled, setupDisabled = disabled, refresh, durable = false }: Props) {
+export function KnowledgeImport({ status, disabled, setupDisabled = disabled, refresh, durable = false, actionTarget }: Props) {
   const { locale, messages } = useI18n();
   const copy = knowledgeImport(locale);
   const input = useRef<HTMLInputElement>(null);
@@ -88,12 +89,13 @@ export function KnowledgeImport({ status, disabled, setupDisabled = disabled, re
     } finally { locked.current = false; operation.current = null; if (mounted.current) { setBusy(false); setRevision(value => value + 1); } }
   };
 
-  return <section className="knowledge-import" aria-label={messages.knowledge.add}>
-    {(status?.enabled || status === null) && <div className="knowledge-import-actions">
+  const actions=(status?.enabled || status === null) && <div className="knowledge-import-actions">
       <input hidden ref={input} type="file" multiple disabled={disabled || busy} accept={accept} data-knowledge-import onChange={event => { const files = [...event.target.files ?? []]; event.target.value = ''; void add(files); }} />
-      <button type="button" className="primary-button" disabled={disabled || busy} onClick={() => input.current?.click()}><Icon name="upload" size={17} />{busy ? copy.importing : messages.knowledge.add}</button>
+      <button type="button" className="secondary-button library-create-action" disabled={disabled || busy} onClick={() => input.current?.click()}><Icon name="plus" size={17} />{busy ? copy.importing : messages.knowledge.add}</button>
       {durable && busy && <button type="button" className="text-button" onClick={() => operation.current?.abort()}>{messages.models.cancel}</button>}
-    </div>}
+    </div>;
+  return <section className="knowledge-import" aria-label={messages.knowledge.add}>
+    {actionTarget ? createPortal(actions,actionTarget) : actions}
     {notice && <p role="alert">{notice}</p>}
     {!!results.length && <div className="knowledge-import-results">
       <div className="knowledge-import-heading"><h3>{copy.recent}</h3>{!busy && <button type="button" className="text-button" onClick={() => { setResults([]); setNotice(''); }}>{copy.clear}</button>}</div>
