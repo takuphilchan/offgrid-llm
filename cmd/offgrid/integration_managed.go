@@ -100,7 +100,7 @@ func runManagedIntegration(ctx context.Context, action, id string, args []string
 		}
 	}
 	if err == nil && action == "status" && !report.Ready {
-		return fmt.Errorf("%s preflight is blocked; address the checks above", id)
+		return fmt.Errorf("%s is not ready; see Needs attention above", id)
 	}
 	return err
 }

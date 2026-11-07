@@ -62,7 +62,8 @@ func renderIntegrationReport(p cli.Presenter, action string, r integrations.Host
 		if serviceBlocked {
 			p.Note("Restore the OffGrid service connection, then check status again.")
 		} else if capacityBlocked {
-			p.Note("Resolve the model/context requirement above before setup or launch. Use --model to select another installed compatible model; setup cannot increase available memory.")
+			p.Note("Choose an installed model with sufficient context before setup or launch. Setup cannot increase available memory.")
+			p.Detail("Model option", "--model MODEL")
 		} else if setupNeeded {
 			p.Note("Run " + integrationNextCommand(r.ID, "configure") + " in this environment to review setup.")
 		}
