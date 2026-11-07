@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -92,36 +93,11 @@ func runManagedIntegration(ctx context.Context, action, id string, args []string
 		payload = legacyIntegrationProjection(action, id, report, o, err)
 	}
 	if !outputJSON(payload) {
-		fmt.Printf("\n  %s: %s\n", id, report.Phase)
-		if report.ModelID != "" {
-			fmt.Printf("  Model: %s (%s)\n", report.ModelID, report.SelectionSource)
+		renderIntegrationReport(legacyPresenter(), action, report, o)
+		var blocked *integrations.PreflightError
+		if errors.As(err, &blocked) {
+			return fmt.Errorf("%s is not ready; see Needs attention above", id)
 		}
-		if report.Verification != nil {
-			fmt.Printf("  File contract: %s (%s)\n", report.Verification.State, report.Verification.Code)
-		}
-		if report.Runtime.Version != "" {
-			fmt.Printf("  Runtime: %s\n", report.Runtime.Version)
-		}
-		for _, check := range report.Checks {
-			if check.State == "blocked" {
-				printWarning(check.Message)
-			}
-		}
-		if report.Ready {
-			for _, warning := range report.Service.Warnings {
-				printWarning(warning)
-			}
-		}
-		if report.Ready && action != "run" {
-			fmt.Printf("  Preflight ready; model reply: %s; tool workflow: %s\n", report.Smoke.State, report.Workflow.State)
-		}
-		if report.RecoveryPath != "" {
-			fmt.Printf("  Configuration backup: %s\n", report.RecoveryPath)
-		}
-		if o.DryRun {
-			fmt.Printf("  Would configure provider %s at %s for model %s; no files changed\n", id, o.Endpoint(), report.ModelID)
-		}
-		fmt.Println()
 	}
 	if err == nil && action == "status" && !report.Ready {
 		return fmt.Errorf("%s preflight is blocked; address the checks above", id)

@@ -11,6 +11,12 @@ Run managed install commands on the host where the external agent should
 live, even when OffGrid itself runs in Docker. If the CLI is only built locally,
 use `./bin/offgrid` (or `.\bin\offgrid.exe` in PowerShell) in place of `offgrid`.
 
+Windows and WSL have separate agent installations. Run `offgrid hermes status`
+or `offgrid openclaw status` in the same environment as that agent. Status names
+the host environment and reports a missing runtime before dependent provider and
+connection checks. A running OffGrid service does not mean the external agent is
+installed on that host. Setup does not bypass model/context requirements.
+
 ## Check readiness
 
 Start OffGrid and install at least one chat model, then run:

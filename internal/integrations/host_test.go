@@ -107,6 +107,34 @@ func managerFixture(t *testing.T) (*Manager, *fixtureHost, *fixtureService, Host
 	return m, host, service, HostOptions{ServerURL: "http://localhost:11611"}
 }
 
+func TestMissingRuntimeReportsFindingWithoutDependentFalseFailures(t *testing.T) {
+	m, host, _, o := managerFixture(t)
+	host.state = HostState{}
+	r, err := m.Status(context.Background(), "fixture-third", o)
+	if err != nil || r.Ready {
+		t.Fatalf("report=%+v err=%v", r, err)
+	}
+	for _, c := range r.Checks {
+		switch c.ID {
+		case "runtime":
+			if c.Code != "runtime_missing" || c.State != "blocked" || !strings.Contains(c.Message, "not found") {
+				t.Fatalf("runtime: %+v", c)
+			}
+		case "plugin", "configuration":
+			if c.State != "not_checked" {
+				t.Fatalf("dependent check: %+v", c)
+			}
+		case "context":
+			t.Fatalf("cannot inspect configuration context without runtime: %+v", c)
+		}
+	}
+	_, err = m.Run(context.Background(), "fixture-third", o, nil)
+	var blocked *PreflightError
+	if !errors.As(err, &blocked) || host.runs != 0 {
+		t.Fatalf("err=%v runs=%d", err, host.runs)
+	}
+}
+
 func TestThirdAdapterSharedLifecycleAndSelection(t *testing.T) {
 	m, host, _, o := managerFixture(t)
 	ctx := context.Background()

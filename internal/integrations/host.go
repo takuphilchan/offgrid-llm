@@ -153,11 +153,22 @@ func (m *Manager) inspect(ctx context.Context, id string, o HostOptions) (inspec
 		r.report.Checks[len(r.report.Checks)-1].Message = err.Error()
 	}
 	add("runtime", host.Installed && hostErr == nil, "runtime_inspected", "External runtime is installed and its version is readable")
+	if !host.Installed && hostErr == nil {
+		r.report.Checks[len(r.report.Checks)-1].Code = "runtime_missing"
+		r.report.Checks[len(r.report.Checks)-1].Message = "External runtime was not found in this host environment. An installation in WSL or on another computer is separate."
+	}
 	if hostErr != nil {
 		r.report.Checks[len(r.report.Checks)-1].Code = "runtime_inspection_failed"
 		r.report.Checks[len(r.report.Checks)-1].Message = hostErr.Error()
 	}
-	add("plugin", host.Plugin, "plugin_required", "The installed OffGrid provider must match the trusted bundle; a model test verifies runtime loading")
+	add("plugin", host.Plugin, "plugin_required", "OffGrid provider is missing, outdated, or could not be verified; run the integration install command to review setup")
+	if host.Plugin {
+		r.report.Checks[len(r.report.Checks)-1].Message = "OffGrid provider matches the trusted bundle"
+	}
+	if !host.Installed || hostErr != nil {
+		r.report.Checks[len(r.report.Checks)-1].State = "not_checked"
+		r.report.Checks[len(r.report.Checks)-1].Message = "Provider check requires a readable external runtime"
+	}
 	modelOK := err == nil && r.setup.Integration.Ready && r.setup.Integration.ContextWindow >= a.Profile().MinimumContext
 	if err == nil {
 		message := strings.Join(r.setup.Integration.Warnings, "; ")
@@ -170,11 +181,18 @@ func (m *Manager) inspect(ctx context.Context, id string, o HostOptions) (inspec
 		add("model", modelOK, "model_compatibility", message)
 	}
 	configured := host.ConfigError == "" && strings.TrimRight(host.BaseURL, "/") == o.Endpoint()
-	add("configuration", configured, "configuration_required", "External provider must point to the selected OffGrid endpoint")
+	add("configuration", configured, "configuration_required", "External provider is not configured for the selected OffGrid endpoint")
+	if configured {
+		r.report.Checks[len(r.report.Checks)-1].Message = "External provider uses the selected OffGrid endpoint"
+	}
 	if host.ConfigError != "" {
 		r.report.Checks[len(r.report.Checks)-1].Message = host.ConfigError
 	}
-	if modelOK {
+	if !host.Installed || hostErr != nil {
+		r.report.Checks[len(r.report.Checks)-1].State = "not_checked"
+		r.report.Checks[len(r.report.Checks)-1].Message = "Configuration check requires a readable external runtime"
+	}
+	if modelOK && host.Installed && hostErr == nil {
 		configuredContext := host.Models[r.report.ModelID]
 		if configuredContext == 0 {
 			configuredContext = host.ContextWindow
@@ -207,6 +225,17 @@ func (m *Manager) Status(ctx context.Context, id string, o HostOptions) (HostRep
 	return r.report, err
 }
 
+// PreflightError retains detailed diagnostics for programmatic callers while
+// allowing the CLI to avoid repeating an already-rendered report.
+type PreflightError struct {
+	Reasons string
+	ID      string
+}
+
+func (e *PreflightError) Error() string {
+	return fmt.Sprintf("%s preflight blocked: %s", e.ID, e.Reasons)
+}
+
 func blockedReport(r HostReport) error {
 	var reasons []string
 	for _, c := range r.Checks {
@@ -214,7 +243,7 @@ func blockedReport(r HostReport) error {
 			reasons = append(reasons, c.Message)
 		}
 	}
-	return fmt.Errorf("%s preflight blocked: %s", r.ID, strings.Join(reasons, "; "))
+	return &PreflightError{ID: r.ID, Reasons: strings.Join(reasons, "; ")}
 }
 
 func reportFingerprint(r HostReport, o HostOptions) string {
