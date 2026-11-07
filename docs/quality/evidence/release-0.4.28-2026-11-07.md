@@ -72,6 +72,26 @@ Publication, successful attestation and the final checksum manifest remain
 unverified until the failed gate is retried successfully and the workflow
 finishes. The release remains a draft; no manual bypass was performed.
 
+## Publication verified (2026-11-08, local time)
+
+After CUDA finished successfully, the failed CPU manifest job was retried with
+`gh run rerun 42378980803 --job 128432462835`. The retry passed attestation,
+published-container verification and release finalization. The same release run
+now reports `completed / success`; the immutable source remains `6154aa8b`.
+No gate was bypassed and no tag or existing source asset was replaced.
+
+GitHub published [OffGrid v0.4.28](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.28)
+at `2026-11-07T16:01:44Z`, as a normal release (not a draft or prerelease).
+There are 14 downloadable application/runtime assets and the checksum manifest.
+Downloaded `checksums-v0.4.28.sha256` and compared every entry with the matching
+GitHub uploaded-asset digest: all 14 matched, with no missing or duplicate names.
+The verification and finalization jobs are `128452939692` and `128452970589`.
+
+After the owner opened the installed desktop, `/health` reported healthy
+version `0.4.28`, six available models, zero active inference requests and an
+empty inference queue. This confirms the installed service is reachable; it
+does not substitute for the broader qualification listed below.
+
 ## Remaining product qualification
 
 This maintenance release does not close the entire product roadmap. The existing
