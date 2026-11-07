@@ -125,3 +125,22 @@ passed with tab switching, draft/cursor preservation, CLI/Agent input, Unicode,
 search, clipboard restrictions, zoom and close/quit child-process cleanup.
 Evidence: `build/release-0427-terminal-readiness.log`. Linux's complete desktop
 suite also passed all 140 tests after the environment correction above.
+
+## Wrapped draft regression
+
+CI run `42314994383` passed every job except the packaged Windows draft assertion.
+The visibility wait above was insufficient: the assertion still assumed the
+draft ended on the cursor's physical row. A deterministic local reproduction
+set the prompt width so prompt plus draft exactly filled one terminal row. The
+original assertion then failed with an empty cursor row, matching CI, while
+ConPTY had retained the input across the row boundary.
+
+The fixture now deliberately covers that boundary and checks the complete exact
+prompt/draft across the surrounding rows, then compares those rows and the cursor
+coordinates after three tab switches. It still submits the command once and
+requires its independent output. No production behavior or authorization was
+changed. The failing reproduction is retained in
+`build/release-0427-wrap-reproduce.log`.
+The corrected full packaged check passed, including child-process cleanup;
+`build/release-0427-wrapped-draft.log` records the result. Remote CI remains a
+separate gate on this correction.

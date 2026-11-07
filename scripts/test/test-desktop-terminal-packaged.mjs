@@ -186,6 +186,13 @@ try {
  await input.pressSequentially("[Console]::Write(([char]27)+']52;c;dW50cnVzdGVk'+([char]7)); [Console]::WriteLine(('ESCAPE_'+'DONE'))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('ESCAPE_DONE');
  assert.deepEqual(await app.evaluate(()=>global.__terminalCopy),['SECOND_TAB']);
+ // Exercise a prompt+draft exactly one row wide. ConPTY can move the cursor
+ // onto an empty next row; that is valid wrapping, not missing input.
+ const draftCommand="[Console]::WriteLine(('TAB_'+'DRAFT'))";
+ const promptPadding=await terminal.evaluate(length=>tabs.get(current).term.cols-length-5,draftCommand.length);
+ assert.ok(promptPadding>0);
+ await input.pressSequentially(`function prompt { 'PS '+('x'*${promptPadding})+'> ' }`);await input.press('Enter');
+ await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();})).toBe('PS '+'x'.repeat(promptPadding)+'>');
  await terminal.getByTitle('Return to Chat',{exact:true}).click();
  await page.getByRole('button',{name:'Open terminal',exact:true}).click();
  await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(2);
@@ -194,12 +201,13 @@ try {
  await expect.poll(()=>terminal.evaluate(()=>visible&&!tabs.get(current).term.options.disableStdin)).toBe(true);
  await expect(input).toBeFocused();
  await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();})).toMatch(/^PS .*>$/);
- await input.pressSequentially("[Console]::WriteLine(('TAB_'+'DRAFT'))");
- await expect.poll(()=>terminal.evaluate(()=>{const t=tabs.get(current).term;return t.buffer.active.getLine(t.buffer.active.baseY+t.buffer.active.cursorY)?.translateToString().trimEnd();})).toMatch(/TAB_'\+'DRAFT'\)\)$/);
- const draftCursor=await terminal.evaluate(()=>{const t=tabs.get(current).term;return {x:t.buffer.active.cursorX,y:t.buffer.active.cursorY,line:t.buffer.active.getLine(t.buffer.active.baseY+t.buffer.active.cursorY)?.translateToString()};});
+ await input.pressSequentially(draftCommand);
+ const draftSnapshot=()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return {x:b.cursorX,y:b.cursorY,baseY:b.baseY,lines:Array.from({length:3},(_,i)=>b.getLine(b.baseY+b.cursorY-2+i)?.translateToString(true)||'')};});
+ await expect.poll(async()=> (await draftSnapshot()).lines.join('')).toContain('PS '+'x'.repeat(promptPadding)+'> '+draftCommand);
+ const draftCursor=await draftSnapshot();
  for(let n=0;n<3;n++){await terminal.getByRole('tab',{name:'PowerShell',exact:true}).first().click();await terminal.getByRole('tab',{name:'PowerShell',exact:true}).last().click();}
  await expect(input).toBeFocused();
- await expect.poll(()=>terminal.evaluate(()=>{const t=tabs.get(current).term;return {x:t.buffer.active.cursorX,y:t.buffer.active.cursorY,line:t.buffer.active.getLine(t.buffer.active.baseY+t.buffer.active.cursorY)?.translateToString()};})).toEqual(draftCursor);
+ await expect.poll(draftSnapshot).toEqual(draftCursor);
  await input.press('Enter');await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('TAB_DRAFT');
  await input.pressSequentially("$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 300' -WindowStyle Hidden -PassThru; [Console]::WriteLine(('CHILD' + 'PID:' + $p.Id))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText(/CHILDPID:[0-9]+/);
