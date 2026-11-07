@@ -78,6 +78,8 @@ export function App() {
   const [guest, setGuest] = useState(false);
   const [authRequired, setAuthRequired] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [inventoryState, setInventoryState] = useState<'checking' | 'ready' | 'failed'>('checking');
+  const [inventoryError, setInventoryError] = useState('');
   const [workspaceID, setWorkspaceID] = useState('');
   const [taskFirst, setTaskFirst] = useState(false);
   const [workSummary, setWorkSummary] = useState(false);
@@ -106,6 +108,8 @@ export function App() {
     }
     const revision = ++accessRevision.current;
     setLoadError('');
+    setInventoryState('checking');
+    setInventoryError('');
     const [healthResult, modelResult, userResult, identityResult] = await Promise.allSettled([api.health(), api.models(), api.currentUser(), api.systemIdentity()]);
     if (revision !== accessRevision.current) return;
     setHealth(healthResult.status === 'fulfilled' ? 'ready' : 'offline');
@@ -140,6 +144,7 @@ export function App() {
     setAuthUser(userResult.value.authenticated ? userResult.value.user : null);
     setGuest(userResult.value.guest === true);
     if (modelResult.status === 'fulfilled') {
+      setInventoryState('ready');
       setAccess('ready');
       setModels(modelResult.value);
       setModel(current => {
@@ -152,6 +157,8 @@ export function App() {
       setAuthUser(null);
     } else {
       setAccess('ready');
+      setInventoryState('failed');
+      setInventoryError(modelResult.reason instanceof Error ? modelResult.reason.message : text.common.error);
       setLoadError(modelResult.reason instanceof Error ? modelResult.reason.message : text.common.error);
     }
   }, [text.common.error]);
@@ -248,12 +255,14 @@ export function App() {
     </main>
     {showHelp && !showOnboarding && <WorkspaceHelp close={()=>setShowHelp(false)} guide={()=>{setShowHelp(false);setShowOnboarding(true);}} />}
     {showCommands && !showOnboarding && !showHelp && <CommandPalette workSearch={workSearch} actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
-    {showOnboarding && <Onboarding health={health} chatModelCount={chatModels.length} chatReady={chatReady} suggestedModel={suggestedModel} pending={onboardingPending} onImport={admin && offlineImport ? () => continueSetup('models/import') : undefined} onAction={() => continueSetup(chatReady ? 'chat' : chatModels.length ? 'models' : 'models/discover')} onSelectSuggested={() => { setModel(suggestedModel); continueSetup('chat'); }} onRetry={refreshBase} onClose={() => setShowOnboarding(false)} />}
+    {showOnboarding && <Onboarding health={health} inventoryState={inventoryState} inventoryError={inventoryError} chatModelCount={chatModels.length} chatReady={chatReady} suggestedModel={suggestedModel} pending={onboardingPending} onImport={admin && offlineImport ? () => continueSetup('models/import') : undefined} onAction={() => continueSetup(chatReady ? 'chat' : chatModels.length ? 'models' : 'models/discover')} onSelectSuggested={() => { setModel(suggestedModel); continueSetup('chat'); }} onRetry={refreshBase} onClose={() => { if (onboardingPending) writePreference('offgrid.onboarding.stage', 'working'); setShowOnboarding(false); }} />}
   </div></SidebarContext.Provider></WorkSearchNavigation></ActiveWorkProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
 }
 
-function Onboarding({ health, chatModelCount, chatReady, suggestedModel, pending, onImport, onAction, onSelectSuggested, onRetry, onClose }: {
+function Onboarding({ health, inventoryState, inventoryError, chatModelCount, chatReady, suggestedModel, pending, onImport, onAction, onSelectSuggested, onRetry, onClose }: {
   health: Health;
+  inventoryState: 'checking' | 'ready' | 'failed';
+  inventoryError: string;
   chatModelCount: number;
   chatReady: boolean;
   suggestedModel: string;
@@ -280,8 +289,9 @@ function Onboarding({ health, chatModelCount, chatReady, suggestedModel, pending
     if (event.shiftKey && (active === first || !event.currentTarget.contains(active))) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && (active === last || !event.currentTarget.contains(active))) { event.preventDefault(); first.focus(); }
   };
-  const hasSuggested = pending && health === 'ready' && !!suggestedModel;
-  const action = !pending ? text.onboarding.close : health === 'checking' ? text.status.checking : health !== 'ready' ? text.onboarding.retryService : chatReady ? text.onboarding.startChat : hasSuggested ? `${workspaceOrder(locale).selectModel}: ${readableModelName(suggestedModel)}` : text.onboarding.chooseModel;
+  const checking = health === 'checking' || inventoryState === 'checking';
+  const hasSuggested = pending && health === 'ready' && inventoryState === 'ready' && !!suggestedModel;
+  const action = !pending ? text.onboarding.close : checking ? text.status.checking : health !== 'ready' ? text.onboarding.retryService : inventoryState === 'failed' ? text.common.retry : chatReady ? text.onboarding.startChat : hasSuggested ? `${workspaceOrder(locale).selectModel}: ${readableModelName(suggestedModel)}` : text.onboarding.chooseModel;
   return <dialog ref={dialog} className="onboarding" aria-labelledby="onboarding-title" onKeyDown={containFocus} onCancel={event => { event.preventDefault(); onClose(); }}>
     <button className="onboarding-close icon-button" onClick={onClose} aria-label={text.onboarding.close}><Icon name="close" size={18} /></button>
     <div className="onboarding-heading"><div className="onboarding-mark"><Icon name="models" size={24} /></div><h2 id="onboarding-title">{text.onboarding.title}</h2></div>
@@ -289,13 +299,14 @@ function Onboarding({ health, chatModelCount, chatReady, suggestedModel, pending
     <details className="onboarding-connection">
       <summary><span>{text.onboarding.service}</span><strong>{health === 'ready' ? text.status.ready : health === 'checking' ? text.status.checking : text.status.offline}</strong></summary>
       <p>{text.guidance.connectionMeaning}</p>
-      <div className="readiness-list"><div><i className={chatModelCount > 0 ? 'ready' : ''} /><span>{text.onboarding.models}</span><strong>{chatModelCount}</strong></div></div>
+      <div className="readiness-list"><div><i className={inventoryState === 'ready' && chatModelCount > 0 ? 'ready' : ''} /><span>{text.onboarding.models}</span><strong>{inventoryState === 'ready' ? chatModelCount : inventoryState === 'checking' ? text.status.checking : text.common.error}</strong></div></div>
     </details>
-    {pending && <p className="onboarding-next">{chatReady ? text.onboarding.firstReplyHint : suggestedModel ? chatReadiness[locale].unavailable : chatReadiness[locale].setup}</p>}
+    {pending && inventoryError && <p role="alert" className="onboarding-next">{inventoryError}</p>}
+    {pending && inventoryState === 'ready' && <p className="onboarding-next">{chatReady ? text.onboarding.firstReplyHint : suggestedModel ? chatReadiness[locale].unavailable : chatReadiness[locale].setup}</p>}
     <div className="onboarding-actions">
-      <button autoFocus className="primary-button" disabled={pending && health === 'checking'} onClick={!pending ? onClose : health !== 'ready' ? () => void onRetry() : hasSuggested ? onSelectSuggested : onAction}>{action}</button>
+      <button autoFocus className="primary-button" disabled={pending && checking} onClick={!pending ? onClose : health !== 'ready' || inventoryState !== 'ready' ? () => void onRetry() : hasSuggested ? onSelectSuggested : onAction}>{action}</button>
       {hasSuggested && <button className="text-button" onClick={onAction}>{text.onboarding.chooseModel}</button>}
-      {pending && health === 'ready' && !chatModelCount && onImport && <button className="text-button" onClick={onImport}>{modelImport(locale).title}</button>}
+      {pending && health === 'ready' && inventoryState === 'ready' && !chatModelCount && onImport && <button className="text-button" onClick={onImport}>{modelImport(locale).title}</button>}
     </div>
   </dialog>;
 }

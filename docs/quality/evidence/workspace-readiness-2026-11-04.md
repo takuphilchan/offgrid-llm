@@ -46,3 +46,35 @@ the required theme methods; it was corrected before the passing rerun.
 This follow-up addresses the terminal integration task. It does not close the
 larger guided setup, document-answer, human usability or platform gates. No
 installed application or personal workspace was changed in this pass.
+
+## First-use recovery follow-up (2026-11-08)
+
+Three new browser tests reproduced two defects before the patch: dismissing
+the guide with Close or Escape displayed it again after reload, and a failed
+model inventory read was presented as an empty library with installation
+guidance. Explicit dismissal now persists the existing working stage without
+marking onboarding complete. A failed inventory read shows its error and a
+retry action inside the guide; model selection and import actions require a
+successful inventory read. A retry preserves the saved model selection.
+
+Validation on the follow-up source:
+
+- `npx.cmd playwright test tests/chat-readiness.spec.ts tests/workspace-experience.spec.ts --workers=1`:
+  32 passed. The invocation also included the unmatched name
+  `tests/setup-handoff.spec.ts`; that name selected no additional tests.
+- `npx.cmd playwright test tests/offline-model-setup.spec.ts --workers=1`:
+  14 passed, including all nine locales, explicit import, permission/capability
+  restrictions and retained drafts.
+- `npm.cmd run check`, `npm.cmd run api:check`, and `npm.cmd run build` in
+  `apps/web`: passed. The build retains its existing large-chunk warning.
+- Documentation links, source-size ratchet and `git diff --check`: passed.
+
+One initial post-patch test used the label `Retry` while the existing localized
+English action is `Try again`; correcting that selector produced the passing
+run above. The original three pre-patch behavior failures remain distinct from
+that test-label error.
+
+This is partial progress on task 22.2, not completion of guided setup or human
+usability qualification. These changes follow the published 0.4.28 source and
+are not included in its installed or published binaries. The installed app and
+personal workspace were not changed during these isolated browser tests.

@@ -15,8 +15,40 @@ async function setup(page: Page, selected = '', first = false, locale: LocaleCod
     ? { status: 503, json: { error: { message: 'Inventory unavailable' } } }
     : { json: { data: models } }));
   await page.route('**/v1/sessions', route => route.fulfill({ json: { sessions: [] } }));
-  return { fixture, models: (value: typeof models) => { models = value; }, fail: () => { failed = true; } };
+  return { fixture, models: (value: typeof models) => { models = value; }, fail: () => { failed = true; }, recover: () => { failed = false; } };
 }
+
+for (const method of ['close', 'escape'] as const) {
+  test(`declining first-use setup survives reload without claiming completion: ${method}`, async ({ page }) => {
+    const state = await setup(page, '', true);
+    await page.goto('/ui/');
+    const guide = page.getByRole('dialog');
+    await expect(guide).toBeVisible();
+    if (method === 'escape') await page.keyboard.press('Escape');
+    else await guide.locator('.onboarding-close').click();
+    await expect(guide).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator('.composer textarea')).toBeVisible();
+    await expect(guide).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem('offgrid.onboarding.complete'))).not.toBe('true');
+    expect(state.fixture.writes).toEqual([]);
+  });
+}
+
+test('first-use inventory failure offers retry rather than model installation', async ({ page }) => {
+  const state = await setup(page, 'saved-model', true);
+  state.fail();
+  await page.goto('/ui/');
+  const guide = page.getByRole('dialog');
+  await expect(guide).toContainText('Inventory unavailable');
+  await expect(guide.getByRole('button', { name: 'Choose a chat model' })).toHaveCount(0);
+  await expect(guide).not.toContainText(chatReadiness.en.setup);
+  state.recover();
+  await guide.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(guide.getByRole('button', { name: 'Select model: working model' })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('offgrid.model'))).toBe('saved-model');
+  expect(state.fixture.writes).toEqual([]);
+});
 
 async function refresh(page: Page) {
   await page.getByRole('button', { name: 'Workspace options' }).click();
