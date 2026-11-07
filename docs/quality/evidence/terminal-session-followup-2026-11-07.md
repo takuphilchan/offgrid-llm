@@ -153,3 +153,13 @@ and cursor before/after overlays. The remaining physical-row assertions are
 short, known-width prompts or the short Agent `/help` selector, not shell drafts.
 The full packaged check passed with both forced wrapping cases in
 `build/release-0427-wrapped-overlay.log`. No command retries were added.
+
+CI run `42320191529` passed both wrapped-draft checks and reached the final Agent
+exit assertion. PowerShell returned to the correct directory, expanded from the
+runner's `RUNNER~1` temporary-path alias to `runneradmin`. The fixture now resolves
+its temporary directory through the native filesystem before launch, keeping the
+exact full-path assertion rather than accepting a basename or partial match.
+Local verification confirmed that `C:\PROGRA~1` and `C:\Program Files` resolve to
+the same native path. The complete packaged terminal check passed again in
+`build/release-0427-canonical-folder.log`, including Agent exit and child cleanup.
+All other jobs in that CI run passed; exact-revision CI must run again.

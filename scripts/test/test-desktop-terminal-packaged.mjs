@@ -2,6 +2,7 @@
 // local HTTP fixture. This never changes OS appearance or the user's workspace.
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
+import {realpathSync} from 'node:fs';
 import {mkdtemp, mkdir, readFile, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join, resolve, sep, extname} from 'node:path';
@@ -17,7 +18,9 @@ const binary = resolve(process.argv[2]);
 const ui = join(root, 'apps/web/dist');
 const version = JSON.parse(await readFile(join(root, 'apps/desktop/package.json'), 'utf8')).version;
 const uiBuild = createHash('sha256').update((await readFile(join(ui, 'index.html'), 'utf8')).replace(/\r\n/g, '\n')).digest('hex');
-const evidence = await mkdtemp(join(tmpdir(), 'offgrid-desktop-theme-'));
+// Windows runner TEMP may use an 8.3 alias; PowerShell expands it on entry.
+// Compare the same canonical directory identity after Agent exits.
+const evidence = realpathSync.native(await mkdtemp(join(tmpdir(), 'offgrid-desktop-theme-')));
 await writeFile(join(evidence, 'desktop-presentation.json'), JSON.stringify({locale:'en',theme:'dark'}));
 const savedSessions=new Map();let submittedTurns=0;
 const server = createServer(async (request, response) => {
