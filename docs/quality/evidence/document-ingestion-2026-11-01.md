@@ -1617,3 +1617,58 @@ stale-worker publication, cache batch/restart/error paths, redirected staging
 paths, and source/original/preview denial after expiry. This focused audit does
 not close collection policy (4.1), scheduling (4.3), complete document-answer
 quality (5.2), or unavailable platform and human checks.
+
+## Queue deadline and indexed import verification — November 8
+
+Fixed a queue-admission race: Go may select an available slot even when the
+queue deadline has expired. Both the shared reader and durable-import gate now
+recheck the queue context after acquiring the slot and release it on expiry.
+An expired wait remains an operational `document_busy` result; parent cancellation
+retains its own error. Limits, retained sources and authorization are unchanged.
+
+The new expired-wait regression failed against the old code with
+`expired queue wait admitted extraction`. After the fix, the scheduler suite
+passed 20 repetitions:
+
+```text
+go test ./internal/rag -run 'Test(Extraction|ExpiredExtraction|ParserAndDurableImport|ImportQueue)' -count=20
+go test ./internal/rag ./internal/server ./internal/sessions -count=1
+```
+
+The full package checks passed (RAG 24.7s, server 147.4s, sessions 8.3s).
+An opt-in Windows native test also passed with the installed PDF worker and
+existing bge-m3 embedding model through the real llama-server runtime. All
+indexes, retained test sources, worker logs and code caches used temporary
+directories; no installed workspace was opened or model downloaded.
+
+To reproduce, compile `./internal/rag` with `go test -c` beside the packaged
+`offgrid-document-worker.exe`, set `OFFGRID_TEST_PACKAGED_DOCUMENTS=1`,
+`OFFGRID_TEST_EMBEDDING_MODEL` to an existing local embedding GGUF and
+`OFFGRID_LLAMA_SERVER_PATH` to its compatible runtime. Run from `internal/rag`:
+
+```text
+rag.test.exe -test.run=^TestRealDocumentImportSchedulingAndRecovery$ -test.v -test.count=1 -test.timeout=4m
+```
+
+Final native result: 17.49s total. Cold embedding load took 7.37s and cold PDF
+import 8.45s; warm import took 0.48s. Each phase used a fresh index, preventing
+deduplication from standing in for ingestion. Both produced a searchable chunk
+with 1,024 embedding dimensions and preserved the exact original PDF bytes and
+embedding identity. Cancellation while waiting for index publication took
+4.44ms, published nothing, and retained the source. Retry published exactly one
+document in 0.41s. A separate text attachment remained readable during that wait.
+These are single-fixture measurements, not general performance claims.
+
+The initial native harness failed because it configured a fresh parser object
+instead of exercising app-local discovery. Running the compiled test beside the
+packaged worker corrected the harness; a subsequent invocation also needed quoted
+test flags in PowerShell. Those failed logs remain in local build evidence.
+The final log is `build/document-import-runtime-final-20261108.log`.
+PowerShell labels native stderr log messages as `NativeCommandError`; the test
+process itself returned zero and all three phases passed.
+
+Task 4.3 remains open: this does not establish concurrent real-model Chat latency
+or memory-budget behavior. Local Windows race coverage was not run because CGO
+and a C compiler were unavailable; CI supplies separate race checks. Other
+platforms and full document-answer qualification remain unverified. This is a
+source follow-up, not a change to the installed or published 0.4.28 payload.

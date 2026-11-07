@@ -101,20 +101,10 @@ func (e *Engine) RunImport(parent context.Context, owner, id string) (doc *Docum
 		control.mu.Unlock()
 		control.wait.Done()
 	}()
-	queued, stopWaiting := context.WithTimeout(ctx, extractionQueueTimeout)
-	defer stopWaiting()
-	select {
-	case control.gate <- struct{}{}:
-		defer func() { <-control.gate }()
-	case <-queued.Done():
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, extractionBusy()
-	}
-	if err = ctx.Err(); err != nil {
+	if err = acquireDocumentSlot(ctx, control.gate, extractionQueueTimeout); err != nil {
 		return nil, err
 	}
+	defer func() { <-control.gate }()
 	// Acquire the shared reader before loading a retained source into memory.
 	// Release it before waiting for embedding/index work, so Chat attachments
 	// can continue while a library document is being indexed.

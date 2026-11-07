@@ -81,6 +81,29 @@ func TestExtractionQueueTimeoutIsOperationalNotInvalidDocument(t *testing.T) {
 	}
 }
 
+func TestExpiredExtractionWaitCannotAdmitWork(t *testing.T) {
+	var scheduler extractionScheduler
+	for i := 0; i < 100; i++ {
+		release, err := scheduler.acquire(context.Background(), -time.Second)
+		if release != nil {
+			release()
+			t.Fatal("expired queue wait admitted extraction")
+		}
+		var busy *ParseError
+		if !errors.As(err, &busy) || busy.Code != "document_busy" {
+			t.Fatalf("expected operational queue timeout, got %v", err)
+		}
+		if len(scheduler.active) != 0 || len(scheduler.admitted) != 0 {
+			t.Fatal("expired queue wait retained a slot")
+		}
+	}
+	release, err := scheduler.acquire(context.Background(), time.Second)
+	if err != nil {
+		t.Fatal("expired waits prevented subsequent work", err)
+	}
+	release()
+}
+
 func TestParserAndDurableImportShareExtractionAdmission(t *testing.T) {
 	release, err := sharedExtractionScheduler.acquire(context.Background(), time.Second)
 	if err != nil {

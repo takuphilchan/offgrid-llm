@@ -37,22 +37,30 @@ func (s *extractionScheduler) acquire(ctx context.Context, wait time.Duration) (
 	default:
 		return nil, extractionBusy()
 	}
+	if err := acquireDocumentSlot(ctx, s.active, wait); err != nil {
+		<-s.admitted
+		return nil, err
+	}
+	var released sync.Once
+	return func() { released.Do(func() { <-s.active; <-s.admitted }) }, nil
+}
+
+// A ready slot and an expired deadline may both win a select. Recheck after
+// acquiring so expired work cannot begin parsing, load source bytes or index.
+// The caller owns the slot only when this returns nil.
+func acquireDocumentSlot(ctx context.Context, slot chan struct{}, wait time.Duration) error {
 	queued, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 	select {
-	case s.active <- struct{}{}:
-		if err := ctx.Err(); err != nil {
-			<-s.active
-			<-s.admitted
-			return nil, err
+	case slot <- struct{}{}:
+		if queued.Err() == nil {
+			return nil
 		}
-		var released sync.Once
-		return func() { released.Do(func() { <-s.active; <-s.admitted }) }, nil
+		<-slot
 	case <-queued.Done():
-		<-s.admitted
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		return nil, extractionBusy()
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return extractionBusy()
 }
