@@ -53,3 +53,31 @@ macOS/Linux installer appearance and hardware/model behavior were not qualified
 by this test. The candidate uses 0.4.27 package metadata; final release CI must
 test the exact new release revision. Installation into the owner's production
 workspace is a separate operation.
+
+## Follow-up: full-width 0.4.28 installer
+
+The first refresh retained the stock bitmap-column layout and did not adequately
+address the presentation feedback. The follow-up uses a small layer mark and
+aligned, full-width heading/body controls on welcome and finish pages. Geometry
+uses native dialog units. The existing wizard lifecycle and install/uninstall
+boundaries remain unchanged.
+
+The final candidate was built with `npx.cmd electron-builder --config
+installer-test.cjs --win nsis --x64 --publish never` from `apps/desktop`, then
+tested with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+scripts/release/test-windows-installer.ps1 -InstallerPath
+"D:/offgrid-llm/build/windows-installer-smoke/OffGrid Desktop Install Test-Setup-0.4.28.exe"`.
+
+The test passed clean installation, installed startup, Finish launch choices,
+silent running-app refusal, interactive reinstall, uninstall, workspace fixture
+preservation and independently managed service survival. Finish closed in 74 ms
+for installation, 58 ms for reinstall and 66 ms for removal. The harness also
+checked heading/body alignment, usable text width and non-overlapping bounds.
+Actual installation and uninstall welcome screenshots were inspected.
+
+Final log: `build/installer-refresh-final.log`. Private captures and result:
+`%TEMP%/offgrid-install-d25f300d869a442c9fddccd86b38a9d6/diagnostics`.
+Startup evidence: `%TEMP%/offgrid-desktop-startup-y0C3CV`.
+Desktop unit tests passed 141 with one skip. This supersedes the earlier candidate
+for these installer checks without replacing its historical evidence. Elevated
+installation, manual accessibility and other native platforms remain unverified.

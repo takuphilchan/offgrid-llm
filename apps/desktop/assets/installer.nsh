@@ -16,25 +16,78 @@
   BrandingText " "
   ShowInstDetails hide
   ShowUninstDetails hide
+  !ifdef BUILD_UNINSTALLER
+    !insertmacro OffGridFullPage "un." "Welcome"
+    !insertmacro OffGridFullPage "un." "Finish"
+  !else
+    !insertmacro OffGridFullPage "" "Welcome"
+    !insertmacro OffGridFullPage "" "Finish"
+  !endif
 !macroend
 
 !macro customWelcomePage
+  !define MUI_PAGE_CUSTOMFUNCTION_SHOW OffGridWelcomeLayout
   !define MUI_WELCOMEPAGE_TITLE "Install OffGrid"
-  !define MUI_WELCOMEPAGE_TEXT "A local workspace for conversations, documents and agents.$\r$\n$\r$\nSetup installs or updates the app. Your models and saved work are kept.$\r$\n$\r$\nChoose Next to continue."
+  !define MUI_WELCOMEPAGE_TEXT "A local workspace for conversations, documents and agents.$\r$\n$\r$\nYour models and saved work are kept."
   !insertmacro MUI_PAGE_WELCOME
 !macroend
 
 !macro customUnWelcomePage
+  !define MUI_PAGE_CUSTOMFUNCTION_SHOW un.OffGridWelcomeLayout
   !define MUI_WELCOMEPAGE_TITLE "Remove OffGrid?"
-  !define MUI_WELCOMEPAGE_TEXT "This removes the application and its shortcuts.$\r$\n$\r$\nYour models and saved work are kept. Separately managed services are not removed.$\r$\n$\r$\nClose OffGrid and finish any active tasks before continuing."
+  !define MUI_WELCOMEPAGE_TEXT "This removes the application and its shortcuts.$\r$\n$\r$\nYour models and saved work are kept. Separately managed services are not removed."
   !insertmacro MUI_UNPAGE_WELCOME
 !macroend
 
 !macro customUninstallPage
+  !define MUI_PAGE_CUSTOMFUNCTION_SHOW un.OffGridFinishLayout
   ; MUI_UNPAGE_FINISH consumes the same page-local definitions as install
   ; Finish. Set them in this hook immediately before that page is inserted.
   !define MUI_FINISHPAGE_TITLE "OffGrid removed"
   !define MUI_FINISHPAGE_TEXT "The application has been removed.$\r$\n$\r$\nYour models and saved work are still on this computer. Reinstall OffGrid to use them again."
+!macroend
+
+; Keep the native page lifecycle, but replace the stock bitmap-column layout.
+; All geometry is in dialog units, mapped by Windows using the current font/DPI.
+; Do not use screen pixels: these pages also run at enlarged display scales.
+!macro OffGridPlace CONTROL X Y W H
+  System::Call '*(&i4 ${X}, &i4 ${Y}, &i4 ${W}, &i4 ${H}) p .r0'
+  System::Call 'user32::MapDialogRect(p $HWNDPARENT, p r0)'
+  System::Call '*$0(&i4 .r1, &i4 .r2, &i4 .r3, &i4 .r4)'
+  System::Free $0
+  System::Call 'user32::MoveWindow(p ${CONTROL}, i r1, i r2, i r3, i r4, i 1)'
+!macroend
+
+!macro OffGridFullPage PREFIX PAGE
+Function ${PREFIX}OffGrid${PAGE}Layout
+  Push $0
+  Push $1
+  Push $2
+  Push $3
+  Push $4
+  ; A small layer mark replaces the full-height decorative sidebar.
+  !insertmacro OffGridPlace $mui.${PAGE}Page.Image 24 20 22 22
+  ${NSD_FreeImage} $mui.${PAGE}Page.Image.Bitmap
+  ${NSD_SetStretchedImage} $mui.${PAGE}Page.Image "$PLUGINSDIR\modern-wizard.bmp" $mui.${PAGE}Page.Image.Bitmap
+  !insertmacro OffGridPlace $mui.${PAGE}Page.Title 24 50 280 28
+  StrCpy $0 $mui.${PAGE}Page.Title.Font
+  CreateFont $mui.${PAGE}Page.Title.Font "Segoe UI" 18 600
+  SendMessage $mui.${PAGE}Page.Title ${WM_SETFONT} $mui.${PAGE}Page.Title.Font 1
+  System::Call 'gdi32::DeleteObject(p r0)'
+  !insertmacro OffGridPlace $mui.${PAGE}Page.Text 24 84 280 52
+  !if "${PAGE}" == "Finish"
+    !if "${PREFIX}" == ""
+      !ifndef HIDE_RUN_AFTER_FINISH
+        !insertmacro OffGridPlace $mui.FinishPage.Run 24 148 280 14
+      !endif
+    !endif
+  !endif
+  Pop $4
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
+FunctionEnd
 !macroend
 
 !macro OffGridStyleWindow PREFIX
@@ -75,6 +128,7 @@ FunctionEnd
 ; Keep the Finish callback trivial. Shell activation/virus scanning must not
 ; block the wizard's UI thread while its Finish button is still on screen.
 !macro customFinishPage
+  !define MUI_PAGE_CUSTOMFUNCTION_SHOW OffGridFinishLayout
   !define MUI_FINISHPAGE_TITLE "OffGrid installed"
   !define MUI_FINISHPAGE_TEXT "Your models and saved work are kept.$\r$\n$\r$\nOpen OffGrid to continue. Separately managed services are unchanged."
   !ifndef HIDE_RUN_AFTER_FINISH

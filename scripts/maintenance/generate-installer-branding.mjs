@@ -30,7 +30,8 @@ function bitmap(width, height, sidebar, scale, density = 4) {
   return file;
 }
 for (const [name, width, height, sidebar, scale] of [
-  ['installer-sidebar.bmp', 164, 314, true, 2],
+  // MUI's full-height image control is reflowed to a small square mark.
+  ['installer-sidebar.bmp', 32, 32, false, 1],
   ['installer-header.bmp', 150, 57, false, 1.3]
 ]) {
   await writeFile(fileURLToPath(new URL(`../../apps/desktop/assets/${name}`, import.meta.url)), bitmap(width, height, sidebar, scale));

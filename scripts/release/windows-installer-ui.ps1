@@ -9,6 +9,7 @@ using System.Text;
 public static class OffGridWizard {
   [StructLayout(LayoutKind.Sequential)] public struct Rect { public int left, top, right, bottom; }
   [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr window, out Rect rect);
+  public static Rect Bounds(IntPtr window) { Rect rect; if (!GetWindowRect(window, out rect)) throw new InvalidOperationException("Missing control bounds"); return rect; }
   [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
   [DllImport("user32.dll")] static extern IntPtr GetWindowDpiAwarenessContext(IntPtr window);
   [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
@@ -64,6 +65,21 @@ function Write-WizardDiagnostic([string]$Path, [string]$Event, [hashtable]$Detai
     if (-not $Path) { return }
     $record = @{ time = [DateTime]::UtcNow.ToString('o'); event = $Event; detail = $Detail } | ConvertTo-Json -Depth 5 -Compress
     [IO.File]::AppendAllText($Path, $record + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+}
+
+function Assert-WizardPageLayout([IntPtr]$Window, [string]$Title, [string]$BodyPrefix) {
+    $controls = @([OffGridWizard]::Children($Window) | Where-Object { [OffGridWizard]::IsWindowVisible($_) })
+    $heading = @($controls | Where-Object { [OffGridWizard]::Text($_) -eq $Title })
+    $body = @($controls | Where-Object { [OffGridWizard]::Text($_).StartsWith($BodyPrefix) })
+    if ($heading.Count -ne 1 -or $body.Count -ne 1) { throw 'Missing installer page heading or description.' }
+    $frame = [OffGridWizard]::Bounds($Window)
+    $h = [OffGridWizard]::Bounds($heading[0])
+    $b = [OffGridWizard]::Bounds($body[0])
+    $width = $frame.right - $frame.left
+    if ($h.left - $frame.left -gt $width * .2 -or [Math]::Abs($h.left - $b.left) -gt 2 -or $b.right - $b.left -lt $width * .7) {
+        throw 'Installer regressed to a narrow column beside decorative artwork.'
+    }
+    if ($h.bottom -gt $b.top -or $b.bottom -gt $frame.bottom - 20) { throw 'Installer page text overlaps or escapes its surface.' }
 }
 
 # Pure timing policy, separate from Win32 and screenshot collection. Time spent
@@ -244,6 +260,9 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
                 if ($clicked.ContainsKey($key)) { continue }
                 if ($text.Contains('A local workspace for conversations, documents and agents.') -or ($Uninstall -and $text.Contains('This removes the application and its shortcuts.'))) {
                     if (-not $text.Contains('Your models and saved work are kept.')) { throw 'Welcome omitted data-preservation guidance.' }
+                    $pageTitle = if ($Uninstall) { 'Remove OffGrid?' } else { 'Install OffGrid' }
+                    $pageBody = if ($Uninstall) { 'This removes the application' } else { 'A local workspace' }
+                    Assert-WizardPageLayout $window $pageTitle $pageBody
                     if (-not $welcomeCapture) {
                         $welcomeName = if ($Uninstall) { 'uninstaller-welcome.png' } else { 'installer-welcome.png' }
                         $welcomeCapture = Start-WizardCapture $window (Join-Path $evidence.FullName $welcomeName) $diagnosticPath
@@ -270,6 +289,8 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
                         if ($clock.ElapsedMilliseconds - $finishPageAt -lt 10000) { continue }
                         throw "Finish must display installation and external-service guidance: $visibleText"
                     }
+                    $pageBody = if ($Uninstall) { 'The application has been removed.' } else { 'Your models and saved work are kept.' }
+                    Assert-WizardPageLayout $window $expectedTitle $pageBody
                     # Keep probing while a bounded helper captures the settled page.
                     # Click Finish only afterwards; its two-second close gate remains.
                     if ($detailsCapture -and -not $detailsCapture.done) { continue }

@@ -601,9 +601,10 @@ Desktop navigation observes explicit sidebar activation as well as route changes
 
 Use the existing NSIS assisted installer and supported electron-builder hooks.
 Retain native controls, DPI awareness, directory/scope selection, running-app
-guards and deferred non-elevated launch. Replace the dark decorative sidebar
-with quiet light artwork, remove promotional branding and use concise page
-headings. Progress remains tied to actual installation; diagnostic file output
+guards and deferred non-elevated launch. Use a full-width welcome/finish layout
+with a small OffGrid mark, aligned headings and concise copy instead of a
+decorative sidebar. Map layout dimensions through native dialog units for DPI
+scaling. Progress remains tied to actual installation; diagnostic file output
 stays available through Show details. The uninstall welcome explains application
 removal separately from retained models and saved work. No data-erasure option,
 automatic download or new installer engine is introduced. Render the actual
