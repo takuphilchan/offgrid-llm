@@ -438,3 +438,43 @@ Read-aloud preparation now stays within the response action row, with a small
 progress indicator and an immediate Stop action. Its explanation is available
 to assistive technology without expanding the row. Response metrics use a
 compact label/value popover. This is source-level work until separately installed.
+
+### Terminal and CLI interaction review (2026-11-07)
+
+The supplied terminal analysis was checked against the current working tree,
+including `terminal-renderer.js`, `terminal-sessions.js`,
+`cmd/offgrid/agent_session_input.go` and
+`internal/cli/agent_conversation_chat.go`. Its main interaction findings hold:
+
+- The desktop uses a real supervised PTY. Keep this implementation and its
+  explicit folder, origin and process-ownership boundaries.
+- Agent input preserves pasted newlines but displays them as escaped text in a
+  horizontal viewport. Cursor/delete operate on runes, not grapheme clusters.
+  A bounded multiline editor with wrapping and safe paste is the highest-value
+  next input improvement; an ordinary-terminal newline fallback is necessary.
+- The conversation loop submits with `--wait` before reading another line.
+  Steering exists in the service, but is not available through a continuously
+  editable composer during that wait. A future interaction change must have one
+  input owner and distinguish correction, queued follow-up and approval answers.
+- Font size, line height and scrollback are fixed. ANSI colors are only partly
+  specified. A complete light/dark palette and a small optional preferences panel
+  would improve readability without adding a setup requirement.
+- Tabs report the launch folder and session state. They do not prove the current
+  shell directory, command completion or exit status. Shell integration could
+  add navigation and command blocks, but shell-emitted markers must never become
+  trusted agent execution receipts.
+- Output-to-agent transfer needs a selection preview, provenance and explicit
+  submission. It must not scrape or automatically forward the whole terminal.
+  File-change review must distinguish proposed edits from applied changes and
+  use revision checks for any revert.
+
+These are audited follow-up requirements, not implemented release claims. Keep
+multiline editing/presentation first, live steering second, and command blocks,
+deliberate context transfer and guarded change review as separately reviewable
+work. Do not delay the concrete copy/interrupt fix by replacing the terminal
+engine or introducing detached sessions. Manual accessibility and other native
+platforms remain unverified.
+
+The current correction makes Ctrl+C copy a selection and interrupt only without
+one, retains Ctrl+Shift+C, and softens the terminal welcome focus indicator.
+Packaged Windows verification is recorded in the terminal follow-up evidence.
