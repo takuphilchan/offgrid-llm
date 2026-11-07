@@ -18,7 +18,13 @@ window.addEventListener('DOMContentLoaded', () => {
   document.body.append(strip);
   fitNativeChrome();
 });
-window.addEventListener('resize', fitNativeChrome);
+// Chromium can deliver resize before webFrame exposes the new zoom factor.
+// Read it on the next frame so the native caption strip never keeps old geometry.
+let nativeChromeFrame=0;
+window.addEventListener('resize',()=>{
+  cancelAnimationFrame(nativeChromeFrame);
+  nativeChromeFrame=requestAnimationFrame(fitNativeChrome);
+});
 // Geometry only: the service renderer never receives the local terminal bridge.
 let terminalVisible=false,terminalFrame=0,terminalRect='',terminalOverlay=false,terminalBackdrop;
 function measureTerminalWorkspace(){

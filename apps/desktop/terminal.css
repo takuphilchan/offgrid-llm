@@ -20,6 +20,8 @@ header{display:flex;align-items:center;gap:8px;padding:4px 12px;border-bottom:0;
 .terminal-launch-options{display:grid;gap:10px;margin:24px 0 16px}
 .terminal-launch-options button,#start{display:flex;justify-content:flex-start;gap:16px;width:100%;padding:16px;margin:0;background:transparent;border:1px solid var(--line);border-radius:12px;text-align:start}
 .terminal-launch-options button:hover{background:var(--hover);border-color:var(--muted)}
+.terminal-launch-options button:focus-visible{outline:1px solid var(--muted);outline-offset:3px;background:var(--hover)}
+@media(forced-colors:active){.terminal-launch-options button:focus-visible{outline:2px solid Highlight;outline-offset:3px}}
 .terminal-launch-options button>span:first-of-type{flex:1;display:grid;gap:4px}
 .terminal-launch-options strong{font-weight:550;font-size:14px}
 .terminal-launch-options small{font-size:13px;color:var(--muted);line-height:1.5}

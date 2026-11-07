@@ -1,5 +1,43 @@
 # Terminal and session follow-up — 2026-11-07
 
+## Selection-aware shortcuts and focus follow-up
+
+The old renderer intercepted only Ctrl+Shift+C. Ctrl+C with selected output
+therefore reached the PTY and could cancel the user's command. The renderer now
+intercepts Ctrl+C only when it has a selection. Without a selection it retains
+the normal interrupt path. Ctrl+Shift+C remains copy-only; empty copy does not
+overwrite the clipboard. AltGr, paste and ordinary input retain native handling.
+
+The welcome cards now use a one-pixel secondary focus outline and hover surface,
+with a stronger forced-colors indicator. Native caption sizing reads the zoom
+factor on the next animation frame after resize, avoiding stale caption geometry.
+
+Verification for the isolated 0.4.28 Windows x64 package:
+
+- Desktop suite: 141 passed, one platform skip (142 total).
+- `node scripts/test/test-desktop-terminal-packaged.mjs
+  "build/windows-installer-smoke/win-unpacked/OffGrid Desktop Install Test.exe"`:
+  passed. Evidence: `%TEMP%/offgrid-desktop-theme-21XWFo`;
+  log: `build/terminal-shortcuts-final.log`.
+- Selected output copied while a three-second command continued to its distinct
+  completion marker. Ctrl+C without selection interrupted a 30-second command
+  and returned to the prompt within five seconds. Unicode paste inserted exact
+  editable command text without submitting it before Enter.
+- The paste test dispatches Chromium's clipboard-data event; it does not replace
+  the user's OS clipboard. Clipboard writes are captured by the isolated fixture.
+  This is not a manual OS clipboard interoperability qualification.
+- Existing full checks passed tabs, cursor/draft preservation, search, blocked
+  OSC clipboard writes, Agent /clear and /exit, zoom, reload and owned-child cleanup.
+  The welcome screenshot was inspected with keyboard focus visible.
+
+Earlier runs exposed stale zoom geometry, a fractional-device-pixel assertion,
+test typing before PowerShell had returned from interruption, and a paste draft
+wrapping across rows. The geometry fix and state/whole-draft assertions address
+those causes. A later run timed out capturing the Agent slash-menu screenshot;
+the complete unchanged candidate passed on rerun. That intermittent capture
+failure is retained as a test limitation, not represented as a product pass.
+No production installation, macOS/Linux qualification or human review is implied.
+
 ## Scope and findings
 
 - Agent was the terminal's root process. `/exit` therefore ended the tab's

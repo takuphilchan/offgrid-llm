@@ -33,9 +33,9 @@ async function create(kind){
   const tab={...session,cols:90,rows:24,term,fit:fitAddon,search,pane,button,select:choose};tabs.set(tab.id,tab);
   term.onData(text=>{if(tab.state!=='running')return;for(let i=0;i<text.length;){let end=Math.min(text.length,i+4096);if(end<text.length&&/[\uD800-\uDBFF]/.test(text[end-1]))end--;void request('input',{id:tab.id,text:text.slice(i,end)}).catch(showError);i=end;}});
   term.attachCustomKeyEventHandler(event=>{
-   if(event.type!=='keydown')return true;
-   if((event.ctrlKey||event.metaKey)&&event.shiftKey&&event.code==='KeyC'){void request('copy',{text:term.getSelection()}).catch(showError);event.preventDefault();return false;}
-   if((event.ctrlKey||event.metaKey)&&event.shiftKey&&event.code==='KeyF'){openSearch();event.preventDefault();return false;}
+   const selection=term.getSelection(),shortcut=terminalShortcut(event,selection);
+   if(shortcut==='copy'){if(selection)void request('copy',{text:selection}).catch(showError);event.preventDefault();return false;}
+   if(shortcut==='search'){openSearch();event.preventDefault();return false;}
    return true;
   });
   select(tab.id);await request('attach',{id:tab.id});notice('');

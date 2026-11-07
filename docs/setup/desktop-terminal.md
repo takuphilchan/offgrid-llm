@@ -16,8 +16,9 @@ start a shell automatically. The browser application does not expose a terminal.
 - Terminal replaces the main Chat area while keeping the sidebar available.
   Switch back with **Chat**; your shell and unfinished command stay in their tab.
   Resize the app window to change the terminal dimensions.
-- **Search** searches the current tab. `Ctrl+Shift+C` copies selected text;
-  `Ctrl+C` interrupts the running command.
+- **Search** searches the current tab. `Ctrl+C` copies selected terminal text;
+  with no selection, it interrupts the running command. `Ctrl+Shift+C` always
+  uses copy instead of interrupt. `Ctrl+V` pastes into the focused terminal.
 - **Chat** returns to the workspace without stopping tabs.
 - Closing a live tab asks to stop its commands. Quitting OffGrid stops its owned
   terminal processes. Reloading the terminal also stops its sessions; commands

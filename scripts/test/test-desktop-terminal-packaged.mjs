@@ -136,6 +136,19 @@ try {
  if(process.platform==='win32') await expect.poll(()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].contentView.children.at(-1).getBounds().y)).toBeGreaterThanOrEqual(36);
  terminal.on('pageerror',error=>console.error('TERMINAL PAGE ERROR',error));
  await expect(terminal.locator('#start-agent')).toBeVisible();
+ // Opening the terminal focuses its first launch card. Keep that cue quiet,
+ // but preserve keyboard traversal and the system high-contrast indicator.
+ await terminal.locator('#start').focus();
+ await expect(terminal.locator('#start')).toBeFocused();
+ const outlineWidth=selector=>terminal.locator(selector).evaluate(el=>parseFloat(getComputedStyle(el).outlineWidth));
+ // Chromium rounds strokes to device pixels at fractional Windows scaling.
+ assert.ok(await outlineWidth('#start')>0 && await outlineWidth('#start')<=1);
+ await terminal.keyboard.press('Tab');
+ await expect(terminal.locator('#start-agent')).toBeFocused();
+ assert.ok(await outlineWidth('#start-agent')>0 && await outlineWidth('#start-agent')<=1);
+ await terminal.emulateMedia({forcedColors:'active'});
+ assert.ok(await outlineWidth('#start-agent')>1);
+ await terminal.emulateMedia({forcedColors:'none'});
  await terminal.screenshot({path:join(evidence,'terminal-welcome.png')});
  // The sidebar must reveal Chat even when its route is already selected.
  await page.getByRole('link',{name:'Chat',exact:true}).click();
@@ -185,10 +198,35 @@ try {
  await expect.poll(()=>terminal.evaluate(()=>[...tabs.values()].find(tab=>!tab.pane.hidden).term.getSelection())).toBe('SECOND_TAB');
  await input.focus();await input.press('Control+Shift+C');
  await expect.poll(()=>app.evaluate(()=>global.__terminalCopy)).toEqual(['SECOND_TAB']);
+ await input.press('Control+C');
+ await expect.poll(()=>app.evaluate(()=>global.__terminalCopy)).toEqual(['SECOND_TAB','SECOND_TAB']);
  await terminal.getByRole('button',{name:'Close search',exact:true}).click();
  await input.pressSequentially("[Console]::Write(([char]27)+']52;c;dW50cnVzdGVk'+([char]7)); [Console]::WriteLine(('ESCAPE_'+'DONE'))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('ESCAPE_DONE');
- assert.deepEqual(await app.evaluate(()=>global.__terminalCopy),['SECOND_TAB']);
+ assert.deepEqual(await app.evaluate(()=>global.__terminalCopy),['SECOND_TAB','SECOND_TAB']);
+ // Copy while a command is busy must not cancel it. No selection must retain
+ // the normal interrupt path. All commands run in the disposable fixture folder.
+ await input.pressSequentially("[Console]::WriteLine(('COPY_'+'RUNNING')); Start-Sleep -Seconds 3; [Console]::WriteLine(('COPY_'+'SURVIVED'))");await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('COPY_RUNNING');
+ await terminal.evaluate(()=>tabs.get(current).search.findPrevious('COPY_RUNNING'));
+ await input.press('Control+C');
+ await expect.poll(()=>app.evaluate(()=>global.__terminalCopy.at(-1))).toBe('COPY_RUNNING');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('COPY_SURVIVED');
+ await terminal.evaluate(()=>tabs.get(current).term.clearSelection());
+ await input.pressSequentially("[Console]::WriteLine(('INTERRUPT_'+'RUNNING')); Start-Sleep -Seconds 30");await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('INTERRUPT_RUNNING');
+ await input.press('Control+C');
+ await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();}),{timeout:5000}).toMatch(/^PS .*>$/);
+ await input.pressSequentially("[Console]::WriteLine(('INTERRUPT_'+'RETURNED'))");await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('INTERRUPT_RETURNED',{timeout:5000});
+ await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();})).toMatch(/^PS .*>$/);
+ // Exercise Chromium's paste-event path without changing the user's clipboard.
+ // Pasting inserts a command; it must not submit until Enter is pressed.
+ await input.evaluate(el=>{const data=new DataTransfer();data.setData('text/plain',"[Console]::WriteLine(('PASTE_'+'caf\u00e9_\u65e5\u672c\u8a9e'))");el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));});
+ await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active,y=b.baseY+b.cursorY;return Array.from({length:4},(_,i)=>b.getLine(Math.max(0,y-3)+i)?.translateToString(true)||'').join('');})).toContain("'caf\u00e9_\u65e5\u672c\u8a9e'");
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).not.toContainText('PASTE_caf\u00e9_\u65e5\u672c\u8a9e');
+ await input.press('Enter');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PASTE_caf\u00e9_\u65e5\u672c\u8a9e');
  // Exercise a prompt+draft exactly one row wide. ConPTY can move the cursor
  // onto an empty next row; that is valid wrapping, not missing input.
  const draftCommand="[Console]::WriteLine(('TAB_'+'DRAFT'))";
