@@ -39,7 +39,7 @@ async function toWav(blob: Blob): Promise<Blob> {
 type RecordingWork = { controller: AbortController; stream?: MediaStream; recorder?: MediaRecorder; timer?: number; stopPause?: () => void };
 type CapturePhase = 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing';
 
-export function VoiceInputButton({ onTranscript, onFailure, onPhaseChange, autoStart = false, contextKey, disabled = false, compact = false }: { onTranscript: (text: string) => void; onFailure?: (message: string) => void; onPhaseChange?: (phase: 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing') => void; autoStart?: boolean; contextKey: string; disabled?: boolean; compact?: boolean }) {
+export function VoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseChange, autoStart = false, contextKey, disabled = false, compact = false }: { onTranscript: (text: string) => void; onFailure?: (message: string) => void; onSilence?: () => void; onPhaseChange?: (phase: 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing') => void; autoStart?: boolean; contextKey: string; disabled?: boolean; compact?: boolean }) {
   const { preferences } = useVoicePreferences();
   const { locale, messages } = useI18n();
   const copy = { ...voiceText(locale), silence: voiceSilenceText[locale] };
@@ -61,8 +61,9 @@ export function VoiceInputButton({ onTranscript, onFailure, onPhaseChange, autoS
   const [setupRequired, setSetupRequired] = useState(false);
   const current = useRef<RecordingWork | null>(null);
   // Use the current draft callback, but never deliver a result to another composer.
-  const target = useRef({ contextKey, onTranscript, onFailure });
-  target.current = { contextKey, onTranscript, onFailure };
+  const target = useRef({ contextKey, onTranscript, onFailure, onSilence });
+  target.current = { contextKey, onTranscript, onFailure, onSilence };
+  const silence = () => { if (target.current.onSilence) target.current.onSilence(); else failKnown('silence'); };
   const fail = (message: string) => { setFailure({ message }); target.current.onFailure?.(message); };
   const failKnown = (key: 'failed' | 'permission' | 'unsupported' | 'silence') => { setFailure({ key }); target.current.onFailure?.(currentCopy.current[key]); };
   const cancel = () => {
@@ -133,12 +134,12 @@ export function VoiceInputButton({ onTranscript, onFailure, onPhaseChange, autoS
         setPhase('transcribing');
         try {
           const blob = new Blob(chunks, { type: next.mimeType || 'audio/webm' });
-          if (!blob.size) { failKnown('silence'); return; }
+          if (!blob.size) { silence(); return; }
           const wav = await toWav(blob);
           if (!active()) return;
           const result = await api.transcribeAudio(wav, 'offgrid-recording.wav', work.controller.signal, selection);
           if (active() && result.text.trim()) target.current.onTranscript(result.text.trim());
-          else if (active()) failKnown('silence');
+          else if (active()) silence();
         } catch (reason) {
           if (active()) fail(reason instanceof Error ? reason.message : currentCopy.current.failed);
         } finally { if (active()) { current.current = null; setPhase('idle'); } }

@@ -103,3 +103,9 @@ test and does not close the broader voice qualification tasks.
 - [x] 13.1 Add bounded pause detection to existing microphone capture with editable dictation, manual Stop and honest no-speech/unsupported-device fallback. Test delayed permission, context change, concurrent typing, silence and cancellation.
 - [x] 13.2 Add session-only Talk state in ordinary Chat: ready-package preflight, one transcribed utterance per request, committed response speech, natural-completion relisten, visible Speak again/Stop and no echo capture. Verify drafts and request IDs remain stable under errors and interruptions.
 - [x] 13.3 Run focused web/desktop checks, isolated browser ASR/TTS fixtures and OpenSpec validation. Record physical microphone and hardware qualification separately; do not present fixture behavior as release-wide speech readiness.
+
+Follow-up (2026-11-07): the user-reported silence interruption now re-arms Talk
+without sending or replaying a turn. Stop/navigation cancel re-arming; genuine
+transport failures still pause. The 43-case synthetic browser regression results
+and remaining qualification limits are recorded in
+[silence recovery evidence](../../../docs/quality/evidence/talk-silence-and-integration-status-2026-11-07.md).

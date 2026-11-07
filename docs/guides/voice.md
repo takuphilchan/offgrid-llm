@@ -128,6 +128,10 @@ The answer is shown in Chat and spoken after the turn commits. When playback
 finishes, listening resumes. The microphone does not capture while the speaker
 is playing, preventing the answer from becoming another request.
 
+Silence or an empty recognition result keeps Talk open and starts a fresh
+listening cycle after a short delay. It does not send an empty message or replay
+the recording. Ordinary dictation still reports when no speech was detected.
+
 Choose **Speak again** to interrupt playback and return to listening.
 **Stop Talk** ends the voice session; if a Chat turn is in progress, it also
 requests cancellation. Typing in the composer or switching the Chat model ends

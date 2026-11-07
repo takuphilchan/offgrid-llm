@@ -248,6 +248,7 @@ async function microphoneFixture(page: Page) {
       state.requests++; state.model = (init!.body as FormData).get('model');
       return new Promise((resolve, reject) => {
         state.finish = (text = 'spoken text') => resolve(new Response(JSON.stringify({ text }), { headers: { 'Content-Type': 'application/json' } }));
+        state.disconnect = () => reject(new TypeError('Failed to fetch'));
         init?.signal?.addEventListener('abort', () => reject(new DOMException('Cancelled', 'AbortError')), { once: true });
       });
     };
@@ -794,12 +795,80 @@ test('Talk survives three replies, shows one transcription status and recovers f
   await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(4);
   await page.evaluate(() => (window as any).micTest.finish(''));
-  await expect(page.locator('.chat-speech-controls [role=alert]')).toContainText('No speech was detected');
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(5);
   await expect(page.locator('.chat-speech-controls a[href="#/models"]')).toHaveCount(0);
   await expect(page.locator('.composer textarea')).toHaveValue('');
   expect(await page.evaluate(() => (window as any).speechRequests.length)).toBe(3);
-  await page.getByRole('button', { name: 'Speak again', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(5);
   await expect(page.locator('.chat-speech-controls [role=alert]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Stop Talk', exact: true }).click();
+});
+
+test('Talk keeps listening through repeated empty transcripts, then Stop releases the microphone', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.getByRole('button', { name: 'Talk', exact: true }).click();
+  for (let cycle = 1; cycle <= 3; cycle++) {
+    await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(cycle);
+    await page.evaluate(() => (window as any).micTest.allow());
+    await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(cycle);
+    await page.evaluate(() => (window as any).micTest.finish(''));
+    await expect(page.locator('.chat-speech-controls [role=alert]')).toHaveCount(0);
+  }
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(4);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.starts)).toBe(4);
+  await page.getByRole('button', { name: 'Stop Talk', exact: true }).click();
+  await page.waitForTimeout(1000);
+  expect(await page.evaluate(() => (window as any).micTest.permissions)).toBe(4);
+  expect(await page.evaluate(() => (window as any).micTest.stops)).toBeGreaterThanOrEqual(4);
+  expect(await page.evaluate(() => (window as any).speechRequests.length)).toBe(0);
+  await expect(page.locator('.message.user')).toHaveCount(0);
+});
+
+test('Stop during the silence re-arm delay prevents another microphone request', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.getByRole('button', { name: 'Talk', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.finish(''));
+  await expect(page.locator('.voice-input-control[data-capture-phase="idle"]')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Stop Talk', exact: true }).click();
+  await page.waitForTimeout(1000);
+  expect(await page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await expect(page.getByRole('button', { name: 'Talk', exact: true })).toBeVisible();
+});
+
+test('leaving Chat during silence recovery cancels re-arming and does not reopen Talk on return', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.getByRole('button', { name: 'Talk', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.finish(''));
+  await expect(page.locator('.voice-input-control[data-capture-phase="idle"]')).toHaveCount(1);
+  await page.evaluate(() => { window.location.hash = '#/models'; });
+  await expect(page.locator('.composer')).toHaveCount(0);
+  await page.waitForTimeout(1000);
+  await page.evaluate(() => { window.location.hash = '#/chat'; });
+  await expect(page.getByRole('button', { name: 'Talk', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+});
+
+test('a real transcription disconnect still pauses Talk without retrying or sending', async ({ page }) => {
+  await microphoneFixture(page);
+  await page.getByRole('button', { name: 'Talk', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.disconnect());
+  await expect(page.getByRole('button', { name: 'Speak again', exact: true })).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(await page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  expect(await page.evaluate(() => (window as any).micTest.requests)).toBe(1);
+  expect(await page.evaluate(() => (window as any).micTest.stops)).toBeGreaterThan(0);
+  await expect(page.locator('.message.user')).toHaveCount(0);
 });

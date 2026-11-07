@@ -11,18 +11,33 @@ export function useTalkMode() {
   const active = useRef(false);
   const revision = useRef(0);
   const check = useRef<AbortController | null>(null);
+  const silenceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const reset = () => {
+    clearTimeout(silenceTimer.current);
     check.current?.abort();
     active.current = false;
     revision.current++;
     setState('off');
   };
   useEffect(() => () => {
+    clearTimeout(silenceTimer.current);
     check.current?.abort();
     active.current = false;
     revision.current++;
   }, []);
+
+  // Silence is not a failed turn. Re-arm capture, never replay transcription or
+  // send an empty message. Ownership invalidation also cancels this short delay.
+  const silence = () => {
+    if (!active.current) return;
+    clearTimeout(silenceTimer.current);
+    const current = revision.current;
+    setState('listening');
+    silenceTimer.current = setTimeout(() => {
+      if (active.current && current === revision.current) setCycle(value => value + 1);
+    }, 750);
+  };
 
   const start = async ({ eligible, hasDraft, preferences, locale, unavailable, draftError, setError }: {
     eligible: boolean; hasDraft: boolean; preferences: VoicePreferences;
@@ -54,7 +69,7 @@ export function useTalkMode() {
   const acceptTranscript = (value: string, draftKey: string, send: (value: string) => Promise<boolean>) => {
     if (!active.current || state !== 'listening' && state !== 'transcribing') return;
     const transcript = value.trim();
-    if (!transcript) { active.current = false; setState('needs_attention'); return; }
+    if (!transcript) { silence(); return; }
     writeDraft(draftKey, transcript);
     setState('thinking');
     void send(transcript).then(sent => {
@@ -75,7 +90,7 @@ export function useTalkMode() {
   const capturePhase = (phase: string) => {
     if (active.current && phase === 'transcribing') setState('transcribing');
   };
-  return { state, setState, cycle, nextCycle: () => setCycle(value => value + 1), active, revision, reset, start, acceptTranscript, speakAgain, fail, capturePhase };
+  return { state, setState, cycle, nextCycle: () => setCycle(value => value + 1), active, revision, reset, start, acceptTranscript, speakAgain, fail, silence, capturePhase };
 }
 
 export function useTalkIdentity(identity: string, cancel: () => void) {

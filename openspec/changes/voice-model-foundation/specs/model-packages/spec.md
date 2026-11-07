@@ -350,6 +350,11 @@ restart listening. Agent work and external effects SHALL NOT silently enter Talk
 - **THEN** owned work is stopped or fenced, no uncertain request is resent, and any transcript remains available for review
 - **AND** microphone capture is inactive during speaker playback so the system cannot submit its own voice
 
+#### Scenario: Silence does not end Talk
+- **WHEN** active Talk capture finishes without audio or recognition succeeds with empty text
+- **THEN** the session remains open and re-arms listening after a bounded delay, without sending a Chat request or replaying the recording
+- **AND** Stop or leaving Chat cancels pending re-arming; genuine capture, transport and transcription errors still pause for review
+
 ### Requirement: Inline acquisition without arbitrary variant selection
 Speech repository review SHALL show download conditions in the selected result
 card. Single supported variants SHALL resolve without an intermediate selection
