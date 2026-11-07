@@ -170,3 +170,19 @@ The change SHALL be evaluated against frozen complete journeys and the prior bui
 - **WHEN** required installed-edition or usability evaluation has not run
 - **THEN** the evidence log marks that gate unrun and the experience is not claimed equivalent to leading products
 - **AND** the existing production-readiness, soak and pilot requirements remain authoritative
+
+### Requirement: Clear native installation and removal
+The Windows assisted wizard SHALL present a compact welcome, truthful progress,
+concise completion and explicit uninstall retention guidance. It SHALL preserve
+scope/directory selection, application identity, saved data, native keyboard and
+high-contrast behavior, and running-app protection.
+
+#### Scenario: Install or repair
+- **WHEN** a user installs or repairs OffGrid
+- **THEN** native controls remain reachable and progress reflects actual work
+- **AND** models and saved work remain unchanged, with optional launch deferred until the wizard closes
+
+#### Scenario: Remove the application
+- **WHEN** a user opens the uninstaller
+- **THEN** it explains which application files are removed and that models and saved work are retained
+- **AND** removal does not stop unrelated services or erase the retained workspace

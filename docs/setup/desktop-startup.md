@@ -148,8 +148,12 @@ English. Translation availability does not replace speaker/accessibility review.
 Windows Setup retains native, accessible installation controls, per-user install
 by default, and the option to change the install location/scope. Its branding is
 monochrome and uses Segoe UI. The redundant license-acceptance page is removed;
-the MIT license is still shipped inside the application resources. Native
-installation details remain available: **Show details** expands the actual
+the MIT license is still shipped inside the application resources. Welcome
+and finish pages explain what Setup changes without repeating product
+marketing. Uninstall explains that it removes the application and shortcuts,
+while keeping models and saved work. Separately managed services remain yours
+to manage. These screens use the same restrained artwork and typography.
+Native installation details remain available: **Show details** expands the actual
 installation log, including extraction, file copying and registration. Setup now
 restores those log messages instead of showing an empty panel. A failure leaves
 recovery guidance; it must not be read as a successful installation.

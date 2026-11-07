@@ -171,9 +171,13 @@ function Write-WizardHang([IntPtr]$Window, [string]$OutputPath, [string]$Diagnos
     } finally { $helper.Dispose() }
 }
 
-function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool]$Launch, [bool]$ExpectRunningPrompt) {
+function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool]$Launch, [bool]$ExpectRunningPrompt, [bool]$Uninstall = $false) {
     if ([Diagnostics.FileVersionInfo]::GetVersionInfo($Executable).ProductName -ne 'OffGrid Desktop Install Test') { throw 'Only isolated test installers are allowed.' }
-    $process = Start-Process -FilePath $Executable -ArgumentList "/currentuser /D=$InstallRoot" -WindowStyle Hidden -PassThru
+    $arguments = if ($Uninstall) { "/currentuser _?=$InstallRoot" } else { "/currentuser /D=$InstallRoot" }
+    # This is the explicitly interactive, isolated UI qualification. SW_HIDE
+    # persists on the MUI welcome page, so a hidden launch cannot exercise or
+    # capture the wizard. Silent installs and diagnostic helpers stay hidden.
+    $process = Start-Process -FilePath $Executable -ArgumentList $arguments -WindowStyle Normal -PassThru
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $finishAt = -1L
     $finishPageAt = -1L
@@ -190,6 +194,7 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
     $captures = [Collections.Generic.List[object]]::new()
     $detailsCapture = $null
     $finishCapture = $null
+    $welcomeCapture = $null
     Write-WizardDiagnostic $diagnosticPath 'wizard-start' @{ process = $process.Id; executable = $Executable; launch = $Launch; runningAppPrompt = $ExpectRunningPrompt }
     try {
         while ($clock.Elapsed.TotalSeconds -lt 180) {
@@ -232,8 +237,20 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
                 # text retrieval. Ignore that transition; the overall/Finish deadlines
                 # still fail genuinely stuck windows.
                 if ($label -eq '' -or -not [OffGridWizard]::IsWindow($button)) { continue }
-                $key = "$window/$label"
+                # Welcome, license and scope pages can all have a Next button.
+                # Use page content too; deduplicating only by button traps the
+                # wizard on its second Next page.
+                $key = "$window/$label/$text"
                 if ($clicked.ContainsKey($key)) { continue }
+                if ($text.Contains('A local workspace for conversations, documents and agents.') -or ($Uninstall -and $text.Contains('This removes the application and its shortcuts.'))) {
+                    if (-not $text.Contains('Your models and saved work are kept.')) { throw 'Welcome omitted data-preservation guidance.' }
+                    if (-not $welcomeCapture) {
+                        $welcomeName = if ($Uninstall) { 'uninstaller-welcome.png' } else { 'installer-welcome.png' }
+                        $welcomeCapture = Start-WizardCapture $window (Join-Path $evidence.FullName $welcomeName) $diagnosticPath
+                        $captures.Add($welcomeCapture)
+                    }
+                    if (-not $welcomeCapture.done) { continue }
+                }
                 if ($text.Contains('Setup needs to close OffGrid')) {
                     if (-not $ExpectRunningPrompt) { throw 'Unexpected running-app prompt.' }
                     $consented = $true
@@ -244,10 +261,12 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
                     # NSIS can enable Finish one message-loop turn before it creates
                     # the launch checkbox. Wait for the page to settle, but keep a
                     # bounded failure for a genuinely incomplete installer page.
-                    if ($checks.Count -eq 0 -and $clock.ElapsedMilliseconds - $finishPageAt -lt 10000) { continue }
-                    if ($checks.Count -ne 1) { throw "Expected launch checkbox on Finish, got $($checks.Count): $text" }
+                    if (-not $Uninstall -and $checks.Count -eq 0 -and $clock.ElapsedMilliseconds - $finishPageAt -lt 10000) { continue }
+                    if (-not $Uninstall -and $checks.Count -ne 1) { throw "Expected launch checkbox on Finish, got $($checks.Count): $text" }
                     $visibleText = ($children | Where-Object { [OffGridWizard]::IsWindowVisible($_) } | ForEach-Object { [OffGridWizard]::Text($_) }) -join "`n"
-                    if (-not $visibleText.Contains('OffGrid installed') -or -not $visibleText.Contains('Separately managed services, including Docker, are not upgraded by this installer.')) {
+                    $expectedTitle = if ($Uninstall) { 'OffGrid removed' } else { 'OffGrid installed' }
+                    $expectedGuidance = if ($Uninstall) { 'Your models and saved work are still on this computer.' } else { 'Separately managed services are unchanged.' }
+                    if (-not $visibleText.Contains($expectedTitle) -or -not $visibleText.Contains($expectedGuidance)) {
                         if ($clock.ElapsedMilliseconds - $finishPageAt -lt 10000) { continue }
                         throw "Finish must display installation and external-service guidance: $visibleText"
                     }
@@ -255,14 +274,15 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
                     # Click Finish only afterwards; its two-second close gate remains.
                     if ($detailsCapture -and -not $detailsCapture.done) { continue }
                     if (-not $finishCapture) {
-                        $finishCapture = Start-WizardCapture $window (Join-Path $evidence.FullName 'installer-finish.png') $diagnosticPath
+                        $finishName = if ($Uninstall) { 'uninstaller-finish.png' } else { 'installer-finish.png' }
+                        $finishCapture = Start-WizardCapture $window (Join-Path $evidence.FullName $finishName) $diagnosticPath
                         $captures.Add($finishCapture)
                     }
                     if (-not $finishCapture.done) { continue }
-                    [OffGridWizard]::Check($checks[0], $Launch)
+                    if (-not $Uninstall) { [OffGridWizard]::Check($checks[0], $Launch) }
                     $finishAt = $clock.ElapsedMilliseconds
                     $finishWindow = $window
-                } elseif ($label -notin @('Next >', 'Install')) {
+                } elseif ($label -notin @('Next >', 'Install', 'Uninstall')) {
                     throw "Unexpected wizard page ($label): $text"
                 }
                 $clicked[$key] = $true
@@ -275,10 +295,11 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
         if (-not $process.HasExited) { throw "Installer timed out (PID $($process.Id)); retained for diagnosis." }
         if ($process.ExitCode -ne 0) { throw "Wizard exited with $($process.ExitCode)." }
         if ($finishAt -lt 0) { throw "Wizard never reached Finish (elapsed=$($clock.ElapsedMilliseconds)ms, controls=$($clicked.Keys -join ','), details=$detailsObserved)." }
+        if (-not $welcomeCapture -or $welcomeCapture.status -ne 'captured') { throw 'Installer welcome was not captured.' }
         if ($finishClosedMs -lt 0) { $finishClosedMs = $clock.ElapsedMilliseconds - $finishAt }
         if ($finishClosedMs -gt 2000) { throw "Finish blocked for ${finishClosedMs}ms." }
         if ($consented -ne $ExpectRunningPrompt) { throw 'Running-app consent was not exercised as expected.' }
-        if (-not $detailsOpened -or $detailsItems -lt 1) { throw "Show details did not display installation activity (clicked=$detailsOpened, items=$detailsItems, controls=$detailsObserved)." }
+        if (-not $Uninstall -and (-not $detailsOpened -or $detailsItems -lt 1)) { throw "Show details did not display installation activity (clicked=$detailsOpened, items=$detailsItems, controls=$detailsObserved)." }
         Write-WizardDiagnostic $diagnosticPath 'wizard-passed' @{ elapsedMs = $clock.ElapsedMilliseconds; finishClosedMs = $finishClosedMs; detailsItems = $detailsItems }
         [PSCustomObject]@{ finishClosedMs = $finishClosedMs; elapsedMs = $clock.ElapsedMilliseconds; launched = $Launch; runningAppConsent = $consented; detailsItems = $detailsItems }
     } catch {

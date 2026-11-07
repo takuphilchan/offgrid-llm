@@ -270,6 +270,13 @@ Evidence for this increment: [document workspace verification](../../../docs/qua
 
 - [x] 28.1 Align Activity cleanup, compact Knowledge management, position MCP ahead of tools and present provider setup in a focus-restoring dialog; verify narrow/wide interaction and unchanged permissions.
 - [x] 28.2 Implement authenticated stopped-GGUF discard with explicit confirmation, active-worker rejection, exact partial-file removal, storage-error retry and persisted progress reconciliation; run models/server contracts and browser interaction tests.
-- [ ] 28.3 Complete current full renderer and packaged Windows terminal checks, inspect the candidate, then install under the owner's existing authorization with rollback and data/payload verification. Record unavailable platform and human gates separately.
+- [x] 28.3 Complete current full renderer and packaged Windows terminal checks, inspect the candidate, then install under the owner's existing authorization with rollback and data/payload verification. Record unavailable platform and human gates separately.
 
-Windows candidate installed and verified. The earlier intermittent import-limit failure is retained in `docs/quality/evidence/management-refinement-2026-11-06.md`. The November 7 built-service full renderer rerun passed 1,115 tests with 32 skips, including the sidebar follow-up. That final source follow-up has not yet been installed; keep this combined installation task open until the matching release candidate is verified. See `docs/quality/evidence/terminal-session-followup-2026-11-07.md`.
+Windows candidate installed and verified. The earlier intermittent import-limit failure is retained in `docs/quality/evidence/management-refinement-2026-11-06.md`. The November 7 built-service full renderer rerun passed 1,115 tests with 32 skips, including the sidebar follow-up. The published 0.4.27 package was subsequently installed with verified payloads, rollback and workspace preservation. See `docs/quality/evidence/terminal-session-followup-2026-11-07.md`; broader human and hardware gates remain open.
+
+## 29. Approved native installer refresh (2026-11-07)
+
+- [x] 29.1 Implement compact welcome, progress, finish and uninstall retention presentation through supported native hooks; preserve installation identity, scope/folder choices, accessibility and running-app guards.
+- [x] 29.2 Run desktop and isolated installer checks, inspect actual welcome/progress/finish/uninstall renders, and verify repair/removal preserve saved data and independent services. Record unrun native configurations explicitly.
+
+Evidence: [native installer refresh](../../../docs/quality/evidence/native-installer-refresh-2026-11-07.md). Per-user Windows checks passed; elevated installation and manual accessibility/platform matrices remain unverified.

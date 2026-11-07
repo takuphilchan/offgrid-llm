@@ -596,3 +596,15 @@ other native platform checks remain unverified unless executed on that platform.
 The model-manager-only discard endpoint serializes with download admission, rejects active workers, removes only exact legacy or digest-pinned temporary files, and persists removal of the progress record. Published weights/projectors and receipts are retained. Missing partials make retries safe; persistence failure keeps the record visible. The UI confirms removal and guards against stale progress responses.
 MCP connection management precedes tool discovery. External setup is a read-only modal with bounded scrolling and focus restoration to its initiating card; copying commands performs no setup. Knowledge uses a small menu with model identity and a separate action row. History cleanup aligns with search on wide layouts and wraps immediately below on narrow layouts.
 Desktop navigation observes explicit sidebar activation as well as route changes, hiding the native terminal surface without closing processes. The terminal welcome offers CLI and Agent entry using the existing scoped folder selection and host lifecycle.
+
+## Native installer presentation
+
+Use the existing NSIS assisted installer and supported electron-builder hooks.
+Retain native controls, DPI awareness, directory/scope selection, running-app
+guards and deferred non-elevated launch. Replace the dark decorative sidebar
+with quiet light artwork, remove promotional branding and use concise page
+headings. Progress remains tied to actual installation; diagnostic file output
+stays available through Show details. The uninstall welcome explains application
+removal separately from retained models and saved work. No data-erasure option,
+automatic download or new installer engine is introduced. Render the actual
+isolated wizard and verify preservation, not only source string assertions.

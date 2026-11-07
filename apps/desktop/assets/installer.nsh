@@ -13,9 +13,28 @@
   ; until the installer engine implements and qualifies that behavior.
   ManifestDPIAware true
   SetFont "Segoe UI" 9
-  BrandingText "OffGrid  /  Private local AI"
+  BrandingText " "
   ShowInstDetails hide
   ShowUninstDetails hide
+!macroend
+
+!macro customWelcomePage
+  !define MUI_WELCOMEPAGE_TITLE "Install OffGrid"
+  !define MUI_WELCOMEPAGE_TEXT "A local workspace for conversations, documents and agents.$\r$\n$\r$\nSetup installs or updates the app. Your models and saved work are kept.$\r$\n$\r$\nChoose Next to continue."
+  !insertmacro MUI_PAGE_WELCOME
+!macroend
+
+!macro customUnWelcomePage
+  !define MUI_WELCOMEPAGE_TITLE "Remove OffGrid?"
+  !define MUI_WELCOMEPAGE_TEXT "This removes the application and its shortcuts.$\r$\n$\r$\nYour models and saved work are kept. Separately managed services are not removed.$\r$\n$\r$\nClose OffGrid and finish any active tasks before continuing."
+  !insertmacro MUI_UNPAGE_WELCOME
+!macroend
+
+!macro customUninstallPage
+  ; MUI_UNPAGE_FINISH consumes the same page-local definitions as install
+  ; Finish. Set them in this hook immediately before that page is inserted.
+  !define MUI_FINISHPAGE_TITLE "OffGrid removed"
+  !define MUI_FINISHPAGE_TEXT "The application has been removed.$\r$\n$\r$\nYour models and saved work are still on this computer. Reinstall OffGrid to use them again."
 !macroend
 
 !macro OffGridStyleWindow PREFIX
@@ -57,7 +76,7 @@ FunctionEnd
 ; block the wizard's UI thread while its Finish button is still on screen.
 !macro customFinishPage
   !define MUI_FINISHPAGE_TITLE "OffGrid installed"
-  !define MUI_FINISHPAGE_TEXT "Your models and saved work are preserved. OffGrid checks workspace compatibility when it opens.$\r$\n$\r$\nSeparately managed services, including Docker, are not upgraded by this installer."
+  !define MUI_FINISHPAGE_TEXT "Your models and saved work are kept.$\r$\n$\r$\nOpen OffGrid to continue. Separately managed services are unchanged."
   !ifndef HIDE_RUN_AFTER_FINISH
     Var OffGridLaunchRequested
     !define MUI_FINISHPAGE_RUN

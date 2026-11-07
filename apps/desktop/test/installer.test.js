@@ -13,7 +13,7 @@ test('Finish only records intent; launch happens after the wizard closes', () =>
   assert.match(closed, /\$\{IfNot\} \$\{UAC_IsAdmin\}/);
   assert.match(closed, /StdUtils.ExecShellAsUser/);
   assert.match(source, /MUI_FINISHPAGE_TITLE "OffGrid installed"/);
-  assert.match(source, /Docker, are not upgraded/);
+  assert.match(source, /Separately managed services are unchanged/);
   assert.doesNotMatch(source, /MUI_FINISHPAGE_TITLE "OffGrid is ready"/);
 });
 

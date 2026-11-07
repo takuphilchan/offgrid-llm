@@ -264,3 +264,12 @@ preserve downloads of older releases; do not rename published historical assets.
 
 ## User-requested management follow-up (2026-11-06)
 Keep history cleanup within its search toolbar, place MCP connections before the growing tool inventory, use compact Knowledge management and focused external-provider setup instructions. Add explicit discard for stopped partial GGUF transfers, preserving installed models and unrelated partials. Desktop Chat/New chat navigation must return from Terminal even on the same route without terminating sessions. This follow-up is authorized by the owner's reported defects and installation request.
+
+## Approved native installer refresh (2026-11-07)
+
+Simplify the Windows installer and uninstaller with a compact OffGrid welcome,
+clear install/update progress, a concise finish page and explicit uninstall
+retention guidance. Preserve folder and per-user/all-user choices, application
+identity, existing backup behavior, saved data, native keyboard navigation and
+high-contrast support. Verify isolated clean installation, repair, Finish launch,
+running-app refusal and uninstallation before packaging for users.

@@ -149,7 +149,7 @@ $resolvedUninstaller = (Resolve-Path -LiteralPath $uninstaller).Path
 if (-not $resolvedUninstaller.StartsWith($testRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Uninstaller escaped test directory.' }
 if ([IO.Path]::GetFullPath((Get-ItemProperty -LiteralPath $registryPath).InstallLocation).TrimEnd('\') -ne $installRoot) { throw 'Test registration changed; refusing cleanup.' }
 $stage = 'uninstall the isolated package and preserve its workspace'
-Invoke-TestProcess $resolvedUninstaller "/S /currentuser _?=$installRoot"
+$removal = Invoke-InstallerWizard $resolvedUninstaller $installRoot $false $false $true
 if (Test-Path -LiteralPath $appExe) { throw 'Uninstall did not remove the test application.' }
 if (Test-Path -LiteralPath $uninstallKey) { throw 'Uninstall left its test registration.' }
 if ((Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash -ne $before) { throw 'Uninstall changed the workspace fixture.' }
@@ -157,4 +157,7 @@ if ((Invoke-RestMethod -Uri "$externalURL/fixture-status" -TimeoutSec 2).digest 
 $externalFixtureProcess.Kill()
 $externalFixtureProcess.WaitForExit()
 
-[PSCustomObject]@{ passed = $true; installRoot = $installRoot; startupEvidence = $smoke.evidence; finish = $finish; reinstall = $reinstall; tested = 'clean install, installed startup, Finish with/without launch, silent running-app refusal, interactive running-app reinstall, uninstall, fixture preservation, compatible legacy external-service survival' } | ConvertTo-Json
+$result = [PSCustomObject]@{ passed = $true; installRoot = $installRoot; startupEvidence = $smoke.evidence; finish = $finish; reinstall = $reinstall; removal = $removal; tested = 'clean install, installed startup, Finish with/without launch, silent running-app refusal, interactive running-app reinstall, interactive uninstall, fixture preservation, compatible legacy external-service survival' }
+$resultJSON = $result | ConvertTo-Json -Depth 6
+[IO.File]::WriteAllText((Join-Path $diagnosticDirectory 'result.json'), $resultJSON)
+$resultJSON
