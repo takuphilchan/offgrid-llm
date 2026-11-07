@@ -163,3 +163,33 @@ Local verification confirmed that `C:\PROGRA~1` and `C:\Program Files` resolve t
 the same native path. The complete packaged terminal check passed again in
 `build/release-0427-canonical-folder.log`, including Agent exit and child cleanup.
 All other jobs in that CI run passed; exact-revision CI must run again.
+
+## Published build and installed upgrade
+
+The final source revision `3ce405a147e60b0359f4c3edc9573798cc054f81`
+passed [CI run 42323584066](https://github.com/takuphilchan/offgrid-llm/actions/runs/42323584066)
+and [release run 42326732785](https://github.com/takuphilchan/offgrid-llm/actions/runs/42326732785).
+[v0.4.27](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.27)
+was published on 2026-11-07. All 14 downloadable payloads matched the published
+checksum manifest and GitHub asset digests. The release workflow verified the
+versioned CPU and GPU container tags.
+
+The published Windows x64 installer was downloaded and independently verified:
+SHA-256 `1de08725dc7983e11c37123f5dc59929862901cc7045aea3b6a1a480eea382f1`.
+With the app, terminal, model workers and service port confirmed inactive, it
+replaced the local preview under the owner's existing installation authorization.
+A verified external rollback backup was retained. Five installed payloads match
+the extracted official package: desktop executable, application archive, service,
+UI entry point and terminal host.
+
+Before/after checks preserved 385 primary-workspace data files, 10 desktop-workspace
+data files, the Electron profile, model inventory and installed inference
+executables. The stable uninstall identity and the OffGrid Start-menu shortcut
+were verified. The installed CLI reports version 0.4.27 and detects the RTX 5060.
+That hardware detection is not a new inference benchmark. The application was
+left closed; the production workspace was not launched or modified for a smoke
+test. Installation details remain in the private local receipt
+`build/release-0427-published/install-result.json`.
+
+This closes the Windows installation follow-up, not the remaining real-hardware,
+human usability, screen-reader or document-answer qualification gates.
