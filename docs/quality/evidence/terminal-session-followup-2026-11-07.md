@@ -144,3 +144,12 @@ changed. The failing reproduction is retained in
 The corrected full packaged check passed, including child-process cleanup;
 `build/release-0427-wrapped-draft.log` records the result. Remote CI remains a
 separate gate on this correction.
+
+CI run `42317567026` passed the wrapped tab draft and reached a later overlay
+assertion with the same single-row assumption (`EXACT` was on the preceding row,
+while the cursor row contained the closing brackets). The overlay check now
+also deliberately wraps its draft and compares the complete surrounding rows
+and cursor before/after overlays. The remaining physical-row assertions are
+short, known-width prompts or the short Agent `/help` selector, not shell drafts.
+The full packaged check passed with both forced wrapping cases in
+`build/release-0427-wrapped-overlay.log`. No command retries were added.

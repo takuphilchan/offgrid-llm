@@ -246,9 +246,14 @@ try {
  assert.equal(geometry.view.y,Math.round(workspace.y));assert.equal(geometry.view.height,geometry.size[1]-geometry.view.y);
  // Web menus must never be cut off by the native terminal's compositing layer.
  const nativeVisible=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].contentView.children[0].getVisible());
- await input.pressSequentially("[Console]::WriteLine(('MENU_' + 'EXACT'))");await input.press('ArrowLeft');
- await expect.poll(()=>terminal.evaluate(()=>tabs.get(current).term.buffer.active.getLine(tabs.get(current).term.buffer.active.baseY+tabs.get(current).term.buffer.active.cursorY)?.translateToString())).toContain('EXACT');
- const cursorBeforeMenu=await terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return {x:b.cursorX,y:b.cursorY,line:b.getLine(b.baseY+b.cursorY)?.translateToString()};});
+ const menuDraft="[Console]::WriteLine(('MENU_'+'EXACT'))";
+ const menuPadding=await terminal.evaluate(length=>tabs.get(current).term.cols-length-3,menuDraft.length);
+ assert.ok(menuPadding>0);
+ await input.pressSequentially(`function prompt { 'PS '+('x'*${menuPadding})+'> ' }`);await input.press('Enter');
+ await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();})).toBe('PS '+'x'.repeat(menuPadding)+'>');
+ await input.pressSequentially(menuDraft);await input.press('ArrowLeft');
+ await expect.poll(async()=> (await draftSnapshot()).lines.join('')).toContain('PS '+'x'.repeat(menuPadding)+'> '+menuDraft);
+ const cursorBeforeMenu=await draftSnapshot();
  const options=page.locator('.workspace-options > button'),optionsPanel=page.locator('.workspace-options-panel');
  await options.click();await expect(optionsPanel).toBeVisible();
  const optionsBox=await optionsPanel.boundingBox(),sidebarBox=await page.locator('.sidebar').boundingBox();
@@ -263,7 +268,7 @@ try {
  await page.evaluate(()=>document.getElementById('terminal-overlay-fixture').hidePopover());
  await expect.poll(nativeVisible).toBe(true);
  await page.evaluate(()=>document.getElementById('terminal-overlay-fixture').remove());
- assert.deepEqual(await terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return {x:b.cursorX,y:b.cursorY,line:b.getLine(b.baseY+b.cursorY)?.translateToString()};}),cursorBeforeMenu);
+ assert.deepEqual(await draftSnapshot(),cursorBeforeMenu);
  await input.click();await input.press('ArrowRight');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('MENU_EXACT');
  await input.pressSequentially("[Console]::WriteLine(('SERVICE:' + $env:OFFGRID_SERVER_URL))");await input.press('Enter');
