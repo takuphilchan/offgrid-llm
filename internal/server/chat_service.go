@@ -134,6 +134,7 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 	prepared := *request
 	prepared.Stream = false
 	prepared.Messages = append([]api.ChatMessage(nil), request.Messages...)
+	ctx = s.withChatKnowledgeGuard(ctx, request)
 	if err := s.enhanceChatWithKnowledge(ctx, &prepared); err != nil {
 		return nil, err
 	}
@@ -160,6 +161,10 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 	if err != nil {
 		if operational := inferenceContextError(err); operational != nil {
 			return nil, operational
+		}
+		var access *serviceError
+		if errors.As(err, &access) {
+			return nil, access
 		}
 		if native {
 			return nil, err

@@ -49,6 +49,7 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 	prepared := *request
 	prepared.Messages = append([]api.ChatMessage(nil), request.Messages...)
 	prepared.StreamOptions = &api.StreamOptions{IncludeUsage: true}
+	ctx = s.withChatKnowledgeGuard(ctx, request)
 	if request.UseKnowledgeBase != nil && *request.UseKnowledgeBase {
 		if err := phase("retrieving"); err != nil {
 			return result, err
@@ -82,7 +83,7 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 	var answer strings.Builder
 	var first time.Time
 	emitText := func(text string) error {
-		if err := ctx.Err(); err != nil {
+		if err := inference.CheckGenerationGuard(ctx); err != nil {
 			return err
 		}
 		if text == "" {
@@ -102,6 +103,9 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 	err = lease.Run(ctx, func(ctx context.Context) error {
 		counter, _ := s.engine.(inference.PromptTokenCounter)
 		if err := prepareChatSources(ctx, &prepared, result.Metrics.ContextWindow, counter); err != nil {
+			return err
+		}
+		if err := inference.CheckGenerationGuard(ctx); err != nil {
 			return err
 		}
 		if s.providerScheduler != nil && s.llamaProcess != nil && len(prepared.Tools) == 0 {

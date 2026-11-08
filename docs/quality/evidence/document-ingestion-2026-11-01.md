@@ -1672,3 +1672,49 @@ or memory-budget behavior. Local Windows race coverage was not run because CGO
 and a C compiler were unavailable; CI supplies separate race checks. Other
 platforms and full document-answer qualification remain unverified. This is a
 source follow-up, not a change to the installed or published 0.4.28 payload.
+
+## Direct Chat source revocation follow-up (2026-11-08)
+
+Direct Chat retrieval previously checked access before generation but did not
+retain a live source-policy check across inference admission and output delivery.
+The request now retains its retrieved document references and rechecks current
+account and collection access before dispatch, during streamed output and before
+returning a complete answer. Session-selected documents and passage capture stay
+intact. Guards compose with existing checks; ordinary Chat without Knowledge
+does not acquire this requirement. Native provider failures preserve the
+`knowledge_unavailable` code rather than masking revocation as a runtime failure.
+
+Isolated regression tests use a real SQLite collection policy and deterministic
+retrieval/inference fixtures. They cover account disablement, collection reader
+revocation, missing provenance, unchanged selected-source capture, legacy plain
+and structured HTTP/session streams, native provider streams, revocation during
+native model loading, late answers, cancellation, no repeat dispatch and released
+legacy admission. Already delivered text cannot be recalled. These tests are not
+a new hardware or model-answer qualification result.
+
+Verification passed:
+
+```text
+go test ./internal/inference -run 'Test(GenerationGuard|LegacyGenerationGuard)' -count=1
+go test ./internal/server -run 'Test(ChatKnowledgeGuard|LegacyChatRevocation|NativeChatRevocation)' -count=3
+go test ./...
+node scripts/maintenance/check-source-size.mjs
+node scripts/maintenance/check-docs.mjs
+node scripts/maintenance/check-repository-hygiene.mjs
+openspec validate document-ingestion-reliability --strict --no-interactive
+git diff --check
+```
+
+The final full Go run passed, including server tests in 66.124s; unaffected
+packages reused Go's test cache. Log:
+`build/knowledge-generation-guard-go-tests-final.log`. The first full run included
+a fixture-authentication error (the test used the public root path), subsequently
+corrected to the authenticated Chat endpoint, and timed out across a timestamp
+gap from 02:37 to 11:10. That failed log is retained at
+`build/knowledge-generation-guard-go-tests.log`. Targeted repetitions and the
+final full run use the corrected fixture. Local race checks remain unrun because
+CGO is disabled and gcc is unavailable; no browser/desktop code changed here.
+
+Task 4.1 remains open: this closes the direct-generation delivery gap, not every
+remaining policy and enterprise qualification boundary. The installed service
+still reports healthy on 0.4.28; this source fix is not in that installed payload.

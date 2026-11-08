@@ -109,8 +109,11 @@ func (s *Server) selectNativeChat(ctx context.Context, model string) (inference.
 
 func (s *Server) completeNativeChat(ctx context.Context, request *api.ChatCompletionRequest, descriptor inference.ProviderDescriptor) (*api.ChatCompletionResponse, error) {
 	result, err := inference.GenerateNativeTextChat(ctx, s.providerScheduler, descriptor, request, nil)
+	if err == nil {
+		err = inference.CheckGenerationGuard(ctx)
+	}
 	if err != nil {
-		return nil, newCodedServiceError(http.StatusBadGateway, "native_inference_failed", "Native inference failed without a completed answer", err)
+		return nil, nativeChatFailure("Native inference failed without a completed answer", err)
 	}
 	return result.Response, nil
 }
@@ -131,8 +134,11 @@ func (s *Server) streamNativeSessionChat(ctx context.Context, request *api.ChatC
 		}
 		return emit(ChatStreamEvent{Type: "delta", Delta: delta})
 	})
+	if err == nil {
+		err = inference.CheckGenerationGuard(ctx)
+	}
 	if err != nil {
-		return result, newCodedServiceError(http.StatusBadGateway, "native_inference_failed", "Native generation was interrupted; partial text was not saved", err)
+		return result, nativeChatFailure("Native generation was interrupted; partial text was not saved", err)
 	}
 	result.Answer = native.Response.Choices[0].Message.StringContent()
 	result.FinishReason = native.Response.Choices[0].FinishReason
@@ -164,7 +170,7 @@ func (s *Server) handleNativeChatCompletionsStream(w http.ResponseWriter, r *htt
 	chunkID := stream.id
 	write := stream.writeJSON
 	native, err := inference.GenerateNativeTextChat(stream.ctx, s.providerScheduler, descriptor, request, func(delta string) error {
-		if err := stream.ctx.Err(); err != nil {
+		if err := inference.CheckGenerationGuard(stream.ctx); err != nil {
 			return err
 		}
 		if err := stream.setPhase("receiving_output"); err != nil {
@@ -175,9 +181,11 @@ func (s *Server) handleNativeChatCompletionsStream(w http.ResponseWriter, r *htt
 	})
 	if stream.ctx.Err() != nil {
 		err = stream.ctx.Err()
+	} else if err == nil {
+		err = inference.CheckGenerationGuard(stream.ctx)
 	}
 	if err != nil {
-		stream.writeError(newCodedServiceError(http.StatusBadGateway, "native_inference_failed", "Native generation was interrupted; no complete answer was produced", err))
+		stream.writeError(nativeChatFailure("Native generation was interrupted; no complete answer was produced", err))
 		return
 	}
 	finish := native.Response.Choices[0].FinishReason
@@ -190,4 +198,12 @@ func (s *Server) handleNativeChatCompletionsStream(w http.ResponseWriter, r *htt
 		s.statsTracker.RecordInference(request.Model, int64(native.Response.Usage.TotalTokens), native.Timing.Queue.Milliseconds()+native.Timing.Load.Milliseconds()+native.Timing.Generation.Milliseconds())
 	}
 	atomic.AddInt64(&s.tokensGenerated, int64(native.Response.Usage.CompletionTokens))
+}
+
+func nativeChatFailure(message string, err error) error {
+	var serviceErr *serviceError
+	if errors.As(err, &serviceErr) {
+		return serviceErr
+	}
+	return newCodedServiceError(http.StatusBadGateway, "native_inference_failed", message, err)
 }

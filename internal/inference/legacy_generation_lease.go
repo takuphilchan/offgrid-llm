@@ -39,7 +39,7 @@ func (l *LegacyGenerationLease) Run(ctx context.Context, generate func(context.C
 	if l.closed {
 		return errors.New("legacy generation lease is closed")
 	}
-	if err := ctx.Err(); err != nil {
+	if err := CheckGenerationGuard(ctx); err != nil {
 		return err
 	}
 	var cancelledAt atomic.Int64
@@ -72,7 +72,7 @@ func (l *LegacyGenerationLease) Run(ctx context.Context, generate func(context.C
 	// An engine that ignores Stop or a deadline cannot turn its late output
 	// into a successful decision or tool dispatch.
 	if err == nil {
-		err = ctx.Err()
+		err = CheckGenerationGuard(ctx)
 	}
 	return err
 }

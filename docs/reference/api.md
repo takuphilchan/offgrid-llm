@@ -1062,6 +1062,12 @@ request explicitly requires retrieval. It is never silently ignored:
   retry with `use_knowledge_base: false` for an ordinary model answer.
 
 These rules apply to streaming, non-streaming, and saved-conversation chat.
+Retrieved source IDs remain attached to the generation request. Current source
+access is checked again before generation, at streamed-output boundaries and
+before a completed answer is returned. Revoked access returns
+`knowledge_unavailable` (`403` before a response starts, an SSE error after
+streaming starts), without replaying the request. Already delivered text cannot
+be recalled. This also applies to service-qualified native text providers.
 Successful retrieval supplies untrusted source context to the model; it does
 not guarantee that every generated statement is supported. Source-only answer
 quality evaluation remains a separate requirement.

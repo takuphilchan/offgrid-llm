@@ -770,7 +770,7 @@ func (s *ProviderScheduler) GenerateTimed(ctx context.Context, descriptor Provid
 	generated := time.Now()
 	stop := context.AfterFunc(s.closeCtx, cancel)
 	stream := &providerStreamGate{descriptor: descriptor, request: request, callback: callback}
-	err = runtime.Generate(runCtx, request, stream.accept)
+	err = generateWithGuard(runCtx, runtime, request, stream.accept)
 	stop()
 	timing.Generation = time.Since(generated)
 	if err == nil {

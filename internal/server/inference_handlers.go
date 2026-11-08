@@ -102,6 +102,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	// Streaming and durable chat use the same retrieval and error contract.
 	// Check optional knowledge before loading a potentially expensive chat model.
+	r = r.WithContext(s.withChatKnowledgeGuard(r.Context(), &req))
 	if err := s.enhanceChatWithKnowledge(r.Context(), &req); err != nil {
 		writeServiceError(w, err)
 		return
@@ -157,7 +158,7 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 
 	// Define callback to reuse
 	callback := func(token string) error {
-		if err := ctx.Err(); err != nil {
+		if err := inference.CheckGenerationGuard(ctx); err != nil {
 			return err
 		}
 		if err := streamWriter.setPhase("receiving_output"); err != nil {
@@ -194,7 +195,7 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 		return nil
 	}
 	rawCallback := func(data json.RawMessage) error {
-		if err := ctx.Err(); err != nil {
+		if err := inference.CheckGenerationGuard(ctx); err != nil {
 			return err
 		}
 		if err := streamWriter.setPhase("receiving_output"); err != nil {
