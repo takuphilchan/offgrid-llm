@@ -35,7 +35,7 @@ export function AgentProfiles({ models, preferredModel = '' }: { models: Model[]
   const resourceState = useProfileResources(knowledgePermitted, messages.common.error);
   const { resources, documents } = resourceState;
   const [draft, setDraft] = useWorkspaceState<Draft | null>('agent.profileDraft', null);
-  const [, setChatAgent] = useWorkspaceState<AgentProfile | null>('chat.agent', null);
+  const [chatAgent, setChatAgent] = useWorkspaceState<AgentProfile | null>('chat.agent', null);
   const [query, setQuery] = useWorkspaceState('agent.profileQuery', '');
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
   const [error, setError] = useState(''), [notice, setNotice] = useState('');
@@ -95,6 +95,9 @@ export function AgentProfiles({ models, preferredModel = '' }: { models: Model[]
         : await api.createAgentProfile(draft.settings);
       setDraft({ original: saved, settings: saved.settings }); setConflict(false); setNotice(copy.saved);
       setProfiles(current => [saved, ...current.filter(item => item.id !== saved.id)]);
+      // Saving a new revision of the profile already selected in Chat should
+      // update the next turn's selection. Existing jobs keep their pinned model.
+      if (chatAgent?.id === saved.id) setChatAgent(saved);
     } catch (reason) {
       if (reason instanceof APIError && reason.status === 409) { setConflict(true); setError(copy.conflict); }
       else if (reason instanceof APIError && Array.isArray(reason.data?.issues)) { setIssues(reason.data.issues); setError(copy.review); }

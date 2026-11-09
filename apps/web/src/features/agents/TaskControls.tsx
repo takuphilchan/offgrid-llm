@@ -1,6 +1,7 @@
 import { api, type AgentRun } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { taskControls } from '../../i18n/task-controls';
+import { useTaskStatus } from './useTaskStatus';
 
 export type TaskCommand = Parameters<typeof api.jobAction>[1];
 
@@ -39,8 +40,9 @@ export function TaskLifecycle({run, busy, act}: {run: AgentRun; busy: boolean; a
   </>;
 }
 
-export function TaskDetails({run, onError, childStatus}: {run: AgentRun; onError: (message: string) => void; childStatus: (id: string) => string}) {
+export function TaskDetails({run, onError, childStatus}: {run: AgentRun; onError: (message: string) => void; childStatus?: (id: string) => string | undefined}) {
   const {locale, messages} = useI18n(), copy = taskControls(locale);
+  const status = useTaskStatus();
   const exportEvidence = async () => {
     try {
       const value = await api.exportJob(run.run_id);
@@ -53,7 +55,7 @@ export function TaskDetails({run, onError, childStatus}: {run: AgentRun; onError
     {!!run.children?.length && <section aria-label={copy.children}>
       <h3>{copy.children}</h3>
       <ul className="task-children">{run.children.map(child => <li key={child.id}>
-        <a href={`#/agents/task/${child.id}`}>{child.spec.goal}</a><small>{childStatus(child.id)}</small>
+        <a href={`#/agents/task/${child.id}`}>{child.spec.goal}</a><small>{childStatus?.(child.id) ?? status(child.status ?? 'pending')}</small>
       </li>)}</ul>
     </section>}
     {run.parent_id && <a className="secondary-button" href={`#/agents/task/${run.parent_id}`}>{copy.plan}</a>}

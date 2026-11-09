@@ -32,7 +32,7 @@ export function ConversationWork({ run, refresh, connection, readError, outputSa
   recover: () => Promise<void>; recoveryNeeded: boolean;
   liveSubmission?: boolean;
   inspector?: boolean;
-  childStatus?: (id: string) => string;
+  childStatus?: (id: string) => string | undefined;
 }) {
   const { messages, locale } = useI18n(), copy = conversationWorkText[locale], presentation = taskPresentation(locale);
   const { workspace, scope, admin } = useWorkspace();
@@ -107,7 +107,7 @@ export function ConversationWork({ run, refresh, connection, readError, outputSa
       <AgentProgress run={run} connection={connection === 'live' ? 'live' : connection === 'connecting' ? 'connecting' : 'reconnecting'} showPreview={showPreview} setShowPreview={setShowPreview} />
       <AgentPreview run={run} showPreview={showPreview} />
       <TaskEvidence run={run} />
-      <TaskDetails run={run} onError={setError} childStatus={childStatus ?? (() => presentation.unavailable)} />
+      <TaskDetails run={run} onError={setError} childStatus={childStatus} />
       {run.computer_session ? <><BrowserActivity steps={run.steps} />{run.steps.filter(step=>step.tool_name?.startsWith('workspace_')).map((step,index)=><ExecutionActivity key={`${step.id??index}:${step.type}`} step={step}/>)}</> : run.steps.map((step, index) => step.tool_name?.startsWith('workspace_')?<ExecutionActivity key={`${step.id??index}:${step.type}`} step={step}/>:<details key={`${step.id ?? index}:${step.type}`}><summary>{step.tool_name || step.type}</summary><pre>{step.tool_result || step.content || presentation.unavailable}</pre></details>)}
       <p className="workspace-secondary">{messages.chat.model}: {run.model}</p>
     </details>
