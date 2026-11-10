@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -32,6 +33,90 @@ type ChildLink struct {
 type Delegation struct {
 	CallID   string      `json:"call_id"`
 	Children []ChildLink `json:"children"`
+}
+
+// A rejected delegation has not created child jobs or dispatched a tool. Keep
+// these errors distinct from persistence and scheduling failures, which must
+// still interrupt the run at its durable checkpoint.
+type delegationAdmissionError struct{ reason string }
+
+func (e *delegationAdmissionError) Error() string { return e.reason }
+
+func rejectDelegation(reason string) error { return &delegationAdmissionError{reason: reason} }
+
+func sameChildSpec(a, b ChildSpec) bool {
+	return a.ProfileID == b.ProfileID && a.Key == b.Key && a.Goal == b.Goal &&
+		slices.Equal(a.DependsOn, b.DependsOn) && slices.Equal(a.Tools, b.Tools)
+}
+
+// A model may repeat a graph after receiving its completed result. A repeated
+// call is an observation of saved work, never a request to create the children
+// again. The prior result is the same bounded, actor-scoped result the parent
+// already received; no child state is inferred from model prose.
+func (r *Runner) reuseCompletedDelegation(task *Task, call api.ToolCall, specs []ChildSpec) (bool, error) {
+	if len(specs) == 0 || len(specs) > len(task.ChildHistory) {
+		return false, nil
+	}
+	prior := task.ChildHistory[len(task.ChildHistory)-len(specs):]
+	for i, spec := range specs {
+		if prior[i].Status != TaskCompleted || !sameChildSpec(prior[i].Spec, spec) {
+			return false, nil
+		}
+	}
+	for i := len(task.Steps) - 1; i >= 0; i-- {
+		step := task.Steps[i]
+		if step.Type != "delegation" || step.ToolName != "delegate_tasks" || step.ToolResult == "" {
+			continue
+		}
+		var saved []childOutcome
+		if json.Unmarshal([]byte(step.ToolResult), &saved) != nil || len(saved) != len(prior) {
+			continue
+		}
+		matches := true
+		for j, outcome := range saved {
+			if outcome.RunID != prior[j].ID || outcome.Key != prior[j].Spec.Key || outcome.Status != TaskCompleted {
+				matches = false
+				break
+			}
+		}
+		if !matches {
+			continue
+		}
+		cp := task.Checkpoint
+		cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: step.ToolResult})
+		cp.Calls = nil
+		task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "delegation_reused", ToolName: call.Function.Name, ToolResult: step.ToolResult, Timestamp: time.Now().UTC()})
+		return true, r.persist(task)
+	}
+	return false, nil
+}
+
+// Admission failures are known to precede child creation. Close the saved
+// call with a typed tool result so Resume cannot retry it indefinitely and
+// the parent can answer from completed child evidence. Bound repeated bad
+// proposals instead of presenting a false completed answer.
+func (r *Runner) recordRejectedDelegation(task *Task, call api.ToolCall, reason string) error {
+	result, _ := json.Marshal(map[string]any{
+		"error": "delegation_not_admitted", "message": reason,
+		"effects": "none", "verified": false,
+		"recovery": "Use already completed specialist results to answer, or propose a smaller authorized graph only if the request still needs one.",
+	})
+	cp := task.Checkpoint
+	cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: string(result)})
+	cp.Calls = nil
+	task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "rejected", ToolName: call.Function.Name, ToolArgs: call.Function.Arguments, ToolResult: string(result), Timestamp: time.Now().UTC()})
+	rejections := 0
+	for _, step := range task.Steps {
+		if step.Type == "rejected" && step.ToolName == "delegate_tasks" {
+			rejections++
+		}
+	}
+	if rejections >= 3 {
+		task.ErrorCode = "delegation_not_admitted"
+		_, err := r.fail(task, "Delegation could not be admitted after three proposals: "+reason+". Completed specialist results remain available for inspection.")
+		return err
+	}
+	return r.persist(task)
 }
 
 func containsTool(allowed []string, name string) bool {
@@ -217,16 +302,19 @@ func (r *Runner) beginDelegation(task *Task, call api.ToolCall) error {
 	if err := validateChildSpecs(req.Tasks); err != nil {
 		return err
 	}
+	if reused, err := r.reuseCompletedDelegation(task, call, req.Tasks); reused || err != nil {
+		return err
+	}
 	if len(task.ChildHistory)+len(req.Tasks) > 8 {
-		return fmt.Errorf("Task child budget exhausted")
+		return rejectDelegation("Task child budget exhausted")
 	}
 	childBudget, budgetErr := childDecisionBudget(task, len(req.Tasks))
 	if budgetErr != nil {
-		return budgetErr
+		return rejectDelegation(budgetErr.Error())
 	}
 	if task.Config.Profile != nil {
 		if len(task.ChildHistory)+len(req.Tasks) > 4 {
-			return fmt.Errorf("Profile child budget exhausted")
+			return rejectDelegation("Profile child budget exhausted")
 		}
 	}
 	now := time.Now().UTC()

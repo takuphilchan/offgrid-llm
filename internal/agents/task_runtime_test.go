@@ -515,6 +515,179 @@ func TestDelegationCarriesSuppliedFiguresThroughThreeSpecialistGraph(t *testing.
 	}
 }
 
+func TestCompletedDelegationRepeatedProposalReusesSavedResults(t *testing.T) {
+	m := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
+	const graph = `{"tasks":[{"key":"a","goal":"Source A analysis","tools":[]},{"key":"b","goal":"Source B analysis","tools":[]},{"key":"writer","goal":"Brief writer synthesis","depends_on":["a","b"],"tools":[]}]}`
+	var parentCalls atomic.Int32
+	r := NewRunner(m, NewToolRegistry(), func(_ context.Context, task *Task, messages []api.ChatMessage, _ []api.Tool) (*api.ChatCompletionResponse, error) {
+		if task.ParentID != "" {
+			return runAnswer(api.ChatMessage{Role: "assistant", Content: task.Prompt + " complete"}), nil
+		}
+		switch parentCalls.Add(1) {
+		case 1, 2:
+			return taskCall("delegate_tasks", graph), nil
+		default:
+			if len(messages) == 0 || !strings.Contains(messages[len(messages)-1].StringContent(), "Brief writer synthesis complete") {
+				t.Error("repeated call did not return the saved specialist result")
+			}
+			return runAnswer(api.ChatMessage{Role: "assistant", Content: "Final briefing from the completed children."}), nil
+		}
+	})
+	defer r.Shutdown(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r.StartCoordinator(ctx)
+	task, err := r.Create("Coordinate three specialists", "model", "alice", taskConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Continue(ctx, task.ID, "alice", "start", "", true); err != nil {
+		t.Fatal(err)
+	}
+	result := awaitTask(t, m, task.ID, TaskCompleted)
+	if len(result.ChildHistory) != 3 || result.Result != "Final briefing from the completed children." || parentCalls.Load() != 3 {
+		t.Fatalf("duplicate graph or missing answer: children=%d result=%q parent calls=%d", len(result.ChildHistory), result.Result, parentCalls.Load())
+	}
+	var reused int
+	for _, step := range result.Steps {
+		if step.Type == "delegation_reused" {
+			reused++
+		}
+	}
+	if reused != 1 {
+		t.Fatalf("expected one saved handoff reuse, got %d", reused)
+	}
+}
+
+func TestDelegationBudgetRejectionLetsParentAnswerFromSavedChildren(t *testing.T) {
+	m := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
+	const graph = `{"tasks":[{"key":"a","goal":"Source A analysis","tools":[]},{"key":"b","goal":"Source B analysis","tools":[]},{"key":"writer","goal":"Brief writer synthesis","depends_on":["a","b"],"tools":[]}]}`
+	const newGraph = `{"tasks":[{"key":"c","goal":"New analysis","tools":[]},{"key":"d","goal":"Another analysis","tools":[]},{"key":"e","goal":"Third analysis","tools":[]}]}`
+	var parentCalls atomic.Int32
+	r := NewRunner(m, NewToolRegistry(), func(_ context.Context, task *Task, messages []api.ChatMessage, _ []api.Tool) (*api.ChatCompletionResponse, error) {
+		if task.ParentID != "" {
+			return runAnswer(api.ChatMessage{Role: "assistant", Content: task.Prompt + " complete"}), nil
+		}
+		switch parentCalls.Add(1) {
+		case 1:
+			return taskCall("delegate_tasks", graph), nil
+		case 2:
+			return taskCall("delegate_tasks", newGraph), nil
+		default:
+			if len(messages) == 0 || !strings.Contains(messages[len(messages)-1].StringContent(), "delegation_not_admitted") {
+				t.Error("parent did not receive the no-effects admission failure")
+			}
+			return runAnswer(api.ChatMessage{Role: "assistant", Content: "The completed specialists reported their findings."}), nil
+		}
+	})
+	defer r.Shutdown(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r.StartCoordinator(ctx)
+	task, err := r.Create("Coordinate three specialists", "model", "alice", taskConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Continue(ctx, task.ID, "alice", "start", "", true); err != nil {
+		t.Fatal(err)
+	}
+	result := awaitTask(t, m, task.ID, TaskCompleted)
+	if len(result.ChildHistory) != 3 || result.Result == "" {
+		t.Fatalf("admission failure blocked saved results: children=%d result=%q", len(result.ChildHistory), result.Result)
+	}
+	for _, step := range result.Steps {
+		if step.Type == "rejected" && step.ToolName == "delegate_tasks" && strings.Contains(step.ToolResult, `"effects":"none"`) {
+			return
+		}
+	}
+	t.Fatal("missing recorded no-effects delegation rejection")
+}
+
+func TestInterruptedSavedDuplicateDelegationResumesWithoutNewChildren(t *testing.T) {
+	m := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
+	const graph = `{"tasks":[{"key":"a","goal":"Source A analysis","tools":[]},{"key":"b","goal":"Source B analysis","tools":[]},{"key":"writer","goal":"Brief writer synthesis","depends_on":["a","b"],"tools":[]}]}`
+	var parentCalls atomic.Int32
+	r := NewRunner(m, NewToolRegistry(), func(_ context.Context, task *Task, _ []api.ChatMessage, _ []api.Tool) (*api.ChatCompletionResponse, error) {
+		if task.ParentID != "" {
+			return runAnswer(api.ChatMessage{Role: "assistant", Content: task.Prompt + " complete"}), nil
+		}
+		parentCalls.Add(1)
+		if len(task.ChildHistory) == 0 {
+			return taskCall("delegate_tasks", graph), nil
+		}
+		return runAnswer(api.ChatMessage{Role: "assistant", Content: "Final answer from saved child work."}), nil
+	})
+	defer r.Shutdown(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r.StartCoordinator(ctx)
+	task, err := r.Create("Coordinate three specialists", "model", "alice", taskConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Continue(ctx, task.ID, "alice", "start", "", true); err != nil {
+		t.Fatal(err)
+	}
+	completed := awaitTask(t, m, task.ID, TaskCompleted)
+	settleTask(t, r, task.ID)
+	call := api.ToolCall{ID: "call-saved-duplicate", Type: "function", Function: api.FunctionCall{Name: "delegate_tasks", Arguments: graph}}
+	if _, err := m.updateTask(task.ID, func(saved *Task) error {
+		saved.Status, saved.Result, saved.Error = TaskInterrupted, "", "Execution interrupted. Review and resume explicitly."
+		saved.CompletedAt = nil
+		saved.Checkpoint.Calls = []api.ToolCall{call}
+		saved.Checkpoint.Messages = append(saved.Checkpoint.Messages, api.ChatMessage{Role: "assistant", ToolCalls: []api.ToolCall{call}})
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Continue(ctx, task.ID, "alice", "resume", "", true); err != nil {
+		t.Fatal(err)
+	}
+	resumed := awaitTask(t, m, task.ID, TaskCompleted)
+	if len(resumed.ChildHistory) != len(completed.ChildHistory) || resumed.Result != "Final answer from saved child work." || parentCalls.Load() != 3 {
+		t.Fatalf("resume replayed children or lost final answer: children=%d result=%q calls=%d", len(resumed.ChildHistory), resumed.Result, parentCalls.Load())
+	}
+}
+
+func TestDelegatedAnswerCorrectionUsesSavedResultsWithoutMoreTools(t *testing.T) {
+	m := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
+	const graph = `{"tasks":[{"key":"a","goal":"Check the first figures","tools":[]},{"key":"b","goal":"Check the second figures","tools":[]}]}`
+	prompt := "Check 96 of 120 tasks completed, and 72 of those 96 passed review. Check 94 of 120 tasks completed, and 72 of those 94 passed review. Write a 150-word briefing with each completion and pass rate."
+	var parentCalls atomic.Int32
+	final := "Source A: 96 of 120 tasks completed (80%) and 72 of 96 passed review (75%). Source B: 94 of 120 tasks completed (78.3%) and 72 of 94 passed review (76.6%). " + strings.Repeat("Both sources agree on the reviewed count but differ on completed tasks. ", 9)
+	r := NewRunner(m, NewToolRegistry(), func(_ context.Context, task *Task, _ []api.ChatMessage, tools []api.Tool) (*api.ChatCompletionResponse, error) {
+		if task.ParentID != "" {
+			return runAnswer(api.ChatMessage{Role: "assistant", Content: "The supplied figures were checked."}), nil
+		}
+		switch parentCalls.Add(1) {
+		case 1:
+			return taskCall("delegate_tasks", graph), nil
+		case 2:
+			return runAnswer(api.ChatMessage{Role: "assistant", Content: "The counts disagree."}), nil
+		default:
+			if len(tools) != 0 {
+				t.Error("answer correction exposed tools")
+			}
+			return runAnswer(api.ChatMessage{Role: "assistant", Content: final}), nil
+		}
+	})
+	defer r.Shutdown(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r.StartCoordinator(ctx)
+	task, err := r.Create(prompt, "model", "alice", taskConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Continue(ctx, task.ID, "alice", "start", "", true); err != nil {
+		t.Fatal(err)
+	}
+	result := awaitTask(t, m, task.ID, TaskCompleted)
+	if result.Result != final || len(result.ChildHistory) != 2 || result.Checkpoint.DelegationAnswerRepairs != 1 || parentCalls.Load() != 3 {
+		t.Fatalf("incomplete answer accepted or child work replayed: status=%s children=%d repairs=%d calls=%d", result.Status, len(result.ChildHistory), result.Checkpoint.DelegationAnswerRepairs, parentCalls.Load())
+	}
+}
+
 func TestDelegationRestartRequiresExplicitResume(t *testing.T) {
 	dir := t.TempDir()
 	m := NewManagerWithPersistence(nil, nil, nil, dir)
