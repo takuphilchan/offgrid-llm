@@ -6,12 +6,12 @@ import { responseBudgetHint } from '../../i18n/response-budget';
 
 type Preferences = { profile: string; maxTokens: number };
 
-export function ComposerResponseLimits({ preferences, busy, update }: {
-  preferences: Preferences; busy: boolean; update: (value: Preferences) => void;
+export function ComposerResponseLimits({ preferences, busy, update, expanded = false }: {
+  preferences: Preferences; busy: boolean; expanded?: boolean; update: (value: Preferences) => void;
 }) {
   const { locale, messages: text } = useI18n();
   const { profile, maxTokens } = preferences;
-  return <details className="response-advanced">
+  return <details className="response-advanced" open={expanded || undefined}>
     <summary>{agentProfilesText[locale].advanced}<small>{profile === 'extended' ? text.chatStreaming.extended : text.chatStreaming.interactive}</small></summary>
     <label className="field">{text.chatStreaming.profile}<select value={profile} disabled={busy} onChange={event => update({ ...preferences, profile: event.target.value })}>
       <option value="interactive">{text.chatStreaming.interactive}</option><option value="extended">{text.chatStreaming.extended}</option>

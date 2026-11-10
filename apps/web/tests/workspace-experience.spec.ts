@@ -195,6 +195,7 @@ test('desktop diagnostics distinguish a compatible external service from an upgr
     } as unknown as NonNullable<Window['electron']>;
   });
   await page.goto('/ui/#/settings');
+  await page.getByRole('button', { name: 'About', exact: true }).click();
   await page.getByText('Diagnostics', {exact:true}).click();
   await expect(page.getByText('Reviewed legacy build · 1', {exact:true})).toBeVisible();
   await expect(page.getByText('Separately managed service', {exact:true})).toBeVisible();

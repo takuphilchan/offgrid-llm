@@ -459,3 +459,9 @@
 @media (max-width: 600px) {
   .computer-activity { align-items: stretch; flex-direction: column; }
 }
+
+/* Reviewed terminal context stays a draft until the user sends it. */
+.terminal-context-dialog{width:min(720px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto}
+.terminal-context-dialog>label{display:grid;gap:8px;margin-block:16px;font-size:var(--font-size-sm,14px)}
+.terminal-context-dialog textarea{min-width:0;width:100%;resize:vertical;min-height:180px;font-family:var(--font-mono,monospace);font-size:13px;line-height:1.55}
+.terminal-context-dialog>p{font-size:14px;line-height:1.5;color:var(--text-muted)}

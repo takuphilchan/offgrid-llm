@@ -609,3 +609,7 @@ stays available through Show details. The uninstall welcome explains application
 removal separately from retained models and saved work. No data-erasure option,
 automatic download or new installer engine is introduced. Render the actual
 isolated wizard and verify preservation, not only source string assertions.
+
+## Settings ownership and discovery (2026-11-08)
+
+Use a bounded two-column settings layout with section navigation and a single content pane; stack navigation on small screens. Search includes localized section names and control labels, and renders matching sections. General owns existing language/theme choices. Models & responses reuses the Chat response preferences for the same actor/service scope; model selection stays in Models and pinned agent choices stay in profiles. Voice mounts the existing speech selector only on demand and never enables capture/playback. Terminal links to the desktop terminal display owner rather than writing duplicate settings storage. Access & data distinguishes service data from desktop paths and preserves emergency Stop and administrative restrictions. Advanced/About owns service identity and diagnostics. Missing capabilities stay explained, not simulated. No settings mutation occurs on navigation or metadata refresh.

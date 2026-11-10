@@ -4,6 +4,7 @@ export type DesktopBackend = { state: 'checking' | 'starting' | 'ready' | 'offli
 export type DesktopBridge = {
   bridgeProtocol?: number;
   terminalProtocol?: number;
+  onTerminalContext?: (callback:(context:unknown)=>boolean)=>()=>void;
   openTerminal?: () => Promise<{visible:boolean}>;
   getTerminalStatus?: () => Promise<{available:boolean}>;
   startExecutionWorkspace?: (request:{access:'read'|'edit'|'trusted'}) => Promise<{state:string;resource?:import('./api/client').ExecutionWorkspace}>;

@@ -702,3 +702,24 @@ open: the preview remains in memory but cannot be promised after a restart.
 Images are sent to the connected OffGrid service only on Send; remote image URLs,
 SVG and camera capture are not supported. Do not confuse an attached image with
 permission for desktop control or a qualified visual-agent workflow.
+
+## Settings navigation and ownership
+
+Settings provides six searchable sections: General, Models & responses, Voice,
+Terminal, Access & data, and Advanced/About. Search filters these sections and
+their control labels; it does not query remote content.
+
+General owns interface language, appearance and the setup guide. Models &
+responses reuses Chat's account/workspace-scoped response preferences; it does
+not reconfigure the service or change a running task. Voice uses the existing
+recognition and synthesis preferences without starting recording or playback.
+Terminal links desktop users to the native terminal's display controls; the web
+app explains that boundary. Access & data retains computer-access status and
+explicit emergency Stop, with local paths identified only on desktop. Service
+identity and technical diagnostics live under Advanced/About.
+
+Preferences persist through their existing owners. Opening or searching Settings
+does not grant access, start a terminal, load a model, or modify service limits.
+The section navigation collapses to a compact grid on narrow displays and
+supports the nine interface locales and RTL. Automated locale checks are not a
+substitute for human translation or screen-reader review.

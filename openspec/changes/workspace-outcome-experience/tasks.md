@@ -280,3 +280,9 @@ Windows candidate installed and verified. The earlier intermittent import-limit 
 - [x] 29.2 Run desktop and isolated installer checks, inspect actual welcome/progress/finish/uninstall renders, and verify repair/removal preserve saved data and independent services. Record unrun native configurations explicitly.
 
 Evidence: [native installer refresh](../../../docs/quality/evidence/native-installer-refresh-2026-11-07.md). Per-user Windows checks passed; elevated installation and manual accessibility/platform matrices remain unverified.
+
+## 30. Approved searchable Settings (2026-11-08)
+
+- [x] 30.1 Implement the six localized searchable sections, reuse persisted response/voice controls and preserve service/desktop ownership, diagnostics and emergency Stop.
+- [x] 30.2 Test preference reload/Chat parity, search, all nine locales, narrow/RTL layouts, unavailable desktop and absence of mutations on open; run web type/build and affected browser suites.
+- [x] 30.3 Document settings scope and actual verification; retain native/human qualification limits.

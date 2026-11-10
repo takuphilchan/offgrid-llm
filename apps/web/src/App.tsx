@@ -1,4 +1,5 @@
 import { refreshWorkspace } from './lib/workspace-refresh';
+import { TerminalContextProvider } from './lib/terminal-context';
 import { chatAvailable, initialChatModel } from './api/model-capabilities';
 import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react';
 import { APIError, api, setAgentReplayScope, type Model, type PublicUser } from './api/client';
@@ -230,7 +231,7 @@ export function App() {
   const admin = !authRequired || authUser?.role === 'admin';
   const actor = authUser?.id ?? (authRequired && guest ? 'guest' : 'local');
   const workspaceScope = JSON.stringify([actor, workspaceID, admin, authUser?.role]);
-  return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><ActiveWorkProvider taskFirst={taskFirst} compact={workSummary}><WorkSearchNavigation><SidebarContext.Provider value={{ target: historyTarget, actionTarget, close: closeNavigation }}><div className={`app-shell${collapsed && !narrow ? ' sidebar-collapsed' : ''}`}>
+  return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><TerminalContextProvider><ActiveWorkProvider taskFirst={taskFirst} compact={workSummary}><WorkSearchNavigation><SidebarContext.Provider value={{ target: historyTarget, actionTarget, close: closeNavigation }}><div className={`app-shell${collapsed && !narrow ? ' sidebar-collapsed' : ''}`}>
     <WorkspaceNavigation page={page} health={health} open={navigationOpen} narrow={narrow} collapsed={collapsed && !narrow} onToggle={toggleSidebar} onClose={closeNavigation} historyRef={setHistoryTarget} actionRef={setActionTarget} footer={<WorkspaceOptions health={health} refreshing={refreshing} onRefresh={() => void refreshCurrentWorkspace()} theme={theme.choice} onThemeChange={theme.setChoice} username={authUser?.username} onLogout={() => void logout()} />} />
     {narrow && navigationOpen && <button className="navigation-scrim" tabIndex={-1} aria-label={text.models.cancel} onClick={closeNavigation} />}
 
@@ -256,7 +257,7 @@ export function App() {
     {showHelp && !showOnboarding && <WorkspaceHelp close={()=>setShowHelp(false)} guide={()=>{setShowHelp(false);setShowOnboarding(true);}} />}
     {showCommands && !showOnboarding && !showHelp && <CommandPalette workSearch={workSearch} actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
     {showOnboarding && <Onboarding health={health} inventoryState={inventoryState} inventoryError={inventoryError} chatModelCount={chatModels.length} chatReady={chatReady} suggestedModel={suggestedModel} pending={onboardingPending} onImport={admin && offlineImport ? () => continueSetup('models/import') : undefined} onAction={() => continueSetup(chatReady ? 'chat' : chatModels.length ? 'models' : 'models/discover')} onSelectSuggested={() => { setModel(suggestedModel); continueSetup('chat'); }} onRetry={refreshBase} onClose={() => { if (onboardingPending) writePreference('offgrid.onboarding.stage', 'working'); setShowOnboarding(false); }} />}
-  </div></SidebarContext.Provider></WorkSearchNavigation></ActiveWorkProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
+  </div></SidebarContext.Provider></WorkSearchNavigation></ActiveWorkProvider></TerminalContextProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
 }
 
 function Onboarding({ health, inventoryState, inventoryError, chatModelCount, chatReady, suggestedModel, pending, onImport, onAction, onSelectSuggested, onRetry, onClose }: {

@@ -273,3 +273,7 @@ retention guidance. Preserve folder and per-user/all-user choices, application
 identity, existing backup behavior, saved data, native keyboard navigation and
 high-contrast support. Verify isolated clean installation, repair, Finish launch,
 running-app refusal and uninstallation before packaging for users.
+
+## Searchable Settings follow-up (2026-11-08)
+
+Replace the long preferences/diagnostics sheet with General, Models & responses, Voice, Terminal, Access & data and Advanced/About sections. Search reveals matching settings without changing them. Reuse existing scoped response/voice preferences and capability controls; explain desktop-only features. Opening Settings must not allocate models, start microphones, grant access or change resources. Preserve all nine locales and keyboard/narrow-screen usability.

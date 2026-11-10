@@ -251,6 +251,14 @@ test('Chat exposes specialist handoffs without expanding technical payloads', as
   await expect(activity.locator('.specialist-row').first().getByRole('link', {name:'Inspect work'})).toHaveAttribute('href', `#/agents/task/run-${'c'.repeat(32)}`);
   await expect(activity.locator('.conversation-work-details')).not.toHaveAttribute('open');
   expect(f.submissions).toEqual([]);
+  f.complete();
+  await page.reload();
+  const finalAnswer=page.locator('.message.assistant').filter({hasText:'A saved, verified outline.'});
+  await expect(finalAnswer).toHaveCount(1);
+  await expect(page.locator('.conversation-work-delegates .specialist-row')).toHaveCount(2);
+  expect(await activity.evaluate((work,answer)=>!!(work.compareDocumentPosition(document.querySelector(answer)!) & Node.DOCUMENT_POSITION_FOLLOWING),'.message.assistant')).toBe(true);
+  await activity.locator('.conversation-work-details > summary').click();
+  await expect(activity.locator('.conversation-work-delegates')).toHaveCount(1);
 });
 
 async function desktopFixture(page: Page, deferred = false) {

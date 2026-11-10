@@ -9,9 +9,9 @@ import { ChatWorkBlocker } from './ChatWorkBlocker';
 import { reviewConversationWork, submitComposerInput } from './chat-input';
 import { APIError } from '../../api/client';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
-import { useContext, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useContext, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { workspaceRefinement } from '../../i18n/workspace-refinement';
-import { api, type AgentProfile, type AgentResourceRestrictions, type ChatMessage, type ChatSession, type Model, type SessionTurn, type ExecutionWorkspace as ExecutionWorkspaceResource } from '../../api/client';
+import { api, type AgentProfile, type AgentResourceRestrictions, type ChatMessage, type ChatSession, type SessionTurn, type ExecutionWorkspace as ExecutionWorkspaceResource } from '../../api/client';
 import { composerAttachmentLabel } from '../../i18n/composer';
 import { Icon } from '../../components/Icon';
 import { MarkdownMessage } from '../../components/MarkdownMessage';
@@ -55,20 +55,13 @@ import { TaskAccessPolicy, type TaskComputerPolicy } from '../agents/TaskAccessP
 import { conversationWorkText } from '../../i18n/conversation-work';
 import { ExecutionWorkspace } from './ExecutionWorkspace';
 import { executionWorkspaceText } from '../../i18n/execution-workspace';
-import { messageText, newSessionName, readPreferences, copyChatMessage, conversationOutputState } from './chat-presentation';
+import { messageText, newSessionName, readPreferences, copyChatMessage, conversationOutputState, type ChatPageProps } from './chat-presentation';
 import { ConversationHistory } from './ConversationHistory';
 import './composer-hierarchy.css';
 import { ComposerKnowledgeReadiness, ComposerResponseLimits } from './ComposerOptions';
 import { DocumentWorkspace } from './DocumentWorkspace';
-export function ChatPage({ scope, models, model, setModel, onboardingPending, onFirstResponse, onOpenModels }: {
-  scope: string;
-  models: Model[];
-  model: string;
-  setModel: (model: string) => void;
-  onboardingPending: boolean;
-  onFirstResponse: () => void;
-  onOpenModels: () => void;
-}) {
+import { TerminalContextDialog } from './TerminalContextDialog';
+export function ChatPage({ scope, models, model, setModel, onboardingPending, onFirstResponse, onOpenModels }: ChatPageProps) {
   const { messages: text, locale } = useI18n();
   const sidebar = useContext(SidebarContext);
   const refinement = workspaceRefinement[locale];
@@ -522,9 +515,12 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
     await copyChatMessage(key,content,setCopiedMessage,setError,text.common.error);
   };
   const { lastAssistant, linkedOutputSaved } = conversationOutputState(conversation, linkedTurn?.id);
+  const linkedAnswerIndex = linkedRun ? conversation.reduce((found, message, index) => message.role === 'assistant' && 'job_id' in message && message.job_id === linkedRun.run_id ? index : found, -1) : -1;
+  const linkedWork = linkedTurn?.job_id && linkedRun && <ConversationWork key={linkedRun.run_id} run={linkedRun} refresh={refreshJob} connection={jobConnection} readError={jobReadError} outputSaved={linkedOutputSaved} recoveryNeeded={recoveryNeeded} recover={() => refreshLinkedConversation(linkedTurn, true)} liveSubmission={submittedJob.current === linkedRun.run_id} />;
   const talkRunning = talkState !== 'off' && talkState !== 'needs_attention';
   const showTalkAction = !agent && (talkRunning || (!busy && !draft.trim() && !imageDraft.images.length && !fileDraft.files.length));
   return <DocumentWorkspace scope={`${draftScope}:${activeName}`}><div className="chat-workspace">
+    <TerminalContextDialog sessions={sessions} current={activeName} disabled={loading||busy||checkingTurn||talkRunning} accept={(name,value)=>{const key=draftKey(draftScope,'chat',name);const previous=readDraft(key);writeDraft(key,previous?`${previous}\n\n${value}`:value);activate(sessions.find(session=>session.name===name));}}/>
     {deleteItems && <ChatHistoryDelete items={deleteItems} onDeleted={historyDeleted} onClose={() => setDeleteItems(null)} />}
     <SidebarSlot action><button className="new-chat-button" title={text.chat.newChat} aria-label={text.chat.newChat} disabled={!!deleteItems} onClick={() => { sidebar.close(); startNew(); }}><Icon name="plus" size={18} /><span>{text.chat.newChat}</span></button></SidebarSlot>
     <SidebarSlot><ConversationHistory sessions={sessions} activeName={activeName} busy={busy} loading={loading} locked={!!deleteItems} notice={historyNotice} select={activate} remove={setDeleteItems} refresh={() => void loadSessions()} /></SidebarSlot>
@@ -536,7 +532,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
         {conversation.map((message, index) => {
           const content = messageText(message.content);
           const messageKey = `${index}-${'timestamp' in message ? message.timestamp : content.slice(0, 24)}`;
-          return <article className={`message ${message.role}`} key={messageKey}>
+          return <Fragment key={messageKey}>
+          {index === linkedAnswerIndex && linkedWork}
+          <article className={`message ${message.role}`}>
             <div className="message-heading"><div className="message-label">{message.role === 'user' ? text.chat.you : message.role === 'assistant' ? text.chat.assistant : message.role}</div></div>
             <div className="message-body">{message.role === 'assistant' ? 'attachment_selections' in message && Array.isArray(message.attachment_selections) && message.attachment_selections.length ? <AttachmentAnswer content={content} session={activeName} selections={message.attachment_selections} /> : <MarkdownMessage content={content} /> : content}</div>
             <ImageAttachments images={message.images}/>
@@ -549,9 +547,9 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
               {'job_id' in message && typeof message.job_id === 'string' && message.job_id !== linkedTurn?.job_id && <a className="secondary-button message-job-link" href={`#/agents/task/${encodeURIComponent(message.job_id)}`}>{jobCopy.inspect}</a>}
               {metrics && index === lastAssistant && <ChatResponseDetails metrics={metrics}/>}
             </footer>}
-          </article>;
+          </article></Fragment>;
         })}
-        {linkedTurn?.job_id && linkedRun && <ConversationWork key={linkedRun.run_id} run={linkedRun} refresh={refreshJob} connection={jobConnection} readError={jobReadError} outputSaved={linkedOutputSaved} recoveryNeeded={recoveryNeeded} recover={() => refreshLinkedConversation(linkedTurn, true)} liveSubmission={submittedJob.current === linkedRun.run_id} />}
+        {linkedAnswerIndex < 0 && linkedWork}
         {linkedTurn && !linkedRun && <ScopedNotice kind={jobReadError ? 'error' : 'status'} action={<button className="secondary-button" onClick={() => { if (linkedTurn.job_id) refreshJob(); else void api.recoverAgentTurn(activeName, linkedTurn.id).then(result => setLinkedTurn(result.turn)).catch(reason => setError(reason instanceof Error ? reason.message : text.common.error)); }}>{linkedTurn.job_id ? text.common.refresh : jobCopy.attach}</button>}>{jobReadError || (linkedTurn.job_id ? text.common.loading : jobCopy.savedJob)}</ScopedNotice>}
         {((busy && !linkedRun) || streamed) && <article className="message assistant streaming-response"><div className="message-heading"><div className="message-label">{text.chat.assistant}</div>{streamed && <button type="button" className="message-copy" onClick={() => void copyMessage('partial', streamed)}>{copiedMessage === 'partial' ? text.chat.copied : text.chat.copy}</button>}</div>
           {streamed && <div className="message-body"><MarkdownMessage content={displayedStream} streaming /></div>}
