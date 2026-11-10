@@ -21,6 +21,8 @@ type ServiceDependencies struct {
 	RenderStream            func(io.Writer, io.Writer, io.Reader) error
 	Chat                    func(context.Context, *serviceclient.Client, []string, io.Reader, io.Writer, bool) error
 	ReadAgentLine           func(*bufio.Reader, io.Writer, PresentationStyle, []AgentCommandSuggestion) (string, error)
+	ReadAgentDraft          func(*bufio.Reader, io.Writer, PresentationStyle, []AgentCommandSuggestion, string) (string, error)
+	LiveAgentStream         LiveAgentStream
 	ClearAgentDisplay       func(io.Writer) bool
 	PickAgentProfile        func(*bufio.Reader, io.Writer, PresentationStyle, []agents.AgentProfile) (agents.AgentProfile, error)
 	AgentDefaults           AgentDefaultStore

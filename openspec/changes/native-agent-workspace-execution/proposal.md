@@ -68,3 +68,12 @@ resume from the saved conversation's agent identity, never a current default.
 Provide in-session agent selection that starts a separate conversation without
 mutating, replaying or transferring grants from the old one. Keep configuration
 inspectable, removable and optional; preserve scripts and explicit flags.
+
+### Comfortable agent sessions (approved review, 2026-11-08)
+
+Implement the attached CLI review incrementally within the canonical client:
+bounded wrapped multiline editing, grapheme-safe navigation, explicit newline
+shortcuts, safe paste and recoverable history; then live steering with one input
+owner and distinct correction/follow-up/approval semantics. Terminal preferences,
+command context and change review remain separately tracked, not implied by an
+editor improvement. Preserve plain input, saved context and existing authority.

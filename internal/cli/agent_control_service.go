@@ -127,7 +127,14 @@ func RenderAgentSnapshot(w io.Writer, snapshot AgentRunSnapshot) {
 		fmt.Fprintf(w, "Inspect the saved host receipt without replaying work:\n  offgrid agent recover-execution %s\n", TerminalSafe(snapshot.RunID))
 	}
 	for _, child := range snapshot.Children {
-		fmt.Fprintf(w, "Subtask: %s â€” %s\n  offgrid agent status %s\n", TerminalSafe(child.Spec.Key), TerminalSafe(child.Spec.Goal), TerminalSafe(child.ID))
+		state := string(child.Status)
+		if state == "" {
+			state = "pending"
+		}
+		if child.Phase != "" && child.Status == agents.TaskRunning {
+			state += " / " + child.Phase
+		}
+		fmt.Fprintf(w, "  %s - %s - %s\n", TerminalSafe(child.Spec.Key), TerminalSafe(state), TerminalSafe(child.Spec.Goal))
 	}
 	if input := snapshot.PendingInput; snapshot.Status == string(agents.TaskInput) && input != nil {
 		if input.Kind == "workspace" {

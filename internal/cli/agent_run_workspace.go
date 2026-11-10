@@ -136,5 +136,5 @@ func streamForegroundRun(ctx context.Context, client *serviceclient.Client, snap
 		return err
 	}
 	defer response.Body.Close()
-	return env.Service.RenderStream(env.Stdout, env.Stderr, response.Body)
+	return followConversationStream(ctx, client, snapshot.RunID, env.Stdout, env.Stderr, response.Body, env.Service.RenderStream)
 }

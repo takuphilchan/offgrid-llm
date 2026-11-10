@@ -15,6 +15,8 @@ type agentSessionPresentation struct {
 	Profile      agents.AgentProfile
 	Style        PresentationStyle
 	ReadLine     func(*bufio.Reader, io.Writer, PresentationStyle, []AgentCommandSuggestion) (string, error)
+	ReadDraft    func(*bufio.Reader, io.Writer, PresentationStyle, []AgentCommandSuggestion, string) (string, error)
+	Follow       LiveAgentStream
 	ClearDisplay func(io.Writer) bool
 	Default      func(string, io.Writer)
 	Switch       func(string, io.Writer) error

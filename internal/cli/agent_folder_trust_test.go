@@ -37,7 +37,7 @@ func TestCLIExplicitRememberSkipsLaterReviewUntilRevoked(t *testing.T) {
 		}
 		_ = lease.Close()
 	}
-	if opens != 2 || strings.Count(out.String(), "[y/remember/N]") != 1 || !strings.Contains(out.String(), "Using remembered") {
+	if opens != 2 || strings.Count(out.String(), "1  Allow once") != 1 || !strings.Contains(out.String(), "Using remembered") {
 		t.Fatal(out.String(), opens)
 	}
 	if _, err := openCLIWorkspace(context.Background(), client, root, "edit", bufio.NewReader(strings.NewReader("n\n")), &out, env); err == nil {

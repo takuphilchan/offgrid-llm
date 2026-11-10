@@ -242,3 +242,32 @@ The slash palette keeps common commands first, bounds visible rows to terminal
 height and shows the selection position. Short `/help` stays scannable; `/help all`
 retains every recovery command. These are presentation-only changes and never
 submit a command or change the pinned profile merely by opening the palette.
+
+### Multiline input and interaction follow-up
+
+The raw-mode editor uses a bounded vertical viewport instead of escaped newline
+display. Enter submits; Ctrl+J and supported Alt/Shift+Enter sequences insert a
+newline. Bracketed paste is one edit, never submission. Drain an oversized paste
+without retaining excess bytes or consuming the next approval; keep the previous
+draft and explain the limit. Cursor movement/deletion use grapheme boundaries,
+while stored text remains unchanged. Arrow keys navigate multiline visual rows;
+Ctrl+P/N recall history explicitly and restore the unfinished draft. Plain mode
+retains its existing line-oriented behavior and emits no cursor controls.
+
+Render only owned editor rows, keep the caret in view, and restore terminal mode
+before consent. Tests cover wraps, CJK/combining/emoji text, paste limits,
+resize, history and shared input ownership. While following a conversation's
+foreground run, a single nonblocking keyboard owner edits a bounded lower region
+while serialized stream writes use the upper region. Enter requests steering;
+`/queue MESSAGE` retains one distinct follow-up for explicit review after the turn.
+Ctrl+C requests Stop without erasing unfinished input. Plain and small terminals
+retain the prior interface. The input owner relinquishes raw mode and buffered
+type-ahead before an approval can begin; type-ahead becomes a draft, never consent.
+
+Every correction rechecks the exact service-owned job and its CanSteer boundary.
+Uncertain acknowledgments block repeated corrections during that stream. Stop
+uses a bounded cancellation-independent request and displays the returned state,
+not an assumed completion. Receipts remain in scrollback; queued and unfinished
+drafts require a new Enter, and never create another task automatically. Native
+PTY fixtures cover streaming, resizing, Stop and fresh approval ownership;
+service fixtures cover completion races and lost acknowledgments.

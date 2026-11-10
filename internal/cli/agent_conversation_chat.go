@@ -65,6 +65,11 @@ func runConversationChatWithAccess(ctx context.Context, client *serviceclient.Cl
 	if !ok {
 		reader = bufio.NewReader(stdin)
 	}
+	live := &liveAgentSession{input: reader}
+	if presentation.ReadDraft != nil {
+		live.follow = presentation.Follow
+	}
+	ctx = context.WithValue(ctx, liveAgentSessionKey{}, live)
 	if workspace != nil {
 		workspace.env.Stdin = reader
 		workspace.env.Stdout = stdout
@@ -73,7 +78,12 @@ func runConversationChatWithAccess(ctx context.Context, client *serviceclient.Cl
 	for {
 		var line string
 		var readErr error
-		if presentation.ReadLine != nil {
+		if len(live.drafts) > 0 && presentation.ReadDraft != nil {
+			draft := live.drafts[0]
+			live.drafts = live.drafts[1:]
+			fmt.Fprintln(stdout, "Draft retained. Review it and press Enter to send; nothing was submitted automatically.")
+			line, readErr = presentation.ReadDraft(reader, stdout, presentation.Style, AgentCommandSuggestions(), draft)
+		} else if presentation.ReadLine != nil {
 			line, readErr = presentation.ReadLine(reader, stdout, presentation.Style, AgentCommandSuggestions())
 		} else {
 			agentSessionPrompt(stdout, presentation.Style)

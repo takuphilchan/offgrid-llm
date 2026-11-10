@@ -49,7 +49,8 @@ func osCLIEnvironment() cli.Environment {
 		return observeInfo(ctx, config.LoadConfig(), getVersion())
 	}
 	env.Service = sessionEnvironment().Service
-	env.Service.ReadAgentLine = newAgentSessionInput()
+	env.Service.ReadAgentLine, env.Service.ReadAgentDraft = newAgentSessionEditors()
+	env.Service.LiveAgentStream = followAgentLive
 	env.Service.ClearAgentDisplay = clearAgentDisplay
 	env.Service.PickAgentProfile = pickAgentProfile
 	env.Service.AgentDefaults = agentDefaultFiles{directory: func() (string, error) {
@@ -108,6 +109,7 @@ func osCLIEnvironment() cli.Environment {
 		},
 	}
 	env.Execution = nativeExecutionDependencies()
+	env.Execution.ChooseAccess = chooseWorkspaceAccess
 	return env
 }
 

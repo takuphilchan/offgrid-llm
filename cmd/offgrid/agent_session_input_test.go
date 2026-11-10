@@ -35,7 +35,7 @@ func TestAgentSessionPTYInput(t *testing.T) {
 	data, _ := json.Marshal(line)
 	fmt.Printf("\nINPUT_RESULT:%s\nAPPROVAL_READY\n", data)
 	approval, err := input.ReadString('\n')
-	if err != nil || approval != "y\n" {
+	if err != nil || (approval != "y\n" && approval != "y\r\n") {
 		t.Fatal("approval input lost", approval, err)
 	}
 	fmt.Println("APPROVAL_RECEIVED")

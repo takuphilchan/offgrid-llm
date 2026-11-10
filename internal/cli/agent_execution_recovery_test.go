@@ -9,8 +9,21 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
 )
+
+func TestRenderAgentSnapshotShowsChildStateWithoutClaimingCompletion(t *testing.T) {
+	var output bytes.Buffer
+	RenderAgentSnapshot(&output, AgentRunSnapshot{RunID: "run-parent", Status: string(agents.TaskChildren), Children: []agents.ChildLink{
+		{Spec: agents.ChildSpec{Key: "research", Goal: "Find sources"}, Status: agents.TaskRunning, Phase: "generating"},
+		{Spec: agents.ChildSpec{Key: "draft", Goal: "Draft from sources"}, Status: agents.TaskPending},
+	}})
+	text := output.String()
+	if !strings.Contains(text, "research - running / generating - Find sources") || !strings.Contains(text, "draft - pending - Draft from sources") || strings.Contains(text, "Status: completed") {
+		t.Fatal(text)
+	}
+}
 
 func TestExecutionRecoveryCLIOnlyRequestsOriginalReceipt(t *testing.T) {
 	calls := 0
