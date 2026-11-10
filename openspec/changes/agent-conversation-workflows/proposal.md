@@ -23,6 +23,7 @@ Current task-wide access couples permission to computer-work intent: even a gree
 4. A trusted protected-path/argument rejection known to precede effects gets bounded corrective feedback, not an outcome textarea. A lost acknowledgment after input remains uncertain and is never replayed.
 5. A tool-enabled turn and its canonical job survive failure at every persistence boundary. Reconnect, navigation, profile editing and opening details create no second job, approval or action.
 6. Users can configure a profile, attach authorized connections, select it in Chat, converse, run work, stop, inspect the result and change profiles for future turns. Narrow/short screens, both themes, keyboard/RTL/IME and all nine locales work coherently.
+7. A delegated graph runs each dependency-ready branch within the shared runner's admitted capacity, persists concise child outcomes with source references, and waits for independent branches after a prerequisite fails. The parent reports verified partial work and blocked dependencies without claiming full success. CLI and Chat show actual child states and progress without implying simultaneous inference on unqualified hardware. Restart, cancellation and budget tests prevent duplicate child execution.
 
 ### Boundaries
 

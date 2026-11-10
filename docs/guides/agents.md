@@ -201,9 +201,15 @@ A task can keep a work plan, archive/retrieve older exact context, and delegate
 bounded read-only analysis to linked subtasks. Describe the desired outcome;
 there is no topology setup form. Delegation uses the same local model and runner,
 up to four children per group and eight per task, without copied computer access
-or approvals. Dependencies run after their prerequisites. Inspect each child
-for findings, approvals or recovery; the parent waits for all children and cannot
-silently ignore a failed branch. After restart, explicitly resume the parent.
+or approvals. Dependency-ready children are admitted within the runner's
+capacity; this does not promise simultaneous model generation on every machine.
+If a prerequisite fails, its descendants do not run, while independent branches
+may finish. The parent retains bounded child outcomes and evidence-step references,
+reports partial completion as a failure, and never treats a child claim as
+independently verified. Inspect each child for findings, limitations and recovery.
+After restart, explicitly resume the parent; recovery does not replay uncertain
+external effects. Chat and CLI show the saved child states and live phases when
+available.
 
 For work across applications, OffGrid verifies each current target under the
 desktop task grant. The grant does not turn off action restrictions, and a
@@ -228,9 +234,8 @@ Children cannot control the desktop, delegate again, widen the parent's tools
 or speak independently. Their reserved iterations come out of the parent's
 budget. Existing unprofiled delegation retains the limits described above.
 
-The service API is available in this development change; the profile library,
-Chat selector and linked conversation experience are still being implemented.
-See [profile API contracts](../reference/api.md#agent-profiles-development-api).
+See [profile API contracts](../reference/api.md#agent-profiles-development-api)
+for the current service representation.
 
 ### CLI tasks
 
