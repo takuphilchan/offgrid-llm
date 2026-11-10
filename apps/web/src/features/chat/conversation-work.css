@@ -1,5 +1,8 @@
 @layer workspace {
-  .conversation-work { display: grid; gap: 1rem; width: 100%; min-width: 0; margin: 0 0 1.5rem; padding: 1rem 0; background: transparent; border: 0; border-block: 1px solid var(--line); border-radius: 0; overflow-wrap: anywhere; }
+  .conversation-work { display: grid; gap: 1rem; width: 100%; min-width: 0; margin: 0 0 1.5rem; padding: .75rem 0; background: transparent; border: 0; border-radius: 0; overflow-wrap: anywhere; }
+  /* The work region receives focus after navigation, but its controls carry
+     their own visible keyboard focus. Avoid outlining the entire result. */
+  .conversation-work:focus { outline: none; }
   .conversation-work > header { display: flex; align-items: center; justify-content: space-between; gap: .5rem 1rem; min-width: 0; flex-wrap: wrap; font-size: .875rem; }
   .conversation-work > header > div { min-width: 0; }
   .conversation-work > header > a { flex-shrink: 0; }
@@ -40,10 +43,19 @@
   .work-recovery-guidance { display: grid; gap: 12px; border-inline-start: 2px solid var(--line); padding-inline-start: var(--space-4, 1rem); font-size: var(--text-body, .875rem); line-height: 1.6; }
   .work-recovery-guidance p { margin: 0; }
   .conversation-work-delegates > ul { list-style: none; padding: 0; margin-block: .5rem 0; }
-  .specialist-row { border-block-end: 1px solid var(--line); }
-  .specialist-row:last-child { border: 0; }
-  .specialist-row summary { padding-block: .7rem; font-size: .875rem; overflow-wrap: anywhere; }
-  .specialist-row summary small { display: block; margin-block-start: .25rem; color: var(--muted); }
+  .specialist-row { min-width: 0; border: 0; border-radius: .65rem; }
+  .specialist-row:hover, .specialist-row:has(details[open]) { background: var(--surface-1); }
+  .specialist-row summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .75rem; min-width: 0; padding: .6rem .75rem; font-size: .875rem; list-style: none; }
+  .specialist-row summary::-webkit-details-marker { display: none; }
+  .specialist-row summary::after { content: '›'; grid-column: 1; grid-row: 1; justify-self: end; color: var(--muted); }
+  .specialist-row details[open] summary::after { transform: rotate(90deg); }
+  .specialist-row summary small { grid-column: 2; grid-row: 1; color: var(--muted); white-space: nowrap; }
+  .specialist-title { display: flex; align-items: center; gap: .6rem; min-width: 0; padding-inline-end: 1.25rem; }
+  .specialist-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .specialist-state { inline-size: .5rem; block-size: .5rem; flex: none; border-radius: 50%; background: var(--muted); }
+  .specialist-row-active .specialist-state { background: currentColor; animation: specialist-pulse 1.6s ease-in-out infinite; }
+  @keyframes specialist-pulse { 50% { opacity: .35; transform: scale(.8); } }
+  @media (prefers-reduced-motion: reduce) { .specialist-row-active .specialist-state { animation: none; } }
   .specialist-detail { padding: .25rem .75rem 1rem; min-width: 0; }
   .conversation-work-recovery p { margin-block: 0 .75rem; }
   .conversation-work-recovery label { display: grid; gap: .5rem; }

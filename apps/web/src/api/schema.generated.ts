@@ -2977,6 +2977,13 @@ export interface components {
         };
         TaskChild: {
             id: string;
+            /**
+             * @description Last persisted child status
+             * @enum {string}
+             */
+            status?: "pending" | "running" | "waiting_for_approval" | "waiting_for_input" | "waiting_for_children" | "interrupted" | "uncertain" | "completed" | "failed" | "cancelled";
+            /** @description Last persisted public progress phase */
+            phase?: string;
             spec: {
                 key: string;
                 goal: string;

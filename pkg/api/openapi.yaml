@@ -3752,6 +3752,8 @@ components:
       required: [id, spec]
       properties:
         id: { type: string }
+        status: { type: string, description: Last persisted child status, enum: [pending, running, waiting_for_approval, waiting_for_input, waiting_for_children, interrupted, uncertain, completed, failed, cancelled] }
+        phase: { type: string, description: Last persisted public progress phase }
         spec:
           type: object
           required: [key, goal, depends_on, tools]

@@ -108,7 +108,7 @@ export function TaskWorkspace({ scope, workspace }: { scope: string; workspace: 
         </div>
       </div>
       <h2 id="task-title" tabIndex={-1} ref={heading}>{title}</h2>
-      {run ? <ConversationWork key={run.run_id} run={run} refresh={() => { refresh(); void refreshHistory(); }} connection={connection} readError={readError} outputSaved={false} recover={async () => {}} recoveryNeeded={false} inspector childStatus={childID => { const child = tasks.find(task => task.id === childID); return child ? status(child) : undefined; }} />
+      {run ? <ConversationWork key={run.run_id} run={run} refresh={() => { refresh(); void refreshHistory(); }} connection={connection} readError={readError} outputSaved={false} recover={async () => {}} recoveryNeeded={false} inspector />
         : readError ? <ScopedNotice kind="error" action={<button className="secondary-button" onClick={refresh}>{text.common.retry}</button>}>{readError}</ScopedNotice>
         : <p role="status">{text.common.loading}</p>}
     </section> : !admin ? <PermissionNotice /> : known.compact ? <WorkHistory/> : <section className="task-list" aria-label={text.agentRuntime.history}>
