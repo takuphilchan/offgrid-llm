@@ -3,6 +3,7 @@ const path=require('node:path'),fs=require('node:fs'),{pathToFileURL}=require('n
 const {TerminalSessions}=require('./terminal-sessions');
 const {createTerminalProtocol}=require('./terminal-protocol');
 const {validateWorkspaceBounds,terminalBounds}=require('./terminal-layout');
+const {createContextDelivery}=require('./terminal-context-delivery');
 
 function createTerminalDock({electron,window,host,cli,service,presentation}){
   const {WebContentsView,ipcMain,dialog,clipboard}=electron;
@@ -21,18 +22,26 @@ function createTerminalDock({electron,window,host,cli,service,presentation}){
     window.webContents.send('terminal-visibility',visible);emit({type:'layout',visible});return bounds;
   }
   function hide(){visibilityRevision++;visible=false;emit({type:'visibility',visible:false});layout();window.webContents.focus();return {visible:false};}
+  const contextDelivery=createContextDelivery({send:value=>{
+    if(window.webContents.isDestroyed()||window.webContents.isLoading())throw Error('Workspace unavailable');
+    window.webContents.send('terminal-context',value);
+  }});
+  window.webContents.on('did-start-loading',()=>contextDelivery.cancel());
   const protocol=createTerminalProtocol({trustedURL:url,contents:()=>view?.webContents,available:()=>sessions.available()&&!cleanup,operations:{
-    create:request=>sessions.create(request),attach:id=>sessions.attach(id),input:(id,text)=>sessions.input(id,text),resize:(id,cols,rows)=>sessions.resize(id,cols,rows),ack:(id,sequence)=>sessions.ack(id,sequence),close:id=>sessions.close(id),layout,hide,copy:text=>clipboard.writeText(text),presentation:()=>({...presentation(),visible:visible&&!overlay})
+    share:async context=>{const result=await contextDelivery.deliver(context);hide();return result;},
+    create:request=>sessions.create(request),attach:id=>sessions.attach(id),input:(id,text)=>sessions.input(id,text),resize:(id,cols,rows)=>sessions.resize(id,cols,rows),ack:(id,sequence)=>sessions.ack(id,sequence),close:id=>sessions.close(id),layout,hide,copy:text=>clipboard.writeText(text),paste:()=>clipboard.readText(),presentation:()=>({...presentation(),visible:visible&&!overlay})
   }});
   function cleanupRenderer(){
+    contextDelivery.cancel();
     protocol.invalidate();
     if(!cleanup)cleanup=sessions.stop().then(()=>{protocol.releaseStopped();cleanup=null;emit({type:'availability',available:sessions.available()});}).catch(()=>{emit({type:'availability',available:false});emit({type:'error',message:'Terminal cleanup could not be confirmed. Quit and retry stopping before opening another terminal.'});});
   }
   ipcMain.removeHandler('terminal-request');
   ipcMain.handle('terminal-request',(event,request)=>protocol.dispatch(event,request));
-  window.on('closed',()=>{protocol.invalidate();void sessions.stop().catch(()=>{});});
+  window.on('closed',()=>{contextDelivery.cancel();protocol.invalidate();void sessions.stop().catch(()=>{});});
   window.on('resize',()=>layout());window.webContents.on('did-finish-load',()=>layout());
   return {
+    acknowledgeContext:(id,accepted)=>contextDelivery.acknowledge(id,accepted),
     async open(){
       if(stopping)throw Error('terminal_stopping');
       const intent=visibilityRevision;
@@ -75,7 +84,7 @@ function createTerminalDock({electron,window,host,cli,service,presentation}){
     hide,
     toggle(){return visible?Promise.resolve(hide()):this.open();},
     appearance(){emit({type:'appearance',...presentation()});},
-    async stop(){stopping=true;protocol.invalidate();try{await sessions.stop();if(view&&!view.webContents.isDestroyed())view.webContents.close();view=undefined;loaded=false;visible=false;layout();}finally{stopping=false;}},
+    async stop(){stopping=true;contextDelivery.cancel();protocol.invalidate();try{await sessions.stop();if(view&&!view.webContents.isDestroyed())view.webContents.close();view=undefined;loaded=false;visible=false;layout();}finally{stopping=false;}},
     get sessions(){return sessions;}
   };
 }

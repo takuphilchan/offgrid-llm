@@ -76,3 +76,36 @@ platform tests, with safe fallback to the ordinary app if unavailable.
 #### Scenario: Missing PTY dependency
 - **WHEN** a desktop cannot load its terminal runtime
 - **THEN** Terminal shows a repairable error while Chat and Knowledge remain usable
+
+### Requirement: Bounded terminal display preferences
+The trusted terminal SHALL provide validated local display preferences and
+complete readable light/dark palettes without changing shell execution authority.
+
+#### Scenario: Adjust presentation during a session
+- **WHEN** the user changes text size, spacing, cursor or scrollback
+- **THEN** existing and new tabs use the bounded settings without restarting or replaying commands
+- **AND** decreasing scrollback is explained as removal of older displayed output
+
+#### Scenario: Accessibility and invalid preferences
+- **WHEN** stored settings are malformed or unavailable, or the user requests reduced motion or forced colors
+- **THEN** safe defaults and the applicable motion/system-color preference are used
+- **AND** settings retain keyboard focus without sending keys to the shell
+
+### Requirement: Inspectable shell command context
+The terminal SHALL track bounded shell-reported command boundaries, folder,
+status and duration without treating shell output as trusted action receipts.
+
+#### Scenario: Command completion and incomplete evidence
+- **WHEN** a supported PowerShell session reports a completed command
+- **THEN** the terminal exposes its bounded output including a final unterminated line, reported exit and folder
+- **AND** missing ends, trimmed starts, malformed markers and alternate-screen markers never establish verified success
+
+#### Scenario: Deliberate output sharing
+- **WHEN** a user selects command output, edits its preview and supplies a question
+- **THEN** only the bounded reviewed context is handed to the authenticated workspace for conversation selection
+- **AND** unavailable delivery preserves the terminal preview and overlapping previews cannot overwrite each other
+- **AND** adding context appends to the chosen conversation draft without sending, running a command or granting agent access
+
+#### Scenario: Local context lifetime
+- **WHEN** the terminal closes or the authenticated workspace identity changes
+- **THEN** the corresponding in-memory command or pending context is discarded without replay or cross-actor reuse

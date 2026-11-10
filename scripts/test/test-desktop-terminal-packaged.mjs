@@ -136,16 +136,20 @@ try {
  if(process.platform==='win32') await expect.poll(()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].contentView.children.at(-1).getBounds().y)).toBeGreaterThanOrEqual(36);
  terminal.on('pageerror',error=>console.error('TERMINAL PAGE ERROR',error));
  await expect(terminal.locator('#start-agent')).toBeVisible();
- // Opening the terminal focuses its first launch card. Keep that cue quiet,
- // but preserve keyboard traversal and the system high-contrast indicator.
- await terminal.locator('#start').focus();
+ // Resting state has no selected card. Keyboard traversal still has a subtle
+ // focus cue and the system high-contrast indicator.
+ await expect(terminal.locator('#terminal-welcome-title')).toBeFocused();
+ await terminal.screenshot({path:join(evidence,'terminal-welcome-resting.png')});
+ await terminal.keyboard.press('Tab');
  await expect(terminal.locator('#start')).toBeFocused();
  const outlineWidth=selector=>terminal.locator(selector).evaluate(el=>parseFloat(getComputedStyle(el).outlineWidth));
- // Chromium rounds strokes to device pixels at fractional Windows scaling.
- assert.ok(await outlineWidth('#start')>0 && await outlineWidth('#start')<=1);
+ // The focused card uses its muted border and background without a text decoration.
+ await expect(terminal.locator('#start')).toHaveCSS('outline-style','none');
+ assert.notEqual(await terminal.locator('#start').evaluate(el=>getComputedStyle(el).borderTopColor),await terminal.locator('#start').evaluate(el=>getComputedStyle(el).color));
+ await expect(terminal.locator('#start strong')).toHaveCSS('text-decoration-line','none');
  await terminal.keyboard.press('Tab');
  await expect(terminal.locator('#start-agent')).toBeFocused();
- assert.ok(await outlineWidth('#start-agent')>0 && await outlineWidth('#start-agent')<=1);
+ await expect(terminal.locator('#start-agent')).toHaveCSS('outline-style','none');
  await terminal.emulateMedia({forcedColors:'active'});
  assert.ok(await outlineWidth('#start-agent')>1);
  await terminal.emulateMedia({forcedColors:'none'});
@@ -156,6 +160,18 @@ try {
  await page.getByRole('button',{name:'Open terminal',exact:true}).click();
  await page.getByRole('button',{name:'New chat',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>document.documentElement.hasAttribute('data-native-terminal-visible'))).toBe(false);
+ // Settings lives in the sidebar footer, outside the primary navigation.
+ // Returning to the same route must hide the native view without resetting it.
+ await page.getByRole('button',{name:'Workspace options',exact:true}).click();
+ await page.getByRole('link',{name:'Settings',exact:true}).click();
+ await page.getByRole('button',{name:'Terminal',exact:true}).click();
+ await page.locator('.settings-content').getByRole('button',{name:'Open terminal',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.hasAttribute('data-native-terminal-visible'))).toBe(true);
+ await page.getByRole('button',{name:'Workspace options',exact:true}).click();
+ await page.getByRole('link',{name:'Settings',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.hasAttribute('data-native-terminal-visible'))).toBe(false);
+ await expect(page.locator('.settings-navigation').getByRole('button',{name:'Terminal',exact:true})).toHaveAttribute('aria-current','page');
+ await page.getByRole('link',{name:'Chat',exact:true}).click();
  await page.getByRole('button',{name:'Open terminal',exact:true}).click();
  if(process.env.OFFGRID_DOC_CAPTURES){
    const demoFolder=join(evidence,'OffGrid Demo');await mkdir(demoFolder);
@@ -167,6 +183,27 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');
  await input.pressSequentially('offgrid --help');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('agent');
+
+ // Exercise the installed renderer with real PowerShell markers, not injected snapshots.
+ await expect.poll(()=>terminal.evaluate(()=>tabs.get(current).commands.commands.at(-1)?.finished)).toBe(true);
+ await terminal.locator('#commands').click();
+ await expect(terminal.getByRole('dialog',{name:'Command context',exact:true})).toBeVisible();
+ await expect(terminal.locator('#context-output')).toHaveValue(/Start here/);
+ await expect(terminal.locator('#context-state')).toContainText('exit 0');
+ await terminal.keyboard.press('Escape');
+ await input.pressSequentially("Start-Sleep -Seconds 2; Write-Output 'CONTEXT_FINISHED'");await input.press('Enter');
+ await expect.poll(()=>terminal.evaluate(()=>tabs.get(current).commands.commands.at(-1)?.command)).toContain('CONTEXT_FINISHED');
+ await terminal.locator('#commands').click();
+ await expect(terminal.locator('#context-state')).toContainText('Command still running');
+ await expect(terminal.locator('#context-output')).toHaveValue(/CONTEXT_FINISHED/);
+ await expect(terminal.locator('#context-state')).toContainText('exit 0');
+ await terminal.keyboard.press('Escape');
+ await terminal.locator('#search').click();await terminal.locator('#query').fill('CONTEXT_FINISHED');
+ await expect(terminal.locator('#find-result')).toContainText('of');
+ await terminal.locator('#query').fill('');
+ await expect.poll(()=>terminal.locator('.xterm-decoration').count()).toBe(0);
+ await expect(terminal.locator('#next')).toBeDisabled();
+ await terminal.locator('#find-close').click();
  if(process.env.OFFGRID_DOC_CAPTURES){
    await input.pressSequentially("function prompt { 'PS OffGrid Demo> ' }; Clear-Host; offgrid --help");await input.press('Enter');
    await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS OffGrid Demo>');
@@ -186,7 +223,7 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');
  await input.pressSequentially("[Console]::WriteLine(('SECOND_' + 'TAB'))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('SECOND_TAB');
- await app.evaluate(({clipboard})=>{global.__terminalCopy=[];clipboard.writeText=text=>global.__terminalCopy.push(text);});
+ await app.evaluate(({clipboard})=>{global.__terminalCopy=[];clipboard.writeText=text=>global.__terminalCopy.push(text);clipboard.readText=()=>"[Console]::WriteLine(('PASTE_'+'caf\u00e9_\u65e5\u672c\u8a9e'))";});
  await terminal.getByTitle('Search terminal output').click();await terminal.getByRole('searchbox',{name:'Search terminal output'}).fill('SECOND_TAB');
  await expect(terminal.locator('#query')).toHaveCSS('outline-style','none');
  // Electron rounds a one-CSS-pixel border to device pixels at Windows scaling.
@@ -220,9 +257,9 @@ try {
  await input.pressSequentially("[Console]::WriteLine(('INTERRUPT_'+'RETURNED'))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('INTERRUPT_RETURNED',{timeout:5000});
  await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();})).toMatch(/^PS .*>$/);
- // Exercise Chromium's paste-event path without changing the user's clipboard.
- // Pasting inserts a command; it must not submit until Enter is pressed.
- await input.evaluate(el=>{const data=new DataTransfer();data.setData('text/plain',"[Console]::WriteLine(('PASTE_'+'caf\u00e9_\u65e5\u672c\u8a9e'))");el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));});
+ // Exercise the actual accelerator through the owned clipboard bridge. Pasting
+ // inserts a command and must not submit until Enter is pressed.
+ await input.press('Control+V');
  await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active,y=b.baseY+b.cursorY;return Array.from({length:4},(_,i)=>b.getLine(Math.max(0,y-3)+i)?.translateToString(true)||'').join('');})).toContain("'caf\u00e9_\u65e5\u672c\u8a9e'");
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).not.toContainText('PASTE_caf\u00e9_\u65e5\u672c\u8a9e');
  await input.press('Enter');
@@ -355,7 +392,9 @@ try {
  await input.pressSequentially('/clear');await input.press('Enter');
  await expect.poll(()=>terminal.evaluate(()=>{const t=tabs.get(current).term;return Array.from({length:t.buffer.active.length},(_,i)=>t.buffer.active.getLine(i)?.translateToString()).join('\n');})).not.toContain('Search or number:');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Terminal fixture 1');
- await input.pressSequentially('/ses');
+ await app.evaluate(({clipboard})=>{clipboard.readText=()=>'/ses';});
+ await input.press('Control+V');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('> /ses');
  await terminal.getByRole('tab',{name:'PowerShell',exact:true}).click();
  await terminal.getByRole('tab',{name:'Agent',exact:true}).click();
  await expect(input).toBeFocused();await input.pressSequentially('sion');await input.press('Enter');
@@ -399,5 +438,5 @@ try {
  await writeFile(join(evidence,'terminal-narrow-200.png'),Buffer.from(capture,'base64'));
  await app.close();app=undefined;
  assert.equal(execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`if(Get-Process -Id ${quitPID} -ErrorAction SilentlyContinue){'alive'}else{'gone'}`],{encoding:'utf8',windowsHide:true}).trim(),'gone');
- console.log(JSON.stringify({passed:true,evidence,reloadChild:true,search:true,copy:true,oscClipboardBlocked:true,cliInteractive:true,agentClear:true,agentDraft:true,cursorPreserved:true,mainWorkspace:true,zoom200:true,tabs:true,unicode:true,hiddenRetained:true,closeChild:true,quitChild:true,serviceIdentity:true}));
+ console.log(JSON.stringify({passed:true,evidence,reloadChild:true,search:true,copy:true,paste:true,agentPaste:true,oscClipboardBlocked:true,cliInteractive:true,agentClear:true,agentDraft:true,cursorPreserved:true,mainWorkspace:true,zoom200:true,tabs:true,unicode:true,hiddenRetained:true,closeChild:true,quitChild:true,serviceIdentity:true}));
 }finally{await app?.close();server.close();clearTimeout(deadline);}

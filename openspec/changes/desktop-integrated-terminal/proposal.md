@@ -29,6 +29,11 @@ required setup surface would worsen the ordinary-user experience.
 
 ## Capabilities
 
+The approved November 8 CLI/terminal review adds bounded local display preferences
+(font size, line height, cursor and scrollback), complete light/dark ANSI palettes,
+and reduced-motion/high-contrast fallbacks. Preferences affect presentation only;
+they cannot configure shell commands, grant access or restore/replay processes.
+
 ### New Capabilities
 - `desktop-terminal`: optional native interactive shell and owned lifecycle.
 
@@ -42,3 +47,10 @@ shutdown supervision and isolated native/renderer tests. A terminal starts with
 the user's OS permissions; a chosen working folder is not a sandbox. Agent input
 does not inherit terminal authority. No public remote-shell API, WSL requirement,
 automatic shell startup, administrator elevation or shared-session migration.
+
+Task 6.2 implements the approved review's PowerShell command inspection and
+selected-output handoff: bounded command history, shell-reported folder/status,
+editable output, acknowledged delivery and an explicitly selected Chat draft.
+Nothing sends automatically or expands agent authority. This focused contract is
+defined in the design/spec; broader file-change review stays in the native-agent
+change and native platform qualification remains separately tracked.

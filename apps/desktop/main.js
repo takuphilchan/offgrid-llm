@@ -367,6 +367,7 @@ handleTrustedIPC('terminal-status', () => ({available:terminal?.sessions.availab
 handleTrustedIPC('terminal-layout', value => terminal.setWorkspaceBounds(value));
 handleTrustedIPC('terminal-overlay', value => terminal.setOverlayActive(value));
 handleTrustedIPC('terminal-hide', () => terminal.hide());
+handleTrustedIPC('terminal-context-response', (id,accepted) => terminal.acknowledgeContext(id,accepted));
 handleTrustedIPC('get-presentation', () => presentationSnapshot());
 handleTrustedIPC('set-presentation', value => {
   // Only appearance/language preferences: no caller-provided file paths or commands.

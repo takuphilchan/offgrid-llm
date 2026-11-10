@@ -317,6 +317,11 @@ jobs:
           node scripts/test/test-web-workspace.mjs build/linux/offgrid-model-fixtures --model-fixtures model-acquisition.spec.ts --workers=1
           node scripts/test/test-web-workspace.mjs build/linux/offgrid-model-fixtures --model-fixtures model-restart.spec.ts --workers=1
 
+      - name: Exercise isolated agent input and streaming ownership
+        run: |
+          go test -c -o build/agent-session-input.test ./cmd/offgrid
+          python3 scripts/test/test-agent-session-pty.py build/agent-session-input.test
+
       - name: Preserve failed browser diagnostics
         if: failure() && steps.browser-tests.outcome == 'failure'
         uses: actions/upload-artifact@v7
@@ -340,6 +345,9 @@ jobs:
           node --check preload.js
           npm test
           npx electron-builder --dir --linux
+
+      - name: Check terminal display preferences and search
+        run: node scripts/test/test-terminal-display.mjs
 
       - name: Test real Linux AT-SPI controls in an isolated desktop
         env:
@@ -407,6 +415,10 @@ jobs:
       - name: Test desktop compatibility and IPC trust policy
         working-directory: apps/desktop
         run: npm test
+
+      - name: Test isolated PowerShell command context
+        if: runner.os == 'Windows'
+        run: node scripts/test/test-terminal-command-windows.cjs --isolated-native-test
 
       - name: Retrieve verified OCR build assets
         uses: actions/download-artifact@v7

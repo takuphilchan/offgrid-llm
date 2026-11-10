@@ -73,6 +73,51 @@ Output uses the available pane width with bounded edge padding.
 
 ## Migration Plan
 
+### Display preferences (approved CLI/terminal review, 2026-11-08)
+
+Store only versioned, validated display preferences in the trusted terminal
+renderer's local storage. Invalid, unknown or unavailable storage uses defaults.
+Font size (11–24), line height (1–1.8), cursor shape/blink and scrollback
+(1,000–20,000 lines) apply to existing and new tabs without restarting shells.
+Reducing scrollback may discard older displayed output and must be explained.
+Reduced motion disables blinking even when the stored preference enables it.
+Define all sixteen ANSI colors with measurable contrast against each background;
+forced-color mode uses system foreground/background rather than the palette.
+The settings dialog owns focus while open, restores focus when closed and never
+passes form keystrokes to the PTY. Palette/preference validation, browser behavior
+and isolated PTY evidence remain distinct from manual accessibility qualification.
+
 Add desktop capability negotiation and preserve old clients with no terminal
 capability. No saved sessions or permission records are migrated. Rollback closes
 owned PTYs before replacing the desktop; installation remains separately governed.
+
+### Command context contract (approved review implementation, 2026-11-08)
+
+The existing task 6.2 uses a versioned PowerShell OSC 633 envelope for command
+start/end and current directory. Fixed first-party initialization is confined to
+the new NoProfile shell. It never edits profiles or execution policy. These
+markers can be forged by terminal programs: label their status shell-reported,
+never consume them as agent receipts, approvals or recovery evidence. Incomplete
+input and missing end markers do not become successful commands. Other shells
+remain explicitly without command integration.
+
+Keep at most 100 command records per tab and 32,768 characters of displayed output
+per completed command, captured before the next prompt changes its last line.
+Marks allow navigation while in scrollback; trimmed start markers make output
+unavailable. Alternate-screen markers cannot define normal-buffer commands.
+Records remain in terminal memory only and disappear when the tab closes.
+
+Commands opens an editable bounded preview of one command or a manual selection.
+The user supplies a question and removes private content before continuing.
+Authenticated terminal IPC checks exact frame, renderer generation, session
+ownership and payload bounds. Delivery requires a current workspace acknowledgment;
+unavailable/reloaded workspaces and overlapping previews retain the terminal
+preview for retry. The actor/workspace-scoped web provider clears pending content
+on identity changes and never restores it across reload.
+
+Chat lets the user choose the current, another saved, or a new conversation and
+edit the final context. Adding it appends to that conversation's draft; Send is
+still required. Provenance and truncation are visible in the serialized context;
+quoted output is untrusted user-supplied material, not an executable instruction.
+This is explicit text sharing, not a service-owned file attachment or automatic
+transcript upload. File-change review remains native-agent task 10.3.
