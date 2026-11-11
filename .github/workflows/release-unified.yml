@@ -1035,6 +1035,12 @@ jobs:
       - name: Build desktop app
         if: steps.existing.outputs.skip != 'true'
         working-directory: apps/desktop
+        env:
+          CSC_LINK: ${{ matrix.os == 'windows' && secrets.WINDOWS_CSC_LINK || matrix.os == 'macos' && secrets.MACOS_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'windows' && secrets.WINDOWS_CSC_KEY_PASSWORD || matrix.os == 'macos' && secrets.MACOS_CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ matrix.os == 'macos' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
         run: |
           echo "Building desktop app for ${{ matrix.os }}..."
           npm run ${{ matrix.build_script }}
@@ -1216,6 +1222,40 @@ jobs:
           echo "All files uploaded successfully!"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Check the downloaded draft assets even on reruns and partial rebuilds.
+      # Checking only dist/ would miss preexisting assets upload_if_missing keeps.
+      - name: Verify published desktop artifact trust
+        if: matrix.os != 'linux'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OFFGRID_WINDOWS_SIGNER_THUMBPRINT: ${{ vars.OFFGRID_WINDOWS_SIGNER_THUMBPRINT }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          TRUST_PLATFORM: ${{ matrix.os }}
+        run: |
+          set -euo pipefail
+          target="build/release-trust-${TRUST_PLATFORM}"
+          mkdir -p "$target"
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?per_page=100" --paginate --slurp > "$target/assets.json"
+          node --input-type=module -e 'import {artifactNames} from "./scripts/release/verify-desktop-trust.mjs"; for(const name of artifactNames(process.env.TRUST_PLATFORM,process.env.RELEASE_VERSION)) console.log(name)' > "$target/expected.txt"
+          while IFS= read -r name; do
+            id=$(jq -er --arg name "$name" '[.[][] | select(.name == $name and .state == "uploaded" and .size > 0)] | if length == 1 then .[0].id else error("Missing/duplicate artifact") end' "$target/assets.json")
+            expected=$(jq -er --arg name "$name" '.[][] | select(.name == $name) | .digest | select(test("^sha256:[0-9a-f]{64}$"))' "$target/assets.json")
+            gh api "repos/${GITHUB_REPOSITORY}/releases/assets/${id}" -H 'Accept: application/octet-stream' > "$target/$name"
+            ARTIFACT="$target/$name" EXPECTED="$expected" node --input-type=module -e 'import {createReadStream} from "node:fs"; import {createHash} from "node:crypto"; const hash=createHash("sha256"); for await(const data of createReadStream(process.env.ARTIFACT)) hash.update(data); if("sha256:"+hash.digest("hex")!==process.env.EXPECTED) throw Error("Downloaded release artifact digest mismatch")'
+          done < "$target/expected.txt"
+          node scripts/release/verify-desktop-trust.mjs --directory "$target" --platform "$TRUST_PLATFORM" --version "$RELEASE_VERSION" --report "$target/trust.json"
+
+      - name: Preserve desktop trust evidence
+        if: always() && matrix.os != 'linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-trust-${{ matrix.os }}
+          path: build/release-trust-${{ matrix.os }}/trust.json
+          if-no-files-found: warn
 
   # Create release notes and checksums
   finalize-release:

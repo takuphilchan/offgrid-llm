@@ -212,6 +212,7 @@ jobs:
           node scripts/release/test-desktop-branding.mjs
           node scripts/release/test-release-context.mjs
           node scripts/release/test-release-ci.mjs
+          node --test scripts/release/verify-desktop-trust.test.mjs scripts/build/desktop-preview.test.mjs
           node scripts/release/test-release-containers.mjs
 
       - name: Check maintained documentation
