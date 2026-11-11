@@ -212,7 +212,9 @@ func TestLateSuccessfulModelResultCannotCrossStop(t *testing.T) {
 		return response, nil // A backend that ignores cancellation and returns success.
 	})
 	config := DefaultAgentConfig()
-	config.MaxTokens, config.TimeoutPerStep = 4, time.Second
+	// This tests the Stop boundary, not model-start latency. Leave room for
+	// Windows persistence/antivirus contention before the caller starts.
+	config.MaxTokens, config.TimeoutPerStep = 4, 10*time.Second
 	task, err := runner.Create("write", "fixture", "alice", config)
 	if err != nil {
 		t.Fatal(err)
@@ -222,13 +224,13 @@ func TestLateSuccessfulModelResultCannotCrossStop(t *testing.T) {
 	}
 	select {
 	case <-started:
-	case <-time.After(time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("model call did not start")
 	}
 	if _, err := runner.Stop(task.ID, "alice", "cancel", ""); err != nil {
 		t.Fatal(err)
 	}
-	shutdown, cancel := context.WithTimeout(context.Background(), time.Second)
+	shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := runner.Shutdown(shutdown); err != nil {
 		t.Fatal(err)
