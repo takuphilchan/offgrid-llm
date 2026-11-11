@@ -92,7 +92,9 @@ func renderAgentStreamMode(w, progress io.Writer, body io.Reader, terminal, anim
 		if runID == "" && event.RunID != "" {
 			runID = event.RunID
 		}
-		if event.Status == "waiting_for_children" {
+		// Child completion can first arrive after the parent resumes, or in a
+		// recovered terminal snapshot. Do not lose the last specialist's result.
+		if len(event.Children) > 0 {
 			active := false
 			label := "Waiting for specialists"
 			for _, child := range event.Children {
@@ -109,7 +111,9 @@ func renderAgentStreamMode(w, progress io.Writer, body io.Reader, terminal, anim
 					lastChildren[child.ID] = state
 				}
 			}
-			display.phase(label, active)
+			if event.Status == "waiting_for_children" {
+				display.phase(label, active)
+			}
 		}
 		if p := event.Progress; p != nil && event.Type == "status" {
 			if terminal && p.Phase == "generating" && p.Preview != "" {

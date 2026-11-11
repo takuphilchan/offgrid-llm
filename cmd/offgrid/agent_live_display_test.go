@@ -145,6 +145,31 @@ func TestDelegatedProgressShowsTransitionsWithoutRepeatingTheWholeSnapshot(t *te
 	}
 }
 
+func TestLastSpecialistCompletionAppearsBeforeParentAnswer(t *testing.T) {
+	for _, eventType := range []string{"status", "done", "snapshot_recovery"} {
+		t.Run(eventType, func(t *testing.T) {
+			state := "completed"
+			if eventType == "status" {
+				state = "running"
+			}
+			stream := `data: {"type":"status","run_id":"parent","status":"waiting_for_children","children":[{"id":"writer","status":"running","spec":{"key":"Brief writer"}}]}` + "\n"
+			stream += fmt.Sprintf(`data: {"type":%q,"run_id":"parent","status":%q,"output":"Verified briefing.","children":[{"id":"writer","status":"completed","spec":{"key":"Brief writer"}}]}`, eventType, state) + "\n"
+			if eventType == "status" {
+				stream += `data: {"type":"done","run_id":"parent","status":"completed","output":"Verified briefing.","children":[{"id":"writer","status":"completed","spec":{"key":"Brief writer"}}]}` + "\n"
+			}
+			var transcript bytes.Buffer
+			if err := renderAgentStreamMode(&transcript, &transcript, strings.NewReader(stream), true, false, cli.PresentationStyle{}); err != nil {
+				t.Fatal(err)
+			}
+			shown := transcript.String()
+			completion := "Brief writer · completed"
+			if strings.Count(shown, completion) != 1 || strings.Index(shown, completion) > strings.Index(shown, "Verified briefing.") {
+				t.Fatal("last child completion was lost, duplicated, or printed after the answer", shown)
+			}
+		})
+	}
+}
+
 func TestAgentProgressAnimatesInPlace(t *testing.T) {
 	t.Setenv("OFFGRID_UNICODE", "1")
 	var out bytes.Buffer
