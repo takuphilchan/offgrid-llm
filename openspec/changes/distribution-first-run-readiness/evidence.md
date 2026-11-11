@@ -331,3 +331,12 @@ the duplicate install from the later renderer build. Local desktop checks
 passed again (202 passed, one platform skip). This changes CI ordering only;
 it does not change the installed application's behavior. The corrected revision
 requires a new full CI run; the first run is not qualifying evidence.
+
+The second run (`43091293641`, revision `23c2def9`) passed the previously failing
+desktop test step and Apple Silicon packaged startup. The Windows terminal
+fixture then exposed the same ordering problem for `node-pty`: desktop dependencies
+were installed only in a later packaging step. The locked desktop/computer
+dependency installs now also precede native terminal tests. The isolated local
+PowerShell/ConPTY fixture passed command boundaries, Unicode, exit status,
+directory changes and owned-shell shutdown without using the installed app or
+normal workspace. These CI-order corrections still require a full passing run.

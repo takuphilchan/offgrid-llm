@@ -426,6 +426,9 @@ jobs:
         run: |
           # Translation contract tests parse the shared renderer with TypeScript.
           npm ci --prefix ../web
+          # Install native terminal dependencies before the Windows shell check.
+          npm ci --prefix ../computer --ignore-scripts
+          npm ci
           npm test
 
       - name: Test isolated PowerShell command context
@@ -469,8 +472,6 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
           cd apps/desktop
-          npm ci --prefix ../computer --ignore-scripts
-          npm ci
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             npx electron-builder --dir --win --x64 --publish never
             node ../../scripts/test/test-desktop-startup.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'
