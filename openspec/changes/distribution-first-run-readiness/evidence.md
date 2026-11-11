@@ -299,3 +299,22 @@ See tasks.md: runtime API verification, artifact trust and preview identity, ful
   Native macOS signing/notarization, exact-revision remote CI and publication
   remain incomplete. No successful CPU-model reply or vision qualification is
   inferred from the GPU test.
+
+### Reviewed source checkpoint
+
+- Created focused local commits after the verified upgrade: `c2192d54` runtime
+  preparation, `0df992d2` setup/appearance/localization, `145a005b` native upgrade
+  guards and artifact trust, and `24f0cd7` version 0.4.29 and candidate notes.
+  Package versions and lockfiles agree. The staged snapshots passed whitespace,
+  credential-pattern, large-file and binary checks. Trust/preview regression
+  fixtures passed again (six tests); maintained documentation had zero findings.
+- The package source differs from the final commits only in the documented
+  browser-test corrections, release/specification documentation and removal of
+  trailing blank lines from the theme license notice. The installed artifact
+  hashes above continue to identify the tested pre-commit candidate; they are
+  not hashes of a future CI build. No application behavior was changed after
+  installed qualification.
+- GitHub still lists only `DOCKERHUB_TOKEN` among repository secret names and
+  no repository variables. Windows/macOS signing and notarization credentials
+  remain unavailable. The latest published version is still 0.4.28. The exact
+  committed source must pass remote CI before a release can be qualified.

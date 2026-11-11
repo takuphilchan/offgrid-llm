@@ -28,5 +28,5 @@
 
 ## 6. Authorized commit and release
 
-- [ ] 6.1 Review the final source changes and release identity, prepare accurate release notes, and create focused commits after the installed upgrade is verified; preserve unrelated work and record validation.
+- [x] 6.1 Review the final source changes and release identity, prepare accurate release notes, and create focused commits after the installed upgrade is verified; preserve unrelated work and record validation.
 - [ ] 6.2 Push the reviewed release source, require passing CI for its exact revision, publish through the maintained release workflow with actual trust checks, and verify the public assets, checksums and release identity.
