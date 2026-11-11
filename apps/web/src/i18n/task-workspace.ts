@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from "./index";
 
 // Task workflow copy shared by the web and packaged desktop renderer.
-const copy = {
+const copy = defineMessages<string[]>("i18n/task-workspace:inline1", {
   en: [
     "New task",
     "What would you like done?",
@@ -164,7 +165,7 @@ const copy = {
     "Khetha uhlelo oluzosetshenziswa yi-OffGrid.",
     "Hlola imodeli ku-Models bese uzama futhi. Umsebenzi wakho ugciniwe.",
   ],
-} satisfies Record<LocaleCode, string[]>;
+});
 
 export function taskWorkspaceText(locale: LocaleCode) {
   const [

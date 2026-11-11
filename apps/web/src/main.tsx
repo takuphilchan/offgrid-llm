@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { I18nProvider } from './i18n';
+import { appearanceKey, normalizeAppearance } from './appearance';
 import { initializeTheme } from './theme';
 import { writePreference } from './lib/preferences';
 import '@fontsource-variable/ibm-plex-sans/wght.css';
@@ -17,6 +18,7 @@ import './components/workspace-presentation.css';
 import './components/shell/workspace-shell.css';
 import './components/shell/sidebar-conversations.css';
 import './controls.css';
+import '../../desktop/select-controls.css';
 import './features/agents/task-workspace.css';
 
 async function start() {
@@ -28,6 +30,7 @@ async function start() {
       const value = await Promise.race([window.electron.getPresentation(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Presentation timeout')), 1500); })]);
       writePreference('offgrid.locale', value.locale);
       writePreference('offgrid.theme', value.theme);
+      if (value.appearance) writePreference(appearanceKey, JSON.stringify(normalizeAppearance(value.appearance)));
     } catch { /* Retain browser preferences if the desktop bridge is unavailable. */ }
     finally { clearTimeout(timer); }
   }

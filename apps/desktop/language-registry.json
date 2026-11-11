@@ -1,0 +1,147 @@
+{
+  "en": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "existing"
+  },
+  "fr": {
+    "fallback": "fr",
+    "direction": "ltr",
+    "stage": "existing"
+  },
+  "es": {
+    "fallback": "es",
+    "direction": "ltr",
+    "stage": "existing"
+  },
+  "ar": {
+    "fallback": "ar",
+    "direction": "rtl",
+    "stage": "existing"
+  },
+  "sw": {
+    "fallback": "sw",
+    "direction": "ltr",
+    "stage": "existing"
+  },
+  "sn": {
+    "fallback": "sn",
+    "direction": "ltr",
+    "stage": "existing"
+  },
+  "nd": {
+    "fallback": "nd",
+    "direction": "ltr",
+    "stage": "existing"
+  },
+  "zu": {
+    "fallback": "zu",
+    "direction": "ltr",
+    "stage": "existing"
+  },
+  "de": {
+    "fallback": "de",
+    "direction": "ltr",
+    "stage": "existing"
+  },
+  "pt-BR": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "pt-PT": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "it": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "ru": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "uk": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "tr": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "zh-Hans": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "zh-Hant": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "ja": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "ko": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "hi": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "bn": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "ta": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "ur": {
+    "fallback": "en",
+    "direction": "rtl",
+    "stage": "preview"
+  },
+  "fa": {
+    "fallback": "en",
+    "direction": "rtl",
+    "stage": "preview"
+  },
+  "he": {
+    "fallback": "en",
+    "direction": "rtl",
+    "stage": "preview"
+  },
+  "id": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "vi": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "th": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  },
+  "fil": {
+    "fallback": "en",
+    "direction": "ltr",
+    "stage": "preview"
+  }
+}

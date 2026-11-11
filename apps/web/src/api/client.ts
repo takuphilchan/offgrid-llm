@@ -1,3 +1,4 @@
+import {clientMessage} from '../i18n/client-errors';
 import { validateRetention } from './retention';
 import { notifyWorkChanged } from '../lib/work-changes';
 import type { components, operations } from './schema.generated';
@@ -95,7 +96,7 @@ async function request<T>(path: string, init?: RequestInit, timeout = 30_000, de
   });
   if (!response.ok) {
     const body = await response.text();
-    let message = `OffGrid returned HTTP ${response.status}. Refresh the workspace before retrying.`;
+    let message = clientMessage('http',{status:response.status});
     let data: Record<string, any> | undefined;
     try {
       const parsed = JSON.parse(body);
@@ -111,7 +112,7 @@ async function request<T>(path: string, init?: RequestInit, timeout = 30_000, de
     throw new APIError(message, response.status, data);
   }
   if (decode) return await decode(response);
-  if (!response.headers.get('content-type')?.includes('application/json')) throw new APIError('Unexpected service response. Check the backend address and version.', 502);
+  if (!response.headers.get('content-type')?.includes('application/json')) throw new APIError(clientMessage('response'), 502);
   return await response.json() as T;
   } catch (reason) {
     if (deadline.signal.aborted) throw new APIError(workflowText().timeout, 408);
@@ -120,6 +121,8 @@ async function request<T>(path: string, init?: RequestInit, timeout = 30_000, de
 }
 
 export const api = {
+  runtimeReadiness: (signal?: AbortSignal) => request<components['schemas']['InferenceRuntimeReadiness']>('/api/v2/runtime', { signal }),
+  prepareRuntime: (signal: AbortSignal) => request<components['schemas']['InferenceRuntimeReadiness']>('/api/v2/runtime', { method: 'POST', body: '{}', signal }, 310_000),
   searchWork: (query: string, signal?: AbortSignal) => request<WorkSearchResponse>(`/api/v2/work/search?query=${encodeURIComponent(query)}`, { signal }),
   typedModels: async (category?: ModelCategory, signal?: AbortSignal) => (await request<{ models: InstalledTypedModel[] }>(`/api/v2/models?${new URLSearchParams(category ? { category } : {})}`, { signal })).models,
   typedCatalog: (category: ModelCategory, query?: string, signal?: AbortSignal) => request<{ models: TypedCatalogModel[]; repositories: { id: string; downloads: number; likes: number; size_bytes?: number }[] }>(`/api/v2/models/catalog?${new URLSearchParams(query === undefined ? { category } : { category, source: 'huggingface', q: query })}`, { signal }),
@@ -153,13 +156,13 @@ export const api = {
   synthesizeSpeech: async (input: string, signal?: AbortSignal, selection?: { model?: string; voice?: string }) => {
     const response = await fetch('/v1/audio/speech', { method: 'POST', signal, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input, response_format: 'wav', speed: 1, ...selection }) });
     if (!response.ok) {
-      const body = await response.text(); let message = 'Speech playback is unavailable.';
+      const body = await response.text(); let message = clientMessage('speech');
       try { const parsed = JSON.parse(body); message = parsed.error?.message ?? parsed.error ?? message; } catch { /* keep safe message */ }
       throw new APIError(message, response.status);
     }
-    if (!response.headers.get('Content-Type')?.includes('audio/wav')) throw new APIError('Speech runtime returned an unsupported audio format.', 502);
+    if (!response.headers.get('Content-Type')?.includes('audio/wav')) throw new APIError(clientMessage('speech'), 502);
     const blob = await response.blob();
-    if (blob.size <= 44) throw new APIError('Speech runtime returned empty audio.', 502);
+    if (blob.size <= 44) throw new APIError(clientMessage('speech'), 502);
     return blob;
   },
   currentUser: () => request<components['schemas']['CurrentUser']>('/v1/users/me'),
@@ -200,9 +203,9 @@ export const api = {
     // An older generate endpoint may ignore additive fields. Never let a saved
     // agent selection silently turn into an unrestricted/plain Chat request.
     const identity = await request<components['schemas']['SystemIdentity']>('/api/v2/system', {signal});
-    if (!identity.capabilities?.includes('agent-conversations-v1')) throw new APIError('This service does not support agent conversations. Update the service before retrying.', 409);
-    if (data.knowledge_documents && !identity.capabilities?.includes('scoped-knowledge-chat-v1')) throw new APIError('This service does not support selected Knowledge sources. Nothing was submitted.', 409);
-    if (data.execution && !identity.capabilities?.includes('native-execution-preview-v1')) throw new APIError('This service does not support the selected execution workspace. No work was submitted.', 409);
+    if (!identity.capabilities?.includes('agent-conversations-v1')) throw new APIError(clientMessage('agentUpgrade'), 409);
+    if (data.knowledge_documents && !identity.capabilities?.includes('scoped-knowledge-chat-v1')) throw new APIError(clientMessage('knowledgeUpgrade'), 409);
+    if (data.execution && !identity.capabilities?.includes('native-execution-preview-v1')) throw new APIError(clientMessage('workspaceUpgrade'), 409);
     return request<LinkedAgentTurn>(`/v1/sessions/${encodeURIComponent(name)}/generate`, { method: 'POST', signal, body: JSON.stringify(data) });
   },
   recoverAgentTurn: (name: string, id: string) => request<LinkedAgentTurn>(`/v1/sessions/${encodeURIComponent(name)}/turn/recover`, { method: 'POST', body: JSON.stringify({id}) }),
@@ -232,15 +235,15 @@ export const api = {
   cancelTurn: (name: string, id: string) => request<{ success: boolean }>(`/v1/sessions/${encodeURIComponent(name)}/turn/cancel`, { method: 'POST', body: JSON.stringify({ id }) }),
   followTurn: async (name: string, id: string, onEvent: (event: SessionEvent) => void, signal: AbortSignal) => {
     const response = await fetch(`/v1/sessions/${encodeURIComponent(name)}/turn/events?id=${encodeURIComponent(id)}`, { credentials: 'same-origin', signal });
-    if (!response.ok) throw new APIError('Conversation progress unavailable. Refresh to reconnect.', response.status);
+    if (!response.ok) throw new APIError(clientMessage('progress'), response.status);
     return readSessionStream(response, onEvent);
   },
   streamSession: async (name: string, content: string, modelID: string, useKnowledgeBase: boolean, profile: string, maxTokens: number, onEvent: (event: SessionEvent) => void, signal: AbortSignal, requestID = crypto.randomUUID(), knowledgeDocuments?: string[], images?: SessionImage[], attachments?: SessionAttachmentReference[]) => {
-    if(attachments?.length){const identity=await request<components['schemas']['SystemIdentity']>('/api/v2/system',{signal});if(!identity.capabilities?.includes('session-files-v1'))throw new APIError('File input requires an updated service. Your draft is retained.',409);}
-    if(images?.length){const identity=await request<components['schemas']['SystemIdentity']>('/api/v2/system',{signal});if(!identity.capabilities?.includes('session-images-v1'))throw new APIError('Image input requires an updated service. Your draft is retained.',409);}
+    if(attachments?.length){const identity=await request<components['schemas']['SystemIdentity']>('/api/v2/system',{signal});if(!identity.capabilities?.includes('session-files-v1'))throw new APIError(clientMessage('fileUpgrade'),409);}
+    if(images?.length){const identity=await request<components['schemas']['SystemIdentity']>('/api/v2/system',{signal});if(!identity.capabilities?.includes('session-images-v1'))throw new APIError(clientMessage('imageUpgrade'),409);}
     if (knowledgeDocuments) {
       const identity = await request<components['schemas']['SystemIdentity']>('/api/v2/system', { signal });
-      if (!identity.capabilities?.includes('scoped-knowledge-chat-v1')) throw new APIError('This service does not support selected Knowledge sources. Nothing was submitted.', 409);
+      if (!identity.capabilities?.includes('scoped-knowledge-chat-v1')) throw new APIError(clientMessage('knowledgeUpgrade'), 409);
     }
     const response = await fetch(`/v1/sessions/${encodeURIComponent(name)}/generate`, {
       method: 'POST', credentials: 'same-origin', signal,
@@ -317,7 +320,7 @@ export const api = {
   },
   computerSessions: async () => {
     const data = await request<{ sessions: ComputerSession[] }>('/api/v2/computer/sessions');
-    if (!Array.isArray(data.sessions) || data.sessions.some(s => !s || typeof s.id !== 'string' || typeof s.origin !== 'string' || !Number.isFinite(s.remaining_actions))) throw new APIError('Invalid browser session response. Check the service version.', 502);
+    if (!Array.isArray(data.sessions) || data.sessions.some(s => !s || typeof s.id !== 'string' || typeof s.origin !== 'string' || !Number.isFinite(s.remaining_actions))) throw new APIError(clientMessage('browser'), 502);
     return data;
   },
   checkComputerModel: (model: string, signal: AbortSignal, driver='browser') => request<ComputerModelCheck>('/api/v2/computer/model-check', { method: 'POST', body: JSON.stringify({model,driver}), signal }, 600_000),
@@ -343,14 +346,14 @@ export const api = {
   exportJob: (id: string) => request<AgentRun>(`/api/v2/jobs/${encodeURIComponent(id)}/export`),
   taskArtifact: (id: string, digest: string, signal: AbortSignal) => request<Blob>(`/api/v2/jobs/${encodeURIComponent(id)}/artifact?digest=${encodeURIComponent(digest)}`, { signal }, 30_000, async response => {
     // Matches the existing bounded task-artifact contract, not arbitrary URLs.
-    if (!response.headers.get('content-type')?.includes('application/octet-stream') || !response.body) throw new APIError('Unexpected artifact response.', 502);
+    if (!response.headers.get('content-type')?.includes('application/octet-stream') || !response.body) throw new APIError(clientMessage('artifact'), 502);
     const reader = response.body.getReader(), chunks: Uint8Array<ArrayBuffer>[] = [];
     let length = 0;
     try {
       for (;;) {
         const { value, done } = await reader.read(); if (done) break;
         length += value.byteLength;
-        if (length > 128 * 1024) throw new APIError('Artifact exceeds the supported size.', 502);
+        if (length > 128 * 1024) throw new APIError(clientMessage('artifactLarge'), 502);
         chunks.push(value);
       }
       return new Blob(chunks, { type: 'application/octet-stream' });
@@ -374,7 +377,7 @@ export const api = {
     const cursor = agentCursors.get(id);
     if (replay && cursor) headers['Last-Event-ID'] = cursor;
     const response = await fetch(`${replay ? '/api/v2/jobs' : '/v1/agents/tasks'}/${encodeURIComponent(id)}/events`, { credentials: 'same-origin', headers, signal });
-    if (!response.ok) throw new APIError('Agent progress unavailable', response.status);
+    if (!response.ok) throw new APIError(clientMessage('progress'), response.status);
     return readAgentStream(response, id, run => {
       if (signal.aborted || generation !== agentReplayGeneration) return;
       if (onSnapshot(run) === false) return;

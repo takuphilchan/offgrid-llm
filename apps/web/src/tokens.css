@@ -11,6 +11,8 @@
     --surface-3: #303031;
     --line: rgba(255, 255, 255, .11);
     --line-strong: rgba(255, 255, 255, .22);
+    /* Decoration blends with its containing surface; controls keep --line. */
+    --separator: color-mix(in srgb, var(--text) 14%, transparent);
     --text: #f5f5f4;
     --muted: #b9b9b7;
     --faint: #989896;
@@ -50,7 +52,9 @@
     --scrim: rgba(0, 0, 0, .45);
   }
 
-  :root[lang='ar'] { font-family: 'IBM Plex Sans Arabic', 'IBM Plex Sans Variable', sans-serif; }
+  :root:is([lang='ar'],[lang='fa'],[lang='ur']) { font-family: 'IBM Plex Sans Arabic', 'IBM Plex Sans Variable', sans-serif; }
+  :root[data-palette='contrast'] { --separator: var(--line); }
+  @media (forced-colors: active) { :root { --separator: CanvasText; } }
   :root { --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px; font-synthesis: none; text-rendering: optimizeLegibility; }
   body { font: inherit; }
   /* Additive, color-free presentation scale. Existing palette/size tokens stay

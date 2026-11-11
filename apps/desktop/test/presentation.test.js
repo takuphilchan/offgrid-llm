@@ -6,6 +6,26 @@ const vm = require('node:vm');
 const { normalize, readCopy } = require('../presentation');
 const catalog = readCopy(path.join(__dirname, '../../web/public'));
 
+test('missing or damaged optional presentation assets retain safe startup defaults',()=>{
+ const {loadAssets}=require('../presentation');
+ const dir=fs.mkdtempSync(path.join(require('node:os').tmpdir(),'offgrid-presentation-assets-'));
+ const missing=loadAssets(dir);
+ assert.deepEqual(missing.catalog,{themes:{},terminal:{}});
+ assert.equal(missing.languages.en.fallback,'en');assert.equal(missing.languages.ar.direction,'rtl');
+ fs.writeFileSync(path.join(dir,'theme-palettes.json'),'{bad');
+ fs.writeFileSync(path.join(dir,'language-registry.json'),'{}');
+ assert.deepEqual(loadAssets(dir),missing);
+});
+test('pack verification catches the exact missing-catalog failure before release',()=>{
+ const {verify,required,mapped}=require('../presentation-pack.cjs');
+ const archive={extractFile:(_archive,name)=>fs.readFileSync(path.join(__dirname,'..',mapped[name]??name))};
+ assert.doesNotThrow(()=>verify('fixture',archive));
+ for(const missing of [...required,...Object.keys(mapped)])assert.throws(()=>verify('fixture',{extractFile:(a,name)=>{if(name===missing)throw Error('missing');return archive.extractFile(a,name);}}),/missing from app.asar/);
+ assert.throws(()=>verify('fixture',{extractFile:()=>Buffer.from('{}')}),/differs from source/);
+ const manifest=require('../package.json');for(const file of required)assert.ok(manifest.build.files.includes(file));
+ for(const [to,from] of Object.entries(mapped))assert.ok(manifest.build.files.some(entry=>entry.to===path.posix.dirname(to)&&entry.from===path.posix.dirname(from)&&entry.filter?.includes(path.posix.basename(from))));
+});
+
 test('desktop presentation validates preferences and all nine dictionaries have matching keys', () => {
   assert.deepEqual(normalize({ locale: '../../bad', theme: 'bad' }), { locale: 'en', theme: 'system' });
   assert.deepEqual(normalize({ locale: 'ar', theme: 'dark' }), { locale: 'ar', theme: 'dark' });
@@ -42,4 +62,10 @@ for (const locale of Object.keys(catalog)) test(`startup applies ${locale} and s
   vm.runInContext("render({state:'unavailable',autoReconnect:true})",sandbox);
   assert.equal(sandbox.document.title,'OffGrid');
   assert.equal(elements.get('recovery').hidden,false);
+});
+
+test('appearance normalization rejects executable and unbounded preferences',()=>{
+ const value=normalize({locale:'ar',theme:'system',appearance:{version:1,light:'forest',dark:'../bad',textSize:999,reduceMotion:true,script:'bad'}});
+ assert.deepEqual(value.appearance,{version:1,light:'forest',dark:'offgrid',textSize:100,reduceMotion:true});
+ assert.equal(normalize({appearance:{version:999}}).appearance,undefined);
 });

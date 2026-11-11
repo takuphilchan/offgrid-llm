@@ -83,11 +83,8 @@ try {
     await expect.poll(() => app.evaluate(({nativeTheme}) => nativeTheme.themeSource)).toBe(theme);
     const effective = await app.evaluate(({nativeTheme}) => nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
     await expect(page.locator('html')).toHaveAttribute('data-theme', effective);
-    const language = page.locator('.locale-picker select');
-    const drawer = await page.evaluate(() => matchMedia('(max-width: 1023px)').matches);
-    if (drawer) await page.locator('.navigation-trigger').click();
-    await page.locator('.workspace-options > button').click();
-    await expect(language.locator('option')).toHaveCount(9);
+    const language = page.locator('#settings-language');
+    await expect(language.locator('option')).toHaveCount(Object.keys(require(join(root,'apps/desktop/language-registry.json'))).length);
     for (const option of await language.locator('option').all()) {
       await expect(option).toHaveCSS('color', effective === 'dark' ? 'rgb(245, 245, 244)' : 'rgb(23, 23, 23)');
       await expect(option).toHaveCSS('background-color', effective === 'dark' ? 'rgb(24, 24, 25)' : 'rgb(255, 255, 255)');
@@ -105,23 +102,24 @@ try {
       await language.press('Enter');
     }
     await expect(language).toHaveValue('fr');
-    // A Windows native select can also dismiss its parent popover when it
-    // commits. Reopen through the visible trigger, never force a hidden select.
-    if (!await language.isVisible()) {
-      if (drawer && !await page.locator('.sidebar').isVisible()) await page.locator('.navigation-trigger').click();
-      await page.locator('.workspace-options > button').click();
-      await expect(language).toBeVisible();
-    }
     await language.selectOption('en');
-    await page.keyboard.press('Escape');
-    // Native popup dismissal can consume Escape before the parent popover.
-    if (await language.isVisible()) await page.locator('.workspace-options > button').click();
-    await expect(language).toBeHidden();
-    if (drawer) {
-      await page.locator('.sidebar-toggle').click();
-      await expect(page.locator('.sidebar')).toBeHidden();
+  }
+  console.log('Checking named palettes in the real packaged renderer and native chrome');
+  const palettes=require(join(root,'apps/desktop/theme-palettes.json'));
+  await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/settings`);
+  for(const mode of ['light','dark']){
+    await page.locator('#setting-theme').getByRole('button',{name:mode==='light'?'Light':'Dark',exact:true}).click();
+    for(const id of Object.keys(palettes.sources)){
+      const tokens=palettes.themes[id][mode];if(!tokens)continue;
+      await page.locator('.theme-summary').nth(mode==='light'?0:1).click();
+      await page.getByRole('dialog',{name:'Choose a theme'}).getByRole('button',{name:palettes.labels[id][mode],exact:true}).click();
+      await page.getByRole('button',{name:'Apply',exact:true}).click();
+      await expect(page.locator('html')).toHaveAttribute('data-palette',id);
+      await expect.poll(()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].getBackgroundColor().toLowerCase())).toBe(tokens['surface-0']);
+      await expect.poll(()=>page.evaluate(async mode=>(await window.electron.getPresentation()).appearance[mode],mode)).toBe(id);
     }
   }
+  await page.getByRole('button',{name:'Reset appearance',exact:true}).click();
   // Hidden packaged fixtures may not produce the compositor frame awaited by
   // Playwright screenshots. Capture through Electron, as in the zoom checks.
   const darkControls = await app.evaluate(async ({BrowserWindow}) =>
@@ -145,7 +143,7 @@ try {
     // not a second composer. Keep both routes in packaged zoom coverage.
     if (route.startsWith('agents')) await expect(page.getByRole('textbox',{name:'Task',exact:true})).toHaveCount(0);
     if (route === 'models') await expect(page.getByRole('alert')).toHaveCount(0);
-    const target = route === 'chat' ? page.locator('.composer textarea') : route === 'agents' ? page.locator('.profile-library-header > button') : route === 'agents/workspace' ? page.getByRole('region',{name:'Recent tasks',exact:true}).getByRole('link',{name:'Chat',exact:true}) : route === 'models' ? page.getByRole('button',{name:'Language',exact:true}) : route === 'knowledge' ? page.getByRole('button',{name:'Open model manager',exact:true}) : route === 'activity' ? page.locator('.activity-diagnostics > summary') : page.locator('.page-content button').last();
+    const target = route === 'chat' ? page.locator('.composer textarea') : route === 'agents' ? page.locator('.profile-library-header > button') : route === 'agents/workspace' ? page.getByRole('region',{name:'Recent tasks',exact:true}).getByRole('link',{name:'Chat',exact:true}) : route === 'models' ? page.getByRole('button',{name:'Language',exact:true}) : route === 'knowledge' ? page.getByRole('button',{name:'Open model manager',exact:true}) : route === 'activity' ? page.locator('.activity-diagnostics > summary') : page.locator('#appearance-text-size');
     await expect(target).toBeVisible(); await expect(target).toBeEnabled(); await target.focus(); await target.scrollIntoViewIfNeeded();
     await expect(target).toBeFocused();
     await page.evaluate(() => document.fonts.ready);
@@ -170,13 +168,32 @@ try {
   await writeFile(join(evidence,'help-zoom-200.png'),Buffer.from(helpCapture,'base64'));
   await page.keyboard.press('Escape');
   await expect(page.locator('.help-trigger')).toBeFocused();
+  console.log('Checking theme chooser at native 200% zoom');
+  await page.locator('.theme-summary').nth(1).click();
+  const chooser=page.getByRole('dialog',{name:'Choose a theme'});
+  await chooser.getByRole('searchbox').fill('Catppuccin');
+  await chooser.getByRole('button',{name:'Catppuccin Mocha',exact:true}).click();
+  await expect(chooser.getByRole('button',{name:'Apply',exact:true})).toBeInViewport();
+  assert.ok(await chooser.evaluate(el=>el.scrollWidth<=el.clientWidth));
+  const chooserCapture=await app.evaluate(async({BrowserWindow})=>(await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'));
+  await writeFile(join(evidence,'theme-chooser-zoom-200.png'),Buffer.from(chooserCapture,'base64'));
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.theme-summary').nth(1)).toBeFocused();
   await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1));
+  await page.locator('.theme-summary').nth(1).click();
+  await page.getByRole('button',{name:'Catppuccin Mocha',exact:true}).click();
+  await page.getByRole('button',{name:'Apply',exact:true}).click();
+  await page.locator('#settings-language').selectOption('ur');
+  await expect.poll(()=>page.evaluate(async()=>(await window.electron.getPresentation()).locale)).toBe('ur');
   await app.close(); app = null;
   console.log('Checking saved appearance after restart');
   page = await launch();
   assert.equal(await app.evaluate(({nativeTheme}) => nativeTheme.themeSource), 'dark');
   await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
-  console.log(JSON.stringify({passed:true,platform:process.platform,savedAndLiveNativeTheme:true,readableOptions:9,evidence}));
+  await expect(page.locator('html')).toHaveAttribute('data-palette','catppuccin');
+  await expect(page.locator('html')).toHaveAttribute('lang','ur');
+  await expect(page.locator('html')).toHaveAttribute('dir','rtl');
+  console.log(JSON.stringify({passed:true,platform:process.platform,savedAndLiveNativeTheme:true,namedPaletteVariants:13,previewLanguageSurvivesRestart:true,readableOptions:Object.keys(require(join(root,'apps/desktop/language-registry.json'))).length,evidence}));
 } finally {
   await app?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
   clearTimeout(deadline);

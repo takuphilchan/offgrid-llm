@@ -29,7 +29,7 @@ const toolKey = (tool: NonNullable<AgentProfileSettings['tools']>[number]) => JS
 const reference = (tool: AgentCapabilityIdentity): NonNullable<AgentProfileSettings['tools']>[number] => ({ provider: tool.source, tool: tool.name, schema_revision: tool.revision, location: tool.location });
 
 export function AgentProfiles({ models, preferredModel = '' }: { models: Model[]; preferredModel?: string }) {
-  const { locale, messages } = useI18n(), copy = agentProfilesText[locale];
+  const { locale, messages , language} = useI18n(), copy = agentProfilesText[locale];
   const { knowledge: knowledgePermitted,scope,workspace } = useWorkspace();
   const [profiles, setProfiles] = useState<AgentProfile[]>([]);
   const resourceState = useProfileResources(knowledgePermitted, messages.common.error);
@@ -117,7 +117,7 @@ export function AgentProfiles({ models, preferredModel = '' }: { models: Model[]
   const modelMissing = !!draft?.settings.model && !models.some(item => item.id === draft.settings.model);
   const selectedModel = models.find(item => item.id === draft?.settings.model);
   const providerCopy = modelProviderDetails(locale);
-  const visibleProfiles = profiles.filter(item => `${item.settings.name} ${item.settings.description ?? ''}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
+  const visibleProfiles = profiles.filter(item => `${item.settings.name} ${item.settings.description ?? ''}`.toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language)));
   return <section className="agent-profiles" aria-label={copy.profiles}>
     <header className="profile-library-header"><div><h2>{copy.profiles}</h2><p>{messages.guidance.profiles}</p></div><button type="button" className="secondary-button library-create-action" disabled={busy} onClick={() => choose(fresh(suggestedModel))}><Icon name="plus" size={17}/>{copy.create}</button></header>
     {error && <div className="inline-error" role="alert"><p>{error}</p>{!conflict && <button type="button" className="secondary-button" onClick={() => void refresh()} disabled={loading || busy}>{messages.common.refresh}</button>}</div>}
@@ -166,7 +166,7 @@ export function AgentProfiles({ models, preferredModel = '' }: { models: Model[]
           <details className="profile-advanced"><summary>{copy.advanced}</summary>
             <label className="profile-description">{copy.description}<input value={draft.settings.description ?? ''} maxLength={512} onChange={event => update({ description: event.target.value })} /></label>
             <label>{copy.iterations}<input type="number" required min={1} max={50} value={draft.settings.max_iterations} onChange={event => update({ max_iterations: event.target.valueAsNumber || 1 })} /></label>
-            {selectedModel && <p className="profile-hint">{[selectedModel.engine || 'llama_cpp', selectedModel.format, selectedModel.backend].filter(Boolean).join(' · ')}{selectedModel.context_window ? ` · ${providerCopy.context}: ${selectedModel.context_window.toLocaleString(locale)}` : ''} · {providerCopy.qualified}: {selectedModel.qualified ? providerCopy.yes : providerCopy.unmeasured}</p>}
+            {selectedModel && <p className="profile-hint">{[selectedModel.engine || 'llama_cpp', selectedModel.format, selectedModel.backend].filter(Boolean).join(' · ')}{selectedModel.context_window ? ` · ${providerCopy.context}: ${selectedModel.context_window.toLocaleString(language)}` : ''} · {providerCopy.qualified}: {selectedModel.qualified ? providerCopy.yes : providerCopy.unmeasured}</p>}
             <ExecutionPolicy value={draft.settings.execution} onChange={execution=>update({execution})} />
 
           </details>

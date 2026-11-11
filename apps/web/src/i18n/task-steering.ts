@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 // Shared pending/application language; native-speaker review is a separate gate.
-export const taskSteering = {
+export const taskSteering = defineMessages<{ queued: string; applied: string }>("i18n/task-steering:inline1", {
   en: { queued: 'Instruction queued for the next safe step. Actions already sent are not cancelled.', applied: 'Instruction applied.' },
   fr: { queued: 'Consigne en attente de la prochaine étape sûre. Les actions déjà envoyées ne sont pas annulées.', applied: 'Consigne appliquée.' },
   de: { queued: 'Anweisung für den nächsten sicheren Schritt vorgemerkt. Bereits gesendete Aktionen werden nicht abgebrochen.', applied: 'Anweisung angewendet.' },
@@ -11,4 +12,4 @@ export const taskSteering = {
   sn: { queued: 'Murayiro wakamirira danho rinotevera rakachengeteka. Zviito zvakatotumirwa hazvimiswe.', applied: 'Murayiro washandiswa.' },
   nd: { queued: 'Umlayo ulindele inyathelo elilandelayo eliphephileyo. Izenzo esezithunyelwe azikhanselwa.', applied: 'Umlayo ususetshenzisiwe.' },
   zu: { queued: 'Umyalelo ulinde isinyathelo esilandelayo esiphephile. Izenzo esezithunyelwe azikhanselwa.', applied: 'Umyalelo ususetshenzisiwe.' },
-} satisfies Record<LocaleCode, { queued: string; applied: string }>;
+});

@@ -1,3 +1,4 @@
+import {clientMessage} from '../../i18n/client-errors';
 import { useWorkspace, useWorkspaceState } from '../../lib/workspace-context';
 import { presentation } from '../../i18n/presentation';
 import { interaction } from '../../i18n/interaction';
@@ -41,7 +42,7 @@ export function KnowledgePage(props: Props) {
 }
 
 function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
-  const { messages: text, locale } = useI18n();
+  const { messages: text, locale , language} = useI18n();
   const copy = workflow[locale];
   const start = knowledgeStart(locale);
   const guidance = knowledgeGuidance(locale);
@@ -173,7 +174,7 @@ function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
     setError('');
     try {
       const model = embeddingCatalog.find(item => item.id === embeddingModel) ?? (selectedInstalled ? { id: embeddingModel, repo: '', file: `${embeddingModel}.gguf`, quant: '', size_bytes: 0 } : undefined);
-      if (!model) throw new Error('Selected embedding model is not available in the catalog.');
+      if (!model) throw new Error(clientMessage('embedding'));
       const accepted = await api.downloadModel(model, true);
       preparing.current = false;
       if (accepted.exists) {
@@ -200,7 +201,7 @@ function KnowledgeWorkspace({ models, onModelsChanged, onOpenModels }: Props) {
   };
 
   const enabled = status?.enabled === true;
-  const shownDocuments = documents.filter(document => document.name.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
+  const shownDocuments = documents.filter(document => document.name.toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language)));
   const readiness = (document: Document) => document.index_status === 'ready' ? management.indexed : ['indexing', 'building'].includes(document.index_status ?? '') ? management.indexing : document.index_status === 'failed' ? management.indexFailed : presentation[locale].unknown;
   return <div className="stack knowledge-workspace">
     {!permissions.admin && status?.enabled === false && <p className="permission-notice">{interaction[locale].adminOnly}</p>}

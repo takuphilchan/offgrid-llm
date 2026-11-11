@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type {LocaleCode} from './index';
 type Copy={title:string;notice:string;conversation:string;preview:string;review:string;add:string};
-export const terminalContextText:Record<LocaleCode,Copy>={
+export const terminalContextText=defineMessages<Copy>("i18n/terminal-context:terminalContextText", {
  en:{title:'Ask about terminal output',notice:'Only the output you reviewed is included. Shell information is not verified evidence.',conversation:'Conversation',preview:'Review and remove private information',review:'This adds a draft. Existing text is kept; nothing is sent until you press Send.',add:'Add to draft'},
  fr:{title:'Question sur la sortie du terminal',notice:'Seule la sortie relue est incluse. Les informations du terminal ne sont pas des preuves vérifiées.',conversation:'Discussion',preview:'Relisez et retirez les informations privées',review:'Un brouillon sera ajouté. Le texte existant est conservé. Rien ne sera envoyé automatiquement.',add:'Ajouter au brouillon'},
  es:{title:'Consultar la salida del terminal',notice:'Solo se incluye la salida revisada. La información del terminal no es evidencia verificada.',conversation:'Conversación',preview:'Revisa y elimina información privada',review:'Se añade un borrador conservando el texto existente. No se envía automáticamente.',add:'Añadir al borrador'},
@@ -10,4 +11,4 @@ export const terminalContextText:Record<LocaleCode,Copy>={
  sn:{title:'Bvunza nezvezvabuda muterminal',notice:'Zvaongororwa chete ndizvo zvinosanganiswa. Mashoko eshell haasi humbowo hwakasimbiswa.',conversation:'Hurukuro',preview:'Ongorora ubvise mashoko akavanzika',review:'Gwaro rinowedzerwa. Mashoko aripo anochengetwa; hapana chinotumirwa choga.',add:'Wedzera kugwaro'},
  nd:{title:'Buza ngemiphumela yetheminali',notice:'Kufakwa imiphumela oyihlolileyo kuphela. Ulwazi lweshell alubona ubufakazi obuqinisekisiweyo.',conversation:'Ingxoxo',preview:'Hlola ususe ulwazi oluyimfihlo',review:'Kungezwa umbhalo osalungiswa. Okukhona kuyagcinwa; akukho okuthunyelwa ngokuzenzakalela.',add:'Engeza embhalweni'},
  zu:{title:'Buza ngemiphumela yetheminali',notice:'Kufakwa imiphumela oyibuyekezile kuphela. Ulwazi lweshell alubona ubufakazi obuqinisekisiwe.',conversation:'Ingxoxo',preview:'Buyekeza bese ususa imininingwane eyimfihlo',review:'Kwengezwa uhlaka. Umbhalo okhona uyagcinwa; akukho okuthunyelwa ngokuzenzakalela.',add:'Engeza ohlakeni'}
-};
+});

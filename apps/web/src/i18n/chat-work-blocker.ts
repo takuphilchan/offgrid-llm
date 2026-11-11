@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
-export const chatUncertainHint: Record<LocaleCode, string> = {
+export const chatUncertainHint = defineMessages<string>("i18n/chat-work-blocker:chatUncertainHint", {
   en: 'Review the unconfirmed action before continuing. Your draft stays here.',
   fr: 'Examinez l’action non confirmée avant de continuer. Votre brouillon reste ici.',
   es: 'Revisa la acción no confirmada antes de continuar. Tu borrador permanece aquí.',
@@ -10,10 +11,10 @@ export const chatUncertainHint: Record<LocaleCode, string> = {
   sn: 'Ongorora chiito chisina kusimbiswa usati waenderera. Rasimu yako inosara pano.',
   nd: 'Hlola isenzo esingaqinisekiswanga ungakaqhubeki. Uhlaka lwakho luhlala lapha.',
   zu: 'Hlola isenzo esingaqinisekisiwe ngaphambi kokuqhubeka. Uhlaka lwakho luhlala lapha.',
-};
+});
 
 // Loading, access, approval, children, and other non-steerable active work.
-export const chatWorkBlockerText: Record<LocaleCode, readonly [string, string, string, string, string]> = {
+export const chatWorkBlockerText = defineMessages<readonly [string, string, string, string, string]>("i18n/chat-work-blocker:chatWorkBlockerText", {
   en: ['Checking the saved task. Your draft is kept here.', 'This task needs access before it can continue. Inspect work to review the request.', 'This task needs your approval. Inspect work to review the exact action.', 'Specialists are still working. Wait for their results or start a separate conversation.', 'This task cannot accept another instruction yet. Inspect its progress or start a separate conversation.'],
   fr: ['Vérification de la tâche enregistrée. Votre brouillon reste ici.', 'Cette tâche attend un accès. Consultez le travail pour examiner la demande.', 'Cette tâche attend votre approbation. Consultez le travail pour examiner l’action exacte.', 'Les spécialistes travaillent encore. Attendez leurs résultats ou ouvrez une autre conversation.', 'Cette tâche ne peut pas encore recevoir de consigne. Consultez sa progression ou ouvrez une autre conversation.'],
   es: ['Comprobando la tarea guardada. Tu borrador se conserva aquí.', 'Esta tarea necesita acceso. Inspecciona el trabajo para revisar la solicitud.', 'Esta tarea necesita tu aprobación. Inspecciona el trabajo para revisar la acción exacta.', 'Los especialistas siguen trabajando. Espera los resultados o inicia otra conversación.', 'Esta tarea aún no puede recibir instrucciones. Revisa su progreso o inicia otra conversación.'],
@@ -23,4 +24,4 @@ export const chatWorkBlockerText: Record<LocaleCode, readonly [string, string, s
   sn: ['Kuongorora basa rakachengetwa. Rasimu yako inosara pano.', 'Basa iri rinoda mvumo yekuwana. Ongorora basa kuti uone chikumbiro.', 'Basa iri rinoda kubvumidzwa newe. Ongorora basa kuti uone chiito chaicho.', 'Nyanzvi dzichiri kushanda. Mirira mhinduro kana tanga imwe hurukuro.', 'Basa iri harisati ragamuchira mumwe murayiro. Ongorora kufambira mberi kana tanga imwe hurukuro.'],
   nd: ['Kuhlolwa umsebenzi ogciniweyo. Uhlaka lwakho luhlala lapha.', 'Umsebenzi lo udinga ukufinyelela. Hlola umsebenzi ukuze ubone isicelo.', 'Umsebenzi lo udinga imvumo yakho. Hlola umsebenzi ukuze ubone isenzo esiqondileyo.', 'Izingcitshi zisasebenza. Linda imiphumela kumbe uqale enye ingxoxo.', 'Umsebenzi lo kawukwazi ukwamukela omunye umlayo okwamanje. Hlola ukuqhubeka kumbe uqale enye ingxoxo.'],
   zu: ['Kuhlolwa umsebenzi olondoloziwe. Uhlaka lwakho luhlala lapha.', 'Lo msebenzi udinga ukufinyelela. Hlola umsebenzi ukuze ubone isicelo.', 'Lo msebenzi udinga imvume yakho. Hlola umsebenzi ukuze ubone isenzo esiqondile.', 'Ochwepheshe basasebenza. Linda imiphumela noma uqale enye ingxoxo.', 'Lo msebenzi awukwazi ukwamukela omunye umyalelo okwamanje. Hlola ukuqhubeka noma uqale enye ingxoxo.'],
-};
+});

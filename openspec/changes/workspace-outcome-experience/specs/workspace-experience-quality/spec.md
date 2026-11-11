@@ -4,6 +4,76 @@ Set observable visual and behavioral quality gates for the shared web and deskto
 
 ## ADDED Requirements
 
+### Requirement: Predictable settings and native controls
+The sidebar gear SHALL navigate directly to Settings. Workspace status, refresh
+and sign-out SHALL remain in a separately identified overflow menu. Language and
+appearance controls SHALL have one settings location. Dropdowns SHALL preserve
+native keyboard/type-ahead behavior with theme-aware geometry and RTL support.
+
+#### Scenario: Gear navigation from a mobile draft
+- **WHEN** a user opens the navigation drawer and activates its gear
+- **THEN** Settings opens directly and the drawer closes
+- **AND** returning to Chat preserves the unsent draft
+
+#### Scenario: Dropdown accessibility
+- **WHEN** text size, theme, direction or forced colors changes
+- **THEN** dropdown text and its indicator remain separated and readable
+- **AND** keyboard selection and persisted values remain functional
+
+### Requirement: Theme-consistent decorative separation
+Decorative rules SHALL blend with the selected palette and containing surface.
+Lists and adjacent sections SHALL avoid redundant closing/opening rules. Control,
+focus, selection and progress borders SHALL retain their distinct roles.
+
+#### Scenario: Installed models followed by advanced import
+- **WHEN** an installed package list precedes the Advanced import disclosure
+- **THEN** the boundary presents at most one horizontal rule, with deliberate spacing
+- **AND** changing palettes, locale or text size preserves readable controls and content
+
+#### Scenario: Thematic breaks and accessibility
+- **WHEN** a response contains a Markdown thematic break or system forced colors are enabled
+- **THEN** the break renders as one explicit rule using theme or system colors
+- **AND** keyboard focus and selected tabs remain distinguishable
+
+### Requirement: Theme and language expansion remains lightweight and truthful
+The workspace SHALL provide established themes through shared local data and
+SHALL distinguish incomplete language previews from reviewed translations.
+
+#### Scenario: Established theme follows the selected appearance mode
+- **WHEN** a user saves an available named palette and changes system light/dark mode
+- **THEN** the corresponding saved palette is restored, desktop and terminal consume the same colors, and no theme code or network asset is loaded
+
+#### Scenario: An incomplete language is selected explicitly
+- **WHEN** a user selects a preview language
+- **THEN** the choice survives reload, a native-language notice identifies incomplete translation and pending review, and untranslated features use complete fallback text rather than missing labels
+- **AND** interface language does not change voice configuration, models or permissions
+
+#### Scenario: A preview language matches the operating system
+- **WHEN** no explicit saved language exists and the browser advertises only an unreviewed preview language
+- **THEN** the workspace uses the existing fallback language instead of silently enabling the preview
+
+#### Scenario: A translation is incomplete or corrupt
+- **WHEN** a language pack changes placeholders, contains empty messages or corrupted characters, or claims reviewed status without meeting the release gate
+- **THEN** translation validation fails and does not certify the pack as production ready
+
+### Requirement: Personalization preserves existing work
+The renderer SHALL separate system/light/dark mode from versioned palette choices for each mode. Appearance preview SHALL be reversible without changing conversations, profiles, permissions or models. Unknown persisted versions SHALL fall back to the original appearance. Desktop storage SHALL accept only normalized presentation data.
+
+#### Scenario: Preview and cancel
+- **WHEN** a user previews a palette and cancels or leaves the appearance view
+- **THEN** the last applied appearance returns without writing the preview
+- **AND** appearance reset affects only appearance preferences
+
+#### Scenario: Storage failure
+- **WHEN** a presentation preference cannot be persisted
+- **THEN** the current session remains usable and the user sees that persistence failed
+- **AND** a later successful write clears only the relevant failure
+
+#### Scenario: Direct settings navigation
+- **WHEN** the user opens a supported settings deep link or selects a matching search result
+- **THEN** the matching section opens and keyboard focus moves to the requested setting
+- **AND** no service configuration or access grant changes as a result of navigation
+
 ### Requirement: Consistent readable typography
 The shared renderer SHALL use semantic size and line-height roles for titles,
 sections, prose, controls, metadata and captions. Visible interface copy SHALL
@@ -21,7 +91,7 @@ utility material as at most three decorative families per screen. Primary
 actions SHALL use solid fills. Floating utilities and the command palette MAY
 use at most 12px backdrop blur with a 96% surface-color fill; text SHALL remain
 fully opaque. Answer/code surfaces and full-screen drawers SHALL NOT blur.
-No animated gradient, wallpaper capture or new color palette is permitted.
+No animated gradient or wallpaper capture is permitted. The approved personalization extension permits validated named palettes while retaining the original default.
 
 #### Scenario: Material fallback
 - **WHEN** backdrop filtering is unavailable, transparency is reduced, contrast is increased, forced colors are active or the central material off switch is set
@@ -146,6 +216,23 @@ All new and touched user-facing workflow copy, including voice preferences, read
 - **WHEN** a user switches locale with a draft, selected model or open utility
 - **THEN** labels and announcements change without resetting work
 - **AND** translated labels remain usable at narrow widths and in RTL
+
+#### Scenario: Audit and review every selectable language
+- **WHEN** localization is audited or exported for review
+- **THEN** all 29 registered languages include the complete contextual message inventory, source, placeholders and authored-versus-fallback status
+- **AND** a readiness check rejects missing translations and missing or stale human review records
+- **AND** reviewed import rejects changed sources, concurrent edits, duplicate or missing entries and broken placeholders before replacing source files
+
+#### Scenario: Selected language reaches desktop-owned copy
+- **WHEN** translated contextual overrides exist for the selected language
+- **THEN** startup, native menus, computer-access copy, remembered-folder prompts and terminal controls use them before per-message fallback
+- **AND** packaging verifies the exact shared override asset, while user names, paths, commands and terminal output remain unchanged
+
+#### Scenario: Audit rendered elements and live terminal utilities
+- **WHEN** localization is checked across routes and expanded utility states
+- **THEN** the audit records all rendered text nodes and user-facing attributes, including messages outside the known catalogs, instead of selecting a few expected labels
+- **AND** changing language updates open terminal utilities and their status text without clearing questions, redacted output, search queries, terminal selection or process state
+- **AND** missing translations, unclassified first-party runtime copy and human review remain distinct unresolved findings
 
 ### Requirement: Accessible responsive interaction
 The experience SHALL support keyboard use, visible focus, semantic names, IME, RTL, reduced motion, text zoom and screen-reader status announcements. Work must remain reachable at 320-pixel width and short desktop heights. Optional utilities SHALL NOT obscure the focused control or remove access to Stop.

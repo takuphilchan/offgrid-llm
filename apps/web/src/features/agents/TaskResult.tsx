@@ -10,7 +10,7 @@ import { workspaceOrder } from '../../i18n/workspace-order';
 
 type Artifact = NonNullable<AgentRun['artifacts']>[number];
 function ArtifactRow({ id, artifact }: { id: string; artifact: Artifact }) {
-  const { locale, messages } = useI18n(), copy = taskPresentation(locale);
+  const { locale, messages , language} = useI18n(), copy = taskPresentation(locale);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const download = useRef<AbortController | null>(null);
   useEffect(() => () => download.current?.abort(), []);
@@ -32,7 +32,7 @@ function ArtifactRow({ id, artifact }: { id: string; artifact: Artifact }) {
     } finally { if (download.current === controller) download.current = null; if (!controller.signal.aborted) setBusy(false); }
   };
   return <li className="task-artifact">
-    <div><strong className="artifact-name" title={artifact.name}>{artifact.name}</strong><p>{artifact.format} · {artifact.bytes.toLocaleString(locale)} B · {checked ? copy.integrity : copy.unverified}</p>{artifact.name.length > 48 && <details className="artifact-name-details"><summary>{workspaceOrder(locale).fullName}</summary><p>{artifact.name}</p></details>}{!canPreviewArtifact(artifact) && <p>{copy.noPreview}</p>}</div>
+    <div><strong className="artifact-name" title={artifact.name}>{artifact.name}</strong><p>{artifact.format} · {artifact.bytes.toLocaleString(language)} B · {checked ? copy.integrity : copy.unverified}</p>{artifact.name.length > 48 && <details className="artifact-name-details"><summary>{workspaceOrder(locale).fullName}</summary><p>{artifact.name}</p></details>}{!canPreviewArtifact(artifact) && <p>{copy.noPreview}</p>}</div>
     <button className="secondary-button" disabled={busy} onClick={() => void save()} aria-label={`${copy.download}: ${artifact.name}`}>{busy ? messages.common.loading : copy.download}</button>
     {error && <ScopedNotice kind="error">{error}</ScopedNotice>}
     {canPreviewArtifact(artifact) && <ArtifactPreview runID={id} artifact={artifact} />}
@@ -40,7 +40,7 @@ function ArtifactRow({ id, artifact }: { id: string; artifact: Artifact }) {
 }
 
 export function TaskResult({ run, compact = false, hideOutput = false, explainOutcome = false }: { run: AgentRun; compact?: boolean; hideOutput?: boolean; explainOutcome?: boolean }) {
-  const { locale, messages } = useI18n(), copy = taskPresentation(locale);
+  const { locale, messages , language} = useI18n(), copy = taskPresentation(locale);
   if (!run.output && !run.artifacts?.length) return null;
   return <section className="task-result" aria-label={messages.agents.result}>
     {(!compact || explainOutcome) && run.outcome === 'answer_only' && <p className="workspace-secondary">{taskAccessText(locale).answerOnly}</p>}

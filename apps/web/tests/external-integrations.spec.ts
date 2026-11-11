@@ -34,8 +34,8 @@ test('registry-defined providers use one setup flow and distinguish service from
   await expect(page.locator('.provider-card button')).toBeFocused();
 });
 
-test('external provider state labels exist in all nine locales', () => {
-  expect(Object.keys(externalIntegrations)).toHaveLength(9);
+test('external provider state labels resolve for all supported languages', () => {
+  expect(Object.keys(externalIntegrations)).toHaveLength(29);
   for (const messages of Object.values(externalIntegrations)) {
     for (const value of Object.values(messages)) expect(value.length).toBeGreaterThan(0);
   }

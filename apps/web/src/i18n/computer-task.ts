@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 // Human-readable draft translations; speaker qualification is still pending.
-const labels: Record<LocaleCode, readonly string[]> = {
+const labels = defineMessages<readonly string[]>("i18n/computer-task:labels", {
  en: ['Connected browser', 'Stop browser', 'Ready', 'Assigned to a task', 'Finished — start a new session', 'Action limit reached', 'Stop requested. The browser is closing; already dispatched effects may still need review.', 'Connection lost. Use Ctrl+C in the companion to stop locally.', 'Advanced settings', 'Copy pairing code', 'Pairing code copied', 'Stop this session and restart the companion to approve another task.', 'Seconds remaining', 'New browser task'],
  fr: ['Navigateur connecté', 'Arrêter le navigateur', 'Prêt', 'Affecté à une tâche', 'Terminé — nouvelle session nécessaire', 'Limite d’actions atteinte', 'Arrêt demandé. Le navigateur se ferme ; vérifiez les effets déjà déclenchés.', 'Connexion perdue. Utilisez Ctrl+C dans le compagnon pour arrêter localement.', 'Paramètres avancés', 'Copier le code', 'Code copié', 'Arrêtez cette session et relancez le compagnon pour autoriser une autre tâche.', 'Secondes restantes', 'Nouvelle tâche navigateur'],
  de: ['Verbundener Browser', 'Browser stoppen', 'Bereit', 'Einer Aufgabe zugewiesen', 'Beendet — neue Sitzung starten', 'Aktionslimit erreicht', 'Stopp angefordert. Der Browser wird geschlossen; bereits ausgelöste Auswirkungen müssen eventuell geprüft werden.', 'Verbindung verloren. Mit Strg+C im Begleiter lokal stoppen.', 'Erweiterte Einstellungen', 'Kopplungscode kopieren', 'Code kopiert', 'Stoppen Sie diese Sitzung und starten Sie den Begleiter für eine neue Aufgabe neu.', 'Verbleibende Sekunden', 'Neue Browseraufgabe'],
@@ -11,9 +12,9 @@ const labels: Record<LocaleCode, readonly string[]> = {
  sn: ['Bhurawuza rakabatana', 'Misa bhurawuza', 'Ragadzirira', 'Rakapiwa basa', 'Zvapera — tanga chikamu chitsva', 'Muganhu wezviito wasvikwa', 'Kumisa kwakumbirwa. Bhurawuza riri kuvharwa; ongorora zvakatoitwa.', 'Kubatanidzwa kwarasika. Shandisa Ctrl+C mumubatsiri kumisa pakombiyuta.', 'Marongero epamusoro', 'Kopa kodhi', 'Kodhi yakopwa', 'Misa chikamu ichi wotangazve mubatsiri kuti ubvumire rimwe basa.', 'Masekonzi asara', 'Basa idzva rebhurawuza'],
  nd: ['Ibhrawuza exhunyiweyo', 'Misa ibhrawuza', 'Ilungile', 'Yabelwe umsebenzi', 'Kuphelile — qala iseshini entsha', 'Umkhawulo wezenzo usufikile', 'Ukumisa kuceliwe. Ibhrawuza iyavalwa; hlola izenzo eseziqalile.', 'Uxhumano lulahlekile. Sebenzisa Ctrl+C kumsizi ukumisa lapha.', 'Izilungiselelo eziphezulu', 'Kopa ikhodi', 'Ikhodi ikotshiwe', 'Misa iseshini le uqale umsizi njalo ukuvumela omunye umsebenzi.', 'Amasekhondi aseleyo', 'Umsebenzi omutsha webhrawuza'],
  zu: ['Isiphequluli esixhunyiwe', 'Misa isiphequluli', 'Silungile', 'Sabelwe umsebenzi', 'Kuphelile — qala iseshini entsha', 'Umkhawulo wezenzo ufinyelelwe', 'Ukumisa kuceliwe. Isiphequluli siyavalwa; hlola izenzo eseziqalile.', 'Uxhumano lulahlekile. Sebenzisa Ctrl+C kumsizi ukumisa lapha.', 'Izilungiselelo ezithuthukisiwe', 'Kopisha ikhodi', 'Ikhodi ikopishiwe', 'Misa le seshini bese uqala umsizi kabusha ukuze uvumele omunye umsebenzi.', 'Amasekhondi asele', 'Umsebenzi omusha wesiphequluli']
-};
+});
 export function computerTaskText(locale: LocaleCode) {
  const [connected, stop, ready, in_use, finished, exhausted, stopping, lost, advanced, copy, copied, renew, remaining, newTask] = labels[locale];
- const close: Record<LocaleCode, string> = { en: 'Dismiss notice', fr: 'Fermer le message', de: 'Hinweis schließen', es: 'Cerrar aviso', ar: 'إغلاق التنبيه', sw: 'Funga taarifa', sn: 'Vhara chiziviso', nd: 'Vala isaziso', zu: 'Vala isaziso' };
+ const close = defineMessages<string>("i18n/computer-task:close", { en: 'Dismiss notice', fr: 'Fermer le message', de: 'Hinweis schließen', es: 'Cerrar aviso', ar: 'إغلاق التنبيه', sw: 'Funga taarifa', sn: 'Vhara chiziviso', nd: 'Vala isaziso', zu: 'Vala isaziso' });
  return { connected, stop, ready, in_use, finished, exhausted, stopping, lost, advanced, copy, copied, renew, remaining, newTask, close: close[locale] };
 }

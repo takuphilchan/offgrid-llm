@@ -1,3 +1,4 @@
+import {clientMessage} from '../i18n/client-errors';
 export async function copyText(value: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     try {
@@ -14,7 +15,7 @@ export async function copyText(value: string): Promise<void> {
   document.body.appendChild(field);
   field.select();
   try {
-    if (!document.execCommand('copy')) throw new Error('Clipboard access is unavailable.');
+    if (!document.execCommand('copy')) throw new Error(clientMessage('clipboard'));
   } finally {
     field.remove();
   }

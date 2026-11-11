@@ -10,7 +10,7 @@ import { api } from '../../api/client';
 import { useDocumentReader } from './DocumentWorkspace';
 
 export function KnowledgePassages({ passages }: { passages?: SessionMessage['knowledge_sources'] }) {
-  const { locale } = useI18n(), copy = knowledgeScope[locale];
+  const { locale , language} = useI18n(), copy = knowledgeScope[locale];
   const openReader = useDocumentReader();
   const [error, setError] = useState('');
   const pending = useRef<AbortController | null>(null);
@@ -36,7 +36,7 @@ export function KnowledgePassages({ passages }: { passages?: SessionMessage['kno
     <p>{copy.evidence}</p>
     {passages.map((passage, index) => <section key={`${passage.document_id}:${passage.chunk_id}:${index}`}>
       <h4><span>[{index + 1}]</span> <bdi>{passage.name}</bdi></h4>
-      {passage.source && Object.hasOwn(knowledgeUnitLabels[locale], passage.source.kind) && Number.isSafeInteger(passage.source.index) && passage.source.index > 0 && <p><bdi>{knowledgeUnitLabels[locale][passage.source.kind]} {new Intl.NumberFormat(locale).format(passage.source.index)}{passage.source.name ? ` · ${passage.source.name}` : ''}</bdi></p>}
+      {passage.source && Object.hasOwn(knowledgeUnitLabels[locale], passage.source.kind) && Number.isSafeInteger(passage.source.index) && passage.source.index > 0 && <p><bdi>{knowledgeUnitLabels[locale][passage.source.kind]} {new Intl.NumberFormat(language).format(passage.source.index)}{passage.source.name ? ` · ${passage.source.name}` : ''}</bdi></p>}
       <blockquote dir="auto">{passage.content}</blockquote>
       {passage.source?.kind === 'sheet' && !!passage.source.cells?.length && <p className="workspace-secondary"><bdi>{passage.source.cells.join(', ')}</bdi></p>}
       {passage.source && <button className="text-button" onClick={() => void openSource(passage)}>{workflow[locale].viewSource}</button>}

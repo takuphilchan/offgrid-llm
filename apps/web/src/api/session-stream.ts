@@ -1,3 +1,4 @@
+import {clientMessage} from '../i18n/client-errors';
 import type { ChatSession, SessionMessage } from './client';
 import type { components } from './schema.generated';
 
@@ -14,7 +15,7 @@ export class SessionResponseError extends Error {
 // fetch is required for authenticated POST streams. Decode across arbitrary UTF-8
 // and network boundaries; EOF without a persisted `done` event is never success.
 export async function readSessionStream(response: Response, onEvent: (event: SessionEvent) => void): Promise<SessionResult> {
-  if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) throw new StreamInterruptedError('Session streaming is unavailable; update the OffGrid service.');
+  if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) throw new StreamInterruptedError(clientMessage('stream'));
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -25,9 +26,9 @@ export async function readSessionStream(response: Response, onEvent: (event: Ses
     if (line !== '' || data.length === 0) return;
     const event = JSON.parse(data.join('\n'));
     data = [];
-    if (event.type === 'error') throw new SessionResponseError(event.error || 'Generation failed', typeof event.error_code === 'string' ? event.error_code : '');
+    if (event.type === 'error') throw new SessionResponseError(event.error || clientMessage('generation'), typeof event.error_code === 'string' ? event.error_code : '');
     if (event.type === 'done') {
-      if (!event.session?.name || !Array.isArray(event.session.messages) || event.message?.role !== 'assistant') throw new StreamInterruptedError('Invalid saved response');
+      if (!event.session?.name || !Array.isArray(event.session.messages) || event.message?.role !== 'assistant') throw new StreamInterruptedError(clientMessage('saved'));
       return event as SessionResult;
     }
     if (event.type === 'phase' && ['queued', 'retrieving', 'loading', 'processing', 'generating', 'saving'].includes(event.phase)) onEvent(event as SessionEvent);
@@ -37,7 +38,7 @@ export async function readSessionStream(response: Response, onEvent: (event: Ses
     for (;;) {
       const { value, done } = await reader.read();
       buffer += decoder.decode(value, { stream: !done });
-      if (buffer.length > 16 * 1024 * 1024) throw new StreamInterruptedError('Stream event is too large');
+      if (buffer.length > 16 * 1024 * 1024) throw new StreamInterruptedError(clientMessage('eventLarge'));
       let end: number;
       while ((end = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, end);
@@ -45,7 +46,7 @@ export async function readSessionStream(response: Response, onEvent: (event: Ses
         const result = consume(line);
         if (result) return result;
       }
-      if (done) throw new StreamInterruptedError('Connection ended before the conversation was confirmed saved. Reload before retrying.');
+      if (done) throw new StreamInterruptedError(clientMessage('interrupted'));
     }
   } finally {
     await reader.cancel().catch(() => {});

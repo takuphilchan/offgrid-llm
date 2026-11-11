@@ -1,3 +1,4 @@
+import {syncPreferences} from './helpers/workspace-actions';
 import { voiceText } from '../src/i18n/voice';
 import { chooseModel } from './helpers/model-choice';
 import { expect, test, type Page } from '@playwright/test';
@@ -362,9 +363,7 @@ test('dictation feedback follows input levels, fits narrow screens and discards 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('dictation-recording-narrow.png'), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.locator('.workspace-options > button').click();
-  await page.getByLabel('Appearance', { exact: true }).selectOption('dark');
-  await page.keyboard.press('Escape');
+  await syncPreferences(page,{theme:'dark'});
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.setViewportSize({ width: 320, height: 640 });
   await page.screenshot({ path: info.outputPath('dictation-recording-dark.png'), fullPage: true });
@@ -761,9 +760,7 @@ test('changing language during microphone permission keeps one request and local
   }}}));
   await page.getByRole('button',{name:'Use microphone',exact:true}).click();
   await expect.poll(()=>page.evaluate(()=>(window as any).micTest.permissions)).toBe(1);
-  await page.locator('.workspace-options > button').click();
-  await page.locator('.workspace-options-panel select').nth(0).selectOption('ar');
-  await page.keyboard.press('Escape');
+  await syncPreferences(page,{locale:'ar'});
   await page.evaluate(()=>(window as any).micTest.deny());
   await expect(page.getByText(voiceText('ar').permission,{exact:true})).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('dir','rtl');

@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
-export const profileSelectionPrompt: Record<LocaleCode, string> = {
+export const profileSelectionPrompt = defineMessages<string>("i18n/agent-profiles:profileSelectionPrompt", {
   en: 'Choose an agent to review its instructions, model and resources.',
   fr: 'Choisissez un agent pour examiner ses consignes, son modèle et ses ressources.',
   de: 'Wähle einen Agenten, um seine Anweisungen, sein Modell und seine Ressourcen zu prüfen.',
@@ -10,7 +11,7 @@ export const profileSelectionPrompt: Record<LocaleCode, string> = {
   sn: 'Sarudza mubatsiri kuti uongorore mirayiridzo, modhi nezviwanikwa zvake.',
   nd: 'Khetha umsizi ukuze uhlole imiyalo, imodeli lezinsiza zakhe.',
   zu: 'Khetha umsizi ukuze uhlole imiyalo, imodeli nezinsiza zakhe.',
-};
+});
 
 const en = {
   profiles: 'Agent profiles', introduction: 'Configure reusable agents here. Talk and work with them in Chat.',
@@ -35,7 +36,7 @@ const en = {
 };
 
 // All supported locales are explicit. Native-speaker review is a separate gate.
-export const agentProfilesText: Record<LocaleCode, typeof en> = {
+export const agentProfilesText = defineMessages<typeof en>("i18n/agent-profiles:agentProfilesText", {
   en,
   fr: {
     profiles: 'Profils d’agents', introduction: 'Configurez des agents réutilisables ici. Discutez et travaillez avec eux dans Chat.', create: 'Nouvel agent', edit: 'Modifier l’agent', empty: 'Créez un agent pour vos tâches habituelles.',
@@ -109,4 +110,4 @@ export const agentProfilesText: Record<LocaleCode, typeof en> = {
     conflict: 'Le-agent ishintshiwe kwenye indawo. Okusalungiswa kwakho kugciniwe. Layisha inguqulo yamanje noma ulondoloze i-agent entsha.', loadLatest: 'Layisha inguqulo yamanje', saveCopy: 'Londoloza njenge-agent entsha', discard: 'Lahla izinguquko', discardBody: 'Izinguquko ezingalondoloziwe zale phrofayela zizolahleka.', modelMissing: 'Le modeli ayifakiwe. Khetha imodeli efakiwe; akukho okuzolandwa.',
     search: 'Sesha ama-agent', use: 'Sebenzisa kuChat', plain: 'Ayikho i-agent', selector: 'I-agent', future: 'Kusebenza kumlayezo wakho olandelayo.', unsupported: 'Le sevisi ayisekeli amaphrofayela ama-agent. Buyekeza isevisi ukuze usebenzise lesi sici.', archived: 'I-agent ifakwe kungobo yomlando. Umsebenzi okhona ugciniwe.',
   },
-};
+});

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import './platform';
+import { applyAppearance, appearanceKey } from './appearance';
 import { readPreference, writePreference } from './lib/preferences';
 
 export type ThemeChoice = 'system' | 'dark' | 'light';
@@ -17,6 +18,7 @@ function preferredTheme(): 'dark' | 'light' {
 function applyTheme(theme: 'dark' | 'light') {
   document.documentElement.dataset.theme = theme;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#101011' : '#f7f7f6');
+  applyAppearance();
 }
 
 export function initializeTheme() {
@@ -31,6 +33,11 @@ export function useTheme() {
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const update = () => setSystemTheme(media.matches ? 'dark' : 'light');
+    const storage = (event: StorageEvent) => { if (event.key === themeKey) setChoice(readThemeChoice()); if (event.key === appearanceKey) { applyAppearance(); window.dispatchEvent(new Event('offgrid-appearance')); } };
+    window.addEventListener('storage', storage);
+    const contrast = matchMedia('(forced-colors: active)');
+    const refreshAppearance = () => applyAppearance();
+    contrast.addEventListener('change', refreshAppearance);
     media.addEventListener('change', update);
     const bridge = window.electron;
     let removeDesktopListener: (() => void) | undefined;
@@ -38,7 +45,7 @@ export function useTheme() {
       void bridge.getSystemTheme().then(setSystemTheme).catch(update);
       removeDesktopListener = bridge.onThemeChange(setSystemTheme);
     }
-    return () => { media.removeEventListener('change', update); removeDesktopListener?.(); };
+    return () => { contrast.removeEventListener('change', refreshAppearance); window.removeEventListener('storage', storage); media.removeEventListener('change', update); removeDesktopListener?.(); };
   }, []);
 
   useEffect(() => {

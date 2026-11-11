@@ -4,15 +4,17 @@ const {TerminalSessions}=require('./terminal-sessions');
 const {createTerminalProtocol}=require('./terminal-protocol');
 const {validateWorkspaceBounds,terminalBounds}=require('./terminal-layout');
 const {createContextDelivery}=require('./terminal-context-delivery');
+const terminalTranslations=require('./terminal-translations');
 
 function createTerminalDock({electron,window,host,cli,service,presentation}){
   const {WebContentsView,ipcMain,dialog,clipboard}=electron;
+  const text=key=>terminalTranslations.text(presentation().locale,key);
   const url=pathToFileURL(path.join(__dirname,'terminal.html')).href;
   let view,visible=false,overlay=false,workspaceBounds,loaded=false,loading=null,stopping=false,cleanup=null,visibilityRevision=0;
   const emit=value=>{if(view&&!view.webContents.isDestroyed())view.webContents.send('terminal-event',value);};
   const sessions=new TerminalSessions({host,runner:process.execPath,worker:path.join(__dirname,'terminal-worker.js'),cli,service,
-    choose:async()=>{const result=await dialog.showOpenDialog(window,{title:'Choose a local terminal folder',properties:['openDirectory']});return result.canceled?null:result.filePaths[0];},
-    confirm:async r=>(await dialog.showMessageBox(window,{type:'question',title:'Close terminal?',message:'Stop this terminal and its running commands?',detail:r.cwd,buttons:['Cancel','Stop and close'],defaultId:0,cancelId:0})).response===1,
+    choose:async()=>{const result=await dialog.showOpenDialog(window,{title:text('Choose a local terminal folder'),properties:['openDirectory']});return result.canceled?null:result.filePaths[0];},
+    confirm:async r=>(await dialog.showMessageBox(window,{type:'question',title:text('Close terminal?'),message:text('Stop this terminal and its running commands?'),detail:r.cwd,buttons:[text('Cancel'),text('Stop and close')],defaultId:0,cancelId:0})).response===1,
     send:emit});
   function layout(){
     if(window.isDestroyed())return {};

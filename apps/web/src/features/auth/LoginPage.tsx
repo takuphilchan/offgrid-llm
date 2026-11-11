@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { api, type PublicUser } from '../../api/client';
 import { useI18n } from '../../i18n';
 import { loginContext } from '../../i18n/login-context';
+import { BrandMark } from '../../components/BrandMark';
 import './login.css';
 
 export function LoginPage({ onAuthenticated }: { onAuthenticated: (user: PublicUser) => void }) {
@@ -41,7 +42,7 @@ export function LoginPage({ onAuthenticated }: { onAuthenticated: (user: PublicU
   };
 
   return <div className="login-screen"><form className="login-card" onSubmit={submit}>
-    <div className="brand-mark large"><span /></div><span className="eyebrow">{text.product}</span><h1>{text.auth.title}</h1><p>{text.auth.body}</p>
+    <BrandMark size={64} /><span className="eyebrow">{text.product}</span><h1>{text.auth.title}</h1><p>{text.auth.body}</p>
     <div className="login-service"><span>{copy.service}</span><code dir="ltr">{service}</code></div>
     <p className="login-account-hint" id={`${id}-account`}>{copy.account}</p>
     {error && <div className="inline-error login-recovery" role="alert"><p>{error}</p><p>{copy.recovery}</p></div>}

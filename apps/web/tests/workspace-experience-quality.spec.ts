@@ -115,7 +115,9 @@ test('workspace proportions prioritize the editor and keep service navigation in
   expect((await row.boundingBox())!.height).toBeLessThanOrEqual(150);
   await page.screenshot({ path: info.outputPath('model-list-desktop.png'), fullPage: true });
   await page.goto('/ui/#/settings');
-  await expect(page.locator('.settings-page')).toHaveCSS('max-width', '960px');
+  await expect(page.locator('.settings-page')).toHaveCSS('max-width', '1120px');
+  await expect(page.locator('.settings-navigation')).toBeVisible();
+  expect((await page.locator('.settings-content').boundingBox())!.width).toBeLessThanOrEqual(860);
   expect(writes).toEqual([]);
 });
 

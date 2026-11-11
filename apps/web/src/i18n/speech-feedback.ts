@@ -1,5 +1,6 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
-const copy: Record<LocaleCode, readonly [string, string, string, string, string]> = {
+const copy = defineMessages<readonly [string, string, string, string, string]>("i18n/speech-feedback:copy", {
   en: ['Speech took too long. Audio stopped; the text response is unaffected.', 'Speech cannot keep up with this response. Audio stopped; read the text or use Read aloud afterward.', 'The saved response changed. Audio stopped; use Read aloud for the saved answer.', 'Speech returned no audio.', 'Audio playback failed. Check your output device.'],
   fr: ['La parole a pris trop de temps. L’audio est arrêté ; le texte est conservé.', 'L’audio ne suit pas la réponse et est arrêté. Lisez le texte ou utilisez Lire à voix haute ensuite.', 'La réponse enregistrée a changé. L’audio est arrêté ; utilisez Lire à voix haute sur la réponse enregistrée.', 'La synthèse n’a produit aucun audio.', 'Échec de lecture audio. Vérifiez votre périphérique de sortie.'],
   es: ['La voz tardó demasiado. Se detuvo el audio; el texto no se ve afectado.', 'El audio no sigue el ritmo de la respuesta y se detuvo. Lee el texto o usa Leer en voz alta después.', 'La respuesta guardada cambió. Se detuvo el audio; usa Leer en voz alta para la respuesta guardada.', 'La síntesis no devolvió audio.', 'Falló la reproducción. Comprueba el dispositivo de salida.'],
@@ -9,7 +10,7 @@ const copy: Record<LocaleCode, readonly [string, string, string, string, string]
   sn: ['Kutaura kwatora nguva yakareba. Sauti yamiswa; mhinduro yakanyorwa haina kuchinjwa.', 'Sauti haigoni kutevera mhinduro uye yamiswa. Verenga mashoko kana shandisa Verenga zvinonzwika gare gare.', 'Mhinduro yakachengetwa yachinja. Sauti yamiswa; shandisa Verenga zvinonzwika pamhinduro yakachengetwa.', 'Hapana sauti yadzoka.', 'Kuridza sauti kwakundikana. Tarisa mudziyo unoburitsa sauti.'],
   nd: ['Ukukhuluma kuthathe isikhathi eside. Umsindo umisiwe; impendulo ebhaliweyo ayithintekanga.', 'Umsindo awusenelisi ukulandela impendulo njalo umisiwe. Bala umbhalo kumbe usebenzise Bala kuzwakale ngemva kwalokho.', 'Impendulo egciniweyo itshintshile. Umsindo umisiwe; sebenzisa Bala kuzwakale empendulweni egciniweyo.', 'Akubuyanga msindo.', 'Ukudlala umsindo kwehlulekile. Hlola idivayisi yokukhipha umsindo.'],
   zu: ['Ukukhuluma kuthathe isikhathi eside. Umsindo umisiwe; impendulo ebhaliwe ayithintekanga.', 'Umsindo awukwazi ukulandela impendulo futhi umisiwe. Funda umbhalo noma usebenzise Funda kuzwakale kamuva.', 'Impendulo egciniwe ishintshile. Umsindo umisiwe; sebenzisa Funda kuzwakale empendulweni egciniwe.', 'Akubuyanga msindo.', 'Ukudlala umsindo kwehlulekile. Hlola idivayisi yokukhipha umsindo.'],
-};
+});
 export function speechFeedback(locale: LocaleCode) {
   const [timeout, lag, changed, empty, playback] = copy[locale];
   return { timeout, lag, changed, empty, playback };

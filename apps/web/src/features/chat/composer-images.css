@@ -12,7 +12,7 @@
  .image-preview { width:min(1100px,calc(100vw - 32px)); height:min(820px,calc(100dvh - 32px)); max-width:none; max-height:none; margin:auto; padding:0; color:var(--text); background:var(--surface-1); border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:var(--shadow); }
  .image-preview[open] { display:flex; flex-direction:column; }
  .image-preview::backdrop { background:var(--scrim); }
- .image-preview > header { display:flex; align-items:center; gap:16px; padding:10px 16px; border-block-end:1px solid var(--line); flex-shrink:0; }
+ .image-preview > header { display:flex; align-items:center; gap:16px; padding:10px 16px; border-block-end:1px solid var(--separator); flex-shrink:0; }
  .image-preview h2 { flex:1; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; margin:0; font-size:var(--type-ui); font-weight:500; }
  .image-preview header > div { display:flex; align-items:center; gap:8px; }
  .image-preview [aria-pressed=true] { background:var(--surface-2); }

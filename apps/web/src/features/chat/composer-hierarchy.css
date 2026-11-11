@@ -42,7 +42,7 @@
   .composer-attachments-menu .utility-popover-content > button,
   .composer-attachments-menu .saved-file-picker > button { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 8px 10px; font-size: var(--type-ui); font-weight: var(--weight-regular); line-height: 1.35; border-radius: 6px; }
   .composer-attachments-menu button > svg { flex: 0 0 17px; color: var(--muted); }
-  .composer-attachments-menu .saved-file-picker { border-block-start: 1px solid var(--line); margin-block-start: 4px; padding-block-start: 4px; }
+  .composer-attachments-menu .saved-file-picker { border-block-start: 1px solid var(--separator); margin-block-start: 4px; padding-block-start: 4px; }
   .composer.composer-compact .composer-context { display: grid; gap: 10px; }
   .composer.composer-compact .composer-context .model-select { max-width: 100%; }
   .composer.composer-compact > .composer-active-context { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; padding-inline: 8px; color: var(--muted); font-size: var(--type-meta); }

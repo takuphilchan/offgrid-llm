@@ -8,7 +8,7 @@ const t = key => preferences?.copy?.[key] ?? key;
 function applyPresentation(value) {
   preferences = value;
   document.documentElement.lang = value.locale;
-  document.documentElement.dir = value.locale === 'ar' ? 'rtl' : 'ltr';
+  document.documentElement.dir = value.direction === 'rtl' || value.locale === 'ar' ? 'rtl' : 'ltr';
   document.documentElement.dataset.theme = value.effectiveTheme;
   for (const node of document.querySelectorAll('[data-copy]')) node.textContent = t(node.dataset.copy);
   document.title = 'OffGrid';

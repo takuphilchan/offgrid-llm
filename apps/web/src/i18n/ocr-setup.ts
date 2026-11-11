@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
-const labels: Record<LocaleCode, string[]> = {
+const labels = defineMessages<string[]>("i18n/ocr-setup:labels", {
   en: ['Read scanned documents', 'Import an OCR language file', 'Language installed. OCR remains experimental; review extracted text.', 'Use a supported local language pack, up to 32 MiB. Nothing is downloaded automatically.', 'Check setup status', 'Installing language…', 'The language file is too large.', 'Language setup was not confirmed. Check its status before retrying.'],
   fr: ['Lire les documents numérisés', 'Importer un fichier de langue OCR', 'Langue installée. OCR expérimental ; vérifiez le texte extrait.', 'Utilisez un fichier de langue local compatible, jusqu’à 32 Mio. Aucun téléchargement automatique.', 'Vérifier la configuration', 'Installation de la langue…', 'Le fichier de langue est trop volumineux.', 'Installation non confirmée. Vérifiez son état avant de réessayer.'],
   de: ['Gescannte Dokumente lesen', 'OCR-Sprachdatei importieren', 'Sprache installiert. OCR bleibt experimentell; prüfen Sie den erkannten Text.', 'Verwenden Sie ein unterstütztes lokales Sprachpaket bis 32 MiB. Kein automatischer Download.', 'Einrichtung prüfen', 'Sprache wird installiert…', 'Die Sprachdatei ist zu groß.', 'Installation nicht bestätigt. Prüfen Sie den Status vor einem neuen Versuch.'],
@@ -10,7 +11,7 @@ const labels: Record<LocaleCode, string[]> = {
   sn: ['Verenga magwaro akasikeniwa', 'Pinza faera remutauro weOCR', 'Mutauro waiswa. OCR ichiri kuyedzwa; ongorora mashoko aburitswa.', 'Shandisa faera remutauro rinotsigirwa, kusvika 32 MiB. Hapana chinotorwa choga.', 'Tarisa kuiswa', 'Kuisa mutauro…', 'Faera remutauro rakakura zvakanyanya.', 'Kuiswa hakuna kusimbiswa. Tarisa mamiriro usati waedza zvakare.'],
   nd: ['Bala imibhalo eskeniweyo', 'Faka ifayela lolimi lweOCR', 'Ulimi lufakiwe. I-OCR isahlolwa; hlola umbhalo okhitshiweyo.', 'Sebenzisa ifayela lolimi elisekelwayo, kuze kube 32 MiB. Akulakulanda okuzenzakalelayo.', 'Hlola ukufakwa', 'Kufakwa ulimi…', 'Ifayela lolimi likhulu kakhulu.', 'Ukufakwa akuqinisekiswanga. Hlola isimo ungakazami futhi.'],
   zu: ['Funda imibhalo eskeniwe', 'Ngenisa ifayela lolimi lweOCR', 'Ulimi lufakiwe. I-OCR isahlolwa; hlola umbhalo okhishiwe.', 'Sebenzisa iphakheji yolimi esekelwayo, kufika ku-32 MiB. Akukho ukulanda okuzenzakalelayo.', 'Hlola ukusetha', 'Kufakwa ulimi…', 'Ifayela lolimi likhulu kakhulu.', 'Ukufakwa akuqinisekisiwe. Hlola isimo ngaphambi kokuzama futhi.'],
-};
+});
 
 export function ocrSetup(locale: LocaleCode) {
   const [title, importFile, installed, guidance, check, installing, tooLarge, unknown] = labels[locale];

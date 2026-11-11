@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 type Labels = readonly [string, string, string, string, string, string, string, string, string, string];
-const labels: Record<LocaleCode, Labels> = {
+const labels = defineMessages<Labels>("i18n/document-workflow:labels", {
  en: ['Inspect documents', 'Create a blank document', 'Select document', 'Read document text', 'Select text', 'Insert text', 'Replace selected text', 'Input dispatched; independent verification pending.', 'This read failed without input. Earlier actions remain recorded. Resume continues this same task; it does not replay those actions.', 'Document verification'],
  fr: ['Inspecter les documents', 'Créer un document vide', 'Sélectionner le document', 'Lire le texte du document', 'Sélectionner le texte', 'Insérer du texte', 'Remplacer la sélection', 'Saisie envoyée ; vérification indépendante en attente.', 'Cette lecture a échoué sans saisie. Les actions précédentes restent enregistrées. Reprendre continue la même tâche sans les rejouer.', 'Vérification du document'],
  de: ['Dokumente prüfen', 'Leeres Dokument erstellen', 'Dokument auswählen', 'Dokumenttext lesen', 'Text auswählen', 'Text einfügen', 'Auswahl ersetzen', 'Eingabe gesendet; unabhängige Prüfung ausstehend.', 'Dieser Lesevorgang scheiterte ohne Eingabe. Frühere Aktionen bleiben gespeichert. Fortsetzen führt dieselbe Aufgabe weiter, ohne diese Aktionen zu wiederholen.', 'Dokumentprüfung'],
@@ -11,7 +12,7 @@ const labels: Record<LocaleCode, Labels> = {
  sn: ['Ongorora magwaro', 'Gadzira gwaro risina chinhu', 'Sarudza gwaro', 'Verenga zviri mugwaro', 'Sarudza mashoko', 'Isa mashoko', 'Tsiva mashoko asarudzwa', 'Mashoko atumirwa; kuongorora kwakazvimirira kwakamirira.', 'Kuverenga uku kwakundikana pasina kuisa mashoko. Zviito zvekare zvakachengetwa. Kuenderera mberi kunoenderera nebasa rimwe chete pasina kuzvidzokorora.', 'Kuongorora gwaro'],
  nd: ['Hlola imibhalo', 'Dala umbhalo ongelalutho', 'Khetha umbhalo', 'Bala amazwi ombhalo', 'Khetha amazwi', 'Faka amazwi', 'Tshintsha amazwi akhethiweyo', 'Okufakiweyo kuthunyelwe; ukuqinisekisa okuzimeleyo kusalindile.', 'Ukubala lokhu kwehlulekile kungelalutho olufakiweyo. Izenzo zangaphambili zigciniwe. Ukuqhubeka kuqhubekisa umsebenzi lo ngaphandle kokuziphinda.', 'Ukuhlola umbhalo'],
  zu: ['Hlola imibhalo', 'Dala umbhalo ongenalutho', 'Khetha umbhalo', 'Funda umbhalo', 'Khetha amagama', 'Faka amagama', 'Shintsha amagama akhethiwe', 'Okufakiwe kuthunyelwe; ukuqinisekisa okuzimele kusalindile.', 'Lokhu kufunda kwehlulekile ngaphandle kokufaka. Izenzo zangaphambili zigciniwe. Ukuqhubeka kuqhubekisa lo msebenzi ngaphandle kokuziphinda.', 'Ukuhlola umbhalo'],
-};
+});
 export function documentWorkflowText(locale: LocaleCode) {
  const [documents, create, select, read, selectText, insert, replaceSelection, dispatched, readFailed, verification] = labels[locale];
  return { documents, create, select, read, selectText, insert, replaceSelection, dispatched, readFailed, verification };

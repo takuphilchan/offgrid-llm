@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 type Labels = readonly [string,string,string,string,string,string,string,string,string,string,string,string];
-const labels: Record<LocaleCode, Labels> = {
+const labels = defineMessages<Labels>("i18n/task-evidence:labels", {
  en: ['Outcome checks','Pending checks','Partially verified','Not independently verified','Declared checks passed','Verified','Pending','Verification unavailable','Model interpretation','Caller-defined','Check details','These checks cover only the declared outcomes, not every aspect of your request.'],
  fr: ['Vérifications du résultat','Vérifications en attente','Partiellement vérifié','Non vérifié indépendamment','Vérifications déclarées réussies','Vérifié','En attente','Vérification indisponible','Interprétation du modèle','Défini par le demandeur','Détails des vérifications','Ces vérifications couvrent uniquement les résultats déclarés, pas tous les aspects de votre demande.'],
  es: ['Comprobaciones del resultado','Comprobaciones pendientes','Verificado parcialmente','Sin verificación independiente','Comprobaciones declaradas superadas','Verificado','Pendiente','Verificación no disponible','Interpretación del modelo','Definido por el solicitante','Detalles de las comprobaciones','Estas comprobaciones solo cubren los resultados declarados, no todos los aspectos de tu solicitud.'],
@@ -10,7 +11,7 @@ const labels: Record<LocaleCode, Labels> = {
  sn: ['Kuongorora zvabuda','Kuongorora kwakamirira','Zvimwe zvasimbiswa','Hazvina kusimbiswa zvakazvimirira','Kuongorora kwakataurwa kwapasa','Zvasimbiswa','Zvakamirira','Kusimbisa hakuwanikwi','Dudziro yemodeli','Zvakatsanangurwa nemukumbiri','Mashoko ekuongorora','Kuongorora uku kunobata zvabuda zvakataurwa chete, kwete zvikamu zvose zvechikumbiro chako.'],
  nd: ['Ukuhlolwa kwemiphumela','Ukuhlolwa kusalindile','Kuqinisekisiwe ngokwengxenye','Akuqinisekiswanga ngokuzimela','Ukuhlolwa okuchaziweyo kuphumelele','Kuqinisekisiwe','Kusalindile','Ukuqinisekisa akutholakali','Ingcazelo yemodeli','Kuchazwe ngumceli','Imininingwane yokuhlolwa','Ukuhlolwa lokhu kugoqela imiphumela echaziweyo kuphela, hatshi zonke izingxenye zesicelo sakho.'],
  zu: ['Ukuhlolwa kwemiphumela','Ukuhlolwa kusalindile','Kuqinisekiswe ngokwengxenye','Akuqinisekiswanga ngokuzimela','Ukuhlolwa okuchaziwe kuphumelele','Kuqinisekisiwe','Kusalindile','Ukuqinisekisa akutholakali','Incazelo yemodeli','Kuchazwe ngumceli','Imininingwane yokuhlolwa','Lokhu kuhlolwa kuhlanganisa imiphumela echaziwe kuphela, hhayi zonke izingxenye zesicelo sakho.'],
-};
+});
 export function taskEvidenceText(locale: LocaleCode) {
  const [title,pending,partial,unverified,checks_passed,verified,checkPending,unavailable,model,caller,details,scope] = labels[locale];
  return {title,pending,partial,unverified,checks_passed,verified,checkPending,unavailable,model,caller,details,scope};

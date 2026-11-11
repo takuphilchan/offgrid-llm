@@ -6,12 +6,12 @@
  .sidebar-heading { grid-column:1 / -1; grid-row:1; padding-inline:0; gap:12px; }
  .brand { gap:20px; padding-inline-start:8px; }
  .brand strong { font-size:16px; font-weight:600; letter-spacing:-.02em; }
- .brand img { width:24px; height:24px; }
+ .brand .brand-symbol { width:24px; height:24px; }
  .sidebar-heading .sidebar-collapse { margin-inline-start:auto; }
  .primary-nav { grid-column:1; grid-row:2; gap:18px; align-self:start; padding-block-start:6px; }
  .nav-section-work, .nav-section-library { flex:none; }
  .nav-group { gap:8px; }
- .nav-section-library { padding-block-start:14px; border-block-start:1px solid var(--line); }
+ .nav-section-library { padding-block-start:14px; border-block-start:1px solid var(--separator); }
  .sidebar .nav-link { justify-content:center; width:40px; height:40px; min-height:40px; padding:0; border-radius:10px; }
  .sidebar .nav-link span { position:absolute; inset-inline-start:48px; top:4px; width:max-content; max-width:220px; padding:7px 10px; background:var(--surface-1); color:var(--text); border:1px solid var(--line); border-radius:7px; box-shadow:var(--shadow); font-size:var(--type-meta); font-weight:500; pointer-events:none; opacity:0; z-index:5; }
  .sidebar .nav-link[data-label-open] span { opacity:1; }
@@ -30,7 +30,6 @@
  .sidebar-context .history-more { width:auto; min-height:32px; margin:8px; padding:6px 8px; background:transparent; border-color:transparent; color:var(--muted); font-size:var(--type-meta); }
  .sidebar-foot { grid-column:1; grid-row:3; border:0; margin:0; padding:0; gap:8px; justify-items:center; }
  .sidebar-foot .workspace-options > button { --control-justify:center; width:40px; height:40px; padding:0; border:0; border-radius:10px; }
- .sidebar-foot .workspace-options > button span, .sidebar-foot .workspace-options > button > svg:last-child { display:none; }
  .sidebar-collapsed .sidebar { grid-template-columns:40px; padding:10px 12px; gap:8px; }
  .sidebar-collapsed .sidebar-conversations { display:contents; }
  .sidebar-collapsed .sidebar-create { grid-column:1; grid-row:2; align-self:start; z-index:1; }

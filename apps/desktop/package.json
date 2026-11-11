@@ -66,6 +66,17 @@
         ]
       },
       "presentation.js",
+      "locale-messages.js",
+      {
+        "from": "../web/src/i18n",
+        "to": "locale-overrides",
+        "filter": [
+          "feature-packs.json"
+        ]
+      },
+      "language-registry.json",
+      "theme-palettes.json",
+      "theme-NOTICE.txt",
       "preload.js",
       "loading.html",
       "startup.css",
@@ -73,8 +84,11 @@
       "assets/icon.png",
       "package.json",
       "terminal*.js",
+      "terminal-translations.js",
+      "terminal-accessibility.js",
       "terminal.html",
       "terminal.css",
+      "select-controls.css",
       "!node_modules/node-pty/third_party/**",
       "!node_modules/node-pty/prebuilds/win32-arm64/**",
       "!node_modules/node-pty/**/*.pdb"

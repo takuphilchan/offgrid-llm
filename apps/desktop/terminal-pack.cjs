@@ -10,7 +10,7 @@ async function verify(root,version,platform,arch){
  return pack;
 }
 async function prepare(context){
- const platform=context.electronPlatformName,arch=require('builder-util').Arch[context.arch],version=require('./package.json').version;
+ const platform=context.electronPlatformName,arch=require('builder-util').Arch[context.arch],version=require('./build-version.cjs').buildVersion(context);
  const root=path.resolve(__dirname,'../../build/terminal-runtime',`${{win32:'win',darwin:'mac',linux:'linux'}[platform]}-${arch}`);
  await fs.mkdir(root,{recursive:true});const available=platform==='win32'&&arch==='x64';
  const pack={protocol:1,revision:'owned-terminal-v1',version,platform,arch,available};

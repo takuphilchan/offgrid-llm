@@ -1,5 +1,6 @@
+import { defineMessages } from './catalog';
 import type {LocaleCode} from './index';
-const labels: Record<LocaleCode, readonly string[]> = {
+const labels = defineMessages<readonly string[]>("i18n/activity:labels", {
   en: ['Review unknown effects before removing this record.', 'Resolve or deny the pending approval first.', 'An action has not settled. Inspect its receipt.', 'A recovery checkpoint needs review.', 'Stop active work before removing its history.', 'A child task still needs attention.', 'Only the owner can remove this record.', 'Review removable history', 'Preparing the review…', 'Too much history for one review. Narrow your search.', 'History changed. Refresh before reviewing removal.'],
   fr: ['Vérifiez les effets inconnus avant de supprimer.', 'Acceptez ou refusez l’autorisation en attente.', 'Une action reste incertaine. Consultez son reçu.', 'Un point de reprise doit être vérifié.', 'Arrêtez le travail avant de supprimer son historique.', 'Une sous-tâche nécessite votre attention.', 'Seul le propriétaire peut supprimer.', 'Examiner l’historique supprimable', 'Préparation…', 'Trop d’éléments. Affinez la recherche.', 'Historique modifié. Actualisez avant de supprimer.'],
   es: ['Revisa los efectos desconocidos antes de eliminar.', 'Resuelve o rechaza la aprobación pendiente.', 'Una acción no ha terminado. Revisa su recibo.', 'Revisa el punto de recuperación.', 'Detén el trabajo antes de eliminar su historial.', 'Una subtarea requiere atención.', 'Solo el propietario puede eliminar.', 'Revisar historial eliminable', 'Preparando revisión…', 'Demasiados registros. Acota la búsqueda.', 'El historial cambió. Actualiza antes de eliminar.'],
@@ -9,7 +10,7 @@ const labels: Record<LocaleCode, readonly string[]> = {
   sn: ['Ongorora mhedzisiro isingazivikanwi usati wadzima.', 'Bvumira kana kuramba chikumbiro chakamirira.', 'Chiito hachisati chapera. Ongorora risiti.', 'Ongorora nzvimbo yekudzorera.', 'Misa basa riri kushanda usati wadzima nhoroondo.', 'Basa diki richiri kuda kutariswa.', 'Muridzi chete ndiye anogona kudzima.', 'Ongorora nhoroondo inogona kudzimwa', 'Kugadzirira ongororo…', 'Nhoroondo yakawandisa. Dzikisa kutsvaga.', 'Nhoroondo yachinja. Gadziridza usati wadzima.'],
   nd: ['Hlola imiphumela engaziwayo ungakasusi.', 'Vuma kumbe wale imvumo elindileyo kuqala.', 'Isenzo asikapheli. Hlola irisidi yaso.', 'Hlola indawo yokubuyisela.', 'Misa umsebenzi ungakasusi imbali yawo.', 'Umsebenzi omncane usadinga ukunakwa.', 'Ngumnikazi kuphela ongasusa.', 'Hlola imbali engasuswa', 'Kulungiswa ukuhlola…', 'Imbali inengi. Nciphisa ukusesha.', 'Imbali intshintshile. Vuselela ungakasusi.'],
   zu: ['Hlola imiphumela engaziwa ngaphambi kokususa.', 'Vuma noma wenqabe imvume elindile kuqala.', 'Isenzo asikapheli. Hlola irisidi yaso.', 'Hlola indawo yokubuyisela.', 'Misa umsebenzi ngaphambi kokususa umlando.', 'Umsebenzi omncane usadinga ukunakwa.', 'Umnikazi kuphela ongasusa.', 'Hlola umlando ongasuswa', 'Kulungiswa ukuhlola…', 'Umlando muningi. Nciphisa ukusesha.', 'Umlando ushintshile. Vuselela ngaphambi kokususa.'],
-};
+});
 const reasons = ['unknown_effects','pending_approval','unsettled_action','recovery_checkpoint','active_work','child_work','ownership'];
 export function activityText(locale: LocaleCode) {
   const text=labels[locale];

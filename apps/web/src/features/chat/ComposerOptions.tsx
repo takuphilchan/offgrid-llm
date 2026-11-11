@@ -9,7 +9,7 @@ type Preferences = { profile: string; maxTokens: number };
 export function ComposerResponseLimits({ preferences, busy, update, expanded = false }: {
   preferences: Preferences; busy: boolean; expanded?: boolean; update: (value: Preferences) => void;
 }) {
-  const { locale, messages: text } = useI18n();
+  const { locale, messages: text , language} = useI18n();
   const { profile, maxTokens } = preferences;
   return <details className="response-advanced" open={expanded || undefined}>
     <summary>{agentProfilesText[locale].advanced}<small>{profile === 'extended' ? text.chatStreaming.extended : text.chatStreaming.interactive}</small></summary>
@@ -17,7 +17,7 @@ export function ComposerResponseLimits({ preferences, busy, update, expanded = f
       <option value="interactive">{text.chatStreaming.interactive}</option><option value="extended">{text.chatStreaming.extended}</option>
     </select></label>
     <label className="field">{text.chatStreaming.responseLimit}<select value={maxTokens} disabled={busy} onChange={event => update({ ...preferences, maxTokens: Number(event.target.value) })}>
-      {[256, 1024, 4096].map(count => <option value={count} key={count}>{count.toLocaleString(locale)}</option>)}
+      {[256, 1024, 4096].map(count => <option value={count} key={count}>{count.toLocaleString(language)}</option>)}
     </select></label>
     <p>{responseBudgetHint[locale]}</p>
     <p>{text.chatStreaming.profileHint}</p>
@@ -27,7 +27,7 @@ export function ComposerResponseLimits({ preferences, busy, update, expanded = f
 export function ComposerKnowledgeReadiness({ state, conversation, refresh }: {
   state: 'checking' | 'ready' | 'unavailable' | 'failed'; conversation: string; refresh: () => Promise<void>;
 }) {
-  const { locale } = useI18n();
+  const { locale , language} = useI18n();
   const feedback = operationFeedback(locale);
   return <div className="knowledge-readiness">
     {state === 'checking' ? <span role="status">{feedback.checkingKnowledge}</span>

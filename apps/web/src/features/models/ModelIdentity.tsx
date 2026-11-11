@@ -11,7 +11,7 @@ export function ModelIdentity({ model, select, selected }: { model: ModelDisplay
   const { locale } = useI18n(), copy = modelLibrary(locale), acquisition = modelAcquisition[locale];
   const provider = modelProviderDetails(locale);
   const runtime = model.runtime === 'unavailable' ? `${provider.ready}: ${provider.no}` : model.runtime === 'ready' ? provider.ready : model.runtime ? copy[model.runtime] : '';
-  const size = model.bytes === undefined ? copy.unknown : `${formatBytes(model.bytes)}${model.maximumBytes && model.maximumBytes !== model.bytes ? ` – ${formatBytes(model.maximumBytes)}` : ''}`;
+  const size = model.bytes === undefined ? copy.unknown : `${formatBytes(model.bytes, locale)}${model.maximumBytes && model.maximumBytes !== model.bytes ? ` – ${formatBytes(model.maximumBytes, locale)}` : ''}`;
   return <div className="model-display">
     {select ? <button className="secondary-button installed-model-main" aria-label={model.id} aria-pressed={selected} onClick={select}><strong>{model.name}</strong></button> : <h3>{model.name}</h3>}
     <div className="model-summary">

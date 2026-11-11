@@ -5,7 +5,7 @@ import { useI18n } from '../../i18n';
 import { scheduleExperience } from '../../i18n/schedule-experience';
 
 export function TimezoneField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const { locale } = useI18n(), copy = scheduleExperience[locale], id = useId();
+  const { locale , language} = useI18n(), copy = scheduleExperience[locale], id = useId();
   const [open, setOpen] = useState(false), [active, setActive] = useState(-1);
   const input = useRef<HTMLInputElement>(null);
   const zones = useMemo(() => {
@@ -31,7 +31,7 @@ export function TimezoneField({ value, onChange }: { value: string; onChange: (v
 }
 
 export function CalendarPreview({ zone, time, days }: { zone: string; time: string; days: number[] }) {
-  const { locale, messages } = useI18n(), copy = scheduleExperience[locale];
+  const { locale, messages , language} = useI18n(), copy = scheduleExperience[locale];
   const [refresh, setRefresh] = useState(0);
   const [result, setResult] = useState<{ key: string; data?: components['schemas']['AgentCalendarPreview']; failed?: boolean }>();
   const key = JSON.stringify([zone, time, days, refresh]);
@@ -49,7 +49,7 @@ export function CalendarPreview({ zone, time, days }: { zone: string; time: stri
   }, [key]);
   const current = result?.key === key ? result : undefined;
   const format = (date: string) => {
-    try { return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: zone }).format(new Date(date)); } catch { return date; }
+    try { return new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short', timeZone: zone }).format(new Date(date)); } catch { return date; }
   };
   return <section className="schedule-calendar-preview" aria-label={copy.preview}>
     <h4>{copy.preview}</h4><p className="workspace-secondary">{copy.hint}</p>

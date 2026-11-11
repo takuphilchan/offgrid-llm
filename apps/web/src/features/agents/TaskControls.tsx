@@ -28,7 +28,7 @@ export async function stopOwnedComputer(session?: string, requestId?: string) {
 }
 
 export function TaskLifecycle({run, busy, act}: {run: AgentRun; busy: boolean; act: (action: TaskCommand) => void}) {
-  const {locale} = useI18n(), copy = taskControls(locale);
+  const {locale, language} = useI18n(), copy = taskControls(locale);
   const active = ['pending', 'running', 'waiting_for_approval', 'waiting_for_children'].includes(run.status);
   const stoppable = [...['pending', 'running', 'waiting_for_approval', 'waiting_for_children'], 'waiting_for_input', 'interrupted'].includes(run.status);
   return <>
@@ -40,7 +40,7 @@ export function TaskLifecycle({run, busy, act}: {run: AgentRun; busy: boolean; a
 }
 
 export function TaskDetails({run, onError}: {run: AgentRun; onError: (message: string) => void}) {
-  const {locale, messages} = useI18n(), copy = taskControls(locale);
+  const {locale, messages, language} = useI18n(), copy = taskControls(locale);
   const exportEvidence = async () => {
     try {
       const value = await api.exportJob(run.run_id);
@@ -54,7 +54,7 @@ export function TaskDetails({run, onError}: {run: AgentRun; onError: (message: s
     {!!run.plan?.length && <details><summary>{copy.plan}</summary><p>{copy.planHint}</p><ol>{run.plan.map(item => <li key={item.id}>{item.title} · {item.state === 'done' ? messages.recovery.completed : item.state === 'active' ? messages.recovery.running : messages.recovery.pending}{!!item.evidence_steps?.length && <small> · #{item.evidence_steps.join(', #')}</small>}</li>)}</ol></details>}
     {!!run.instructions?.length && <details><summary>{copy.instruction}</summary><ol>{run.instructions.map(item => <li key={item.request_id}>{item.text}</li>)}</ol></details>}
     <details><summary>{copy.context}</summary>
-      {run.context && <dl><dt>{copy.tokens}</dt><dd>{run.context.estimated_tokens.toLocaleString(locale)} / {run.context.window.toLocaleString(locale)}</dd><dt>{copy.archived}</dt><dd>{run.context.archived_messages}</dd></dl>}
+      {run.context && <dl><dt>{copy.tokens}</dt><dd>{run.context.estimated_tokens.toLocaleString(language)} / {run.context.window.toLocaleString(language)}</dd><dt>{copy.archived}</dt><dd>{run.context.archived_messages}</dd></dl>}
       <button className="secondary-button" onClick={() => void exportEvidence()}>{copy.exportEvidence}</button>
     </details>
   </>;

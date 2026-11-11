@@ -1,3 +1,4 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 type Feedback = {
@@ -7,7 +8,7 @@ type Feedback = {
   retrySearch: string; retryInspection: string; refreshCatalog: string; checkStatus: string;
 };
 
-const copy: Record<LocaleCode, Feedback> = {
+const copy = defineMessages<Feedback>("i18n/operation-feedback:copy", {
   en: {
     emptyApplications: 'No launchable applications were found. Open an application yourself, then choose its window.',
     checkingVoice: 'Checking voice availability…', permissionPending: 'Waiting for microphone permission…', cancelVoice: 'Cancel microphone setup', cancelTranscription: 'Cancel transcription',
@@ -62,6 +63,6 @@ const copy: Record<LocaleCode, Feedback> = {
     checkingKnowledge: 'Kuhlolwa Ulwazi…', retryKnowledge: 'Hlola Ulwazi futhi', configureKnowledge: 'Lungiselela Ulwazi', knowledgeCheckFailed: 'Ulwazi alukwazanga ukuhlolwa.',
     retrySearch: 'Sesha futhi', retryInspection: 'Hlola imodeli futhi', refreshCatalog: 'Buyekeza ikhathalogi', checkStatus: 'Hlola isimo esilondoloziwe',
   },
-};
+});
 
 export const operationFeedback = (locale: LocaleCode): Feedback => copy[locale];

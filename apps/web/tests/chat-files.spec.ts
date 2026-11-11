@@ -1,3 +1,4 @@
+import {changePreferences} from './helpers/workspace-actions';
 import {expect,test,type Page} from '@playwright/test';
 import {craftFixture} from './helpers/craft-fixture';
 import {chatFiles} from '../src/i18n/chat-files';
@@ -208,10 +209,7 @@ test('attachment actions form a compact aligned menu in light, dark and RTL layo
   await fixture(page);
   for (const [locale,theme,width] of [['en','light',1280],['ar','dark',390]] as const) {
     await page.setViewportSize({width:1280,height:800});
-    await page.locator('.workspace-options > button').click();
-    await page.locator('.workspace-options-panel select').nth(0).selectOption(locale);
-    await page.locator('.workspace-options-panel select').nth(1).selectOption(theme);
-    await page.keyboard.press('Escape');
+    await changePreferences(page,{locale,theme});
     await expect(page.locator('html')).toHaveAttribute('lang',locale);
     await expect(page.locator('html')).toHaveAttribute('data-theme',theme);
     await page.setViewportSize({width,height:800});

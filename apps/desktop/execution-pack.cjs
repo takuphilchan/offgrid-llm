@@ -28,7 +28,7 @@ async function verify(root,version,platform,arch){
 async function prepare(context){
   const platform=context.electronPlatformName,arch=require('builder-util').Arch[context.arch];
   const {goos,goarch}=target(platform,arch);
-  const version=require('./package.json').version;
+  const version=require('./build-version.cjs').buildVersion(context);
   const directory=path.resolve(__dirname,'../../build/execution-runtime',`${{win32:'win',darwin:'mac',linux:'linux'}[platform]}-${arch}`);
   const env={...process.env};delete env.GOOS;delete env.GOARCH;
   await new Promise((resolve,reject)=>{

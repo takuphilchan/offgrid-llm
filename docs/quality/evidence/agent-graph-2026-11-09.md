@@ -73,3 +73,37 @@ it does not guarantee exactly 150 words, correct attribution in every answer,
 or absence of unsupported interpretation. macOS/Linux, race coverage and broader
 native/human qualification remain unverified here. Existing failed user runs
 were not resumed or rewritten.
+
+## Combined local installation — 2026-11-11
+
+At the user's explicit request, the installed build includes both the agent
+completion fixes and the other thread's current Settings/theme/language changes.
+A fixed build checkout captured 73 changed/untracked source files with SHA-256
+hashes; the shared checkout remained untouched and matched the snapshot before
+installation. The combined installer is in
+`D:/offgrid-agent-install-20261111/build/package-combined/`.
+
+- Web production build passed (existing large-chunk advisory).
+- Desktop tests: 193 passed, one platform skip.
+- Targeted work-results, settings-navigation and workspace-shell browser checks:
+  100 passed. The development server reported font access warnings caused by the
+  dependency junction; this run is functional evidence, not font-rendering proof.
+- Packaged appearance checks passed, including 13 palette variants, 29 language
+  options, restart persistence and 200% zoom. Capture inspected from
+  `offgrid-desktop-theme-3N6p0a` in the local temporary directory.
+- Packaged native terminal checks passed: copy/paste, Agent paste/drafts, cursor,
+  tab switching, child cleanup and service identity (`offgrid-desktop-theme-tBdUeD`).
+- Packaged startup/recovery passed (`offgrid-desktop-startup-ZUVsjp`).
+- Silent installer returned zero. All 1,114 installed payload files matched the
+  tested package. The earlier rollback backup remains at
+  `D:/offgrid-backups/agent-completion-20261111-185838`.
+- Saved-state comparison retained 471/475 exact file hashes. The four differences
+  were window geometry and its temporary file, plus SQLite shared-memory/WAL
+  files. Logical RAG comparison found only index_metadata.updated_at changed;
+  all other stored rows and embedding identity were unchanged. Model inventory:
+  22 files, unchanged sizes and modification timestamps.
+- The installed service subsequently reported version 0.4.28 and UI fingerprint
+  `86feb797b29781f7161b4571bf687a2fd0f4da42dbe3ba78d3930a6dff79557a`.
+
+This is a combined local installation, not publication or broad qualification.
+The other thread's changes remain uncommitted in the shared checkout.

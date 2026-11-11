@@ -11,7 +11,7 @@ export function LegacyDownloadReview({ repository, file, bytes, license, bundles
   const { locale, messages: text } = useI18n(), copy = modelAcquisition[locale], library = modelLibrary(locale);
   return <div className="legacy-download-review">
     <dl className="package-facts">
-      <dt>{copy.transfer}</dt><dd>{bytes && bytes > 0 ? formatBytes(bytes) : library.unknown}{bundles && <small> · {modelBundles(locale).size}</small>}</dd>
+      <dt>{copy.transfer}</dt><dd>{bytes && bytes > 0 ? formatBytes(bytes, locale) : library.unknown}{bundles && <small> · {modelBundles(locale).size}</small>}</dd>
       <dt>{copy.space}</dt><dd>{library.unknown}</dd>
       <dt>{copy.license}</dt><dd>{license || library.unknown}</dd>
       <dt>{copy.source}</dt><dd>{repository} · {file} · {library.unpinned}</dd>

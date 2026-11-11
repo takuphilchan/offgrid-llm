@@ -260,11 +260,18 @@ jobs:
         run: |
           npm ci
           npm run api:check
+          npm run i18n:check
+          npm run i18n:audit
+          npm run i18n:complete
+          npm run i18n:consistency
           npm run check
           npm run build
 
       - name: Test first-party OpenClaw provider controls
         run: node --test scripts/test/test-openclaw-provider.mjs scripts/test/test-verification-hooks.mjs
+
+      - name: Test translation audit and consistency guards
+        run: node --test scripts/quality/*.test.mjs
 
       - name: Retrieve verified OCR build assets
         uses: actions/download-artifact@v7

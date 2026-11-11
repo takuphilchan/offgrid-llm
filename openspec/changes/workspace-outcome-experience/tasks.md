@@ -286,3 +286,76 @@ Evidence: [native installer refresh](../../../docs/quality/evidence/native-insta
 - [x] 30.1 Implement the six localized searchable sections, reuse persisted response/voice controls and preserve service/desktop ownership, diagnostics and emergency Stop.
 - [x] 30.2 Test preference reload/Chat parity, search, all nine locales, narrow/RTL layouts, unavailable desktop and absence of mutations on open; run web type/build and affected browser suites.
 - [x] 30.3 Document settings scope and actual verification; retain native/human qualification limits.
+
+## 31. Approved personalization implementation (2026-11-11)
+
+Partial implementation and exact evidence: `docs/quality/evidence/personalization-2026-11-11.md`.
+The initial palette/settings slice passes its targeted tests; broader scope below
+remains open and must not be inferred complete from those passes.
+
+- [ ] 31.1 Implement versioned named light/dark palettes, preview/apply/cancel/reset, text sizing and reduced motion; preserve legacy mode preferences and drafts, synchronize desktop/terminal, and validate preference recovery.
+- [ ] 31.2 Implement individual-setting search/deep links, explicit scope and truthful persistence feedback; preserve grants and service-owned settings.
+- [ ] 31.3 Repair corrupted translations and add independent quality checks; complete regional formatting and language/speech separation without implying model language capability.
+- [ ] 31.4 Complete workspace interaction improvements described in the approved review, reusing existing palette, context and work controls.
+- [ ] 31.5 Run API/type/build, affected browser/desktop and complete relevant CI checks; inspect palette/locale/RTL/zoom states and record manual native-language, accessibility and platform gates separately.
+
+## 32. Established themes and global languages (2026-11-11)
+
+- [x] 32.1 Bundle seven established theme families with attribution, contrast adaptation and a bounded picker; synchronize native chrome and terminal ANSI colors without new runtime dependencies, and verify persistence, forced colors and layout.
+- [x] 32.2 Expand language coverage with explicit preview status, safe complete feature fallback, script/region-aware selection, RTL and regional formatting; test persistence and separation from voice/model settings.
+- [ ] 32.3 Add translation key/placeholder/encoding checks to CI and report actual coverage; complete feature translations and contextual/native review before promoting any preview pack.
+- [x] 32.4 Run applicable web/desktop checks and inspect representative Latin, CJK, Indic and RTL layouts; retain unavailable native-platform and human review gates.
+- [x] 32.5 Replace the crowded theme grids with compact saved-theme summaries and a focused searchable chooser; verify separate modes, useful previews, keyboard/Escape focus restoration and narrow/zoom/RTL layouts.
+- [x] 32.6 Repair the reported missing-catalog package, preserve its native unpacked payloads, reject missing assets during packaging, retain safe runtime defaults and verify a coherent replacement build without touching installed-user data.
+
+## 33. App-wide language routing and theme-aware branding
+
+- [x] 33.1 Replace the global legacy-language substitution with selected-language lookup in every feature catalog, including voice and computer workflows; preserve existing translations and per-message fallback without modifying user content.
+- [x] 33.2 Inventory core and feature coverage together, validate keys/placeholders across all catalogs, reject untranslated coverage regressions and expand contextual global-language content. Full translation/native review remains tracked by 32.3.
+- [x] 33.3 Replace fixed-color in-app brand images with the existing vector mark inheriting theme colors; verify named palettes, explicit mode, RTL, forced colors and login branding.
+- [x] 33.4 Verify actual language switching across main routes, dialogs and settings, restart persistence and formatting without remounting user drafts; run relevant browser/desktop/type/build and documentation checks and record remaining coverage accurately.
+
+## 34. App-wide divider audit (owner-requested)
+
+- [x] 34.1 Inventory horizontal borders, rules and separators across renderer and terminal; distinguish decorative separators from controls, selection, focus, tables and progress indicators, and record concrete defects.
+- [x] 34.2 Introduce theme-relative decorative separation, eliminate stacked list/section rules and unnecessary closing rules, explicitly style Markdown thematic breaks, and preserve control boundaries, forced colors and RTL behavior.
+- [x] 34.3 Verify actual Models reproduction, populated and empty main routes, settings and dialogs across all available palette modes; inspect representative screenshots, narrow/RTL/large-text layouts and forced colors. Run web check/build, affected Playwright and desktop checks; record coverage and limitations.
+
+## 35. Owner-reported dropdown and navigation controls
+
+- [x] 35.1 Give native dropdowns consistent arrow spacing, theme-aware indicators, text scaling, RTL and forced-color behavior across renderer and terminal; preserve native keyboard and selection semantics.
+- [x] 35.2 Replace the oversized mobile navigation text pill with a compact accessible icon trigger, retain touch targets and focus return, and verify localized narrow/zoom layouts and dropdown keyboard use.
+
+## 36. Direct Settings navigation (owner-requested)
+
+- [x] 36.1 Make the sidebar gear a direct localized Settings link with current-page state and drawer dismissal; separate workspace status, refresh and account actions behind a distinct overflow trigger and remove duplicated language/appearance controls from that menu.
+- [x] 36.2 Verify one-step Settings access in desktop/collapsed/mobile/RTL layouts, retained drafts and preferences, separate status actions and keyboard focus, and update affected browser/native checks and documentation.
+
+## 37. All-language mixed-interface correction and review handoff
+
+- [x] 37.1 Audit all 29 selectable languages across the full contextual inventory; separate missing, identical-to-source, authored and reviewed copy, and add a readiness gate that rejects fallback and stale review records.
+- [x] 37.2 Translate the reported management-screen messages across all 20 preview packs and fix shared desktop/startup/terminal override routing; preserve user content and existing locale dictionaries.
+- [x] 37.3 Export all 29 translator review packs with sources, context, placeholders and review requirements; implement validated, conflict-aware import with backups and failure rollback. Native-language review and full translation completion remain open in 32.3.
+- [x] 37.4 Verify all-language management screens, Settings persistence, import failure cases, desktop unit tests, web build and packaged assets; install the verified follow-up under the owner's request without computer-use automation. Record incomplete language coverage explicitly.
+
+Evidence: `docs/quality/evidence/localization-followup-2026-11-11.md`. The reported
+screen increment is installed; full feature translation and human review are not
+complete and the readiness command intentionally fails.
+
+## 38. Rendered text and terminal audit (owner-requested)
+
+- [x] 38.1 Collect visible text nodes, placeholders, titles and accessible names across main routes, expanded Help/setup, all Settings sections, model discovery and Activity states; correlate every element with contextual sources and report unclassified runtime content separately.
+- [x] 38.2 Audit all 29 languages in the actual terminal renderer, including open display/search/command dialogs, changing language without resetting input/output, native confirmation copy and errors. Correct stale labels and preserve editable command context.
+- [x] 38.3 Complete missing authored translations identified by the audit across registered languages, update review packs and retain the independent human-review gate; do not substitute a selected-label test for whole-screen coverage.
+- [x] 38.4 Run affected browser/terminal/desktop/build and packaging checks, record exact remaining gaps, and install the verified result under the existing authorization after the correction is complete.
+
+Earlier evidence: `docs/quality/evidence/localization-terminal-audit-2026-11-12.md`.
+Completion evidence: `docs/quality/evidence/localization-completion-2026-11-12.md`.
+All 29 catalogs now have 1,356 entries and zero missing messages. The strict
+rendered audit passes 47 states per language (1,363 total); terminal, structural,
+browser, build and package checks pass. The verified 0.4.28 update is installed,
+with workspace metadata and preference hashes preserved. Translator packs include
+rendered context and pending review records. Native confirmation copy was checked
+through catalogs, not desktop control. Human review remains open under 32.3;
+`i18n:ready` intentionally fails. Go CLI/process output and OS-owned copy remain
+outside the catalog inventory and are not claimed as fully localized.

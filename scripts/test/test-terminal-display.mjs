@@ -154,6 +154,22 @@ try{
  await page.locator('#commands').click();
  await expect(page.locator('#context-limits')).toHaveText('This command produced no text output.');
  await expect(page.locator('#context-copy')).toBeDisabled();await page.keyboard.press('Escape');
+ // Exercise the actual xterm renderer with every new locally bundled palette.
+ const catalog=require(join(desktop,'theme-palettes.json'));
+ await page.emulateMedia({forcedColors:'none',reducedMotion:'no-preference'});
+ await page.setViewportSize({width:1000,height:650});
+ for(const [id,modes] of Object.entries(catalog.terminal))for(const [mode,ansi] of Object.entries(modes)){
+  const palette={...catalog.themes[id][mode],ansi};
+  await page.evaluate(({mode,palette})=>fixtureEvent({type:'appearance',theme:mode,palette,reduceMotion:true}),{mode,palette});
+  const actual=await page.evaluate(()=>({theme:tabs.get(current).term.options.theme,blink:tabs.get(current).term.options.cursorBlink}));
+  assert.equal(actual.theme.background,palette['surface-0']);assert.equal(actual.theme.cursorAccent,palette['surface-0']);
+  for(const [key,color] of Object.entries(ansi))assert.equal(actual.theme[key],color);
+  assert.equal(actual.blink,false);
+ }
+ await page.evaluate(()=>new Promise(resolve=>tabs.get(current).term.write('\r\n\x1b[31mError\x1b[0m  \x1b[32mSuccess\x1b[0m  \x1b[33mWarning\x1b[0m  \x1b[34mLink\x1b[0m\r\n',resolve)));
+ await page.screenshot({path:join(evidence,'established-palette-terminal.png')});
+ await page.emulateMedia({forcedColors:'active'});
+ await expect.poll(()=>page.evaluate(()=>{const t=tabs.get(current).term.options.theme;return t.red===t.foreground;})).toBe(true);
  if(process.env.OFFGRID_TERMINAL_CAPTURE){
   const capture=await readFile(process.env.OFFGRID_TERMINAL_CAPTURE,'utf8');
   await page.emulateMedia({forcedColors:'none'});
@@ -161,6 +177,88 @@ try{
   await page.evaluate(()=>fixtureEvent({type:'appearance',theme:'dark'}));
   await page.evaluate(text=>new Promise(resolve=>{const term=tabs.get(current).term;term.reset();term.resize(72,20);term.write(text,resolve);}),capture);
   await page.screenshot({path:join(evidence,'live-agent.png')});
+ }
+ // Language updates localize authored controls without touching shell output,
+ // selected text, command edits or the terminal process.
+ await page.keyboard.press('Escape');
+ const terminalCopy=require(join(desktop,'terminal-translations.js'));
+ const terminalOverrides=require(join(root,'apps/web/src/i18n/feature-packs.json'));
+ const registry=require(join(desktop,'language-registry.json'));
+ for(const locale of Object.keys(registry))for(const key of Object.keys(terminalCopy.catalogs.en))assert.ok(Object.hasOwn(terminalOverrides[locale]?.['desktop/terminal']??{},key)||Object.hasOwn(terminalCopy.catalogs[locale]??{},key),`${locale}: missing terminal message ${key}`);
+ const beforeLanguage=await page.evaluate(()=>({output:tabs.get(current).term.buffer.active.getLine(0)?.translateToString(),inputs:fixtureCalls.filter(c=>c.action==='input').length,tabs:tabs.size}));
+ for(const locale of Object.keys(terminalCopy.catalogs)){
+  await page.evaluate(({locale,translations})=>fixtureEvent({type:'appearance',locale,translations,theme:'dark'}),{locale,translations:terminalOverrides[locale]?.['desktop/terminal']??{}});
+  await expect(page.locator('html')).toHaveAttribute('lang',locale);
+  await expect(page.locator('#display-settings')).toHaveAccessibleName(terminalCopy.text(locale,'Terminal display'));
+  await expect(page.locator('.xterm-helper-textarea').first()).toHaveAttribute('aria-label',terminalCopy.text(locale,'Terminal input'));
+  await page.locator('#display-settings').click();
+  await expect(page.locator('#terminal-display-title')).toHaveText(terminalCopy.text(locale,'Terminal display'));
+  await expect(page.locator('option[value="underline"]')).toHaveText(terminalCopy.text(locale,'Underline'));
+  await expect(page.locator('#terminal-display button[value="close"]').last()).toBeInViewport();
+  if(['ar','de','sn'].includes(locale))await page.screenshot({path:join(evidence,`terminal-language-${locale}.png`)});
+  await page.keyboard.press('Escape');
+ }
+ assert.deepEqual(await page.evaluate(()=>({output:tabs.get(current).term.buffer.active.getLine(0)?.translateToString(),inputs:fixtureCalls.filter(c=>c.action==='input').length,tabs:tabs.size})),beforeLanguage);
+ // Switch language while a real command preview is already open. Redacted
+ // output and the user's question must survive all 29 language changes.
+ await page.evaluate(()=>new Promise(resolve=>{
+  const mark=value=>'\x1b]633;OffGrid;'+btoa(unescape(encodeURIComponent(JSON.stringify({v:1,...value}))))+'\x07';
+  tabs.get(current).term.clearSelection();
+  tabs.get(current).term.write('\r\n'+mark({event:'begin',command:'echo audit',cwd:'C:\\fixture',truncated:false})+'audit output'+mark({event:'end',exit:4}),resolve);
+ }));
+ await page.locator('#commands').click();await page.locator('#context-output').fill('Keep this redaction — café 日本語');await page.locator('#context-question').fill('Keep my question');
+ for(const locale of Object.keys(registry)){
+  await page.evaluate(({locale,translations})=>fixtureEvent({type:'appearance',locale,translations,theme:'light'}),{locale,translations:terminalOverrides[locale]?.['desktop/terminal']??{}});
+  await expect(page.locator('#context-output')).toHaveValue('Keep this redaction — café 日本語');await expect(page.locator('#context-question')).toHaveValue('Keep my question');
+  await expect(page.locator('#context-state')).toContainText(terminalCopy.text(locale,'Shell reported exit {code} · {seconds}s',{code:4,seconds:''}).split('4')[0]);
+  await expect(page.locator('#context-share')).toHaveText(terminalCopy.text(locale,'Continue in Chat'));
+  const markers=await page.evaluate(()=>{
+   const result=[];
+   for(const element of document.querySelectorAll('[data-terminal-text]'))result.push({key:element.dataset.terminalText,actual:element.textContent});
+   for(const [marker,attribute] of [['data-terminal-label','aria-label'],['data-terminal-title','title'],['data-terminal-placeholder','placeholder']])for(const element of document.querySelectorAll('['+marker+']'))result.push({key:element.getAttribute(marker),actual:element.getAttribute(attribute)});
+   return result;
+  });
+  for(const {key,actual} of markers)assert.equal(actual,terminalCopy.text(locale,key),`${locale}: ${key}`);
+ }
+ await page.keyboard.press('Escape');await page.locator('#search').click();await page.locator('#query').fill('audit');
+ const searchBefore=await page.evaluate(()=>tabs.get(current).term.getSelectionPosition());
+ for(const locale of Object.keys(registry)){
+  await page.evaluate(({locale,translations})=>fixtureEvent({type:'appearance',locale,translations,theme:'light'}),{locale,translations:terminalOverrides[locale]?.['desktop/terminal']??{}});
+  await expect(page.locator('#query')).toHaveValue('audit');
+  assert.deepEqual(await page.evaluate(()=>tabs.get(current).term.getSelectionPosition()),searchBefore);
+ }
+ await page.locator('#find-close').click();
+ await page.locator('#new').click();await page.locator('#agent').click();
+ await expect.poll(()=>page.evaluate(()=>tabs.get(current)?.kind)).toBe('agent');
+ for(const locale of Object.keys(registry)){
+  await page.evaluate(({locale,translations})=>fixtureEvent({type:'appearance',locale,translations,theme:'light'}),{locale,translations:terminalOverrides[locale]?.['desktop/terminal']??{}});
+  await expect(page.locator('[role="tab"][aria-selected="true"]')).toHaveAccessibleName(terminalCopy.text(locale,'Agent'));
+ }
+ await page.locator('#display-settings').click();
+ await page.evaluate(()=>{window.fixtureStorageSet=Storage.prototype.setItem;Storage.prototype.setItem=()=>{throw new DOMException('Fixture storage denied','SecurityError');};});
+ await page.locator('select[name="fontSize"]').selectOption('16');
+ for(const locale of Object.keys(registry)){
+  await page.evaluate(({locale,translations})=>fixtureEvent({type:'appearance',locale,translations,theme:'light'}),{locale,translations:terminalOverrides[locale]?.['desktop/terminal']??{}});
+  await expect(page.locator('#display-save-status')).toHaveText(terminalCopy.text(locale,'Applied for this window; preferences could not be saved.'));
+  await expect(page.locator('select[name="fontSize"]')).toHaveValue('16');
+ }
+ await page.evaluate(()=>{Storage.prototype.setItem=window.fixtureStorageSet;});await page.keyboard.press('Escape');
+ await page.evaluate(()=>tabs.get(current).term.selectAll());await page.locator('#commands').click();
+ await page.locator('#context-output').fill('Private selection redacted');await page.locator('#context-question').fill('Keep selected-text question');
+ for(const locale of Object.keys(registry)){
+  await page.evaluate(({locale,translations})=>fixtureEvent({type:'appearance',locale,translations,theme:'light'}),{locale,translations:terminalOverrides[locale]?.['desktop/terminal']??{}});
+  await expect(page.locator('#context-output')).toHaveValue('Private selection redacted');
+  await expect(page.locator('#context-question')).toHaveValue('Keep selected-text question');
+  await expect(page.locator('#context-state')).toHaveText(terminalCopy.text(locale,'Manually selected output · command and outcome not verified'));
+ }
+ await page.keyboard.press('Escape');
+ await page.evaluate(()=>fixtureEvent({type:'error',message:'fixture_backend_error: original diagnostic <untrusted>'}));
+ for(const locale of Object.keys(registry)){
+  await page.evaluate(({locale,translations})=>fixtureEvent({type:'appearance',locale,translations,theme:'light'}),{locale,translations:terminalOverrides[locale]?.['desktop/terminal']??{}});
+  await expect(page.locator('#notice')).toHaveText(terminalCopy.text(locale,'The terminal request could not be confirmed. Check its state before trying again.'));
+  await expect(page.locator('#terminal-error-details summary')).toHaveText(terminalCopy.text(locale,'Technical details'));
+  await expect(page.locator('#terminal-error-text')).toHaveText('fixture_backend_error: original diagnostic <untrusted>');
+  await expect(page.locator('#terminal-error-text untrusted')).toHaveCount(0);
  }
  assert.deepEqual(errors,[]);
  console.log(JSON.stringify({passed:true,evidence,checks:['existing/new tabs','no settings keystrokes to PTY','focus restoration','persistence/reload','reset','reduced motion','forced colors','narrow dialog','command output snapshot','edited context sharing','search counts and empty-query decoration cleanup','running command completion','private edits retained on shell events','failed handoff retention','duplicate handoff guard','late acknowledgement isolation','empty command output'],nativePTY:false}));

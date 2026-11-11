@@ -4,6 +4,7 @@ import { navigationGroups, type Page, type ServiceHealth } from '../../lib/navig
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useFocusScope } from '../../lib/focus-scope';
 import { Icon } from '../Icon';
+import { BrandMark } from '../BrandMark';
 
 function RailLink({ item, label, active, onActivate }: { item: Page; label: string; active: boolean; onActivate: () => void }) {
   const [visible, setVisible] = useState(false);
@@ -15,7 +16,7 @@ function RailLink({ item, label, active, onActivate }: { item: Page; label: stri
     onPointerEnter={event => { if (event.pointerType !== 'touch') timer.current = setTimeout(() => setVisible(true), 450); }}
     onPointerLeave={dismiss} onBlur={dismiss}
     onFocus={event => { if (event.currentTarget.matches(':focus-visible')) setVisible(true); }}
-    onKeyDown={event => { if (event.key === 'Escape' && visible) { dismiss(); event.stopPropagation(); } }}
+    onKeyDown={event => { if (event.key === 'Escape' && visible) { dismiss(); if (!document.querySelector(':popover-open')) event.stopPropagation(); } }}
     onClick={() => { dismiss(); onActivate(); }}>
     <Icon name={item} size={18} /><span role="tooltip" aria-hidden={!visible}>{label}</span>
   </a>;
@@ -32,7 +33,7 @@ export function WorkspaceNavigation({ page, open, narrow, collapsed, onToggle, o
   useFocusScope(panel, narrow && open, onClose);
   return <aside ref={panel} id="workspace-sidebar" data-page={page} className={`sidebar${open ? ' open' : ''}`} role={narrow && open ? 'dialog' : undefined} aria-modal={narrow && open || undefined} aria-label={labels.navigation}>
     <div className="sidebar-heading">
-      <div className="brand"><img src="/ui/app-mark.svg" width="28" height="28" alt="" /><strong>{text.product}</strong></div>
+      <div className="brand"><BrandMark /><strong>{text.product}</strong></div>
       {!narrow && page === 'chat' && <button className="utility-button icon-button sidebar-collapse" type="button" aria-label={collapsed ? labels.expand : labels.collapse} title={collapsed ? labels.expand : labels.collapse} aria-expanded={!collapsed} onClick={onToggle}><Icon name="sidebar" size={18} /></button>}
       <button className="icon-button sidebar-toggle" type="button" aria-label={text.models.cancel} onClick={onClose}><Icon name="close" size={18} /></button>
     </div>
@@ -49,6 +50,7 @@ export function WorkspaceNavigation({ page, open, narrow, collapsed, onToggle, o
     </div>
     <div className="sidebar-foot">
       {footer}
+      <RailLink item="settings" label={text.nav.settings} active={page === 'settings'} onActivate={onClose} />
     </div>
   </aside>;
 }

@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
-const copy: Record<LocaleCode, readonly [string,string,string,string,string,string]> = {
+const copy = defineMessages<readonly [string,string,string,string,string,string]>("i18n/task-desktop:copy", {
   en:['Access scope','Whole desktop for this task','Selected window only','Allow desktop access','Approve once in the desktop dialog. OffGrid will open and switch supported applications itself.','Reviewing desktop access…'],
   fr:['Portée de l’accès','Bureau entier pour cette tâche','Fenêtre sélectionnée uniquement','Autoriser l’accès au bureau','Confirmez une fois dans la boîte de dialogue locale. OffGrid ouvrira et changera les applications prises en charge.','Vérification de l’accès au bureau…'],
   de:['Zugriffsbereich','Gesamter Desktop für diese Aufgabe','Nur ausgewähltes Fenster','Desktopzugriff erlauben','Bestätigen Sie einmal im lokalen Dialog. OffGrid öffnet unterstützte Anwendungen und wechselt selbst zwischen ihnen.','Desktopzugriff wird geprüft…'],
@@ -10,5 +11,5 @@ const copy: Record<LocaleCode, readonly [string,string,string,string,string,stri
   sn:['Muganhu wemvumo','Desktop yose yebasa iri','Hwindo rakasarudzwa chete','Bvumira kupinda padesktop','Bvumira kamwe pahwindo remuno. OffGrid ichavhura nekuchinja mapurogiramu anotsigirwa pachayo.','Kuongorora mvumo yedesktop…'],
   nd:['Umkhawulo wokufinyelela','Idesktop yonke yomsebenzi lo','Iwindi elikhethiweyo kuphela','Vumela ukufinyelela kudeskithophu','Vumela kanye engxoxweni yalapha. I-OffGrid izavula futhi intshintshe izinhlelo ezisekelwayo ngokwayo.','Kuhlolwa ukufinyelela kudeskithophu…'],
   zu:['Umkhawulo wokufinyelela','Ideskithophu yonke yalo msebenzi','Iwindi elikhethiwe kuphela','Vumela ukufinyelela kudeskithophu','Vuma kanye engxoxweni yalapha. I-OffGrid izovula futhi ishintshe izinhlelo ezisekelwayo ngokwayo.','Kubuyekezwa ukufinyelela kudeskithophu…'],
-};
+});
 export function taskDesktopText(locale:LocaleCode){const [scope,desktop,window,allow,hint,working]=copy[locale];return {scope,desktop,window,allow,hint,working};}

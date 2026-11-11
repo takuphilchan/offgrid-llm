@@ -27,11 +27,11 @@ for(const locale of ['en','fr','de','es','ar','sw','sn','nd','zu']) for(const wi
  const state=await craftFixture(page,locale,width===320?'light':'dark');await page.setViewportSize({width,height:700});
  await page.goto('/ui/#/settings');await expect(page.locator('#settings-language')).toBeVisible();
  await expect(page.getByRole('heading',{level:1})).toHaveCount(1);
- const fields=await page.locator('.settings-group .settings-panel').evaluateAll(rows=>rows.filter(row=>row.children.length>1).map(row=>{
+ const fields=await page.locator('.settings-group .settings-panel').evaluateAll(rows=>rows.filter(row=>row.getClientRects().length>0&&row.children.length>1).map(row=>{
   const label=row.firstElementChild!.getBoundingClientRect(),control=row.lastElementChild!.getBoundingClientRect();
   return {label:{x:label.x,y:label.y,bottom:label.bottom,right:label.right},control:{x:control.x,y:control.y,width:control.width,right:control.right},columns:getComputedStyle(row).gridTemplateColumns};
  }));
- expect(fields.length).toBeGreaterThanOrEqual(4);
+ expect(fields.length).toBeGreaterThanOrEqual(3);
  if(width===1280){
   for(const field of fields){expect(field.control.width).toBeLessThanOrEqual(321);const edge=locale==='ar'?'right':'x';expect(Math.abs(field.control[edge]-fields[0].control[edge])).toBeLessThanOrEqual(1);}
  }else for(const field of fields)expect(field.control.y).toBeGreaterThanOrEqual(field.label.bottom);

@@ -84,6 +84,9 @@ test('workspace and actor changes dispose search results and return state', asyn
  await page.getByRole('button',{name:'Workspace options',exact:true}).click();
  await page.getByRole('button',{name:'Refresh',exact:true}).click();
  await expect(page.getByRole('button',{name:'Back to previous view'})).toHaveCount(0);
+ await expect(page.locator('dialog.onboarding')).toBeVisible();
+ await page.locator('dialog.onboarding .onboarding-close').click();
+ await expect(page.locator('dialog.onboarding')).toHaveCount(0);
  await search(page,'slow');await expect.poll(()=>state.queries).toContain('slow');await page.keyboard.press('Escape');
  await page.getByRole('button',{name:'Workspace options',exact:true}).click();
  await page.getByRole('button',{name:'Sign out',exact:true}).click();

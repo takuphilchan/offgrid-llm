@@ -14,7 +14,7 @@ for (const locale of ['en', 'ar']) test(`navigation keeps keyboard focus while a
   const last = panel.getByRole('button').last();
   await last.focus();
   await last.press('Tab');
-  await expect(drawer.locator('.sidebar-toggle')).toBeFocused();
+  await expect(drawer.locator('.sidebar-foot a[href="#/settings"]')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(panel).not.toBeVisible();
   await expect(drawer).toBeVisible();

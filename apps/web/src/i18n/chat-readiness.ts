@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 // Installed files are not proof that their runtime can accept a conversation.
-export const chatReadiness: Record<LocaleCode, { unavailable: string; setup: string }> = {
+export const chatReadiness = defineMessages<{ unavailable: string; setup: string }>("i18n/chat-readiness:chatReadiness", {
   en: { unavailable: 'The selected model is unavailable. Choose an available chat model; your draft is kept.', setup: 'Choose an installed chat model, import one offline, or review a download before starting.' },
   fr: { unavailable: 'Le modèle sélectionné est indisponible. Choisissez un modèle de discussion disponible ; votre brouillon est conservé.', setup: 'Choisissez un modèle installé, importez-en un hors ligne ou examinez un téléchargement avant de commencer.' },
   de: { unavailable: 'Das ausgewählte Modell ist nicht verfügbar. Wähle ein verfügbares Chatmodell; dein Entwurf bleibt erhalten.', setup: 'Wähle ein installiertes Chatmodell, importiere eines offline oder prüfe einen Download, bevor du beginnst.' },
@@ -11,4 +12,4 @@ export const chatReadiness: Record<LocaleCode, { unavailable: string; setup: str
   sn: { unavailable: 'Modhi yawasarudza haisi kuwanikwa. Sarudza modhi yehurukuro inowanikwa; zvauri kunyora zvinochengetwa.', setup: 'Sarudza modhi yakaiswa, pinza imwe pasina intaneti kana ongorora kudhaunirodha usati watanga.' },
   nd: { unavailable: 'Imodeli ekhethiweyo ayitholakali. Khetha imodeli yengxoxo etholakalayo; okusalungiswayo kuyagcinwa.', setup: 'Khetha imodeli efakiweyo, ngenisa eyodwa ungaxhunyiwe ku-inthanethi kumbe uhlole ukuyidawuniloda ungaqali.' },
   zu: { unavailable: 'Imodeli ekhethiwe ayitholakali. Khetha imodeli yengxoxo etholakalayo; okusalungiswa kwakho kuyagcinwa.', setup: 'Khetha imodeli efakiwe, ngenisa eyodwa ungaxhunyiwe ku-inthanethi noma ubuyekeze ukulanda ngaphambi kokuqala.' },
-};
+});

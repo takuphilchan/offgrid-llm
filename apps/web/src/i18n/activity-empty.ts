@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 // Empty views describe the selected filter, never imply saved archives vanished.
-const copy: Record<LocaleCode, readonly [string, string, string, string, string, string]> = {
+const copy = defineMessages<readonly [string, string, string, string, string, string]>("i18n/activity-empty:copy", {
   en: ['No work needs attention', 'Nothing is running', 'No recent history', 'No archived work', 'Your work is up to date', 'Earlier work is available in Archived.'],
   fr: ['Aucune intervention nécessaire', 'Aucun travail en cours', 'Aucun historique récent', 'Aucun travail archivé', 'Votre travail est à jour', 'Les travaux précédents sont disponibles dans les archives.'],
   de: ['Kein Handlungsbedarf', 'Keine laufenden Aufgaben', 'Kein aktueller Verlauf', 'Keine archivierten Aufgaben', 'Alles ist auf dem aktuellen Stand', 'Frühere Aufgaben finden Sie im Archiv.'],
@@ -11,7 +12,7 @@ const copy: Record<LocaleCode, readonly [string, string, string, string, string,
   sn: ['Hapana basa rinoda kutariswa', 'Hapana basa riri kuitwa', 'Hapana nhoroondo ichangobva kuitika', 'Hapana basa rakachengetwa', 'Basa rako riri mugwara', 'Basa rekare rinowanikwa pane Zvakachengetwa.'],
   nd: ['Akulamsebenzi odinga ukunakwa', 'Akulamsebenzi oqhubekayo', 'Akulambali yakamuva', 'Akulamsebenzi ogciniweyo', 'Umsebenzi wakho ulungile', 'Umsebenzi wangaphambilini uyatholakala kokugciniweyo.'],
   zu: ['Awukho umsebenzi odinga ukunakwa', 'Awukho umsebenzi oqhubekayo', 'Awukho umlando wakamuva', 'Awukho umsebenzi ogciniwe', 'Umsebenzi wakho usesimweni', 'Umsebenzi wangaphambilini uyatholakala kokugciniwe.'],
-};
+});
 export function activityEmpty(locale: LocaleCode) {
   const [attention, running, history, archived, all, archiveHint] = copy[locale];
   return { attention, running, history, archived, all, archiveHint };

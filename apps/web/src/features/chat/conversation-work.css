@@ -26,7 +26,7 @@
   .conversation-work-details > :not(summary) { margin-block-start: .75rem; }
   .conversation-work details > summary { padding-block: .375rem; line-height: 1.5; cursor: pointer; }
   .conversation-work details > :not(summary) { margin-block-start: .75rem; }
-  .conversation-work-details > details { padding-block: .375rem; border-block-start: 1px solid var(--line); }
+  .conversation-work-details > details { padding-block: .375rem; border-block-start: 0; }
   .conversation-work details :is(p, ol, ul, dl) { margin-block-end: 0; line-height: 1.6; }
   .conversation-work details dd { margin-inline-start: 0; margin-block-end: .75rem; }
   .conversation-work details dt { color: var(--muted); }
@@ -72,7 +72,7 @@
   :is(.chat-agent-selector, .chat-agent-tools) > button { max-width: 100%; text-align: start; white-space: normal; overflow-wrap: anywhere; }
   .message-actions > .message-job-link { margin: 0; }
 }
-.execution-step { padding-block: 12px; border-block-end: 1px solid var(--line); min-width: 0; }
+.execution-step { padding-block: 12px; border-block-end: 1px solid var(--separator); min-width: 0; }
 .execution-step p, .execution-location { overflow-wrap: anywhere; }
 .chat-execution-workspace fieldset { min-width: 0; border: 0; padding: 0; display: grid; gap: 12px; }
 .chat-execution-workspace select { min-width: 0; max-width: 100%; width: 100%; }

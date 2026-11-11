@@ -27,6 +27,11 @@ start a shell automatically. The browser application does not expose a terminal.
   override the terminal palette. Settings and their keystrokes never become shell
   commands. If preferences cannot be saved, they still apply to the current window.
 - **Chat** returns to the workspace without stopping tabs.
+- Interface language changes update terminal controls, open command previews,
+  search status and accessibility labels. Search selections, edited questions,
+  redacted output and running sessions are preserved. Terminal interface copy
+  has drafts for all 29 selectable languages; this does not imply translated
+  CLI commands/help, arbitrary process output or completed native-language review.
 - **Commands** inspects the latest 100 shell-reported commands in that tab,
   including folder, duration and status, and jumps to output still in scrollback.
   A failed PowerShell command may have no exact numeric exit code; OffGrid shows

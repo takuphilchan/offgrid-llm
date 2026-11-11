@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
-export const responseBudgetHint: Record<LocaleCode, string> = {
+export const responseBudgetHint = defineMessages<string>("i18n/response-budget:responseBudgetHint", {
   en: 'This limits one answer, not the conversation. History, document excerpts and the answer share the model’s context. A lower response limit leaves more room for questions and sources.',
   fr: 'Cette limite concerne une réponse, pas la conversation. L’historique, les extraits et la réponse partagent le contexte du modèle. Une limite plus basse laisse davantage de place aux questions et aux sources.',
   de: 'Dies begrenzt eine Antwort, nicht das Gespräch. Verlauf, Dokumentauszüge und Antwort teilen sich den Modellkontext. Ein niedrigeres Antwortlimit lässt mehr Platz für Fragen und Quellen.',
@@ -10,4 +11,4 @@ export const responseBudgetHint: Record<LocaleCode, string> = {
   sn: 'Uyu muganhu wemhinduro imwe, kwete hurukuro yose. Nhoroondo, zvikamu zvegwaro nemhinduro zvinoshandisa nzvimbo imwe yemodhi. Muganhu mudiki wemhinduro unosiya nzvimbo yakawanda yemibvunzo nezvinyorwa.',
   nd: 'Lo ngumkhawulo wempendulo eyodwa, hatshi ingxoxo yonke. Imbali, izingxenye zombhalo lempendulo kwabelana umongo wemodeli. Umkhawulo omncane wempendulo utshiya indawo enengi yemibuzo lemithombo.',
   zu: 'Lona umkhawulo wempendulo eyodwa, hhayi ingxoxo yonke. Umlando, izingcaphuno zemibhalo nempendulo kwabelana ngomongo wemodeli. Umkhawulo omncane wempendulo ushiya indawo eyengeziwe yemibuzo nemithombo.',
-};
+});

@@ -1,3 +1,4 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 import { voiceLocales } from './voice-locales';
 
@@ -45,11 +46,10 @@ const english: VoiceCopy = {
   provisionalSpeech: 'Speaking the draft response. Text is final only when saved.'
 };
 
-export function voiceText(locale: LocaleCode): VoiceCopy {
-  return locale === 'en' ? english : voiceLocales[locale];
-}
+const voices=defineMessages<VoiceCopy>('i18n/voice:voices',{en:english,...voiceLocales});
+export function voiceText(locale: LocaleCode): VoiceCopy { return voices[locale]; }
 
-export const voiceSilenceText: Record<LocaleCode, string> = {
+export const voiceSilenceText = defineMessages<string>("i18n/voice:voiceSilenceText", {
   en: 'No speech was detected. Try again or type your message. Your draft is unchanged.',
   fr: 'Aucune parole détectée. Réessayez ou saisissez votre message. Votre brouillon est inchangé.',
   es: 'No se detectó voz. Inténtalo de nuevo o escribe tu mensaje. Tu borrador no ha cambiado.',
@@ -59,9 +59,9 @@ export const voiceSilenceText: Record<LocaleCode, string> = {
   sn: 'Hapana mashoko anzwika aonekwa. Edza zvakare kana kunyora meseji. Gwaro rako harina kuchinja.',
   nd: 'Akutholakalanga amazwi. Zama futhi kumbe ubhale umlayezo. Umbhalo wakho awutshintshanga.',
   zu: 'Akutholakalanga amazwi. Zama futhi noma ubhale umlayezo. Umbhalo wakho awushintshanga.',
-};
+});
 
-const runtimeCopy: Record<LocaleCode, { available: string; tested: string; unavailable: string }> = {
+const runtimeCopy = defineMessages<{ available: string; tested: string; unavailable: string }>("i18n/voice:runtimeCopy", {
   en: { available: 'Runtime available; this model has not been tested yet.', tested: 'Speech request passed this session. Quality and latency are not qualified.', unavailable: 'The matching speech runtime is unavailable.' },
   fr: { available: 'Moteur disponible ; ce modèle n’a pas encore été testé.', tested: 'Requête vocale réussie pendant cette session. Qualité et latence non qualifiées.', unavailable: 'Le moteur vocal correspondant est indisponible.' },
   es: { available: 'Motor disponible; este modelo aún no se ha probado.', tested: 'Solicitud de voz completada en esta sesión. Calidad y latencia sin validar.', unavailable: 'El motor de voz correspondiente no está disponible.' },
@@ -71,5 +71,5 @@ const runtimeCopy: Record<LocaleCode, { available: string; tested: string; unava
   sn: { available: 'Injini iripo; modhi iyi haisati yaedzwa.', tested: 'Chikumbiro chezwi chabudirira muchikamu chino. Hunhu nekumhanya hazvisati zvasimbiswa.', unavailable: 'Injini yezwi inoenderana haisipo.' },
   nd: { available: 'Injini ikhona; imodeli le kayikahlolwa.', tested: 'Isicelo selizwi siphumelele kulesi sikhathi. Ubuhle lesivinini akukaqinisekiswa.', unavailable: 'Injini yelizwi ehambelanayo kayitholakali.' },
   zu: { available: 'Injini iyatholakala; le modeli ayikahlolwa.', tested: 'Isicelo sezwi siphumelele kule seshini. Ikhwalithi nesivinini akuqinisekisiwe.', unavailable: 'Injini yezwi ehambisanayo ayitholakali.' }
-};
+});
 export const speechRuntimeText = (locale: LocaleCode) => runtimeCopy[locale];

@@ -1,5 +1,12 @@
 [
   {
+    "path": "apps/desktop/terminal-translations.js",
+    "owner": "Desktop maintainers",
+    "responsibility": "Nine authored terminal dictionaries with a small CommonJS/browser resolver; data dominates this no-growth baseline. Structural review is not native-language approval.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 821
+  },
+  {
     "path": "cmd/offgrid/hermes.go",
     "owner": "CLI maintainers",
     "responsibility": "Existing CLI implementation for hermes; no-growth baseline pending focused extraction.",

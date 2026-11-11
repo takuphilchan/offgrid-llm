@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 // Reviewed locale resources still require human language qualification.
-const labels: Record<LocaleCode, [string, string, string, string, string, string, string]> = {
+const labels = defineMessages<[string, string, string, string, string, string, string]>("i18n/document-retention:labels", {
   en: ['Retention', 'Keep until manually deleted', 'Delete after (UTC)', 'Legal hold', 'A hold prevents deletion, including expiry. Remove it only when authorized.', 'Expiry removes the source, extracted text and search index. Backups and saved answers have separate retention. A past date makes this source eligible for deletion now.', 'Reload policy'],
   es: ['Conservación', 'Conservar hasta eliminar manualmente', 'Eliminar después de (UTC)', 'Retención legal', 'La retención impide la eliminación, incluido el vencimiento. Quítala solo con autorización.', 'El vencimiento elimina la fuente, el texto extraído y el índice. Las copias de seguridad y respuestas guardadas tienen una conservación independiente. Una fecha pasada permite eliminar la fuente ahora.', 'Recargar política'],
   fr: ['Conservation', 'Conserver jusqu’à la suppression manuelle', 'Supprimer après (UTC)', 'Conservation légale', 'La conservation légale empêche la suppression, même à expiration. Ne la levez qu’avec autorisation.', 'L’expiration supprime la source, le texte extrait et l’index. Les sauvegardes et réponses enregistrées ont une conservation distincte. Une date passée autorise la suppression dès maintenant.', 'Recharger la politique'],
@@ -11,10 +12,10 @@ const labels: Record<LocaleCode, [string, string, string, string, string, string
   sn: ['Kuchengetwa', 'Chengeta kusvikira zvadzimwa nemaoko', 'Dzima mushure me (UTC)', 'Kuchengetwa kwemutemo', 'Kuchengetwa kunodzivirira kudzima kunyange nguva yapera. Kubvise chete kana wabvumirwa.', 'Kana nguva yapera, chinyorwa, mashoko akatorwa neindekisi zvinodzimwa. Makopi ekuchengetedza nemhinduro dzakachengetwa zvine mitemo yakasiyana. Zuva rapfuura rinobvumira kudzima iye zvino.', 'Rodha mutemo zvakare'],
   nd: ['Ukugcinwa', 'Gcina kuze kucitshwe ngesandla', 'Citsha ngemva kwe (UTC)', 'Ukugcinwa ngokomthetho', 'Ukugcinwa kuvimbela ukucitsha lanxa isikhathi sesiphelile. Kususe kuphela ngemvumo.', 'Ukuphela kwesikhathi kucitsha umthombo, umbhalo le-index. Amakhophi lempendulo ezigciniweyo kulemithetho ehlukileyo. Ilanga elidlulileyo livumela ukucitsha khathesi.', 'Layisha umthetho futhi'],
   zu: ['Ukugcinwa', 'Gcina kuze kususwe ngesandla', 'Susa ngemva kwe (UTC)', 'Ukugcinwa ngokomthetho', 'Ukugcinwa kuvimbela ukususa noma isikhathi sesiphelile. Kususe kuphela ngemvume.', 'Ukuphela kwesikhathi kususa umthombo, umbhalo nenkomba yokusesha. Amakhophi nezimpendulo ezigciniwe zinemithetho ehlukile. Usuku oludlule luvumela ukususa manje.', 'Layisha inqubomgomo futhi'],
-};
+});
 
 export function documentRetention(locale: LocaleCode) {
   const [title, keep, expiry, hold, holdHint, effect, reload] = labels[locale];
-  const save: Record<LocaleCode, string> = { en: 'Save policy', es: 'Guardar política', fr: 'Enregistrer la politique', de: 'Richtlinie speichern', ar: 'حفظ السياسة', sw: 'Hifadhi sera', sn: 'Chengeta mutemo', nd: 'Gcina umthetho', zu: 'Gcina inqubomgomo' };
+  const save = defineMessages<string>("i18n/document-retention:save", { en: 'Save policy', es: 'Guardar política', fr: 'Enregistrer la politique', de: 'Richtlinie speichern', ar: 'حفظ السياسة', sw: 'Hifadhi sera', sn: 'Chengeta mutemo', nd: 'Gcina umthetho', zu: 'Gcina inqubomgomo' });
   return { title, keep, expiry, hold, holdHint, effect, reload, save: save[locale] };
 }

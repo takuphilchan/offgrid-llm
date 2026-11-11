@@ -289,7 +289,8 @@ export function ChatPage({ scope, models, model, setModel, onboardingPending, on
           setMissingSession(true); setError(missingConversationText[locale]);
         } else activate(!preferred && readDraft(draftKey(draftScope, 'chat')) ? undefined : selected ?? next[0]);
       }
-      if (onboardingPending && next.some(item => item.messages.some(message => message.role === 'assistant' && messageText(message.content).trim()))) onFirstResponse();
+      // Saved history proves a past response, not that this installation's
+      // current engine and model can answer. Only response completion verifies setup.
     } catch (reason) {
       if (mounted.current && request === historyRevision.current) setError(reason instanceof Error ? reason.message : text.common.error);
     } finally {

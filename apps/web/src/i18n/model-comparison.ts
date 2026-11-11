@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 type Copy = { title: string; choose: string; clear: string; hint: string; ram: string; parameters: string; quant: string; filter: string };
-export const modelComparison: Record<LocaleCode, Copy> = {
+export const modelComparison = defineMessages<Copy>("i18n/model-comparison:modelComparison", {
   en: { title: 'Compare models', choose: 'Compare', clear: 'Clear comparison', hint: 'Choose up to three. These are catalog estimates, not a test of your computer. Memory use also depends on context and runtime.', ram: 'Catalog minimum RAM', parameters: 'Parameters', quant: 'Quantization', filter: 'Filter catalog models' },
   fr: { title: 'Comparer les modèles', choose: 'Comparer', clear: 'Effacer la comparaison', hint: 'Choisissez jusqu’à trois modèles. Ce sont des estimations du catalogue, pas un test de votre ordinateur. La mémoire dépend aussi du contexte et du moteur.', ram: 'RAM minimale du catalogue', parameters: 'Paramètres', quant: 'Quantification', filter: 'Filtrer les modèles du catalogue' },
   de: { title: 'Modelle vergleichen', choose: 'Vergleichen', clear: 'Vergleich leeren', hint: 'Bis zu drei Modelle auswählen. Dies sind Katalogschätzungen, kein Test Ihres Computers. Der Speicherbedarf hängt auch vom Kontext und der Laufzeit ab.', ram: 'Mindest-RAM laut Katalog', parameters: 'Parameter', quant: 'Quantisierung', filter: 'Katalogmodelle filtern' },
@@ -11,4 +12,4 @@ export const modelComparison: Record<LocaleCode, Copy> = {
   sn: { title: 'Enzanisa mamodheru', choose: 'Enzanisa', clear: 'Bvisa kuenzanisa', hint: 'Sarudza anosvika matatu. Iyi ifungidziro yekatalogi, kwete bvunzo yekombiyuta yako. Ndangariro dzinoshandiswa dzinoenderanawo nekontekisi neinjini.', ram: 'RAM shoma yekatalogi', parameters: 'Maparamita', quant: 'Quantization', filter: 'Sefa mamodheru ekatalogi' },
   nd: { title: 'Qathanisa amamodeli', choose: 'Qathanisa', clear: 'Susa ukuqathanisa', hint: 'Khetha kuze kube mathathu. Lokhu yizilinganiso zekhathalogi, akusikuhlolwa kwekhompyutha yakho. Inkumbulo iya ngomongo lenjini.', ram: 'I-RAM encane yekhathalogi', parameters: 'Amapharamitha', quant: 'Quantization', filter: 'Hlunga amamodeli ekhathalogi' },
   zu: { title: 'Qhathanisa amamodeli', choose: 'Qhathanisa', clear: 'Sula ukuqhathanisa', hint: 'Khetha kufike kwamathathu. Lezi yizilinganiso zekhathalogi, akusona isivivinyo sekhompyutha yakho. Inkumbulo incike nasengqikithini nasenjinini.', ram: 'I-RAM encane yekhathalogi', parameters: 'Amapharamitha', quant: 'Quantization', filter: 'Hlunga amamodeli ekhathalogi' },
-};
+});

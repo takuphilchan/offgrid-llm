@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 // Independent speaker review remains part of locale qualification.
-export const agentAvailability: Record<LocaleCode, { unsupported: string; connection: string }> = {
+export const agentAvailability = defineMessages<{ unsupported: string; connection: string }>("i18n/agent-availability:agentAvailability", {
   en: {"unsupported":"Task workspace unavailable. Check or update the connected service. Retry checks status only; it does not rerun work.","connection":"Cannot check the service connection. Your current draft is kept. Retry checks status only; it does not rerun work."},
   fr: {"unsupported":"Espace de tâches indisponible. Vérifiez ou mettez à jour le service connecté. Réessayer vérifie seulement l’état, sans relancer le travail.","connection":"Impossible de vérifier la connexion. Votre brouillon est conservé. Réessayer vérifie seulement l’état, sans relancer le travail."},
   es: {"unsupported":"Espacio de tareas no disponible. Compruebe o actualice el servicio conectado. Reintentar solo comprueba el estado; no repite el trabajo.","connection":"No se puede comprobar la conexión. Se conserva su borrador. Reintentar solo comprueba el estado; no repite el trabajo."},
@@ -11,4 +12,4 @@ export const agentAvailability: Record<LocaleCode, { unsupported: string; connec
   sn: {"unsupported":"Nzvimbo yemabasa haisi kuwanikwa. Tarisa kana kugadziridza sevhisi yakabatana. Kuedza zvakare kunongotarisa mamiriro; hakudzokorori basa.","connection":"Hatigoni kutarisa kubatana kwesevhisi. Zvauri kunyora zvinochengetwa. Kuedza zvakare kunongotarisa mamiriro; hakudzokorori basa."},
   nd: {"unsupported":"Indawo yemisebenzi ayitholakali. Hlola kumbe uvuselele isevisi exhunyiweyo. Ukuzama futhi kuhlola isimo kuphela; akuphindi umsebenzi.","connection":"Ukuxhumana lesevisi akuhlolweki. Okubhalayo kuyagcinwa. Ukuzama futhi kuhlola isimo kuphela; akuphindi umsebenzi."},
   zu: {"unsupported":"Indawo yemisebenzi ayitholakali. Hlola noma ubuyekeze isevisi exhunyiwe. Ukuzama futhi kuhlola isimo kuphela; akuphindi umsebenzi.","connection":"Ukuxhumana nesevisi akuhlolweki. Okubhalayo kuyagcinwa. Ukuzama futhi kuhlola isimo kuphela; akuphindi umsebenzi."},
-};
+});

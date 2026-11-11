@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 type Labels = readonly [string,string,string,string,string,string,string,string,string];
-const labels: Record<LocaleCode, Labels> = {
+const labels = defineMessages<Labels>("i18n/chat-files:labels", {
  en:['Add files','Files','Remove from draft','Preparing file…','Ready','Retry preparation','Download original','Files need preparation before sending. Your draft is retained.','Files are supported in ordinary Chat. Switch off the agent to use these attachments.'],
  fr:['Ajouter des fichiers','Fichiers','Retirer du brouillon','Préparation du fichier…','Prêt','Réessayer la préparation','Télécharger l’original','Préparez les fichiers avant l’envoi. Votre brouillon est conservé.','Les fichiers sont disponibles dans le Chat ordinaire. Désactivez l’agent pour utiliser ces pièces jointes.'],
  de:['Dateien hinzufügen','Dateien','Aus Entwurf entfernen','Datei wird vorbereitet…','Bereit','Vorbereitung wiederholen','Original herunterladen','Bereiten Sie die Dateien vor dem Senden vor. Ihr Entwurf bleibt erhalten.','Dateien werden im normalen Chat unterstützt. Deaktivieren Sie den Agenten für diese Anhänge.'],
@@ -10,10 +11,10 @@ const labels: Record<LocaleCode, Labels> = {
  sn:['Wedzera mafaera','Mafaera','Bvisa pane zvawanyora','Kugadzirira faera…','Ragadzirira','Edza kugadzirira zvakare','Dhawunirodha rekutanga','Mafaera anofanira kugadzirirwa asati atumirwa. Zvawanyora zvachengetwa.','Mafaera anoshanda muChat yakajairika. Dzima agent kuti ushandise mafaera aya.'],
  nd:['Faka amafayela','Amafayela','Susa kokubhaliweyo','Kulungiswa ifayela…','Selilungile','Zama ukulungisa futhi','Landa elokuqala','Amafayela kumele alungiswe engakathunyelwa. Okubhalileyo kugciniwe.','Amafayela asebenza kuChat ejayelekileyo. Vala i-agent ukusebenzisa lezi zinamathiselo.'],
  zu:['Engeza amafayela','Amafayela','Susa kokubhaliwe','Kulungiswa ifayela…','Lilungile','Zama ukulungisa futhi','Landa elokuqala','Amafayela adinga ukulungiswa ngaphambi kokuthumela. Okubhaliwe kugciniwe.','Amafayela asebenza kuChat evamile. Vala i-agent ukuze usebenzise lezi zinamathiselo.'],
-};
+});
 export function chatFiles(locale:LocaleCode){const [add,files,remove,preparing,ready,retry,download,blocked,agent]=labels[locale];return {add,files,remove,preparing,ready,retry,download,blocked,agent};}
 
-const recovery:Record<LocaleCode,readonly[string,string,string,string,string]>={
+const recovery=defineMessages<readonly[string,string,string,string,string]>("i18n/chat-files:recovery", {
  en:['Saved files','No saved files in this conversation.','Use in next message','Selected','This file selection could not be saved on this device. Keep this window open.'],
  fr:['Fichiers conservés','Aucun fichier dans cette conversation.','Utiliser au prochain message','Sélectionné','Cette sélection ne peut pas être enregistrée sur cet appareil. Gardez cette fenêtre ouverte.'],
  de:['Gespeicherte Dateien','Keine Dateien in diesem Gespräch.','In nächster Nachricht verwenden','Ausgewählt','Diese Auswahl konnte nicht auf diesem Gerät gespeichert werden. Lassen Sie das Fenster geöffnet.'],
@@ -23,5 +24,5 @@ const recovery:Record<LocaleCode,readonly[string,string,string,string,string]>={
  sn:['Mafaera akachengetwa','Hapana mafaera akachengetwa muhurukuro iyi.','Shandisa mumeseji inotevera','Rasarudzwa','Sarudzo iyi haina kuchengetwa pamudziyo uyu. Siya hwindo iri rakavhurika.'],
  nd:['Amafayela agciniweyo','Akulafayela eligciniweyo kule ingxoxo.','Sebenzisa emlayezweni olandelayo','Likhethiwe','Ukukhetha lokhu akugcinwanga kulo umtshina. Tshiya iwindi livuliwe.'],
  zu:['Amafayela agciniwe','Awekho amafayela agciniwe kule ngxoxo.','Sebenzisa emyalezweni olandelayo','Likhethiwe','Lokhu okukhethiwe akugcinwanga kule divayisi. Gcina leli windi livuliwe.'],
-};
+});
 export function fileRecovery(locale:LocaleCode){const [saved,empty,use,selected,unsaved]=recovery[locale];return {saved,empty,use,selected,unsaved};}
