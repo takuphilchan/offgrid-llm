@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -26,6 +27,11 @@ type BinaryManager struct {
 	hasNVIDIA         bool
 	hasAMD            bool
 	gpuEnabled        atomic.Bool
+	prepareMu         sync.Mutex
+	readinessMu       sync.Mutex
+	readiness         RuntimeReadiness
+	readyPath         string       // protected by readinessMu
+	downloadClient    *http.Client // nil uses the bounded production client
 }
 
 func NewBinaryManager(binDir string) *BinaryManager {
@@ -61,7 +67,11 @@ func (bm *BinaryManager) HasGPU() bool { return bm.hasNVIDIA || bm.hasAMD }
 
 // SetGPUEnabled applies the effective configuration, including values loaded
 // from a configuration file. The environment is only a constructor default.
-func (bm *BinaryManager) SetGPUEnabled(enabled bool) { bm.gpuEnabled.Store(enabled) }
+func (bm *BinaryManager) SetGPUEnabled(enabled bool) {
+	if bm.gpuEnabled.Swap(enabled) != enabled {
+		bm.updateReadiness(func(state *RuntimeReadiness) { *state = RuntimeReadiness{}; bm.readyPath = "" })
+	}
+}
 
 func (bm *BinaryManager) GPUType() string {
 	if bm.hasNVIDIA {
@@ -104,38 +114,44 @@ func regularFile(path string) bool {
 // installed GPU runtime; a cached CPU fallback must not shadow that runtime.
 // CPU/no-device requests retain the checksum-pinned portable fallback.
 func (bm *BinaryManager) GetLlamaServer() (string, error) {
+	return bm.prepareRuntime(context.Background(), false)
+}
+
+func (bm *BinaryManager) resolveLlamaServer(ctx context.Context) (string, error) {
+	supports := func(path string) bool { return llamaServerSupportsRequiredFlagsContext(ctx, path) }
+	device := func(path, kind string) bool { return llamaServerHasGPUDeviceContext(ctx, path, kind) }
 	if path := strings.TrimSpace(os.Getenv("OFFGRID_LLAMA_SERVER_PATH")); path != "" {
 		if !regularFile(path) {
 			return "", fmt.Errorf("OFFGRID_LLAMA_SERVER_PATH does not point to a regular file: %s", path)
 		}
-		if bm.gpuRequested() && !llamaServerHasGPUDevice(path, bm.GPUType()) {
+		if bm.gpuRequested() && !device(path, bm.GPUType()) {
 			return "", fmt.Errorf("explicit llama-server has no available %s device; supply a compatible GPU runtime or disable OFFGRID_ENABLE_GPU for CPU operation", bm.GPUType())
 		}
 		return path, nil
 	}
 	if bm.gpuRequested() {
-		if path := bm.installedGPURuntime(llamaServerSupportsRequiredFlags, llamaServerHasGPUDevice); path != "" {
+		if path := bm.installedGPURuntime(supports, device); path != "" {
 			return path, nil
 		}
 		return "", fmt.Errorf("no compatible GPU llama-server found; set OFFGRID_LLAMA_SERVER_PATH to a GPU build, use the OffGrid GPU container, or disable OFFGRID_ENABLE_GPU for CPU operation")
 	}
 	if path := bm.versionedPath(); regularFile(path) {
-		if llamaServerSupportsRequiredFlags(path) {
+		if supports(path) {
 			return path, nil
 		}
 		return "", fmt.Errorf("existing llama-server at %s lacks required flags; remove that specific runtime directory and retry", path)
 	}
-	if path := bm.localPath(); regularFile(path) && llamaServerSupportsRequiredFlags(path) {
+	if path := bm.localPath(); regularFile(path) && supports(path) {
 		return path, nil
 	}
-	if path := bm.packagedPath(); regularFile(path) && llamaServerSupportsRequiredFlags(path) {
+	if path := bm.packagedPath(); regularFile(path) && supports(path) {
 		return path, nil
 	}
-	if path, err := exec.LookPath("llama-server"); err == nil && llamaServerSupportsRequiredFlags(path) {
+	if path, err := exec.LookPath("llama-server"); err == nil && supports(path) {
 		return path, nil
 	}
 	path := bm.versionedPath()
-	if err := bm.downloadBinary(path); err != nil {
+	if err := bm.downloadBinaryContext(ctx, path); err != nil {
 		return "", fmt.Errorf("download llama-server: %w", err)
 	}
 	return path, nil
@@ -159,7 +175,11 @@ func (bm *BinaryManager) installedGPURuntime(compatible func(string) bool, devic
 }
 
 func llamaServerHasGPUDevice(path, gpuType string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	return llamaServerHasGPUDeviceContext(context.Background(), path, gpuType)
+}
+
+func llamaServerHasGPUDeviceContext(parent context.Context, path, gpuType string) bool {
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, path, "--list-devices")
 	configureBackgroundProcess(command)
@@ -210,14 +230,24 @@ func llamaDeviceListHasGPU(output, gpuType string) bool {
 }
 
 func llamaServerSupportsRequiredFlags(binaryPath string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	return llamaServerSupportsRequiredFlagsContext(context.Background(), binaryPath)
+}
+
+func llamaServerSupportsRequiredFlagsContext(parent context.Context, binaryPath string) bool {
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
-	output, _ := exec.CommandContext(ctx, binaryPath, "--help").CombinedOutput()
+	command := exec.CommandContext(ctx, binaryPath, "--help")
+	configureBackgroundProcess(command)
+	output, err := command.CombinedOutput()
 	text := string(output)
-	return ctx.Err() == nil && strings.Contains(text, "--jinja") && strings.Contains(text, "--fit-ctx") && strings.Contains(text, "--cache-type-k")
+	return err == nil && ctx.Err() == nil && strings.Contains(text, "--jinja") && strings.Contains(text, "--fit-ctx") && strings.Contains(text, "--cache-type-k")
 }
 
 func (bm *BinaryManager) downloadBinary(destPath string) error {
+	return bm.downloadBinaryContext(context.Background(), destPath)
+}
+
+func (bm *BinaryManager) downloadBinaryContext(ctx context.Context, destPath string) error {
 	if err := os.MkdirAll(bm.binDir, 0o755); err != nil {
 		return err
 	}
@@ -232,8 +262,17 @@ func (bm *BinaryManager) downloadBinary(destPath string) error {
 		return err
 	}
 	defer os.Remove(file.Name())
-	client := &http.Client{Timeout: 5 * time.Minute}
-	response, err := client.Get(assetURL)
+	client := bm.downloadClient
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Minute}
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, assetURL, nil)
+	if err != nil {
+		file.Close()
+		return err
+	}
+	bm.updateReadiness(func(state *RuntimeReadiness) { state.State = "downloading" })
+	response, err := client.Do(request)
 	if err != nil {
 		file.Close()
 		return err
@@ -248,8 +287,13 @@ func (bm *BinaryManager) downloadBinary(destPath string) error {
 		file.Close()
 		return fmt.Errorf("release archive exceeds %d bytes", maxArchive)
 	}
+	bm.updateReadiness(func(state *RuntimeReadiness) {
+		if response.ContentLength > 0 {
+			state.DownloadBytes = response.ContentLength
+		}
+	})
 	hash := sha256.New()
-	written, copyErr := io.Copy(io.MultiWriter(file, hash), io.LimitReader(response.Body, maxArchive+1))
+	written, copyErr := io.Copy(io.MultiWriter(file, hash, runtimeProgress{bm}), io.LimitReader(response.Body, maxArchive+1))
 	closeErr := file.Close()
 	if copyErr != nil {
 		return copyErr
@@ -263,6 +307,10 @@ func (bm *BinaryManager) downloadBinary(destPath string) error {
 	if actual := hex.EncodeToString(hash.Sum(nil)); actual != digest {
 		return fmt.Errorf("release archive SHA-256 mismatch: got %s", actual)
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	bm.updateReadiness(func(state *RuntimeReadiness) { state.State = "installing" })
 	stage, err := os.MkdirTemp(bm.binDir, ".llama-stage-*")
 	if err != nil {
 		return err
@@ -274,8 +322,11 @@ func (bm *BinaryManager) downloadBinary(destPath string) error {
 	if !regularFile(filepath.Join(stage, llamaServerBinaryName())) {
 		return fmt.Errorf("verified release archive contains no %s", llamaServerBinaryName())
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := os.Rename(stage, filepath.Dir(destPath)); err != nil {
-		if llamaServerSupportsRequiredFlags(destPath) {
+		if llamaServerSupportsRequiredFlagsContext(ctx, destPath) {
 			// Another OffGrid process completed the same pinned install first.
 			return nil
 		}

@@ -22,6 +22,7 @@ func (s *Server) buildRouter() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v2/system", s.handleSystemIdentity)
 	mux.HandleFunc("/api/v2/work/search", s.handleWorkSearch)
+	mux.HandleFunc("/api/v2/runtime", s.handleRuntimePreparation)
 	adminOnly := func(handler http.HandlerFunc) http.HandlerFunc {
 		return s.requirePermissionWhenAuthEnabled(users.PermissionAdmin, handler)
 	}
