@@ -318,3 +318,16 @@ See tasks.md: runtime API verification, artifact trust and preview identity, ful
   no repository variables. Windows/macOS signing and notarization credentials
   remain unavailable. The latest published version is still 0.4.28. The exact
   committed source must pass remote CI before a release can be qualified.
+
+### First exact-source CI attempt
+
+Run `43090219230` on `c27df6d05cfa2b12a6f4d07f1a6ce6e58f69cf25`
+passed pinned parser/OCR builds, the offline document corpus, Python checks on
+Windows/Linux and PDF-worker checks on Windows/macOS/Linux. The native macOS
+desktop unit step failed because the new translation tests import TypeScript
+before that job installed the renderer's dependencies. The workflow now runs
+its existing locked renderer dependency install before those tests, removing
+the duplicate install from the later renderer build. Local desktop checks
+passed again (202 passed, one platform skip). This changes CI ordering only;
+it does not change the installed application's behavior. The corrected revision
+requires a new full CI run; the first run is not qualifying evidence.

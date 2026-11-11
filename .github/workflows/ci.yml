@@ -423,7 +423,10 @@ jobs:
         run: go test -p 1 -v -timeout 90s ./internal/computer ./cmd/offgrid-computer -run TestNative -count=1
       - name: Test desktop compatibility and IPC trust policy
         working-directory: apps/desktop
-        run: npm test
+        run: |
+          # Translation contract tests parse the shared renderer with TypeScript.
+          npm ci --prefix ../web
+          npm test
 
       - name: Test isolated PowerShell command context
         if: runner.os == 'Windows'
@@ -446,7 +449,6 @@ jobs:
         shell: bash
         run: |
           cd apps/web
-          npm ci
           npm run build
           cd ../..
           version=$(node -p "require('./apps/desktop/package.json').version")
