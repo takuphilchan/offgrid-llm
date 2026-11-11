@@ -4,16 +4,23 @@ The Windows, macOS, and Linux desktop packages use the same startup controller
 and the same product UI. Installation and operating-system trust are separate
 from connecting to an OffGrid service.
 
-**Normal desktop installations are native and self-contained:** Windows uses
+**Normal desktop installations include a native OffGrid service:** Windows uses
 the bundled Windows service, macOS its bundled macOS service, and Linux its Linux
 service. Ubuntu, WSL and Docker are not desktop prerequisites. They apply only
 when you deliberately connect to a separately managed service running there.
 
-The updated native desktop also packages Whisper/Piper speech executables and
-their dependencies. Speech model weights are separate, explicit downloads.
+The native desktop packages Whisper speech executables and their dependencies.
+Windows and Linux also bundle Piper; macOS excludes Piper because the pinned
+upstream archive lacks a required library. Speech model weights are separate,
+explicit downloads. See the [platform matrix](installation.md#platform-capabilities).
 Other speech architectures require their own supported runtime; see
 [voice setup](../guides/voice.md). A connected external service uses its own
 runtimes, not binaries installed on the desktop client's machine.
+
+The main llama.cpp inference runtime is separate from the bundled OffGrid service.
+When no suitable runtime is installed, first inference downloads a pinned CPU/Metal
+runtime. Prepare it and verify a real model response before disconnecting from
+the network. Windows CUDA is not automatically installed by that fallback.
 
 The native inference worker must also have its platform dependencies. Windows
 runtime bundles keep the required Microsoft C++ and OpenMP DLLs beside

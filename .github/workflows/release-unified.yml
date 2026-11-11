@@ -671,6 +671,16 @@ jobs:
           AUDIO_DIR="$HOME/.offgrid-llm/audio"
           
           echo "Installing OffGrid..."
+
+          for name in offgrid llama-server; do
+            status=0
+            pgrep -x "$name" >/dev/null || status=$?
+            if [ "$status" -eq 0 ]; then
+              echo "$name is running. Finish active work and close its owning service normally, then retry." >&2
+              exit 1
+            fi
+            [ "$status" -eq 1 ] || { echo 'Unable to inspect running processes' >&2; exit 1; }
+          done
           
           # Install main binaries
           sudo cp "$SCRIPT_DIR/offgrid" /usr/local/bin/offgrid
@@ -680,6 +690,14 @@ jobs:
           sudo cp "$SCRIPT_DIR/ocr-NOTICE.txt" /usr/local/bin/ocr-NOTICE.txt
           sudo cp "$SCRIPT_DIR/llama-server" /usr/local/bin/llama-server
           sudo chmod +x /usr/local/bin/offgrid /usr/local/bin/llama-server /usr/local/bin/offgrid-document-worker /usr/local/bin/offgrid-ocr-worker
+
+          # Preserve executable-relative payloads for current runtime discovery.
+          for payload in execution-runtime audio web; do
+            if [ -d "$SCRIPT_DIR/$payload" ]; then
+              sudo mkdir -p "/usr/local/bin/$payload"
+              sudo cp -R "$SCRIPT_DIR/$payload/." "/usr/local/bin/$payload/"
+            fi
+          done
           
           # Install audio components
           echo "Installing audio components..."

@@ -9,7 +9,8 @@ cleanup() {
         "$fixture_dir/install.sh" "$fixture_dir/scripts/install.sh" \
         "$fixture_dir/attempts.txt" "$fixture_dir/commands.txt" \
         "$fixture_dir/offgrid-unit.txt" \
-        "$fixture_dir/checksums.sha256" "$fixture_dir/offgrid"
+        "$fixture_dir/checksums.sha256" "$fixture_dir/offgrid" \
+        "$fixture_dir/bundle.tar.gz" "$fixture_dir/release-checksums.sha256"
     rmdir "$fixture_dir/scripts" 2>/dev/null || true
     rmdir "$fixture_dir"
 }
@@ -71,12 +72,26 @@ fi
 unset -f uname
 download_with_progress() {
     printf '%s\n' "$1" >> "$fixture_dir/attempts.txt"
+    if [[ "$1" == *checksums-v0.test.sha256 ]]; then
+        [ "${fixture_manifest:-valid}" != unavailable ] || return 1
+        local digest
+        digest=$(sha256sum "$fixture_dir/bundle.tar.gz"); digest=${digest%% *}
+        case "${fixture_manifest:-valid}" in
+            corrupt) digest=$(printf '%064d' 0) ;;
+            missing) printf '%s  other.tar.gz\n' "$digest" > "$2"; return 0 ;;
+        esac
+        printf '%s  %s\n' "$digest" "$fixture_asset" > "$2"
+        if [ "${fixture_manifest:-valid}" = duplicate ]; then printf '%s  %s\n' "$digest" "$fixture_asset" >> "$2"; fi
+        return 0
+    fi
     case "$1" in
         *-vulkan-avx512.tar.gz) [ "$download_case" = "gpu" ] ;;
         *-cpu-avx512.tar.gz) [ "$download_case" = "cpu" ] ;;
         *-cpu-avx2.tar.gz) [ "$download_case" = "avx2" ] ;;
         *) return 1 ;;
-    esac
+    esac || return 1
+    printf 'archive fixture\n' > "$2"
+    fixture_asset=${1##*/}
 }
 tar() { [ "${fixture_fail_tar:-no}" != 'yes' ]; }
 
@@ -107,7 +122,7 @@ done
 download_case=cpu
 result="$(download_cli_bundle linux amd64 v0.test avx512 "$fixture_dir")"
 [ "$result" = 'offgrid-v0.test-linux-amd64-cpu-avx512' ]
-[ "$(wc -l < "$fixture_dir/attempts.txt")" -eq 1 ]
+[ "$(wc -l < "$fixture_dir/attempts.txt")" -eq 2 ]
 grep -q 'offgrid-v0.test-linux-amd64-cpu-avx512.tar.gz' "$fixture_dir/attempts.txt"
 fixture_fail_tar=yes
 if download_cli_bundle linux amd64 v0.test avx512 "$fixture_dir" cpu >/dev/null 2>&1; then
@@ -115,6 +130,26 @@ if download_cli_bundle linux amd64 v0.test avx512 "$fixture_dir" cpu >/dev/null 
     exit 1
 fi
 fixture_fail_tar=no
+
+# Verification failure must prevent extraction, including in command substitution.
+for fixture_manifest in corrupt missing duplicate unavailable; do
+    tar(){ printf 'UNSAFE extraction\n' >&2; return 99; }
+    if download_cli_bundle linux amd64 v0.test avx512 "$fixture_dir" cpu > "$fixture_dir/local.txt" 2> "$fixture_dir/stream.txt"; then
+        printf 'invalid manifest accepted: %s\n' "$fixture_manifest" >&2; exit 1
+    fi
+    if grep -q 'UNSAFE' "$fixture_dir/stream.txt"; then cat "$fixture_dir/stream.txt" >&2; exit 1; fi
+done
+fixture_manifest=valid
+unset -f tar
+
+for process_status in 0 2 127; do
+    pgrep(){ return "$process_status"; }
+    if stop_running_processes >/dev/null 2>&1; then printf 'unsafe process state accepted\n' >&2; exit 1; fi
+done
+pgrep(){ return 1; }
+stop_running_processes
+unset -f pgrep
+if grep -Eq 'pkill|systemctl stop' "$repo_root/install.sh"; then printf 'process termination remains\n' >&2; exit 1; fi
 
 LEGACY_INSTALL=yes
 printf 'fixture binary\n' > "$fixture_dir/offgrid"

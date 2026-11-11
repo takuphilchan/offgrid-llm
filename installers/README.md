@@ -1,189 +1,72 @@
-# OffGrid - Installation Scripts
+﻿# OffGrid installers
 
-> **Note:** The recommended way to install OffGrid is using the unified installer at the repository root. These individual scripts are kept for legacy compatibility.
+For a personal computer, use the **Windows Setup, macOS ZIP, or Linux desktop
+package** in the [installation guide](../docs/setup/installation.md#download-and-verify-a-release).
+Desktop includes the OffGrid service; Go, Node, Docker and WSL are not required.
+Models and the main inference runtime may still require separate downloads.
+See the [platform matrix](../docs/setup/installation.md#platform-capabilities)
+before planning GPU, speech, terminal, or offline workflows.
 
----
+## Optional script workflows
 
-## Unified Installer (Recommended)
+Download and inspect a script before running it. These are advanced alternatives
+to the desktop package, not a prerequisite for using OffGrid.
 
-**One command installs everything:**
+- [`desktop.ps1`](desktop.ps1) offers CLI and/or desktop installation on Windows.
+  The CLI installs the entire release payload. Without elevation it uses
+  `%LOCALAPPDATA%\Programs\OffGrid CLI` and user PATH; with elevation it uses
+  `%ProgramFiles%\OffGrid` and machine PATH. Restart terminals after installation.
+  CLI replacement refuses running OffGrid/inference processes. Finish active
+  work and close their owning service before retrying.
+  Current builds discover the bundled CLI web UI automatically; older releases
+  need `OFFGRID_UI_DIR` as described in [CLI setup](../docs/setup/installation.md#install-the-cli).
+- [`desktop.sh`](desktop.sh) offers CLI and/or desktop installation on Linux/macOS.
+  CLI installation writes to `/usr/local/bin` and may require sudo. It refuses
+  replacement while OffGrid is running: finish active work and close the owning
+  service normally, then retry. It never stops running OffGrid processes.
+- Both desktop scripts download the same release's `checksums-vX.Y.Z.sha256`
+  and verify each payload before extraction or execution. Missing, ambiguous,
+  or mismatched checksums stop installation. Releases without a manifest are
+  not accepted. Checksums detect corruption; they do not establish publisher
+  identity. See [OS trust guidance](../docs/setup/desktop-startup.md#installer-appearance-and-os-warnings).
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
-```
+Example after saving and inspecting the script:
 
-The root installer selects a platform release bundle, installs the CLI and
-included Web UI/audio assets, and offers the matching desktop build when one
-is published. It does not currently present a component-selection menu.
-
-To select a published release and opt into the Linux user service:
-```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | VERSION=v0.4.19 AUTOSTART=yes bash
-```
-
-The previously published `scripts/install.sh` raw URL remains a compatibility
-wrapper. It preserves its GPU bundle selection and `AUTOSTART=ask` default.
-The root installer has no systemd side effect unless `AUTOSTART` is selected.
-Repository unit sources are under [`systemd/`](systemd/); the installer retains
-the installed `offgrid@.service` name.
-
----
-
-## Legacy Scripts
-
-### Desktop Application (Linux / macOS)
-```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.sh | bash
-```
-
-### Windows (PowerShell as Administrator)
 ```powershell
-irm https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/installers/desktop.ps1 | iex
+powershell -NoProfile -File .\desktop.ps1
 ```
-
----
-
-## What Gets Installed
-
-### CLI Installation
-- Pre-built `offgrid` binary (~10MB)
-- Auto-detection of GPU support
-- PATH configuration for instant use
-- Auto-start service on Linux (systemd - optional)
-
-### Desktop Installation  
-- Desktop application with UI
-- System tray integration
-- Bundled CLI binary
-- Automatic server management
-- Models stored in `~/.offgrid-llm/`
-
-**Installation time:** ~1 minute for CLI, ~2-3 minutes for Desktop
-
----
-
-## Production Install
-
-**For servers with auto-start on boot:**
-
-See [the source-build guide](../docs/advanced/BUILDING.md) and the explicit
-[`install-from-source.sh`](../scripts/build/install-from-source.sh) helper for
-the older source/GPU/systemd path. It installs and changes system services;
-the root release installer is the maintained default.
-
----
-
-## System Requirements
-
-### Minimum
-
-- **OS**: Linux (Ubuntu 20.04+) / macOS 11+ / Windows 10+
-- **RAM**: 4GB
-- **Storage**: 500MB + models
-
-### GPU Acceleration
-
-#### Linux
-```bash
-# NVIDIA (Vulkan)
-sudo apt-get install vulkan-tools libvulkan1
-
-# AMD
-sudo apt-get install mesa-vulkan-drivers vulkan-tools
-```
-
-#### Windows
-Install [CUDA Toolkit 12.4+](https://developer.nvidia.com/cuda-downloads)
-
-#### macOS
-- **Apple Silicon**: Metal built-in [Done]
-- **Intel Mac**: CPU-only
-
----
-
-## Post-Installation
-
-### Verify Installation
 
 ```bash
-offgrid --version
+bash ./desktop.sh
 ```
 
-### Download Your First Model
+The separate root [`install.sh`](../install.sh) is the maintained Unix release
+installer for CLI/service users. It selects a platform bundle; systemd autostart
+is opt-in through `AUTOSTART`. The published [`scripts/install.sh`](../scripts/install.sh)
+URL remains a compatibility wrapper with its legacy GPU selection and
+`AUTOSTART=ask` default. Installed unit identity remains `offgrid@.service`;
+unit sources are under [`systemd/`](systemd/).
 
-```bash
-# Search for models
-offgrid search llama --limit 5
+The root and compatibility entry points now require release archive verification
+before extraction, including after a CPU/GPU fallback. Missing release manifests
+stop installation. They refuse replacement while `offgrid` or `llama-server`
+is running, or process inspection fails; close the owning service normally and
+retry. They do not terminate processes or stop an existing systemd service.
 
-# Download from HuggingFace
-offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF \
-  --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
-```
+For the older source/GPU/systemd path, see the
+[source-build guide](../docs/advanced/BUILDING.md) and
+[`install-from-source.sh`](../scripts/build/install-from-source.sh). That helper
+builds dependencies and changes system services.
 
-### Start Using
+## After installation
 
-```bash
-# Interactive chat
-offgrid run Llama-3.2-3B-Instruct-Q4_K_M
+Open desktop, or start `offgrid serve` and visit <http://127.0.0.1:11611/ui/>.
+Follow the [quickstart](../docs/setup/quickstart.md) to install a model and verify
+an actual reply. A successful installer exit does not confirm inference or GPU
+readiness. Windows CPU bundles do not become CUDA-enabled by installing a toolkit.
 
-# Or access Web UI
-open http://localhost:11611/ui
-```
-
----
-
-## Troubleshooting
-
-### Command not found
-
-```bash
-# Linux/macOS - reload shell
-source ~/.bashrc  # or ~/.zshrc
-
-# Or specify full path
-/usr/local/bin/offgrid --version
-```
-
-### Permission denied
-
-```bash
-# Make binary executable
-chmod +x /usr/local/bin/offgrid
-```
-
-### GPU not detected
-
-```bash
-# Check GPU support
-offgrid info
-
-# Reinstall with GPU libraries
-sudo apt-get install vulkan-tools libvulkan1  # Linux
-```
-
----
-
-## Uninstall
-
-```bash
-# Remove binary
-sudo rm /usr/local/bin/offgrid
-
-# Remove systemd service (Linux only)
-sudo systemctl stop llama-server@$USER.service
-sudo systemctl disable llama-server@$USER.service
-sudo rm /etc/systemd/system/llama-server@.service
-sudo rm /usr/local/bin/llama-server-start.sh
-
-# Remove models and data (optional)
-rm -rf ~/.offgrid-llm
-```
-
----
-
-## Next Steps
-
--  [Documentation](../docs/README.md)
--  [Quick Start Guide](../README.md#quick-start)
--  [CLI Reference](../docs/reference/cli.md)
--  [API Documentation](../docs/reference/api.md)
+Updates are manual; follow the [upgrade guide](../docs/setup/installation.md#update-an-existing-installation).
+To uninstall, remove only the identified application using its OS uninstaller
+or remove its extracted application directory after quitting it. Preserve
+`~/.offgrid-llm`, model/data roots and backups. Do not delete workspaces or stop
+unrelated services as routine uninstall or repair steps.

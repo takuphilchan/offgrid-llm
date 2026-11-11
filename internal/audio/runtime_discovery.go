@@ -22,12 +22,17 @@ func packagedSpeechExecutable(adapter string, names []string) string {
 }
 
 func speechExecutableBeside(executable, adapter string, names []string) string {
-	root := filepath.Join(filepath.Dir(filepath.Dir(executable)), "speech-runtime", adapter)
-	for _, name := range names {
-		candidate := filepath.Join(root, name)
-		info, err := os.Lstat(candidate)
-		if err == nil && info.Mode().IsRegular() {
-			return candidate
+	roots := []string{
+		filepath.Join(filepath.Dir(filepath.Dir(executable)), "speech-runtime", adapter),
+		filepath.Join(filepath.Dir(executable), "audio", adapter),
+	}
+	for _, root := range roots {
+		for _, name := range names {
+			candidate := filepath.Join(root, name)
+			info, err := os.Lstat(candidate)
+			if err == nil && info.Mode().IsRegular() {
+				return candidate
+			}
 		}
 	}
 	return ""

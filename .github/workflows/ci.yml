@@ -247,6 +247,7 @@ jobs:
         run: |
           bash scripts/maintenance/test-installer-entrypoints.sh
           bash scripts/maintenance/test-executor-install.sh
+          node --test scripts/maintenance/desktop-installers.test.mjs
 
       - name: Test Go packages
         run: go test ./...
@@ -419,6 +420,10 @@ jobs:
       - name: Test isolated PowerShell command context
         if: runner.os == 'Windows'
         run: node scripts/test/test-terminal-command-windows.cjs --isolated-native-test
+
+      - name: Test alternative installers with disposable files
+        if: runner.os == 'Windows'
+        run: node --test scripts/maintenance/desktop-installers.test.mjs
 
       - name: Retrieve verified OCR build assets
         uses: actions/download-artifact@v7

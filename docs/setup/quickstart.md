@@ -8,7 +8,7 @@ For a personal computer, use the desktop package from the [release page](https:/
 
 Docker users should follow the [Docker quickstart](docker.md#quick-start). Developers should follow [building from source](../advanced/BUILDING.md). A packaged desktop app does not require you to install Go, Node.js, or Docker.
 
-Do not start another service if you already have a workspace. Desktop can connect to a matching local service at `http://127.0.0.1:11611`; its version and UI build must match. Follow [desktop recovery](desktop-startup.md) if they differ, rather than creating a new workspace just to dismiss the message.
+Do not start another service if you already have a workspace. Desktop can connect to a compatible local service at `http://127.0.0.1:11611`; external release numbers can differ when their API and desktop bridge contracts are supported. The bundled service must match its desktop package. Follow [desktop recovery](desktop-startup.md) if compatibility checks fail, rather than creating a new workspace just to dismiss the message.
 
 ## Download a chat model
 
@@ -17,7 +17,7 @@ Do not start another service if you already have a workspace. Desktop can connec
 3. Download it and wait for the installed state. Use **Find more models** if it is not in the catalog.
 4. Open **Chat**, select the installed model, and ask: "Give me three ways to organize my work this week."
 
-A successful reply confirms text generation on this installation. It does not qualify tool calling, retrieval, vision, or computer control. First inference can take longer while the runtime loads the model.
+A successful reply confirms text generation on this installation. It does not qualify tool calling, retrieval, vision, or computer control. Desktop bundles the OffGrid service, but generally downloads a separate checksum-pinned CPU/Metal inference runtime on first inference when none is available. This needs network access in addition to the model download. Wait for an actual reply before treating setup as ready.
 
 For offline use, install the necessary model and runtime before disconnecting. Test the actual workflow with networking disabled; search, downloads, remote tools, and external websites will not work offline.
 
@@ -58,7 +58,7 @@ docker exec -it offgrid offgrid run YOUR_INSTALLED_MODEL_ID
 
 | What you see | What to do |
 | --- | --- |
-| Desktop and service versions differ | Update the existing service and desktop to matching builds, then retry. Desktop installation alone does not update Docker. |
+| Desktop reports an incompatible service | Follow the compatibility explanation and update the affected component, then retry. Different external release numbers alone are allowed; desktop installation does not update Docker. |
 | No models | Check the connected workspace before downloading again. |
 | Model loading fails or memory runs out | Try a smaller model or shorter context. File size is not total memory use. |
 | Access needed | Review the target in desktop, or stop the task if you do not want to grant access. |

@@ -20,18 +20,23 @@ import (
 // checksum-pinned CPU/Metal release; GPU builds must be supplied explicitly or
 // obtained from the OffGrid GPU container.
 type BinaryManager struct {
-	version    string
-	binDir     string
-	hasNVIDIA  bool
-	hasAMD     bool
-	gpuEnabled atomic.Bool
+	version           string
+	binDir            string
+	serviceExecutable string
+	hasNVIDIA         bool
+	hasAMD            bool
+	gpuEnabled        atomic.Bool
 }
 
 func NewBinaryManager(binDir string) *BinaryManager {
 	if configured := strings.TrimSpace(os.Getenv("OFFGRID_BIN_DIR")); configured != "" {
 		binDir = configured
 	}
-	bm := &BinaryManager{version: "b10516", binDir: binDir}
+	executable, _ := os.Executable()
+	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
+		executable = resolved
+	}
+	bm := &BinaryManager{version: "b10516", binDir: binDir, serviceExecutable: executable}
 	bm.SetGPUEnabled(strings.EqualFold(os.Getenv("OFFGRID_ENABLE_GPU"), "true"))
 	bm.detectGPU()
 	return bm
@@ -83,6 +88,13 @@ func (bm *BinaryManager) localPath() string {
 	return filepath.Join(bm.binDir, llamaServerBinaryName())
 }
 
+func (bm *BinaryManager) packagedPath() string {
+	if bm.serviceExecutable == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(bm.serviceExecutable), llamaServerBinaryName())
+}
+
 func regularFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular()
@@ -116,6 +128,9 @@ func (bm *BinaryManager) GetLlamaServer() (string, error) {
 	if path := bm.localPath(); regularFile(path) && llamaServerSupportsRequiredFlags(path) {
 		return path, nil
 	}
+	if path := bm.packagedPath(); regularFile(path) && llamaServerSupportsRequiredFlags(path) {
+		return path, nil
+	}
 	if path, err := exec.LookPath("llama-server"); err == nil && llamaServerSupportsRequiredFlags(path) {
 		return path, nil
 	}
@@ -131,7 +146,7 @@ func (bm *BinaryManager) gpuRequested() bool {
 }
 
 func (bm *BinaryManager) installedGPURuntime(compatible func(string) bool, device func(string, string) bool) string {
-	candidates := []string{bm.localPath(), bm.versionedPath()}
+	candidates := []string{bm.localPath(), bm.packagedPath(), bm.versionedPath()}
 	if path, err := exec.LookPath("llama-server"); err == nil {
 		candidates = append(candidates, path)
 	}
@@ -303,7 +318,7 @@ func (bm *BinaryManager) getDownloadURL() (string, error) {
 func (bm *BinaryManager) GetVersion() string { return bm.version }
 
 func (bm *BinaryManager) IsInstalled() bool {
-	return regularFile(bm.versionedPath()) || regularFile(bm.localPath())
+	return regularFile(bm.versionedPath()) || regularFile(bm.localPath()) || regularFile(bm.packagedPath())
 }
 
 func (bm *BinaryManager) GetInstalledPath() string {
@@ -311,6 +326,9 @@ func (bm *BinaryManager) GetInstalledPath() string {
 		return path
 	}
 	if path := bm.localPath(); regularFile(path) {
+		return path
+	}
+	if path := bm.packagedPath(); regularFile(path) {
 		return path
 	}
 	if path, err := exec.LookPath("llama-server"); err == nil {

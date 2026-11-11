@@ -49,3 +49,23 @@ func TestSpeechRuntimeStatusDoesNotRequireLegacyModelFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestCLISpeechPayloadBesideService(t *testing.T) {
+	root := t.TempDir()
+	for _, adapter := range []string{"whisper", "piper"} {
+		dir := filepath.Join(root, "audio", adapter)
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		file := filepath.Join(dir, "worker.exe")
+		if err := os.WriteFile(file, []byte("fixture"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if got := speechExecutableBeside(filepath.Join(root, "offgrid.exe"), adapter, []string{"worker.exe"}); got != file {
+			t.Fatalf("CLI payload not found: %q", got)
+		}
+		if got := speechExecutableBeside(filepath.Join(root, "another", "offgrid.exe"), adapter, []string{"worker.exe"}); got != "" {
+			t.Fatalf("cross-install payload found: %q", got)
+		}
+	}
+}
