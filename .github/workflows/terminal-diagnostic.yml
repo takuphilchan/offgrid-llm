@@ -16,3 +16,5 @@ jobs:
       - run: npm ci --prefix apps/desktop --ignore-scripts --no-audit --no-fund
       - name: Verify command context with canonical temporary paths
         run: node scripts/test/test-terminal-command-windows.cjs --isolated-native-test
+      - name: Verify installer fixtures under hosted PowerShell
+        run: node --test scripts/maintenance/desktop-installers.test.mjs
