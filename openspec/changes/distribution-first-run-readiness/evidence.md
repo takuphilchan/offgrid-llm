@@ -501,3 +501,44 @@ tag is retained unchanged. Version 0.4.30 will be released from `main` after
 its own source checks and artifact checks. Local Docker is unavailable, so the
 new container-context builds must run on the hosted Linux runner; a normal
 workspace web build alone is not Docker verification.
+
+### 0.4.30 qualification and documentation captures
+
+The immutable 0.4.30 application source is
+`9d33af62035f63382294dc983d9461054a1d4c4c`, on `main` and tagged `v0.4.30`.
+CI run `43164496473`, attempt 1, passed 13 jobs, including both production
+Docker renderer contexts, Windows installer lifecycle and both macOS hosts.
+The Linux job passed 1,574 browser tests with 32 skips (20.8 minutes), plus
+six speech-acquisition tests and one restart test, but the runner cancelled the
+job at its 30-minute limit. The GitHub check annotation explicitly reports
+`The job has exceeded the maximum execution time of 30m0s`. Later Linux desktop
+and native-control checks did not run. This is incomplete release qualification;
+passing browser tests alone do not satisfy task 5.1. Attempt 2 retries the
+incomplete job against the unchanged source.
+
+The next main revision raises only this combined Linux job's outer timeout
+from 30 to 45 minutes. The observed 20.8-minute browser run followed about eight
+minutes of setup/Go/race work, leaving insufficient time for speech, native
+controls and desktop packaging. Test commands, assertions and per-test
+deadlines remain unchanged. This workflow adjustment does not retroactively
+qualify the tagged 0.4.30 source or replace its pending complete CI result.
+
+The release gate in manual unsigned-preview run `43166620275` refused that
+incomplete CI result. No 0.4.30 draft or public release was created by that run.
+After exact-source CI passes, a fresh publication attempt is still required.
+
+The user's separate visual-documentation request was completed on `main` in
+`7241a520` and `0987aa92`: eight current UI screenshots, a four-frame/16-second
+GIF, full-width model/terminal README sections, and five byte-identical old
+screenshots under `docs/images/old-images/`. Web captures use synthetic public
+demonstration data; terminal captures run the actual locally packaged 0.4.30
+CLI with an isolated temporary PowerShell drive and normal command reporting.
+The optional web capture checks passed (2 tests), the full packaged terminal
+fixture passed, the GIF decoded as four 1440x900 frames, maintained-document
+validation checked 358 Markdown files with zero problems, and the source-size
+ratchet passed. Native capture evidence:
+`C:/Users/phil/AppData/Local/Temp/offgrid-desktop-theme-CnzQ5F`.
+These documentation/capture-only commits do not alter application behavior or
+the tagged release source. The documentation push explicitly skipped its own
+CI to avoid cancelling the exact-source release retry; that retry must still
+pass all required checks before publication.

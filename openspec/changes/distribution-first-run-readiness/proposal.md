@@ -16,7 +16,7 @@ The packaging audit found remaining unsafe root installer behavior, incomplete C
 The user subsequently authorized installation, commits and publication of the new version. Publisher credentials and other OS machines are external prerequisites if unavailable; their absence must remain visible, not be replaced with a claim of qualification. Publication must retain the existing release checks and source/artifact identity requirements.
 
 On 2026-11-12 the user explicitly requested release without waiting for unavailable
-credentials, superseding the earlier signed-only choice. Publish 0.4.29 through
+credentials, superseding the earlier signed-only choice. Publish the new version through
 an explicit unsigned-preview channel with truthful OS warnings, native trust
 reports, complete assets and exact-source CI. Keep signed publication as the
 default and leave signed/notarized qualification incomplete.
