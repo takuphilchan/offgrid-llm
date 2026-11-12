@@ -1,6 +1,6 @@
 # OffGrid workspace tour
 
-These screenshots show the 0.4.27 development build with isolated demonstration
+These screenshots show the 0.4.30 renderer with isolated demonstration
 data. The conversation and library entries are samples, not model-quality or
 document-ingestion benchmark results. Your installed release may look different.
 
@@ -11,6 +11,12 @@ response settings and voice controls without opening a separate setup page.
 
 ![OffGrid Chat showing a sample community workshop plan and its composer](../images/chat-workspace.png)
 
+### Dark mode
+
+The same conversation in dark mode. Choose a theme in Settings to suit your workspace.
+
+![OffGrid Chat in dark mode with the same sample workshop plan](../images/chat-dark.png)
+
 ## Knowledge
 
 Use Knowledge for documents you want to reuse across conversations. Files attached
@@ -19,16 +25,28 @@ for supported preparation paths and source limitations.
 
 ![OffGrid Knowledge showing three sample documents, source controls and search](../images/knowledge-library.png)
 
+## Agent profiles
+
+Save a model and instructions for a recurring task, then select the profile in
+Chat. Tools and context are optional; configure only the resources that task needs.
+
+![Workshop assistant profile showing its instructions, model and optional tools and context](../images/agent-profiles.png)
+
+## Animated overview
+
+This 16-second GIF cycles through four captured screens. It is a screenshot
+slideshow, not a recording of model generation or task execution. The static
+images above show the same views without animation.
+
+![Screenshot slideshow of dark Chat, Knowledge, an agent profile and light Chat](../images/workspace-tour.gif)
+
 ## Desktop terminal
 
 The Windows desktop terminal shares the main work area with Chat. Use **+** to
 open OffGrid CLI, Agent or PowerShell in a folder you choose. Leaving Agent with
 `/exit` returns to the shell; closing a tab stops its owned processes.
 
-![OffGrid's native desktop terminal displaying command help in a demonstration folder](../images/desktop-terminal.png)
-
-The terminal capture runs the actual packaged CLI. Its prompt is shortened for
-the demonstration. See [desktop terminal](../setup/desktop-terminal.md) for
+See [desktop terminal](../setup/desktop-terminal.md) for
 keyboard shortcuts, local permissions and platform availability.
 
 ## Refreshing the images
@@ -40,3 +58,15 @@ For the terminal, use the same variable and run
 from the repository root. Both write to `build/documentation-captures`.
 Inspect the images before copying selected files into `docs/images`.
 Use isolated sample state; do not publish personal conversations or credentials.
+
+To build the optional GIF from the four web captures, run from the repository root:
+
+```sh
+npm install --prefix build/documentation-tools --no-save --ignore-scripts gifenc@1.0.3 pngjs@7.0.0
+node scripts/maintenance/build-documentation-gif.cjs
+```
+
+The encoder writes `build/documentation-captures/workspace-tour.gif`; its tools
+stay outside the application dependencies. Review each frame before publishing.
+Superseded screenshots are retained in [old-images](../images/old-images/README.md)
+and are not examples of the current interface.

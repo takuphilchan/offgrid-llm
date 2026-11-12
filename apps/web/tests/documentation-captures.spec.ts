@@ -4,10 +4,18 @@ import { resolve } from 'node:path';
 import { craftFixture } from './helpers/craft-fixture';
 
 // Deliberately opt-in: real UI, synthetic public demonstration data, no inference.
-test('capture documentation workspace', async ({ page }) => {
+for (const theme of ['light', 'dark']) test(`capture documentation workspace (${theme})`, async ({ page }) => {
   test.skip(!process.env.OFFGRID_DOC_CAPTURES, 'Set OFFGRID_DOC_CAPTURES=1 to refresh documentation images.');
   await page.setViewportSize({ width: 1440, height: 900 });
-  await craftFixture(page, 'en', 'light');
+  await craftFixture(page, 'en', theme);
+  const model = 'Qwen2.5-7B-Instruct-Q4_K_M';
+  await page.route('**/v1/models', r => r.fulfill({ json: { data: [{ id: model, type: 'chat', size: 4.4 * 1024 ** 3 }] } }));
+  const profile = {
+    id: 'researcher', actor: 'local', workspace: 'craft', revision: 1, digest: 'documentation-demo',
+    settings: { name: 'Workshop assistant', model, instructions: 'Help prepare community workshops. Read approved sources, explain uncertainty, and keep activities accessible to beginners.', max_iterations: 20 },
+  };
+  await page.route('**/api/v2/agent-profiles', r => r.fulfill({ json: { profiles: [profile] } }));
+  await page.route('**/api/v2/agent-profiles/researcher/effective**', r => r.fulfill({ json: { profile, ready: true, capabilities: {}, issues: [] } }));
   const output = resolve('../../build/documentation-captures');
   mkdirSync(output, { recursive: true });
   const session = {
@@ -28,11 +36,14 @@ test('capture documentation workspace', async ({ page }) => {
   await page.locator('.history-open').first().click();
   await expect(page.getByRole('heading', { name: 'A practical one-hour workshop' })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
-  await page.screenshot({ path: resolve(output, 'chat-workspace.png'), animations: 'disabled' });
+  await page.screenshot({ path: resolve(output, theme === 'dark' ? 'chat-dark.png' : 'chat-workspace.png'), animations: 'disabled' });
+  if (theme === 'dark') return;
   await page.goto('/ui/#/knowledge');
   await expect(page.locator('.knowledge-documents article')).toHaveCount(3);
   await page.screenshot({ path: resolve(output, 'knowledge-library.png'), animations: 'disabled' });
   await page.goto('/ui/#/agents');
   await expect(page.locator('.profile-list-item')).toHaveCount(1);
+  await page.locator('.profile-list-item').click();
+  await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Workshop assistant');
   await page.screenshot({ path: resolve(output, 'agent-profiles.png'), animations: 'disabled' });
 });

@@ -5,6 +5,11 @@ and Electron desktop host. It runs GGUF models through `llama-server` and keeps
 models, conversations, knowledge indexes, users, and run history on storage you
 control.
 
+![OffGrid Chat in dark mode, showing a sample community workshop plan](docs/images/chat-dark.png)
+
+[Download OffGrid](https://github.com/takuphilchan/offgrid-llm/releases) ·
+[Quickstart](docs/setup/quickstart.md) · [Interface tour](docs/guides/interface-tour.md)
+
 The project is being hardened from a prototype into a dependable local tool.
 Core paths are tested; optional subsystems are exposed according to their
 actual readiness rather than being presented as universally available.
@@ -37,12 +42,21 @@ available on Windows x64.
 
 ## See the workspace
 
-![OffGrid Chat with a sample workshop plan](docs/images/chat-workspace.png)
+| Reuse documents in Knowledge | Configure an agent for your work |
+| --- | --- |
+| [![Knowledge with three sample documents and source selection](docs/images/knowledge-library.png)](docs/images/knowledge-library.png) | [![Workshop assistant profile with instructions and model selection](docs/images/agent-profiles.png)](docs/images/agent-profiles.png) |
 
-Chat, reusable documents and a native desktop terminal in one workspace.
-See the [illustrated tour](docs/guides/interface-tour.md) for Knowledge and terminal
-screenshots. Captures use isolated demonstration data from the 0.4.27 development
-build; they are not model benchmark results.
+<details>
+<summary>Watch the 16-second workspace tour (140 KB GIF)</summary>
+
+![Screenshot slideshow of Chat in dark mode, Knowledge, an agent profile and Chat in light mode](docs/images/workspace-tour.gif)
+
+</details>
+
+The [illustrated tour](docs/guides/interface-tour.md) includes full-size captures
+and light mode. These are real UI captures from the 0.4.30 source with isolated
+sample conversations, documents and profiles; the GIF is a screenshot slideshow,
+not an inference-speed demonstration.
 
 ## Community
 
