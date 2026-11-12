@@ -6,7 +6,14 @@ const {expect}=require('@playwright/test');
 // binding before dismissing setup, and verify that dismissal survives restart.
 export async function dismissWorkspaceSetup(page,workspace) {
   const identity=JSON.stringify(['local',workspace]);
-  await expect.poll(()=>page.evaluate(()=>localStorage.getItem('offgrid.onboarding.legacyOwner'))).toBe(identity);
+  try {
+    await expect.poll(()=>page.evaluate(()=>localStorage.getItem('offgrid.onboarding.legacyOwner')),
+      {timeout:15000,message:'Fixture workspace identity must finish loading before setup dismissal'}).toBe(identity);
+  } catch(error) {
+    console.error('Isolated setup readiness:',await page.evaluate(()=>({url:location.href,
+      readyState:document.readyState,body:document.body.innerText.slice(0,3000)})));
+    throw error;
+  }
   const key=`offgrid.onboarding.workspace:${identity}`;
   const state=await page.evaluate(key=>localStorage.getItem(key),key);
   const dialog=page.locator('dialog.onboarding');

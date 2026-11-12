@@ -454,3 +454,15 @@ against the built renderer with the real isolated service. A preceding local
 development-server run passed 29 and timed out in three large locale loops;
 the production-build run used the unchanged 30-second test deadlines and passed
 all three. No application code or test timeout was changed for this correction.
+
+Windows in run `43158106027` passed the corrected packaged browser, appearance
+and access fixtures. Its terminal fixture then reached the default five-second
+workspace-identity matcher deadline before the identity had loaded. That wait
+now uses the fixture's existing 15-second UI allowance and reports the isolated
+page state on failure. A local terminal rerun also exposed typing immediately
+after pasted output but before the next PowerShell prompt; the fixture now waits
+for the prompt before sending its following command. The complete native
+terminal check passed with both waits, including capture and child cleanup:
+`C:/Users/phil/AppData/Local/Temp/offgrid-desktop-theme-PoDOJf`.
+The startup diagnosis still requires confirmation on the hosted Windows runner;
+the longer bounded wait does not itself establish a passing release check.

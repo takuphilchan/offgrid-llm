@@ -281,6 +281,9 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).not.toContainText('PASTE_caf\u00e9_\u65e5\u672c\u8a9e');
  await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PASTE_caf\u00e9_\u65e5\u672c\u8a9e');
+ // Output can precede PowerShell's next input prompt. Do not send the following
+ // command while the previous pasted command is still finishing.
+ await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();})).toMatch(/^PS .*>$/);
  // Exercise a prompt+draft exactly one row wide. ConPTY can move the cursor
  // onto an empty next row; that is valid wrapping, not missing input.
  const draftCommand="[Console]::WriteLine(('TAB_'+'DRAFT'))";
