@@ -340,3 +340,19 @@ dependency installs now also precede native terminal tests. The isolated local
 PowerShell/ConPTY fixture passed command boundaries, Unicode, exit status,
 directory changes and owned-shell shutdown without using the installed app or
 normal workspace. These CI-order corrections still require a full passing run.
+
+The Linux job in run `43091293641` completed successfully: the full browser
+suite passed 1,574 tests with 32 skips, desktop unit tests passed 203, and
+packaged startup/recovery, AT-SPI and browser-companion checks passed. Both macOS
+native jobs passed. These results apply to that run's source, not future edits.
+
+Run `43094887913` initially failed uploading the verified OCR artifact after
+five service-response errors; the dependent jobs were skipped. Its failed jobs
+were retried only after the run was terminal. In attempt 2, Windows passed the
+dependency setup and desktop unit tests but the headless shell fixture timed
+out with a device-attributes query and no prompt. The fixture had a PTY without
+a terminal peer. It now attaches pinned `@xterm/headless` 6.0.0, matching the
+desktop xterm version, so terminal queries receive normal parser responses.
+The existing native command/Unicode/exit/directory/cleanup assertions remain
+intact and passed locally. This is a test-only dependency and harness change;
+remote Windows confirmation remains required.
