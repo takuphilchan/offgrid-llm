@@ -222,10 +222,18 @@ try {
  await expect(terminal.locator('#next')).toBeDisabled();
  await terminal.locator('#find-close').click();
  if(process.env.OFFGRID_DOC_CAPTURES){
-   await input.pressSequentially("function prompt { 'PS OffGrid Demo> ' }; Clear-Host; offgrid --help");await input.press('Enter');
-   await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS OffGrid Demo>');
-   await expect.poll(()=>terminal.evaluate(()=>{const t=tabs.get(current).term;return t.buffer.active.getLine(t.buffer.active.baseY+t.buffer.active.cursorY)?.translateToString(true)||'';})).toBe('PS OffGrid Demo> ');
+   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1280,660));
+   await input.pressSequentially("New-PSDrive -Name Demo -PSProvider FileSystem -Root (Get-Location).Path | Out-Null; Set-Location Demo:\\; Clear-Host");await input.press('Enter');
+   await expect.poll(()=>terminal.evaluate(()=>{const t=tabs.get(current).term;return t.buffer.active.getLine(t.buffer.active.baseY+t.buffer.active.cursorY)?.translateToString(true)||'';})).toBe('PS Demo:\\> ');
+   await input.pressSequentially('offgrid --help');await input.press('Enter');
+   await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText(`OffGrid ${version}`);
+   await expect.poll(()=>terminal.evaluate(()=>tabs.get(current).commands.commands.at(-1)?.finished)).toBe(true);
    await capture(terminal,join(root,'build/documentation-captures/desktop-terminal.png'));
+   await terminal.locator('#commands').click();
+   await expect(terminal.locator('#context-state')).toContainText('exit 0');
+   await capture(terminal,join(root,'build/documentation-captures/terminal-command-context.png'));
+   await terminal.keyboard.press('Escape');
+   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1280,900));
    await app.evaluate(({dialog},folder)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[folder]});},evidence);
  }
  await terminal.getByRole('button',{name:'Close OffGrid CLI',exact:true}).click();

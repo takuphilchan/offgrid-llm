@@ -42,21 +42,38 @@ available on Windows x64.
 
 ## See the workspace
 
+### Models
+
+Browse the model catalog, compare requirements and review a download before
+installing. Switch to **Installed** to choose a model already on your device.
+
+![OffGrid model discovery with Qwen3.5, SmolLM3 and Granite catalog cards](docs/images/models-discover.png)
+
+### Desktop terminal
+
+Use the bundled OffGrid CLI and PowerShell from the Windows desktop workspace.
+Terminal tabs retain their sessions when you return to Chat.
+
+![OffGrid 0.4.30 native terminal displaying CLI help in an isolated Demo drive](docs/images/desktop-terminal.png)
+
+### Knowledge and agents
+
 | Reuse documents in Knowledge | Configure an agent for your work |
 | --- | --- |
 | [![Knowledge with three sample documents and source selection](docs/images/knowledge-library.png)](docs/images/knowledge-library.png) | [![Workshop assistant profile with instructions and model selection](docs/images/agent-profiles.png)](docs/images/agent-profiles.png) |
 
 <details>
-<summary>Watch the 16-second workspace tour (140 KB GIF)</summary>
+<summary>Watch the 16-second workspace tour</summary>
 
-![Screenshot slideshow of Chat in dark mode, Knowledge, an agent profile and Chat in light mode](docs/images/workspace-tour.gif)
+![Screenshot slideshow of Chat, model discovery, Knowledge and an agent profile](docs/images/workspace-tour.gif)
 
 </details>
 
-The [illustrated tour](docs/guides/interface-tour.md) includes full-size captures
-and light mode. These are real UI captures from the 0.4.30 source with isolated
-sample conversations, documents and profiles; the GIF is a screenshot slideshow,
-not an inference-speed demonstration.
+The [illustrated tour](docs/guides/interface-tour.md) includes the installed-model
+library, terminal command details and light mode. These are real UI captures
+from the 0.4.30 source with isolated sample conversations, documents, models and
+profiles. The terminal runs the actual packaged CLI; the GIF is a screenshot
+slideshow, not an inference-speed demonstration.
 
 ## Community
 

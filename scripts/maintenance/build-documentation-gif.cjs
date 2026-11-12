@@ -9,7 +9,7 @@ const { GIFEncoder, quantize, applyPalette } = load('gifenc');
 const { PNG } = load('pngjs');
 const output = resolve(root, 'build/documentation-captures');
 const gif = GIFEncoder();
-for (const name of ['chat-dark', 'knowledge-library', 'agent-profiles', 'chat-workspace']) {
+for (const name of ['chat-dark', 'models-discover', 'knowledge-library', 'agent-profiles']) {
   const { data, width, height } = PNG.sync.read(readFileSync(resolve(output, `${name}.png`)));
   if (width !== 1440 || height !== 900) throw new Error(`Unexpected capture dimensions: ${name}`);
   const palette = quantize(data, 256);

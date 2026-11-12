@@ -9,7 +9,16 @@ for (const theme of ['light', 'dark']) test(`capture documentation workspace (${
   await page.setViewportSize({ width: 1440, height: 900 });
   await craftFixture(page, 'en', theme);
   const model = 'Qwen2.5-7B-Instruct-Q4_K_M';
-  await page.route('**/v1/models', r => r.fulfill({ json: { data: [{ id: model, type: 'chat', size: 4.4 * 1024 ** 3 }] } }));
+  await page.route('**/v1/models', r => r.fulfill({ json: { data: [
+    { id: model, type: 'chat', size: Math.round(4.4 * 1024 ** 3) },
+    { id: 'Qwen3.5-2B-Q4_K_M', type: 'chat', size: 1280835840 },
+    { id: 'SmolLM3-Q4_K_M', type: 'chat', size: 1915305312 },
+  ] } }));
+  await page.route('**/v1/catalog', r => r.fulfill({ json: { models: [
+    { id: 'qwen3.5-2b', name: 'Qwen3.5 2B', description: 'Small multilingual chat model. Bundle download includes its vision projector; image and agent readiness are checked separately.', parameters: '2B', repo: 'unsloth/Qwen3.5-2B-GGUF', file: 'Qwen3.5-2B-Q4_K_M.gguf', size_bytes: 1280835840, min_ram_gb: 6 },
+    { id: 'smollm3-3b', name: 'SmolLM3 3B', description: 'Text-only multilingual model from Hugging Face. A compact alternative for chat and writing; does not accept images.', parameters: '3B', repo: 'ggml-org/SmolLM3-3B-GGUF', file: 'SmolLM3-Q4_K_M.gguf', size_bytes: 1915305312, min_ram_gb: 6 },
+    { id: 'granite-4.1-3b', name: 'Granite 4.1 3B', description: 'IBM\'s compact text model for conversation and document tasks. Text only; tool use requires separate runtime checks.', parameters: '3B', repo: 'ibm-granite/granite-4.1-3b-GGUF', file: 'granite-4.1-3b-Q4_K_M.gguf', size_bytes: 2099501664, min_ram_gb: 6 },
+  ].map(item => ({ ...item, type: 'chat', quant: 'Q4_K_M', license: 'Apache 2.0' })) } }));
   const profile = {
     id: 'researcher', actor: 'local', workspace: 'craft', revision: 1, digest: 'documentation-demo',
     settings: { name: 'Workshop assistant', model, instructions: 'Help prepare community workshops. Read approved sources, explain uncertainty, and keep activities accessible to beginners.', max_iterations: 20 },
@@ -46,4 +55,10 @@ for (const theme of ['light', 'dark']) test(`capture documentation workspace (${
   await page.locator('.profile-list-item').click();
   await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Workshop assistant');
   await page.screenshot({ path: resolve(output, 'agent-profiles.png'), animations: 'disabled' });
+  await page.goto('/ui/#/models');
+  await expect(page.getByRole('region', { name: 'Installed', exact: true })).toContainText('Qwen');
+  await page.screenshot({ path: resolve(output, 'models-installed.png'), animations: 'disabled' });
+  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await expect(page.locator('.catalog-card')).toHaveCount(3);
+  await page.screenshot({ path: resolve(output, 'models-discover.png'), animations: 'disabled' });
 });
