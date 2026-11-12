@@ -224,6 +224,7 @@ jobs:
           node scripts/release/test-finalize-release.mjs
           node scripts/release/test-release-asset-access.mjs
           node scripts/release/test-desktop-branding.mjs
+          node scripts/release/test-desktop-release-environment.mjs
           node scripts/release/test-release-context.mjs
           node scripts/release/test-release-ci.mjs
           node --test scripts/release/verify-desktop-trust.test.mjs scripts/build/desktop-preview.test.mjs

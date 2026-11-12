@@ -1063,8 +1063,16 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ needs.release-context.outputs.channel == 'signed' && matrix.os == 'macos' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
         run: |
+          if [[ "${{ needs.release-context.outputs.channel }}" == unsigned-preview ]]; then
+            # macOS treats an empty CSC_LINK as a certificate path. Preview
+            # builds must receive no signing/notarization credentials at all.
+            unset CSC_LINK CSC_KEY_PASSWORD CSC_INSTALLER_LINK CSC_INSTALLER_KEY_PASSWORD CSC_KEYCHAIN
+            unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            unset APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER APPLE_KEYCHAIN APPLE_KEYCHAIN_PROFILE
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
           echo "Building desktop app for ${{ matrix.os }}..."
-          npm run ${{ matrix.build_script }}
+          npm run ${{ matrix.build_script }} -- --publish never
           echo "Build completed. Listing dist directory:"
         shell: bash
           

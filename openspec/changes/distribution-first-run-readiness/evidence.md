@@ -542,3 +542,35 @@ These documentation/capture-only commits do not alter application behavior or
 the tagged release source. The documentation push explicitly skipped its own
 CI to avoid cancelling the exact-source release retry; that retry must still
 pass all required checks before publication.
+
+On 2026-11-12, CI `43164496473` attempt 2 completed successfully for the same
+immutable source, with all 14 jobs passed. The Linux job completed 1,574 browser
+tests with 32 skips (17.0 minutes), six speech-acquisition tests, one restart
+test, 207 desktop tests and 75 browser-companion tests. Native Linux controls,
+packaged startup/recovery, browser attachment and appearance checks also passed.
+The entire job finished within the existing 30-minute limit; the prospective
+45-minute allowance was not used to qualify this tag. The main-branch timeout
+adjustment is commit `f05163ea`, pushed after that success.
+
+Fresh manual unsigned-preview release run `43172348254` accepted the passing
+exact-source CI, created the draft, built the renderer and started container and
+native-runtime preparation. Its automation runs from `f05163ea` while all release
+payloads use tag `v0.4.30` at `9d33af62`. Final artifact publication, public asset
+verification and the installed upgrade remain pending.
+
+That publication attempt exposed a macOS automation defect: the preview build
+received `CSC_LINK=''`. Electron Builder 26.15.3's macOS path distinguishes
+null from an empty string, then resolves the empty certificate path to the
+desktop source directory and fails with `apps/desktop not a file`. Windows
+explicitly handles the empty string and completed its package/trust checks.
+The preview build step now unsets signing and notarization variables before
+invoking Electron Builder, keeps identity auto-discovery disabled, and passes
+`--publish never` so only the maintained uploader/finalizer publishes assets.
+
+Twelve executable shell fixtures exercise the workflow's actual build body
+across macOS/Windows/Linux, signed/preview channels, and empty/nonempty dummy
+credentials. They verify that preview variables are absent, signed variables
+are preserved, and automatic builder publication is disabled. The fixtures,
+workflow syntax validation and source-size checks passed locally. Native macOS
+confirmation is still pending. This is an automation-only correction on main;
+the immutable 0.4.30 application tag and its passing source CI are unchanged.
