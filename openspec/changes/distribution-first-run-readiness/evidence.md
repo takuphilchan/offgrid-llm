@@ -444,3 +444,13 @@ Evidence: `C:/Users/phil/AppData/Local/Temp/offgrid-install-722f374b3a794204be4f
 The responsiveness probe separately passed real hidden/visible hangs, capture
 deadlines and healthy capture. This test identity never replaced the normal
 installation. Full-source CI and public asset verification remain pending.
+
+The Linux job in `43155863841` finished with 1,573 browser tests passed, 32
+skipped and one refresh-helper timeout. That helper inspected sidebar visibility
+before mount and could select a desktop-hidden mobile trigger. It now waits for
+the sidebar and checks the actual responsive breakpoint, matching the existing
+Settings navigation helper. All 32 task-first and workspace-shell tests passed
+against the built renderer with the real isolated service. A preceding local
+development-server run passed 29 and timed out in three large locale loops;
+the production-build run used the unchanged 30-second test deadlines and passed
+all three. No application code or test timeout was changed for this correction.

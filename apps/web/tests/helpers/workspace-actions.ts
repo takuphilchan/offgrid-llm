@@ -38,7 +38,8 @@ export async function openWorkDetails(page: Page) {
 
 export async function refreshWorkspace(page: Page) {
   const drawer = page.locator('.sidebar');
-  const opened = !await drawer.isVisible();
+  await drawer.waitFor({state:'attached'});
+  const opened = await page.evaluate(()=>matchMedia('(max-width:1023px)').matches) && !await drawer.isVisible();
   if (opened) await page.locator('.navigation-trigger').click();
   await page.locator('.workspace-options > button').click();
   await page.locator('.workspace-options-panel button[aria-busy]').click();
