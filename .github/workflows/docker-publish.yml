@@ -113,6 +113,17 @@ jobs:
             echo "is_latest=false" >> "${GITHUB_OUTPUT}"
           fi
 
+      - name: Check out release identity verifier
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: .release-automation
+
+      - name: Set up release identity verifier
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
       - name: Reuse complete published versioned images
         id: existing
         shell: bash
@@ -133,14 +144,15 @@ jobs:
               "https://hub.docker.com/v2/repositories/${IMAGE_NAME}/tags/${tag}/")"
             case "${status}" in
               200)
-                if [[ "${flavor}" == cpu ]]; then
-                  if jq -e '.images | any(.[]; .os == "linux" and .architecture == "amd64") and any(.[]; .os == "linux" and .architecture == "arm64")' \
-                    "${RUNNER_TEMP}/offgrid-${flavor}-tag.json" >/dev/null; then
-                    echo "cpu=true" >> "${GITHUB_OUTPUT}"
-                  fi
-                elif jq -e '.images | any(.[]; .os == "linux" and .architecture == "amd64")' \
-                  "${RUNNER_TEMP}/offgrid-${flavor}-tag.json" >/dev/null; then
-                  echo "gpu=true" >> "${GITHUB_OUTPUT}"
+                platforms=amd64
+                if [[ "${flavor}" == cpu ]]; then platforms=amd64,arm64; fi
+                if node .release-automation/scripts/release/verify-container-source.mjs \
+                  "${IMAGE_NAME}" "${tag}" "${{ steps.source.outputs.sha }}" "${platforms}"; then
+                  echo "${flavor}=true" >> "${GITHUB_OUTPUT}"
+                else
+                  verification_status=$?
+                  if [[ "${verification_status}" != 2 ]]; then exit "${verification_status}"; fi
+                  echo "Existing ${tag} has incomplete or different source identity; rebuild it"
                 fi
                 ;;
               404) ;;
@@ -383,6 +395,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=OffGrid (NVIDIA CUDA)
             org.opencontainers.image.description=Private, local-first LLM inference with NVIDIA CUDA acceleration
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.source_sha }}
             org.offgrid.packaging.revision=${{ github.sha }}
 
       - name: Build and push NVIDIA image
@@ -426,8 +439,16 @@ jobs:
       - name: Check out release automation
         uses: actions/checkout@v6
 
+      - name: Set up release identity verifier
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
       - name: Verify exact CPU and GPU tags
         env:
           OFFGRID_CONTAINER_VERIFY_ATTEMPTS: 18
           OFFGRID_CONTAINER_VERIFY_RETRY_SECONDS: 10
-        run: bash .github/scripts/verify-release-containers.sh "v${{ needs.prepare.outputs.version }}"
+        run: |
+          bash .github/scripts/verify-release-containers.sh "v${{ needs.prepare.outputs.version }}"
+          node scripts/release/verify-container-source.mjs "${IMAGE_NAME}" "${{ needs.prepare.outputs.version }}" "${{ needs.prepare.outputs.source_sha }}" amd64,arm64
+          node scripts/release/verify-container-source.mjs "${IMAGE_NAME}" "${{ needs.prepare.outputs.version }}-gpu" "${{ needs.prepare.outputs.source_sha }}" amd64

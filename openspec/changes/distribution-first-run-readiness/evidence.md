@@ -574,3 +574,34 @@ are preserved, and automatic builder publication is disabled. The fixtures,
 workflow syntax validation and source-size checks passed locally. Native macOS
 confirmation is still pending. This is an automation-only correction on main;
 the immutable 0.4.30 application tag and its passing source CI are unchanged.
+
+The automation correction is commit `1d90c4f1`, pushed directly to main. Its
+complete CI run `43174829678` passed all 14 jobs, including the 12 preview/signed
+environment fixtures, 1,574 browser tests with 33 skips, 207 desktop tests, 75
+browser-companion tests and native package/installer checks. This supplements the separate passing
+CI for the immutable application tag; native release macOS confirmation remains
+pending the retry.
+
+The first release attempt's ARM64 CPU container job `131028566228` passed and
+uploaded its image. Its source OCR compilation took 2,377 seconds; the job did
+not hang or require restarting. The combined AMD64/ARM64 CPU manifest also
+passed publication and attestation. The NVIDIA job remains live at this point.
+
+An independent public OCI manifest/config check then found that the NVIDIA image
+had the automation revision `f05163ea` in `org.opencontainers.image.revision`,
+although its build used application source `9d33af62`. The metadata action's
+default label overrode the Dockerfile's application revision. Both CPU platform
+configurations correctly identify `9d33af62`. The GPU version label is the image
+variant `0.4.30-gpu`, which is expected and distinct from the application version.
+
+The GPU metadata step now explicitly sets the application revision. A new
+digest-bound registry verifier checks every required platform's configuration,
+version label and application revision before reuse and after publication.
+An identity mismatch requests a rebuild; registry/network or digest-integrity
+errors fail the job rather than authorizing replacement. The verifier is loaded
+from the automation revision separately from the immutable application checkout.
+Six verifier tests, three executable reuse/error fixtures, existing container
+channel/indexing fixtures, actionlint and the source-size check passed locally.
+Against the current public registry, both CPU platforms passed and the incorrect
+GPU revision was rejected with the intended mismatch status. The corrected GPU
+image, native macOS retry and final public release are still pending.

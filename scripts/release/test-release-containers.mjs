@@ -96,3 +96,31 @@ const aliasLines=workflow.split('\n').filter(line=>line.includes('type=semver,pa
 assert.equal(aliasLines.length,4);
 for(const line of aliasLines)assert.ok(line.includes("enable=${{ needs.prepare.outputs.is_latest == 'true' }}"));
 console.log('Preview CPU/GPU publication cannot promote latest or minor-version aliases');
+
+const reuseStep=workflow.split('- name: Reuse complete published versioned images\n')[1].split('\n  cpu:')[0];
+const reuseScript=reuseStep.split('        run: |\n')[1].split('\n')
+  .filter(line=>line.startsWith('          ')).map(line=>line.slice(10)).join('\n');
+for(const gpuStatus of [0,2,1]) {
+  const root=mkdtempSync(join(tmpdir(),'offgrid-container-reuse-'));
+  try {
+    const input=reuseScript.replaceAll('${{ inputs.force_rebuild || false }}','false')
+      .replaceAll('${{ steps.version.outputs.value }}','0.4.30')
+      .replaceAll('${{ steps.source.outputs.sha }}','a'.repeat(40));
+    assert.ok(!input.includes('${{'));
+    const result=spawnSync('bash',['-euo','pipefail','-s'],{cwd:root,encoding:'utf8',
+      env:{...process.env,GITHUB_OUTPUT:join(root,'output'),RUNNER_TEMP:root,IMAGE_NAME:'example/offgrid'},
+      input:`curl() { printf '200'; }\nnode() { [[ "$1" == .release-automation/scripts/release/verify-container-source.mjs && "$2" == example/offgrid && "$4" == ${'a'.repeat(40)} ]] || return 99; if [[ "$3" == *-gpu ]]; then return ${gpuStatus}; fi; return 0; }\n`+input});
+    assert.equal(result.status,gpuStatus===1?1:0,result.stdout+result.stderr);
+    const output=readFileSync(join(root,'output'),'utf8');
+    assert.match(output,/cpu=true/);
+    assert.equal(output.includes('gpu=true'),gpuStatus===0);
+    if(gpuStatus===2)assert.match(result.stdout,/different source identity; rebuild/);
+  } finally {
+    assert.equal(dirname(realpathSync(root)),realpathSync(tmpdir()));
+    rmSync(root,{recursive:true,force:true});
+  }
+}
+const gpuMetadata=workflow.split('- name: Generate NVIDIA image metadata\n')[1].split('\n      - name:')[0];
+assert.ok(gpuMetadata.includes('org.opencontainers.image.revision=${{ needs.prepare.outputs.source_sha }}'));
+assert.ok(workflow.includes('node scripts/release/verify-container-source.mjs "${IMAGE_NAME}" "${{ needs.prepare.outputs.version }}-gpu" "${{ needs.prepare.outputs.source_sha }}" amd64'));
+console.log('Container reuse requires application identity; lookup failures stop; NVIDIA labels use tagged source');

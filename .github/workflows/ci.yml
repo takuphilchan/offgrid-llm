@@ -229,6 +229,7 @@ jobs:
           node scripts/release/test-release-ci.mjs
           node --test scripts/release/verify-desktop-trust.test.mjs scripts/build/desktop-preview.test.mjs
           node scripts/release/test-release-containers.mjs
+          node --test scripts/release/verify-container-source.test.mjs
 
       - name: Check maintained documentation
         run: |
