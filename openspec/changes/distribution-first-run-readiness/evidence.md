@@ -466,3 +466,38 @@ terminal check passed with both waits, including capture and child cleanup:
 `C:/Users/phil/AppData/Local/Temp/offgrid-desktop-theme-PoDOJf`.
 The startup diagnosis still requires confirmation on the hosted Windows runner;
 the longer bounded wait does not itself establish a passing release check.
+
+## Exact-source release qualification
+
+Full CI `43160128141` passed all 13 jobs for
+`dc5eacdd491fae745bc2104206d78ff527a2eebf`. This includes Go tests/race checks,
+API and renderer checks, 1,574 browser tests with 32 skips, 207 desktop tests
+(206 passed and one platform skip locally), real speech acquisition/restart,
+Linux native controls and packaged startup, both macOS architectures, Windows
+native terminal/browser/access/appearance, and Windows installer qualification.
+The hosted Windows installer passed clean installation, repair, both Finish
+choices, active-app refusal, interactive uninstall, workspace preservation and
+independent-service survival. The earlier revision `63cbaff2` also passed all
+13 jobs in `43159526994`; qualification for the release uses the final SHA.
+
+Tag `v0.4.29` was created at the final passing source. The explicit unsigned
+preview workflow `43163576302` accepted its immutable source and created an
+unpublished draft with source/channel markers. Public asset verification and
+publication are still pending. The earlier local installation evidence remains
+valid for that candidate; task 5.2 is reopened to install and verify the final
+public Windows artifact, including the subsequent terminal startup correction.
+
+The 0.4.29 release did not publish. All three container jobs failed because
+the Docker UI stages copied only `compatibility.cjs`, while the renderer also
+imports the shared theme catalog, language registry, select CSS and theme
+notice. `.dockerignore` excluded those files too. Both Dockerfiles now copy the
+five required shared assets and the ignore file admits exactly those inputs.
+A separate CI job builds the real `ui-builder` stage through both production
+Dockerfiles, catching this boundary before future release tags.
+
+The user then explicitly requested direct commits/pushes to `main` and a new
+release version. The failed 0.4.29 workflow was cancelled and its unpublished
+tag is retained unchanged. Version 0.4.30 will be released from `main` after
+its own source checks and artifact checks. Local Docker is unavailable, so the
+new container-context builds must run on the hosted Linux runner; a normal
+workspace web build alone is not Docker verification.

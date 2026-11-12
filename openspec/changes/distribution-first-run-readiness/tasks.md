@@ -22,8 +22,8 @@
 
 ## 5. Build and install
 
-- [ ] 5.1 Run applicable CI suites including Go, web contract/check/build, desktop and isolated package/installer checks; build the uniquely identified preview and record actual evidence.
-- [x] 5.2 Identify installed app/workspace, preserve state, install the verified new Windows build, observe installed identity/startup and a real model reply; record evidence and rollback information.
+- [ ] 5.1 Run applicable CI suites including Go, web contract/check/build, desktop and isolated package/installer checks; build the uniquely identified preview and record actual evidence. The 0.4.29 source passed; the 0.4.30 Docker-context correction requires its own full CI run.
+- [ ] 5.2 Identify installed app/workspace, preserve state, install the verified new Windows build, observe installed identity/startup and a real model reply; record evidence and rollback information. The initial preview passed; upgrade and verification from the final public artifact remain pending.
 - [ ] 5.3 Audit all acceptance scenarios and cross-platform qualification against actual evidence; keep remaining external gates explicitly incomplete.
 
 ## 6. Authorized commit and release
