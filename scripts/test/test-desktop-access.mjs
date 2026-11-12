@@ -6,6 +6,7 @@ import {mkdtemp,readFile,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve,join,dirname,sep,extname} from 'node:path';
 import {createRequire} from 'node:module';
+import {dismissWorkspaceSetup} from './desktop-onboarding.mjs';
 const root=resolve(import.meta.dirname,'../..');
 const require=createRequire(join(root,'apps/web/package.json'));
 const {_electron:electron,expect}=require('@playwright/test');
@@ -41,8 +42,9 @@ const deadline=setTimeout(()=>{console.error('Packaged access check timed out');
 try{
  app=await electron.launch({executablePath:binary,env,timeout:30000});
  const page=await app.firstWindow();page.setDefaultTimeout(10000);
- await page.waitForURL(/\/ui\//);await page.evaluate(()=>localStorage.setItem('offgrid.onboarding.complete','true'));
+ await page.waitForURL(/\/ui\//);
  await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/chat`);await page.reload();
+ await dismissWorkspaceSetup(page,'access-fixture');
  await page.locator('.composer-context-menu > button').click();
  await page.getByRole('button',{name:'Agent',exact:true}).click();
  await page.getByRole('radio',{name:/Access fixture/}).check();

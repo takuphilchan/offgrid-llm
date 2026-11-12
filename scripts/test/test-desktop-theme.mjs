@@ -7,6 +7,7 @@ import {tmpdir} from 'node:os';
 import {join, resolve, sep, extname} from 'node:path';
 import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
+import {dismissWorkspaceSetup} from './desktop-onboarding.mjs';
 const root = resolve(import.meta.dirname, '../..');
 const require = createRequire(join(root, 'apps/web/package.json'));
 const {_electron: electron} = require('playwright');
@@ -67,9 +68,9 @@ async function launch() {
   // Electron's process handshake can finish before its first BrowserWindow.
   // Wait for that window before sizing it, including after a saved-state restart.
   if (process.argv.includes('--narrow')) await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].setSize(960,720));
-  await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete','true'));
   await page.waitForURL(/\/ui\//);
   await page.reload();
+  await dismissWorkspaceSetup(page,'packaged-theme-fixture');
   console.log('Packaged theme fixture connected');
   return page;
 }

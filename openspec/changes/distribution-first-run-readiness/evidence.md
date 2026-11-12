@@ -423,3 +423,24 @@ The corrected browser workspace/actor isolation test passed three consecutive
 runs without retries. Source-size, syntax and strict OpenSpec checks passed.
 These changes still require a new complete CI run. The local diagnostic package
 was not installed over the user's app or designated a public release artifact.
+
+Run `43155863841` at `6594e16a` passed both macOS native jobs and all document,
+parser and Python jobs. Windows then exposed the same legacy-onboarding race
+in the packaged browser fixture before reaching the terminal checks. The
+browser, appearance, access and terminal fixtures now share a helper that waits
+for the fixture workspace identity, dismisses its real setup dialog, and checks
+that the workspace-scoped dismissal is saved. They no longer write the old
+completion preference after initial migration. All four packaged Windows
+fixtures passed locally. A terminal screenshot timeout was corrected by using
+Electron native capture for its owned surfaces, as other packaged tests already
+do; captures remain required and all terminal assertions remain intact.
+Terminal evidence: `C:/Users/phil/AppData/Local/Temp/offgrid-desktop-theme-agC6YX`.
+Browser evidence: `C:/Users/phil/AppData/Local/Temp/offgrid-packaged-browser-MoFpnn`.
+
+A newly built isolated installer also passed clean install, bundled version,
+installed startup, repair, checked/unchecked Finish, running-app refusal and
+interactive uninstall, preserving its saved data and independent service.
+Evidence: `C:/Users/phil/AppData/Local/Temp/offgrid-install-722f374b3a794204be4f15857440762a/diagnostics/result.json`.
+The responsiveness probe separately passed real hidden/visible hangs, capture
+deadlines and healthy capture. This test identity never replaced the normal
+installation. Full-source CI and public asset verification remain pending.

@@ -7,6 +7,7 @@ import {tmpdir} from 'node:os';
 import {join,resolve,extname,sep} from 'node:path';
 import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
+import {dismissWorkspaceSetup} from './desktop-onboarding.mjs';
 const root=resolve(import.meta.dirname,'../..');
 const require=createRequire(join(root,'apps/web/package.json'));
 const {_electron:electron}=require('playwright');
@@ -73,8 +74,9 @@ try{
  if(process.argv.includes('--narrow')) await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(960,720));
  const page=await app.firstWindow();page.setDefaultTimeout(15000);await page.waitForURL(/\/ui\//,{timeout:15000});
  console.log('Packaged workspace connected');
- await page.evaluate(()=>{localStorage.setItem('offgrid.locale','en');localStorage.setItem('offgrid.onboarding.complete','true');});
+ await page.evaluate(()=>localStorage.setItem('offgrid.locale','en'));
  await page.reload();
+ await dismissWorkspaceSetup(page,'packaged-fixture');
  // Exercise the packaged browser/desktop boundary after the application has
  // mounted. Sidebar presentation has separate responsive navigation tests;
  // this fixture must not depend on a transient drawer state at startup.
