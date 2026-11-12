@@ -36,8 +36,8 @@ The newest download for Windows, macOS and Linux is
 [OffGrid 0.4.30 (unsigned preview)](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.30).
 Windows packages are unsigned; macOS apps are not Developer ID signed or
 notarized. Read the release's OS trust guidance before installing.
-GitHub's **Latest** badge points to the stable channel, currently 0.4.28;
-it does not include previews. [All published versions](https://github.com/takuphilchan/offgrid-llm/releases)
+GitHub's **Latest** release is 0.4.30. This designation does not establish
+publisher trust. [All published versions](https://github.com/takuphilchan/offgrid-llm/releases)
 remain available.
 Windows users should choose the **setup.exe** download. See the
 [platform and architecture guide](docs/setup/installation.md#download-and-verify-a-release)

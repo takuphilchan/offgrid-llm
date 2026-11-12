@@ -21,6 +21,11 @@ Deliver the requested safe installation and first-response workflow on this Wind
   retain source/channel markers, reject cross-channel asset reuse, and require
   all normal source, payload and container checks. Future signed publication
   remains separate qualification with a new release version.
+- On 2026-11-12, the user explicitly requested that the published 0.4.30 become
+  GitHub's Latest release. This authorizes clearing its GitHub prerelease flag
+  and selecting it as latest, while retaining the unsigned-preview title,
+  source/channel identity and actual trust reports. It does not authorize
+  changing Docker aliases or weakening future signed-release checks.
 - Build a distinguishable preview from the current workspace after project checks, test installation with disposable identity/data, then upgrade the identified user installation. Back up application metadata/config and verify workspace preservation; do not move or erase model stores.
 
 ## Risks / Trade-offs

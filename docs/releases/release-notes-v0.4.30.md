@@ -6,6 +6,11 @@ Windows may show an unknown-publisher warning; macOS may block opening the app.
 Checksums verify downloaded bytes, not publisher trust. The attached native trust
 reports record the actual artifact status.
 
+At the maintainer's request, 0.4.30 is now GitHub's **Latest** release and no
+longer carries GitHub's prerelease flag. Its unsigned-preview build identity and
+trust reports are unchanged. Docker's stable aliases still point to 0.4.28;
+use the explicit `0.4.30` or `0.4.30-gpu` image tag for this version.
+
 Version 0.4.29 remained unpublished after its container build exposed missing
 shared UI assets. This version includes those assets in both Docker build
 contexts and adds CI builds of their renderer stages before release tagging.
@@ -23,7 +28,8 @@ contexts and adds CI builds of their renderer stages before release tagging.
   The existing desktop quit flow and saved-work preservation remain in place.
 - Release automation requires passing CI for the exact tagged source, verifies
   downloaded artifacts, and publishes checksums and native trust reports. This
-  preview does not promote stable download or container aliases. The default
+  build originally published as a prerelease; the maintainer subsequently
+  selected it as GitHub's Latest release. Container aliases are unchanged. The default
   signed-release path continues to require publisher verification.
 - Settings, appearance controls and desktop terminal interactions are refined.
   Terminal startup preserves newer host visibility and focus instructions.
@@ -36,17 +42,28 @@ contexts and adds CI builds of their renderer stages before release tagging.
 
 ## Verification and limits
 
-The preceding 0.4.29 candidate passed all 13 CI jobs, including Go/race checks,
-API and UI checks, 1,574 browser tests with 32 skips, packaged checks on Windows,
-Linux and both macOS architectures, and Windows install/repair/uninstall checks.
-Its installed Windows upgrade preserved checked workspace state and produced a
-real Qwen2.5 3B reply with NVIDIA inference using isolated test data. Saved reply
-restart and image-draft preservation passed; unsupported vision was refused.
-These observations apply to that candidate, not an untested artifact.
+The exact 0.4.30 application source (`9d33af62`) passed all 14 CI jobs in
+[run 43164496473, attempt 2](https://github.com/takuphilchan/offgrid-llm/actions/runs/43164496473),
+including Go/race checks, API and UI checks, 1,574 browser tests with 32 skips,
+both Docker renderer contexts, packaged checks on Windows, Linux and both macOS
+architectures, and Windows install/reinstall/uninstall checks. The final release
+automation (`820a9352`) separately passed all 14 jobs in
+[run 43181516257](https://github.com/takuphilchan/offgrid-llm/actions/runs/43181516257).
 
-Publication of 0.4.30 additionally requires CI for its exact source, both Docker
-renderer-context builds, complete native assets, container qualification and
-public checksum verification. The web build retains its existing large-chunk
+[Release run 43181581522](https://github.com/takuphilchan/offgrid-llm/actions/runs/43181581522)
+published all 17 assets, including checksums and native trust reports. Independent
+public container configuration checks confirmed the tagged application revision
+for both CPU architectures and the NVIDIA image. Native Windows inspection of
+the public Setup file confirms it is unsigned.
+
+The preceding 0.4.29 candidate's installed Windows upgrade preserved checked
+workspace state and produced a real Qwen2.5 3B reply with NVIDIA inference using
+isolated test data. That observation does not qualify the final 0.4.30 installed
+upgrade: local installation and a real reply from that installed artifact remain
+pending.
+
+Independent downloading and hashing of every public asset is still in progress;
+the Windows Setup bytes already match the published manifest. The web build retains its existing large-chunk
 advisory. Publisher signing/notarization, native-language review, successful CPU
 model inference, vision inference and broader hardware qualification are not
 implied by these checks.

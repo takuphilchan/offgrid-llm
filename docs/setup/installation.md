@@ -19,8 +19,8 @@ Check memory, storage, CPU instructions, and model requirements before downloadi
 Use the [official releases](https://github.com/takuphilchan/offgrid-llm/releases). Download the package and `checksums-vX.Y.Z.sha256` from the same release. Do not mix packages from different revisions to resolve a compatibility warning.
 
 The newest published version is [0.4.30, an unsigned preview](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.30).
-GitHub's **Latest** badge and `/releases/latest` select the stable channel
-(currently 0.4.28), so use the versioned preview link to get 0.4.30.
+GitHub's **Latest** badge and `/releases/latest` also select 0.4.30.
+It remains unsigned despite its placement as the latest release.
 A Git tag alone does not mean installable packages were published: 0.4.29 was
 superseded by 0.4.30 after its release build failed.
 
