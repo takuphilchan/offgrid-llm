@@ -38,6 +38,16 @@ The system SHALL expose the selected profile revision, model, enabled resources 
 ### Requirement: Bounded delegation
 Configured delegation SHALL use the existing parent-child task mechanism. Children MUST inherit only a strict subset of parent capabilities and remain within aggregate budgets. Parent tasks SHALL own approvals, narration and results; children MUST NOT acquire desktop input or broader permissions.
 
+The coordinator SHALL admit dependency-ready children up to the shared runner's qualified capacity, without claiming concurrent inference where the scheduler serializes it. A failed prerequisite SHALL block its descendants while independent branches may complete. Child outcomes supplied to the parent SHALL be bounded and structured with status, evidence references and uncertainty; failed or blocked graphs MUST NOT be synthesized as full success. Restart and cancellation MUST NOT duplicate child dispatch.
+
+#### Scenario: Independent branch fails
+- **WHEN** one child fails while an independent child can still complete
+- **THEN** the independent result is retained, dependents of the failed child do not run, and the root reports a partial outcome with inspectable child jobs
+
+#### Scenario: Multiple children become ready
+- **WHEN** independent children are ready and runner capacity is available
+- **THEN** each is admitted once within the aggregate budget and activity reflects its actual state rather than an assumed parallel speedup
+
 #### Scenario: Research children
 - **WHEN** a parent delegates two read-only research subtasks
 - **THEN** their authorized findings return to the same parent work and child requests for desktop input or broader tools are rejected

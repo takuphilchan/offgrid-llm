@@ -226,12 +226,13 @@ test('Settings groups preferences and service identity without claiming desktop 
     };
   });
   await page.goto('/ui/#/settings');
-  await expect(page.getByRole('heading', { name: 'Preferences', exact: true })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Workspace', exact: true }).getByText('test', { exact: true })).toHaveCount(1);
+  await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'About', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'About', exact: true }).getByText('test', { exact: true })).toHaveCount(1);
   await expect(page.getByText('http://127.0.0.1:11611', { exact: true })).toBeVisible();
   await expect(page.getByText('Compatibility fixture', { exact: true })).toBeVisible();
   await expect(page.getByText('C:\\desktop-only\\models', { exact: true })).toBeHidden();
-  await page.getByText('Diagnostics', { exact: true }).click();
+  await page.getByRole('button', { name: 'Access & data', exact: true }).click();
   await expect(page.getByText('C:\\desktop-only\\models', { exact: true })).toBeVisible();
   await expect(page.locator('.desktop-local-paths')).toContainText('not its workspace paths');
   await refreshWorkspace(page);
@@ -249,6 +250,7 @@ for (const locale of ['en', 'ar'] as const) for (const theme of ['light', 'dark'
     await expect(page.locator('.sidebar-foot')).not.toContainText('100%');
     await expect(page.getByRole('link', { name: copy.common.serviceDetails, exact: true })).toHaveCount(0);
     await openSettings(page);
+    await page.locator('.settings-navigation nav button').last().click();
     await expect(page.locator('.settings-page').getByText(new URL(page.url()).origin, { exact: true })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

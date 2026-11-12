@@ -609,3 +609,98 @@ stays available through Show details. The uninstall welcome explains application
 removal separately from retained models and saved work. No data-erasure option,
 automatic download or new installer engine is introduced. Render the actual
 isolated wizard and verify preservation, not only source string assertions.
+
+## Settings ownership and discovery (2026-11-08)
+
+Use a bounded two-column settings layout with section navigation and a single content pane; stack navigation on small screens. Search includes localized section names and control labels, and renders matching sections. General owns existing language/theme choices. Models & responses reuses the Chat response preferences for the same actor/service scope; model selection stays in Models and pinned agent choices stay in profiles. Voice mounts the existing speech selector only on demand and never enables capture/playback. Terminal links to the desktop terminal display owner rather than writing duplicate settings storage. Access & data distinguishes service data from desktop paths and preserves emergency Stop and administrative restrictions. Advanced/About owns service identity and diagnostics. Missing capabilities stay explained, not simulated. No settings mutation occurs on navigation or metadata refresh.
+
+## Approved personalization extension (2026-11-11)
+
+The owner requested implementation of the supplied Appearance, Settings, Languages and Workspace plan. Named palettes supersede the earlier palette freeze for this scope. Keep light/dark/system mode separately from versioned per-mode palette IDs. Ship an inert JSON token catalog, normalize persisted input, preview without persistence, and apply/reset only appearance keys. Never change active grants or model execution as a consequence of appearance preferences. Translation repairs require independently asserted labels; human review is a separate open gate. Remaining multi-stage outcomes are tracked in group 31 rather than inferred from earlier checks.
+
+### Established palettes and global language coverage
+
+The owner requested several established themes without runtime bloat, then broad
+global language coverage with proper translations. Add the official palette
+families Catppuccin, Tokyo Night, Gruvbox, Solarized, Rosé Pine, Nord and Dracula
+as locally bundled data. Preserve authentic available modes (Nord is dark only),
+adapt semantic and ANSI colors for contrast, retain upstream notices, and share
+the catalog across renderer, desktop persistence, native chrome and terminal.
+The compressed catalog has an 8 KiB regression budget; no theme dependency,
+download, executable theme, image asset or additional font is required.
+
+Language expansion is staged rather than equating selectable names with full
+translation. Preserve the nine existing dictionaries. Preview packs keep a
+separate BCP 47 language selection and complete English feature fallback; retain
+Chinese script and Portuguese regional distinctions, RTL metadata and regional
+formatting. Previews require explicit selection and show a native-language
+coverage/review notice. They never change model, voice or access settings.
+Automated checks enforce message keys, placeholders, encoding and metadata.
+Promoting a pack requires complete feature coverage, contextual terminology
+review, native-speaker review of ordinary and permission/error copy, and visual
+checks. Machine checks must not be described as language certification.
+
+### App-wide language routing correction
+
+The owner rejected partial-screen localization and the fixed-color in-app mark.
+Keep the selected BCP 47 language intact through all feature functions and table
+lookups. Each contextual catalog resolves missing messages individually; never
+substitute English globally before looking for the selected language's feature
+translations. Core-only percentages cannot represent app coverage. Inventory
+feature messages, voice, computer workflows and accessibility copy, preserve
+placeholders, and report remaining gaps explicitly. Draft completion and human
+language review are separate gates. No DOM translation, translation of user data,
+network translation at runtime or forced remount of the workspace is acceptable.
+Use the existing vector mark with currentColor inside the app so palette changes
+and forced-color preferences apply synchronously without a fixed background tile.
+
+### Decorative separators and boundary ownership
+
+The owner reported stacked, tinted horizontal lines on warm themes and requested
+an app-wide audit. Give decorative separation its own `--separator` role,
+derived from the current foreground with transparency so it blends into the
+actual containing surface. Keep control borders, selected tabs, focus indicators,
+tables and progress indicators distinct. Preserve stronger separation in the
+explicit Contrast family and system colors in forced-color mode.
+
+Lists own rules between rows, not a closing rule competing with the next section.
+Section spacing and headings remain the primary hierarchy. Markdown thematic
+breaks use one authored rule rather than a browser-default inset border. Audit
+source declarations and actual computed layouts, including the installed speech
+package followed by Advanced import. Test data must remain isolated and cannot
+download, import or modify real models.
+
+The owner's placement follow-up rejects a rule immediately above a full-width
+disclosure focus outline. Model sections use whitespace rather than a redundant
+heading/disclosure rule, and disclosure focus wraps its label while retaining
+native semantics and touch height. Native selects keep their browser-managed
+popup and keyboard behavior; shared renderer/terminal CSS supplies a theme-colored
+closed-state chevron, logical padding and text sizing. Forced colors restore the
+native arrow. The compact navigation trigger retains its localized accessible
+name, tooltip, expanded state, drawer ownership and keyboard focus return.
+
+Settings is a destination: the sidebar gear navigates directly to its existing
+route and dismisses the mobile drawer. An independently labeled overflow trigger
+retains service status, Refresh and account actions. Remove language/appearance
+duplication from that menu; preserve preference storage, desktop synchronization,
+workspace drafts, all existing Settings sections and command-palette deep links.
+
+The owner additionally rejects decorative rules under Settings inputs. Form
+sections use headings and spacing without bottom rules, including language,
+mode, text size and reduced motion. This differs from repeated inventory rows
+and sticky dialog toolbars, where a separator communicates a real boundary.
+
+### All-language correction and translator handoff
+
+The owner rejected the mixed-language installed screens and explicitly expanded
+the follow-up to all selectable languages, then requested translator review packs
+and installation after verification. Complete the reported management-screen
+copy in every preview, audit every registered language, and fix desktop override
+routing. Preserve saved names, commands, paths, model identifiers and user text.
+Keep missing translations separate from authored drafts and human approval.
+Export contextual source-only packs, with exact-source hashes and optimistic
+translation conflict checks on import. Permission/deletion/recovery copy needs
+a second reviewer. A separate readiness command must fail for incomplete or
+unreviewed languages. No native speaker has yet signed off; group 32.3 stays open.
+Computer-use automation is explicitly stopped. Run isolated headless tests and
+packaging checks; installation is authorized separately by the owner.

@@ -65,7 +65,7 @@ export function SpeechPackages({ importOnly = false, language = false, onChanged
           } }
           catch { if (version === selection.current) setError(copy.invalid); }
         }} />
-        {prepared && <p>{prepared.manifest.name} · {prepared.manifest.revision} · {formatBytes(prepared.manifest.artifacts.reduce((n, artifact) => n + artifact.size, 0))}</p>}
+        {prepared && <p>{prepared.manifest.name} · {prepared.manifest.revision} · {formatBytes(prepared.manifest.artifacts.reduce((n, artifact) => n + artifact.size, 0), locale)}</p>}
         <div className="model-actions"><button className="primary-button" disabled={!prepared || busy} onClick={() => void perform(async signal => { if (prepared) { await api.importModelPackage(prepared.body, signal); setPrepared(null); } }).catch(() => {})}>{busy ? text.common.loading : copy.import}</button>
         {busy && <button onClick={() => active.current?.abort()}>{text.models.cancel}</button>}</div>
       </>}

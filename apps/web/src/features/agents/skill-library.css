@@ -4,11 +4,11 @@
 .skill-toolbar > .file-picker { flex: 1 1 15rem; }
 .skill-search { display: grid; gap: .35rem; max-width: 28rem; }
 .skill-library-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: .65rem; }
-.skill-card { min-width: 0; padding: .8rem 0; border: 0; border-block-end: 1px solid var(--line); background: transparent; }
+.skill-card { min-width: 0; padding: .8rem 0; border: 0; border-block-end: 1px solid var(--separator); background: transparent; }
 .skill-card .profile-option { align-items: start; }
 .skill-card strong, .skill-card small, .skill-card p { overflow-wrap: anywhere; }
 .skill-card > .utility-button { margin-block-start: .45rem; }
-.skill-inspection { margin-block-start: .8rem; padding-block-start: .8rem; border-block-start: 1px solid var(--line); }
+.skill-inspection { margin-block-start: .8rem; padding-block-start: .8rem; border-block-start: 0; }
 .skill-example { padding: .75rem; border-inline-start: 2px solid var(--line); }
 .skill-example p { margin: .4rem 0 0; overflow-wrap: anywhere; }
 .skill-revision { overflow-wrap: anywhere; font-size: .8rem; }

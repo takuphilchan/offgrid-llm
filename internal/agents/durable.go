@@ -477,9 +477,12 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 			cp, grant = task.Checkpoint, nil
 		}
 		if len(cp.Calls) > 0 {
-			if cp.SkillAnswerRepairs > 0 {
+			if cp.SkillAnswerRepairs > 0 || cp.DelegationAnswerRepairs > 0 {
 				task.ErrorCode = "skill_response_contract_tool_rejected"
-				return r.fail(task, "Skill answer correction cannot execute tools. Earlier work remains saved; no proposed call was dispatched.")
+				if cp.DelegationAnswerRepairs > 0 {
+					task.ErrorCode = "delegation_answer_tool_rejected"
+				}
+				return r.fail(task, "Answer correction cannot execute tools. Earlier work remains saved; no proposed call was dispatched.")
 			}
 			// Older checkpoints also pass the execution boundary. Never trust a
 			// previously persisted batch merely because admission now rejects it.
@@ -772,7 +775,7 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 		tools = projectWorkspaceWriteRepair(task, tools)
 		tools = r.relevantTools(task, tools)
 		tools = r.qualifiedTools(task, tools)
-		if cp.SkillAnswerRepairs > 0 {
+		if cp.SkillAnswerRepairs > 0 || cp.DelegationAnswerRepairs > 0 {
 			tools = nil
 		}
 		if err := reserveModelBudget(task); err != nil {
@@ -974,6 +977,14 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 				}
 				continue
 			}
+			if repair, err := r.repairDelegatedAnswer(task, message.StringContent()); err != nil {
+				return nil, err
+			} else if repair {
+				if task.Status != TaskRunning {
+					return task, nil
+				}
+				continue
+			}
 			settled, err := r.stopOwnedExecution(task)
 			if err != nil || settled.Status == TaskUncertain {
 				return settled, err
@@ -988,16 +999,4 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 			return task, nil
 		}
 	}
-}
-
-func (r *Runner) fail(task *Task, message string) (*Task, error) {
-	settled, err := r.stopOwnedExecution(task)
-	if err != nil || settled.Status == TaskUncertain {
-		return settled, err
-	}
-	finishTask(task, TaskFailed, message)
-	if err := r.persist(task); err != nil {
-		return nil, err
-	}
-	return task, nil
 }

@@ -1,8 +1,8 @@
-import type { LocaleCode } from './index';
+import type { DictionaryLocale } from './language';
 import type { VoiceCopy } from './voice';
 
 // Draft UI translations. Independent speaker review remains a release gate.
-export const voiceLocales: Record<Exclude<LocaleCode, 'en'>, VoiceCopy> = {
+export const voiceLocales: Record<Exclude<DictionaryLocale, 'en'>, VoiceCopy> = {
   fr: {
     record: 'Utiliser le microphone', stop: 'Arrêter l’enregistrement', recording: 'Enregistrement…', transcribing: 'Transcription…',
     unavailable: 'La reconnaissance vocale n’est pas prête. Installez un moteur et un modèle locaux compatibles dans Modèles.',

@@ -5,7 +5,7 @@
   .workspace-help header { position: sticky; top: 0; z-index: 1; background: var(--surface-1); }
   .workspace-help h2 { margin: 0; font-size: var(--type-title); line-height: var(--leading-ui); }
   .workspace-help-body { padding: 0 24px; }
-  .workspace-help details { padding-block: 12px; border-block-start: 1px solid var(--line); }
+  .workspace-help details { padding-block: 12px; border-block-start: 1px solid var(--separator); }
   .workspace-help summary { padding-block: 6px; font-size: var(--type-ui); font-weight: var(--weight-medium); cursor: pointer; }
   .workspace-help details[open] summary { margin-block-end: 8px; }
   .workspace-help h3 { margin: 0 0 8px; font-size: var(--type-section); line-height: var(--leading-ui); }

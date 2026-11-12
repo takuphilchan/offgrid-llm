@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {createTerminalProtocol,MAX_INPUT_BYTES}=require('../terminal-protocol');
+const {createTerminalProtocol,MAX_INPUT_BYTES,MAX_PASTE_BYTES}=require('../terminal-protocol');
 
 function fixture() {
   const url='file:///trusted/terminal.html',calls=[];
@@ -10,6 +10,7 @@ function fixture() {
   let ready=true;
   const operations={create:async request=>{calls.push(['create',request]);return{id:'session-1'};}};
   for(const key of ['input','resize','ack','close']) operations[key]=async(...args)=>{calls.push([key,...args]);};
+  operations.paste=async()=>{calls.push(['paste']);return 'café 日本語';};
   const bridge=createTerminalProtocol({trustedURL:url,contents:()=>contents,operations,available:()=>ready});
   return {bridge,event,calls,operations,setReady:value=>{ready=value;}};
 }
@@ -52,6 +53,18 @@ test('input, resize, ACK and close stay scoped and bounded; Ctrl+C is input',asy
   await assert.rejects(f.bridge.dispatch(f.event,{...session,action:'input',text:'x'}),/unknown/);
   assert.deepEqual(f.calls.map(call=>call[0]),['create','input','input','close']);
 });
+test('clipboard paste requires an owned live session and remains bounded',async()=>{
+  const f=fixture(),base=await connect(f),paste={...base,id:'session-1',action:'paste'};
+  await assert.rejects(f.bridge.dispatch(f.event,paste),/unknown_session/);
+  await f.bridge.dispatch(f.event,{...base,action:'create',kind:'shell',cols:80,rows:24});
+  assert.equal(await f.bridge.dispatch(f.event,paste),'café 日本語');
+  for(const value of ['x'.repeat(MAX_PASTE_BYTES+1),'\x1b[31m','\x00']){
+    f.operations.paste=async()=>value;
+    await assert.rejects(f.bridge.dispatch(f.event,paste),/invalid_paste/);
+  }
+  f.bridge.invalidate();
+  await assert.rejects(f.bridge.dispatch(f.event,paste),/stale_renderer/);
+});
 test('reload fences old input and stops a spawn completed after renderer loss',async()=>{
   const f=fixture(),base=await connect(f);let resolve;
   f.operations.create=()=>new Promise(done=>{resolve=done;});
@@ -79,4 +92,17 @@ test('dock controls work without a runtime, while layout and clipboard stay boun
   await assert.rejects(f.bridge.dispatch(f.event,{...base,action:'layout',height:Infinity}),/height/);
   await assert.rejects(f.bridge.dispatch(f.event,{...base,action:'copy',text:'x'.repeat(1024*1024+1)}),/copy/);
   assert.equal(f.calls.length,3);
+});
+
+test('selected context requires an owned terminal and strict bounded payload',async()=>{
+ const f=fixture(),base=await connect(f),contexts=[];
+ f.operations.share=async value=>{contexts.push(value);return {opened:true};};
+ const context={version:1,source:'terminal_selection',command:'ls',cwd:'C:\\test',output:'selected',question:'Explain this',truncated:false};
+ const request={...base,action:'share',id:'session-1',context};
+ await assert.rejects(f.bridge.dispatch(f.event,request),/unknown_session/);
+ await f.bridge.dispatch(f.event,{...base,action:'create',kind:'shell',cols:80,rows:24});
+ for(const patch of [{output:'x'.repeat(32769)},{output:'\x1b[1m'},{question:''},{source:'trusted_receipt'},{secret:'extra'}])await assert.rejects(f.bridge.dispatch(f.event,{...request,context:{...context,...patch}}));
+ assert.equal(contexts.length,0);assert.deepEqual(await f.bridge.dispatch(f.event,request),{opened:true});
+ f.bridge.invalidate();await assert.rejects(f.bridge.dispatch(f.event,request),/stale/);
+ assert.equal(contexts.length,1);
 });

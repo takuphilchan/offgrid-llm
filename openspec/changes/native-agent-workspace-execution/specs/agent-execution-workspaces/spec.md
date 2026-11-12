@@ -223,3 +223,40 @@ Selection SHALL NOT submit work or grant file, process or desktop authority.
 - **WHEN** the user selects another agent through `/agent`
 - **THEN** a separate conversation starts with its pinned profile while the previous conversation and jobs remain unchanged
 - **AND** owned workspace leases close without being inherited and cancellation retains the current conversation
+
+### Requirement: Bounded multiline agent editing
+Interactive agent input SHALL wrap and retain multiline text, navigate and delete
+whole grapheme clusters, and keep the caret visible in a bounded viewport. It
+SHALL preserve one input owner and the existing plain-mode contract.
+
+#### Scenario: Compose and paste paragraphs
+- **WHEN** a user inserts a newline with Ctrl+J or a supported modified Enter, or pastes bracketed multiline text
+- **THEN** the text remains editable and is submitted only by an explicit Enter
+- **AND** oversized paste is drained and rejected while the previous draft and subsequent consent input remain intact
+
+#### Scenario: Unicode and history navigation
+- **WHEN** a user navigates wrapped CJK text, combining characters or emoji and recalls prior input
+- **THEN** edits do not split grapheme clusters and returning from history restores the unfinished draft
+
+#### Scenario: Resize and limited terminals
+- **WHEN** terminal dimensions change or plain mode is selected
+- **THEN** interactive rendering stays bounded with a visible caret, while plain mode remains line-oriented without terminal controls
+
+### Requirement: Live conversation input owns its phase
+Supported interactive terminals SHALL accept corrections while following a
+conversation's current task without a second keyboard reader or implicit new task.
+
+#### Scenario: Correct current work or retain a follow-up
+- **WHEN** the user submits a correction during streaming
+- **THEN** the client rechecks that exact saved task and submits through the existing steering API only when eligible
+- **AND** `/queue MESSAGE` retains a separate editable follow-up requiring explicit submission after the turn
+
+#### Scenario: Approval, completion and uncertain acknowledgment
+- **WHEN** work reaches an approval boundary, completes or loses a steering acknowledgment
+- **THEN** unfinished input is retained as a draft and cannot become an approval response or automatic replacement task
+- **AND** an unconfirmed correction is not replayed during that stream
+
+#### Scenario: Stop preserves input
+- **WHEN** Ctrl+C or `/stop` requests cancellation
+- **THEN** the service's returned state is reported without assuming effects stopped
+- **AND** unfinished text survives and terminal input ownership is restored before fresh consent

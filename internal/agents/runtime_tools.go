@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 	"io"
@@ -78,7 +79,12 @@ func (r *Runner) executeRuntimeTool(ctx context.Context, task *Task, call api.To
 		return true, fmt.Errorf("Task-management tools must be called separately")
 	}
 	if call.Function.Name == "delegate_tasks" {
-		return true, r.beginDelegation(task, call)
+		err := r.beginDelegation(task, call)
+		var admission *delegationAdmissionError
+		if errors.As(err, &admission) {
+			return true, r.recordRejectedDelegation(task, call, admission.reason)
+		}
+		return true, err
 	}
 	var result string
 	var err error

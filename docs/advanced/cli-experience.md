@@ -139,11 +139,18 @@ completes, Enter runs the selected command and Escape dismisses suggestions.
 The palette shows a bounded selection and its current position, with the common
 conversation actions first. `/help` shows the short command set; `/help all`
 shows recovery and configuration controls without crowding the prompt.
-Outside that menu, Up/Down recalls this invocation's last 50 inputs and restores
-an unfinished draft when moving back down. This input history is not saved to a
-separate file. Unicode editing and bracketed multiline paste share the existing
-bounded input reader with on-demand consent; terminal mode is restored before
-streaming or approval handling. Paste does not submit until Enter.
+Outside that menu, input wraps across up to six visible rows. Enter sends;
+Ctrl+J inserts a newline (Alt+Enter also works where the terminal forwards it).
+Up/Down moves through wrapped or multiline input; for a single line it recalls
+history. Ctrl+P/Ctrl+N always recall this invocation's last 50 inputs and restore
+the unfinished draft when moving back down. Ctrl+R searches history; Enter uses
+the match for further editing, while Escape restores the draft and caret.
+History is not saved to a separate file. Cursor movement and deletion preserve
+whole graphemes, including combining accents and emoji. Bracketed paste retains
+line breaks and never submits by itself. Input is limited to 32,000 UTF-8 bytes;
+an oversized paste is discarded in full and the previous draft is preserved.
+The editor shares the existing bounded input reader with on-demand consent;
+terminal mode is restored before approval handling and when the editor exits.
 
 `/help` lists commands; `/skills`, `/agents` and `/tools` inspect this pinned
 profile's configuration. They do not grant access, attach a skill, change the
@@ -152,10 +159,23 @@ Use the existing profile/skill management commands to make explicit changes.
 
 The terminal picker falls back to ordinary line input for redirected streams,
 `TERM=dumb`, `OFFGRID_PLAIN=1`, `OFFGRID_TUI=0`, or windows below 32 columns or
-10 rows. Slash commands still work when entered followed by Enter. The current
-client accepts new messages and slash commands between foreground turns; while a
-turn runs, streaming and Ctrl+C remain the controls. Concurrent input during an
-active turn is not implemented by this presentation change.
+10 rows. Slash commands still work when entered followed by Enter.
+
+During an agent conversation's reply, supported terminals of at least 40 columns
+and 16 rows keep an editor below the streaming output. Enter sends the text as a
+correction to the current task at a safe boundary. `/queue MESSAGE` retains one
+separate follow-up for review after the turn; it never sends it automatically.
+Ctrl+C or `/stop` requests cancellation and reports the service's actual state.
+An unfinished correction survives Stop. Once the turn ends, retained input is
+shown for editing and requires another Enter to submit.
+
+Only one component reads the keyboard. Before steering, the CLI checks the exact
+saved task again. Tasks awaiting access, approvals or reconciliation cannot accept
+corrections. A missing correction acknowledgment retains the draft and blocks
+another attempt in that stream; inspect saved work before retrying. Complete
+control receipts remain in scrollback. Plain, piped and small terminals retain
+the existing streaming interface. This live editor applies to interactive agent
+conversations, not detached jobs or every one-shot `agent run` command.
 
 The CLI supports these stable controls:
 

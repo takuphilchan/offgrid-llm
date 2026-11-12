@@ -24,6 +24,8 @@ const names = [
   `OffGrid-${packageVersion}-macos-x64.zip`,
   `OffGrid-${packageVersion}-windows-x64-portable.exe`,
   `OffGrid-${packageVersion}-windows-x64-setup.exe`,
+  'trust-windows.json',
+  'trust-macos.json',
 ];
 const digest = 'a'.repeat(64);
 
@@ -34,6 +36,8 @@ function run(assetNames, {
   assets = assetNames.map(asset),
   attempts = '1',
   apiFailure = false,
+  channel = 'signed',
+  previewNotes = false,
 } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'offgrid-release-finalize-'));
   try {
@@ -42,9 +46,11 @@ function run(assetNames, {
       join(repo, `docs/releases/release-notes-${version}.md`),
       join(root, `docs/releases/release-notes-${version}.md`),
     );
+    if(previewNotes) writeFileSync(join(root, `docs/releases/release-notes-${version}.md`), '# Unsigned preview\nNo publisher signature or notarization.\n');
     writeFileSync(join(root, 'initial-assets.json'), JSON.stringify(initialAssets));
     writeFileSync(join(root, 'assets.json'), JSON.stringify(assets));
     const mock = `
+git() { printf '%s\\n' '${'a'.repeat(40)}'; }
 gh() {
   local filter='' arg previous=''
   for arg in "$@"; do
@@ -83,12 +89,12 @@ gh() {
     echo MOCK_UPLOAD
   elif [[ "$1 $2" == "release edit" ]]; then
     touch .mock-published
-    echo MOCK_EDIT
+    echo "MOCK_EDIT $*"
   else
     return 1
   fi
 }
-set -- '${version}' 'example/offgrid-llm'
+set -- '${version}' 'example/offgrid-llm' '${channel}'
 `;
     const result = spawnSync('bash', ['-s'], {
       cwd: root,
@@ -143,4 +149,12 @@ const denied = run(names, { apiFailure: true });
 assert.notEqual(denied.status, 0);
 assert.match(denied.stderr, /Forbidden/);
 assert.doesNotMatch(denied.stdout, /MOCK_UPLOAD|MOCK_EDIT/);
+const preview=run(names,{channel:'unsigned-preview',previewNotes:true});
+assert.equal(preview.status,0,preview.stdout+preview.stderr);
+assert.match(preview.stdout,/--prerelease --latest=false --title OffGrid v0.3.1 - Unsigned preview/);
+for(const options of [{channel:'unsigned-preview'}, {previewNotes:true}, {channel:'unknown'}]) {
+  const rejected=run(names,options);
+  assert.notEqual(rejected.status,0);
+  assert.doesNotMatch(rejected.stdout,/MOCK_UPLOAD|MOCK_EDIT/);
+}
 console.log('Draft finalization uses release IDs, evaluates real JSON filters, retries digests, and rejects incomplete or inaccessible assets');

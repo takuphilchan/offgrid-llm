@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
-export const deleteConversationBody: Record<LocaleCode, string> = {
+export const deleteConversationBody = defineMessages<string>("i18n/history-deletion:deleteConversationBody", {
   en: 'Delete this conversation and its local drafts? This cannot be undone. Saved work records and backups are kept.',
   fr: 'Supprimer cette conversation et ses brouillons locaux ? Cette action est irréversible. Les tâches enregistrées et les sauvegardes sont conservées.',
   de: 'Dieses Gespräch und seine lokalen Entwürfe löschen? Dies kann nicht rückgängig gemacht werden. Gespeicherte Aufgaben und Sicherungen bleiben erhalten.',
@@ -10,4 +11,4 @@ export const deleteConversationBody: Record<LocaleCode, string> = {
   sn: 'Dzima hurukuro iyi nemadhirafiti ayo emuno? Izvi hazvigoni kudzoserwa. Marekodhi ebasa akachengetwa nemabackup anosara.',
   nd: 'Susa ingxoxo le lemibhalo yayo engagqitywanga egcinwe lapha? Lokhu akubuyiseleki. Amarekhodi omsebenzi lamakhophi agciniweyo ayasala.',
   zu: 'Susa le ngxoxo nemibhalo yayo engagciniwe yasendaweni? Lokhu akubuyiseleki. Amarekhodi omsebenzi namakhophi ayisipele ayagcinwa.',
-};
+});

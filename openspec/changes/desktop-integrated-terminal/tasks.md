@@ -38,3 +38,10 @@ Follow-up evidence: `docs/quality/evidence/management-refinement-2026-11-06.md`.
 - [x] 5.1 Return from Agent `/exit` to the same-folder CLI-ready shell; verify literal path escaping, actual prompt/command execution and owned-tree cleanup in the packaged Windows candidate. Consolidate launch controls, align output to the pane and identify tabs by folder.
 
 Evidence: `docs/quality/evidence/terminal-session-followup-2026-11-07.md`.
+
+## 6. Comfortable terminal presentation
+
+- [x] 6.1 Add complete contrast-tested ANSI palettes and bounded local display preferences; verify active/new tabs, persistence failure, reset, reduced motion, forced colors, keyboard focus and resize without process replay. Keep manual screen-reader and other-platform qualification unverified.
+- [x] 6.2 Implement reviewed PowerShell command context and deliberate output-to-agent preview through a focused follow-up contract; never treat shell markers as execution receipts or transfer whole transcripts automatically.
+
+Evidence: `docs/quality/evidence/cli-terminal-interaction-2026-11-08.md`.

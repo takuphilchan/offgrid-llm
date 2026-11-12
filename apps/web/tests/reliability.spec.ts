@@ -65,6 +65,10 @@ test('chat draft survives navigation and reload without leaking to another accou
   state.switchUser('bob');
   await page.reload();
   await expect(page.locator('.composer textarea')).toHaveValue('');
+  // Alice's completed setup must not silently complete Bob's first run.
+  await expect(page.locator('dialog.onboarding')).toBeVisible();
+  await page.locator('dialog.onboarding .onboarding-close').click();
+  await expect(page.locator('dialog.onboarding')).toHaveCount(0);
   await page.locator('.sidebar a[href="#/agents"]').click();
   await expect(page.locator('.task-composer textarea')).toHaveCount(0);
   state.switchUser('alice');

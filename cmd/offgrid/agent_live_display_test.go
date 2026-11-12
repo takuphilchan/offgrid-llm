@@ -122,6 +122,54 @@ func TestAnimatedAgentProgressKeepsTransientPhasesOutOfTranscript(t *testing.T) 
 	}
 }
 
+func TestDelegatedProgressShowsTransitionsWithoutRepeatingTheWholeSnapshot(t *testing.T) {
+	stream := strings.Join([]string{
+		`data: {"type":"status","run_id":"run-parent","status":"waiting_for_children","children":[{"id":"run-child","status":"pending","spec":{"key":"research","goal":"Find sources"}}]}`,
+		`data: {"type":"status","run_id":"run-parent","status":"waiting_for_children","children":[{"id":"run-child","status":"running","phase":"loading","spec":{"key":"research","goal":"Find sources"}}]}`,
+		`data: {"type":"status","run_id":"run-parent","status":"waiting_for_children","children":[{"id":"run-child","status":"running","phase":"generating","spec":{"key":"research","goal":"Find sources"}}]}`,
+		`data: {"type":"status","run_id":"run-parent","status":"waiting_for_children","children":[{"id":"run-child","status":"completed","spec":{"key":"research","goal":"Find sources"}}]}`,
+		`data: {"type":"done","run_id":"run-parent","status":"completed","output":"Reviewed sources."}`,
+	}, "\n") + "\n"
+	var out, progress bytes.Buffer
+	if err := renderAgentStreamMode(&out, &progress, strings.NewReader(stream), true, false, cli.PresentationStyle{}); err != nil {
+		t.Fatal(err)
+	}
+	shown := progress.String()
+	for _, state := range []string{"research · pending", "research · running", "research · completed"} {
+		if strings.Count(shown, state) != 1 {
+			t.Fatal("child transition missing or repeated", state, shown)
+		}
+	}
+	if strings.Contains(shown, "Status: waiting_for_children") || !strings.Contains(out.String(), "Reviewed sources.") {
+		t.Fatal("graph progress displaced the final result", shown, out.String())
+	}
+}
+
+func TestLastSpecialistCompletionAppearsBeforeParentAnswer(t *testing.T) {
+	for _, eventType := range []string{"status", "done", "snapshot_recovery"} {
+		t.Run(eventType, func(t *testing.T) {
+			state := "completed"
+			if eventType == "status" {
+				state = "running"
+			}
+			stream := `data: {"type":"status","run_id":"parent","status":"waiting_for_children","children":[{"id":"writer","status":"running","spec":{"key":"Brief writer"}}]}` + "\n"
+			stream += fmt.Sprintf(`data: {"type":%q,"run_id":"parent","status":%q,"output":"Verified briefing.","children":[{"id":"writer","status":"completed","spec":{"key":"Brief writer"}}]}`, eventType, state) + "\n"
+			if eventType == "status" {
+				stream += `data: {"type":"done","run_id":"parent","status":"completed","output":"Verified briefing.","children":[{"id":"writer","status":"completed","spec":{"key":"Brief writer"}}]}` + "\n"
+			}
+			var transcript bytes.Buffer
+			if err := renderAgentStreamMode(&transcript, &transcript, strings.NewReader(stream), true, false, cli.PresentationStyle{}); err != nil {
+				t.Fatal(err)
+			}
+			shown := transcript.String()
+			completion := "Brief writer · completed"
+			if strings.Count(shown, completion) != 1 || strings.Index(shown, completion) > strings.Index(shown, "Verified briefing.") {
+				t.Fatal("last child completion was lost, duplicated, or printed after the answer", shown)
+			}
+		})
+	}
+}
+
 func TestAgentProgressAnimatesInPlace(t *testing.T) {
 	t.Setenv("OFFGRID_UNICODE", "1")
 	var out bytes.Buffer

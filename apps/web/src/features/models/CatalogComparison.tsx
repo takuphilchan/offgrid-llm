@@ -15,7 +15,7 @@ export function CatalogComparison({ models, clear }: { models: CatalogModel[]; c
       <h4>{model.name || model.id}</h4><small dir="auto">{model.id}</small>
       <dl>
         <dt>{copy.parameters}</dt><dd>{model.parameters || unknown}</dd>
-        <dt>{acquisition.transfer}</dt><dd>{model.size_bytes > 0 ? formatBytes(model.size_bytes) : unknown}</dd>
+        <dt>{acquisition.transfer}</dt><dd>{model.size_bytes > 0 ? formatBytes(model.size_bytes, locale) : unknown}</dd>
         <dt>{copy.ram}</dt><dd>{model.min_ram_gb > 0 ? `${model.min_ram_gb} GB` : unknown}</dd>
         <dt>{copy.quant}</dt><dd>{model.quant || unknown}</dd>
         <dt>{acquisition.license}</dt><dd>{model.license || unknown}</dd>

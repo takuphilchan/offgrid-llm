@@ -160,3 +160,19 @@ identify the version, operating system, architecture and installation format.
 - **WHEN** a user chooses a release asset or uses a maintained installer
 - **THEN** the selected filename matches the published platform/architecture/format
 - **AND** older published release names remain supported without rewriting historical assets
+
+### Requirement: Discoverable application settings
+Settings SHALL offer searchable General, Models & responses, Voice, Terminal, Access & data and Advanced/About sections with truthful existing controls and explicit scope.
+
+#### Scenario: Change a scoped preference
+- **WHEN** a user changes response or voice preferences and returns to Chat or reloads
+- **THEN** the same scoped preference is used and unrelated work, grants and pinned agent profiles remain unchanged
+
+#### Scenario: Browse without side effects
+- **WHEN** a user searches Settings or opens a section
+- **THEN** no model load, microphone capture, playback, grant or resource change occurs
+- **AND** unavailable desktop controls are explained in the browser
+
+#### Scenario: Localized navigation
+- **WHEN** Settings is used by keyboard in any supported locale, a narrow window or RTL
+- **THEN** matching settings remain reachable without clipped controls or losing search focus

@@ -71,12 +71,35 @@ test('specialists expose their own status, dependencies and draft without claimi
   const rows = page.locator('.specialist-row');
   await expect(rows.nth(0)).toContainText('Completed');
   await expect(rows.nth(1)).toContainText('Failed');
+  expect(await page.locator('.conversation-work-delegates').evaluate(node => !!(node.compareDocumentPosition(document.querySelector('.work-inspector .task-result')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
   await expect(page.getByText('Partial specialist draft', { exact: true })).not.toBeVisible();
   await rows.nth(1).locator('summary').click();
   await expect(rows.nth(1)).toContainText('Depends on: Find supporting sources');
   await expect(page.getByText('Partial specialist draft', { exact: true })).toBeVisible();
   await expect(page.locator('.work-status')).toHaveText('Interrupted');
   await expect(rows.getByRole('button', { name: 'Resume', exact: true })).toHaveCount(0);
+  expect(state.writes).toEqual([]);
+});
+
+test('persisted child progress survives follower errors and honors reduced motion', async ({ page }) => {
+  const state = await fixture(page);
+  state.run.status = 'waiting_for_children';
+  state.run.children = [
+    { id: 'run-' + 'b'.repeat(32), status: 'running', phase: 'generating', spec: { key: 'research', goal: 'Find supporting sources', depends_on: [], tools: [] } },
+    { id: 'run-' + 'c'.repeat(32), status: 'pending', spec: { key: 'draft', goal: 'Draft the briefing', depends_on: ['research'], tools: [] } },
+  ];
+  await page.route(/\/api\/v2\/jobs\/run-[bc]{32}$/, route => route.fulfill({ status: 503, json: { error: 'Follower unavailable' } }));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 500, height: 680 });
+  await page.goto(`/ui/#/agents/task/${id}`);
+  const rows = page.locator('.specialist-row');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toHaveClass(/specialist-row-active/);
+  await expect(rows.first()).toContainText('Generating');
+  await expect(rows.nth(1)).toContainText('Pending');
+  await expect(rows.nth(1)).not.toHaveClass(/specialist-row-active/);
+  expect(await rows.first().locator('.specialist-state').evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(state.writes).toEqual([]);
 });
 

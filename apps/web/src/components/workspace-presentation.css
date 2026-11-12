@@ -22,7 +22,7 @@
   .settings-page { width: 100%; max-width: 960px; margin-inline: 0; container-type: inline-size; container-name: settings; }
   .settings-group { display: grid; gap: 12px; }
   .settings-group h3 { margin: 0; font-size: var(--type-body); line-height: var(--leading-ui); }
-  .settings-group .settings-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); border: 0; border-block-end: 1px solid var(--line); border-radius: 0; background: transparent; padding: var(--space-4) 0; }
+  .settings-group .settings-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); border: 0; border-radius: 0; background: transparent; padding: var(--space-4) 0; }
   .settings-group .settings-panel > div { min-width: 0; }
   .settings-group .settings-panel > :is(button, .segmented-control, .settings-actions) { justify-self: start; }
   .settings-group .settings-panel > label { font-size: var(--type-body); font-weight: var(--weight-medium); }
@@ -34,7 +34,7 @@
   @container settings (min-width: 700px) {
     .settings-group .settings-panel { grid-template-columns: minmax(0, 1fr) minmax(0, 20rem); column-gap: 40px; }
   }
-  .settings-diagnostics, .activity-diagnostics { border-block-start: 1px solid var(--line); padding-block-start: 16px; }
+  .settings-diagnostics, .activity-diagnostics { border-block-start: 0; padding-block-start: 16px; }
   .settings-diagnostics > summary, .activity-diagnostics > summary { cursor: pointer; padding-block: 8px; color: var(--muted); }
   .settings-diagnostics dl, .desktop-local-paths { margin-block-start: 16px; }
   .desktop-local-paths > p { max-width: 75ch; color: var(--muted); line-height: 1.6; }
@@ -71,7 +71,7 @@
   .composer-context .model-select > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .composer-context-menu .utility-popover-content { display: grid; gap: 16px; }
   .composer-context-menu p { font-size: 13px; line-height: 1.6; margin: 0; color: var(--muted); }
-  .voice-settings-inline { width: 100%; border-block-start: 1px solid var(--line); padding-block-start: 8px; }
+  .voice-settings-inline { width: 100%; border-block-start: 0; padding-block-start: 8px; }
   .voice-settings-inline > h3 { margin: 0; padding-block: 8px; font-size: var(--type-body); }
   .voice-settings-inline > .voice-settings-panel { display: grid; gap: 16px; padding-block: 12px; }
   .voice-settings-inline [role="alert"] { display: grid; gap: 12px; line-height: 1.5; }
@@ -87,7 +87,7 @@
   .knowledge-scope-hint { max-width: min(100%, 720px); margin: 0; font-size: .875rem; line-height: 1.6; }
   .knowledge-actions > p { max-width: var(--measure-copy); margin: 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
   .knowledge-documents { display: grid; gap: 0; }
-  .knowledge-documents .resource-card { border: 0; border-block-end: 1px solid var(--line); border-radius: 0; background: transparent; padding: 20px 4px; }
+  .knowledge-documents .resource-card { border: 0; border-block-end: 1px solid var(--separator); border-radius: 0; background: transparent; padding: 20px 4px; }
   .knowledge-documents .resource-body { min-width: 0; }
   .knowledge-documents .resource-body h3 { font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
   .knowledge-documents .document-readiness { font-size: 14px; color: var(--text); }

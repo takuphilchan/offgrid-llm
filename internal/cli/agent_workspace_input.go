@@ -96,7 +96,6 @@ func runWithWorkspaceInput(ctx context.Context, client *serviceclient.Client, re
 			}
 			// A user's ceiling is not a request to grant extra privileges.
 		}
-		fmt.Fprintln(env.Stdout, "This task needs local workspace access.")
 		if req.FolderCheck != nil {
 			if err := req.FolderCheck.check(); err != nil {
 				return settleForegroundRun(client, snapshot.RunID, true, err)

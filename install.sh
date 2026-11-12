@@ -98,24 +98,33 @@ detect_arch() {
     esac
 }
 
+# Keep these two functions identical in installers/desktop.sh: both entry points
+# can be downloaded alone. Inspect all instruction families enabled by GGML.
+cpu_features_from_flags() {
+    local flags feature
+    flags=" $(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/avx1\.0/avx/g; s/avx2\.0/avx2/g; s/sse4\.2/sse4_2/g') "
+    for feature in sse4_2 avx avx2 f16c fma bmi2; do
+        case "$flags" in *" $feature "*) ;; *) echo basic; return ;; esac
+    done
+    for feature in avx512f avx512dq avx512bw avx512vl; do
+        case "$flags" in *" $feature "*) ;; *) echo avx2; return ;; esac
+    done
+    echo avx512
+}
+
 detect_cpu_features() {
-    if [ "$(uname -s)" = "Linux" ]; then
-        if grep -q "avx512" /proc/cpuinfo 2>/dev/null; then
-            echo "avx512"
-        elif grep -q "avx2" /proc/cpuinfo 2>/dev/null; then
-            echo "avx2"
-        else
-            echo "basic"
-        fi
-    elif [ "$(uname -s)" = "Darwin" ]; then
-        if sysctl machdep.cpu.features machdep.cpu.leaf7_features 2>/dev/null | grep -qi "avx512"; then
-            echo "avx512"
-        else
-            echo "avx2"
-        fi
-    else
-        echo "avx2"
-    fi
+    local os arch flags
+    os=$(uname -s); arch=$(uname -m)
+    case "$os:$arch" in
+        Darwin:arm64) echo apple-silicon; return ;;
+        Linux:aarch64|Linux:arm64) echo neon; return ;;
+    esac
+    case "$os" in
+        Linux) flags=$(awk -F ': ' '/^flags[[:space:]]*:/ { print $2; exit }' /proc/cpuinfo) || return 1 ;;
+        Darwin) flags=$(sysctl -n machdep.cpu.features machdep.cpu.leaf7_features) || return 1 ;;
+        *) echo 'Use the native Windows desktop installer or installers/desktop.ps1; this shell entry point supports Linux and macOS.' >&2; return 1 ;;
+    esac
+    cpu_features_from_flags "$(printf '%s' "$flags" | tr '\n\t' '  ')"
 }
 
 detect_gpu_variant() {
@@ -179,6 +188,15 @@ download_cli_bundle() {
     local cpu_features="$4"
     local tmp_dir="$5"
     local variant="${6:-cpu}"
+
+    # Match published target names; never guess an x86 variant for ARM.
+    case "$os:$arch" in
+        darwin:arm64) variant=metal; cpu_features=apple-silicon ;;
+        linux:arm64) variant=cpu; cpu_features=neon ;;
+        linux:amd64|darwin:amd64|windows:amd64)
+            case "$cpu_features" in avx2|avx512) ;; *) error 'This CLI archive requires AVX2, FMA, F16C and BMI2. No basic x64 archive is published; use a compatible host or a custom runtime build.'; return 1 ;; esac ;;
+        *) error "No supported CLI archive for $os/$arch"; return 1 ;;
+    esac
     
     local bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
     local ext=".tar.gz"
@@ -192,7 +210,7 @@ download_cli_bundle() {
         spin_done "Downloaded OffGrid"
     else
         # Keep the legacy GPU -> CPU fallback before feature fallback.
-        if [ "$variant" != "cpu" ]; then
+        if [ "$variant" = "vulkan" ]; then
             rm -f "${tmp_dir}/bundle${ext}"
             variant="cpu"
             bundle_name="offgrid-${version}-${os}-${arch}-${variant}-${cpu_features}"
@@ -220,7 +238,9 @@ download_cli_bundle() {
         fi
     fi
     
-    # Extract
+    verify_release_download "${tmp_dir}/bundle${ext}" "${bundle_name}${ext}" "$version" "$tmp_dir" || return 1
+
+    # Extract only after the release archive has been verified.
     spin "Extracting..."
     cd "$tmp_dir" || return 1
     if [ "$os" = "windows" ]; then
@@ -240,12 +260,37 @@ download_cli_bundle() {
     echo "$bundle_name"
 }
 
+verify_release_download() {
+    local file="$1" asset="$2" version="$3" tmp_dir="$4"
+    local manifest="$tmp_dir/release-checksums.sha256" expected actual
+    case "$version" in ''|*[!0-9A-Za-z.+-]*) error 'Invalid release version'; return 1 ;; esac
+    # Always refresh the manifest from the selected release, not the archive.
+    if ! download_with_progress "${GITHUB_URL}/releases/download/${version}/checksums-${version}.sha256" "$manifest" 'Downloading release checksums...'; then
+        error 'Release checksums unavailable; refusing unverified installation'
+        return 1
+    fi
+    expected=$(awk -v asset="$asset" '
+        { sub(/\r$/, ""); digest=substr($0,1,64); marker=substr($0,65,2); name=substr($0,67) }
+        name == asset && length(digest) == 64 && digest !~ /[^a-fA-F0-9]/ && (marker == "  " || marker == " *") { count++; hash=digest }
+        END { if (count != 1) exit 1; print tolower(hash) }
+    ' "$manifest") || { error "Expected exactly one release checksum for $asset"; return 1; }
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual=$(sha256sum "$file") || return 1
+    elif command -v shasum >/dev/null 2>&1; then
+        actual=$(shasum -a 256 "$file") || return 1
+    else
+        error 'SHA-256 verification requires sha256sum or shasum'; return 1
+    fi
+    [ "${actual%% *}" = "$expected" ] || { error "Release checksum mismatch for $asset"; return 1; }
+    ok "Verified $asset"
+}
+
 verify_legacy_checksums() {
     local bundle_dir="$1"
     [ "$LEGACY_INSTALL" = "yes" ] || return 0
     if [ ! -f "$bundle_dir/checksums.sha256" ]; then
-        warn "Checksums file not found, skipping verification"
-        return 0
+        error "Bundle checksums missing; refusing legacy installation"
+        return 1
     fi
     if command -v sha256sum >/dev/null 2>&1; then
         (cd "$bundle_dir" && sha256sum -c checksums.sha256 >/dev/null) || {
@@ -287,7 +332,7 @@ download_desktop_app() {
     local target_os="$os" target_arch="$arch" extension=""
     case "$os:$arch" in
         linux:amd64) target_arch=x86_64; extension=.AppImage ;;
-        linux:arm64) extension=.AppImage ;;
+        linux:arm64) dim 'Linux ARM64 provides the CLI/web service only; no desktop package is published.'; return 0 ;;
         darwin:amd64) target_os=macos; target_arch=x64; extension=.zip ;;
         darwin:arm64) target_os=macos; extension=.zip ;;
         windows:amd64) target_arch=x64; extension=-setup.exe ;;
@@ -298,6 +343,7 @@ download_desktop_app() {
     local download_url="${GITHUB_URL}/releases/download/${version}/${app_name}"
     
     if download_with_progress "$download_url" "${tmp_dir}/${app_name}" "Downloading Desktop app..."; then
+        verify_release_download "${tmp_dir}/${app_name}" "$app_name" "$version" "$tmp_dir" || return 1
         spin_done "Downloaded Desktop app"
         echo "${tmp_dir}/${app_name}"
     else
@@ -311,29 +357,18 @@ download_desktop_app() {
 # Installation Functions
 # ═══════════════════════════════════════════════════════════════
 stop_running_processes() {
-    if [ "$LEGACY_INSTALL" = "yes" ]; then
-        # The published installer targeted exact binary names, not every
-        # process whose command line mentions OffGrid (including this wrapper).
-        local name i
-        for name in llama-server offgrid; do
-            if pgrep -x "$name" >/dev/null 2>&1; then
-                pkill -TERM -x "$name" 2>/dev/null || true
-                for i in {1..10}; do
-                    pgrep -x "$name" >/dev/null 2>&1 || break
-                    sleep 0.5
-                done
-                if pgrep -x "$name" >/dev/null 2>&1; then
-                    pkill -9 -x "$name" 2>/dev/null || true
-                fi
-            fi
-        done
-        return 0
-    fi
-    pkill -TERM -f "offgrid serve" 2>/dev/null || true
-    pkill -TERM -x "llama-server" 2>/dev/null || true
-    sleep 0.5
-    pkill -9 -f "offgrid" 2>/dev/null || true
-    pkill -9 -x "llama-server" 2>/dev/null || true
+    # Historical function name retained for existing sourced fixtures. This
+    # installer has no authority to stop any running service or model worker.
+    local name status
+    for name in offgrid llama-server; do
+        status=0
+        pgrep -x "$name" >/dev/null 2>&1 || status=$?
+        if [ "$status" -eq 0 ]; then
+            error "$name is running. Finish active work and close its owning service normally, then retry. No processes were stopped."
+            return 1
+        fi
+        [ "$status" -eq 1 ] || { error 'Unable to inspect running processes; installation stopped'; return 1; }
+    done
 }
 
 install_cli() {
@@ -341,11 +376,7 @@ install_cli() {
     if [ -d "$bundle_dir/execution-runtime" ]; then case "${VERSION#v}" in ''|*[!0-9A-Za-z.+-]*) spin_fail "Invalid executor version"; return 1 ;; esac; fi
     [ "$os" = "windows" ] && ext=".exe"
     [ "$os" != "windows" ] && [ ! -w "$INSTALL_DIR" ] && use_sudo="sudo"
-    if [ "$LEGACY_INSTALL" = "yes" ] && command -v systemctl >/dev/null 2>&1 && \
-       systemctl is-active --quiet "offgrid@${USER}.service" 2>/dev/null; then
-        $use_sudo systemctl stop "offgrid@${USER}.service"
-    fi
-    stop_running_processes
+    stop_running_processes || return 1
     spin "Installing CLI..."
     local binaries=("offgrid${ext}" "llama-server${ext}") files=() installed=() binary parser
     for parser in document ocr; do
@@ -354,6 +385,19 @@ install_cli() {
     files+=("${binaries[@]/#/$bundle_dir/}")
     for binary in "${binaries[@]}"; do installed+=("$INSTALL_DIR/$binary"); done
     if $use_sudo cp -f "${files[@]}" "$INSTALL_DIR/" && $use_sudo chmod +x "${installed[@]}"; then
+        local payload
+        for payload in audio web; do
+            if [ -d "$bundle_dir/$payload" ]; then
+                $use_sudo mkdir -p "$INSTALL_DIR/$payload" &&
+                    $use_sudo cp -R "$bundle_dir/$payload/." "$INSTALL_DIR/$payload/" || { spin_fail "Failed to install $payload payload"; return 1; }
+            fi
+        done
+        if [ "$os" = windows ]; then
+            local dependency
+            for dependency in "$bundle_dir/"*.dll "$bundle_dir/runtime-dependencies.json"; do
+                [ ! -f "$dependency" ] || $use_sudo cp -f "$dependency" "$INSTALL_DIR/" || return 1
+            done
+        fi
         # Retain versioned assets for rollback; older bundles stay compatible.
         if [ -d "$bundle_dir/execution-runtime" ]; then
             $use_sudo mkdir -p "$INSTALL_DIR/execution-runtime/${VERSION#v}" &&
@@ -439,8 +483,8 @@ install_webui() {
     
     if [ -d "$bundle_dir/web/ui" ]; then
         spin "Installing Web UI..."
-        $use_sudo mkdir -p "$WEB_DIR" 2>/dev/null
-        $use_sudo cp -r "$bundle_dir/web/ui/"* "$WEB_DIR/" 2>/dev/null
+        $use_sudo mkdir -p "$WEB_DIR" || return 1
+        $use_sudo cp -R "$bundle_dir/web/ui/." "$WEB_DIR/" || return 1
         spin_done "Installed Web UI"
     fi
 }
@@ -507,52 +551,19 @@ EOF
 }
 
 install_audio() {
-    local bundle_dir="$1"
-    
-    local AUDIO_DIR="$HOME/.offgrid-llm/audio"
-    mkdir -p "$AUDIO_DIR/whisper" "$AUDIO_DIR/piper"
-    
-    if [ -d "$bundle_dir/audio/whisper" ]; then
-        spin "Setting up Whisper (Speech-to-Text)..."
-        cp -r "$bundle_dir/audio/whisper/"* "$AUDIO_DIR/whisper/" 2>/dev/null || true
-        chmod +x "$AUDIO_DIR/whisper/"* 2>/dev/null || true
-        spin_done "Whisper ready (Speech-to-Text)"
-    fi
-    
-    if [ -d "$bundle_dir/audio/piper" ]; then
-        spin "Setting up Piper (Text-to-Speech)..."
-        cp -r "$bundle_dir/audio/piper/"* "$AUDIO_DIR/piper/" 2>/dev/null || true
-        chmod +x "$AUDIO_DIR/piper/"* 2>/dev/null || true
-        spin_done "Piper ready (Text-to-Speech)"
-    elif [ "$LEGACY_INSTALL" != "yes" ] && [ "$(uname -s)" = "Linux" ]; then
-        download_piper "$AUDIO_DIR/piper"
-    fi
-}
-
-download_piper() {
-    local install_dir="$1"
-    local arch=$(uname -m)
-    local piper_url=""
-    
-    case "$arch" in
-        x86_64|amd64) piper_url="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz" ;;
-        aarch64|arm64) piper_url="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz" ;;
-        *) return 1 ;;
-    esac
-    
-    local tmp_dir="/tmp/piper-$$"
-    mkdir -p "$tmp_dir"
-    
-    if download_with_progress "$piper_url" "$tmp_dir/piper.tar.gz" "Downloading Piper (TTS)..."; then
-        tar -xzf "$tmp_dir/piper.tar.gz" -C "$tmp_dir" 2>/dev/null
-        rm -rf "$install_dir"
-        mkdir -p "$install_dir"
-        [ -d "$tmp_dir/piper" ] && cp -r "$tmp_dir/piper/"* "$install_dir/"
-        chmod +x "$install_dir/piper" 2>/dev/null || true
-        spin_done "Piper ready (Text-to-Speech)"
-    fi
-    
-    rm -rf "$tmp_dir"
+    local bundle_dir="$1" adapter
+    local audio_dir="$HOME/.offgrid-llm/audio"
+    # Install only payloads covered by the verified release archive. An absent
+    # optional runtime must not trigger an unverified upstream download.
+    for adapter in whisper piper; do
+        if [ -d "$bundle_dir/audio/$adapter" ]; then
+            mkdir -p "$audio_dir/$adapter" || return 1
+            cp -R "$bundle_dir/audio/$adapter/." "$audio_dir/$adapter/" || return 1
+            ok "Installed $adapter runtime files (model download is separate)"
+        else
+            dim "$adapter is not bundled for this target; see the voice setup guide."
+        fi
+    done
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -566,9 +577,14 @@ main() {
     print_banner
     
     # Detect system
-    local os=$(detect_os)
-    local arch=$(detect_arch)
-    local cpu_features=$(detect_cpu_features)
+    local os arch cpu_features
+    os=$(detect_os) || return 1
+    arch=$(detect_arch) || return 1
+    cpu_features=$(detect_cpu_features) || return 1
+    if [ "$cpu_features" = basic ]; then
+        error 'No compatible x64 CLI archive: AVX2, FMA, F16C and BMI2 are required. SSE4.2 alone is insufficient. Use a compatible host or build a custom runtime.'
+        return 1
+    fi
     
     section "System"
     dim "$os / $arch / $cpu_features"
@@ -592,7 +608,8 @@ main() {
     # Download CLI bundle
     local variant="cpu"
     [ "$LEGACY_INSTALL" = "yes" ] && variant="$(detect_gpu_variant "$os")"
-    local bundle_name=$(download_cli_bundle "$os" "$arch" "$VERSION" "$cpu_features" "$tmp_dir" "$variant")
+    local bundle_name
+    bundle_name=$(download_cli_bundle "$os" "$arch" "$VERSION" "$cpu_features" "$tmp_dir" "$variant") || return 1
     
     if [ -z "$bundle_name" ]; then
         error "Failed to download"
@@ -600,19 +617,19 @@ main() {
     fi
     
     local bundle_dir="$tmp_dir/$bundle_name"
-    verify_legacy_checksums "$bundle_dir"
+    verify_legacy_checksums "$bundle_dir" || return 1
     
     # Download Desktop app
     local app_path=""
     if [ "$LEGACY_INSTALL" != "yes" ]; then
-        app_path=$(download_desktop_app "$os" "$arch" "$VERSION" "$tmp_dir")
+        app_path=$(download_desktop_app "$os" "$arch" "$VERSION" "$tmp_dir") || return 1
     fi
     
     section "Installing"
     
-    install_cli "$bundle_dir" "$os"
-    install_webui "$bundle_dir"
-    install_audio "$bundle_dir"
+    install_cli "$bundle_dir" "$os" || return 1
+    install_webui "$bundle_dir" || return 1
+    install_audio "$bundle_dir" || return 1
     if [ "$LEGACY_INSTALL" != "yes" ]; then
         install_desktop "$app_path" "$os"
     fi

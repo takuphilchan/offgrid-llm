@@ -4,17 +4,20 @@ const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const fs = require('node:fs');
 const { StringDecoder } = require('node:string_decoder');
+const { powershellIntegration } = require('./terminal-shell-integration');
 
 const shellArgs=['-NoLogo','-NoProfile','-NoExit','-Command','[Console]::InputEncoding = [Text.UTF8Encoding]::new($false); [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding'];
 function launchCommand(kind,cli,systemRoot=process.env.SystemRoot) {
+  const integratedArgs=[...shellArgs];
+  integratedArgs[integratedArgs.length-1]+='; '+powershellIntegration;
   if(kind==='agent'||kind==='offgrid') {
     // Invoke the pinned executable as a literal PowerShell string. The parent
     // shell remains interactive after /exit; no input is replayed or restarted.
-    const args=[...shellArgs];
+    const args=[...integratedArgs];
     args[args.length-1]+="; & '"+cli.replace(/'/g,"''")+"' agent";
     return {file:path.win32.join(systemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),args};
   }
-  if(kind==='shell'||kind==='cli')return {file:path.win32.join(systemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),args:shellArgs};
+  if(kind==='shell'||kind==='cli')return {file:path.win32.join(systemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),args:integratedArgs};
   throw Error('terminal_invalid_kind');
 }
 function launchEnvironment(base,cli,service) {

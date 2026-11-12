@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+
 import react from '@vitejs/plugin-react';
 import computerCopy from './src/i18n/computer-experience.json' with { type: 'json' };
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -13,6 +14,7 @@ export default defineConfig({
   // the Markdown worker, where no DOM exists.
   resolve: { alias: { 'decode-named-character-reference': createRequire(import.meta.url).resolve('decode-named-character-reference') } },
   plugins: [react(), {name:'shared-computer-copy', generateBundle() {
+    this.emitFile({type:'asset',fileName:'theme-NOTICE.txt',source:readFileSync(resolve(import.meta.dirname,'../desktop/theme-NOTICE.txt'),'utf8')});
     this.emitFile({type:'asset',fileName:'computer-experience.json',source:JSON.stringify(computerCopy)});
   }}, {name:'desktop-compatibility', writeBundle(options) {
     const root = resolve(options.dir!);

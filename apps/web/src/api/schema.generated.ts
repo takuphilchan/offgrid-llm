@@ -321,6 +321,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Reports engine preparation separately from model readiness; requires models permission. No download is started. */
+        get: operations["getInferenceRuntimeReadiness"];
+        put?: never;
+        /** @description Requires models management permission. Checks the configured runtime or downloads the pinned CPU/Metal engine. Bounded to five minutes; disconnect cancels the request. Poll GET for progress. Does not load a model or prove a first answer. */
+        post: operations["prepareInferenceRuntime"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1702,6 +1720,22 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Native engine preparation only. Ready verifies runtime startup flags, not model inference or workflow quality. Progress is service-local and is not durable across restart. */
+        InferenceRuntimeReadiness: {
+            /** @enum {string} */
+            state: "unchecked" | "missing" | "checking" | "downloading" | "installing" | "ready" | "failed" | "cancelled";
+            /** @enum {string} */
+            mode: "cpu" | "metal" | "nvidia" | "amd";
+            gpu_detected: boolean;
+            download_required: boolean;
+            /** Format: int64 */
+            download_bytes: number;
+            /** Format: int64 */
+            downloaded_bytes: number;
+            /** @description Pinned CPU/Metal fallback revision; not an inferred version of a separately configured engine. */
+            revision: string;
+            message?: string;
+        };
         /** @description Milliseconds for the shared synthetic tool check, not an individual observer's wait. Admission includes queue/model readiness; probe includes runtime metadata and synthetic generation. Excludes separate vision checks. Absent for a caller that cancels before the shared result completes. */
         ComputerModelCheckTimings: {
             /** Format: int64 */
@@ -2977,6 +3011,13 @@ export interface components {
         };
         TaskChild: {
             id: string;
+            /**
+             * @description Last persisted child status
+             * @enum {string}
+             */
+            status?: "pending" | "running" | "waiting_for_approval" | "waiting_for_input" | "waiting_for_children" | "interrupted" | "uncertain" | "completed" | "failed" | "cancelled";
+            /** @description Last persisted public progress phase */
+            phase?: string;
             spec: {
                 key: string;
                 goal: string;
@@ -4073,6 +4114,71 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SystemIdentity"];
                 };
+            };
+        };
+    };
+    getInferenceRuntimeReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runtime preparation status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceRuntimeReadiness"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Native inference preparation unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    prepareInferenceRuntime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Engine prepared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceRuntimeReadiness"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description Another preparation is running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceRuntimeReadiness"];
+                };
+            };
+            /** @description Preparation failed or unavailable; query status before retrying */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -1,0 +1,130 @@
+{
+  "i18n/agent-context:agentContextText": {
+    "edit": "Edit"
+  },
+  "i18n/agent-profiles:agentProfilesText": {
+    "profiles": "Agent profiles",
+    "create": "New agent",
+    "name": "Name",
+    "description": "Description",
+    "instructions": "Instructions",
+    "save": "Save agent",
+    "tools": "Tools",
+    "knowledge": "Knowledge",
+    "advanced": "Advanced",
+    "search": "Search agents"
+  },
+  "i18n/agent-schedules:rows": {
+    "16": "Cancel"
+  },
+  "i18n/artifact-preview:labels": {
+    "0": "Preview"
+  },
+  "i18n/knowledge-original:sourceClose": {
+    "": "Close"
+  },
+  "i18n/model-acquisition:modelAcquisition": {
+    "language": "Language"
+  },
+  "i18n/personalization:personalization": {
+    "0": "Appearance",
+    "1": "Light theme",
+    "2": "Dark theme",
+    "3": "Text size",
+    "4": "Reduce motion",
+    "5": "Preview",
+    "6": "Apply",
+    "7": "Cancel",
+    "8": "Reset appearance",
+    "11": "Saved",
+    "12": "High contrast"
+  },
+  "i18n/presentation:inline1": {
+    "details": "Technical details"
+  },
+  "i18n/settings-navigation:settingsNavigation": {
+    "search": "Search settings",
+    "empty": "No matching settings.",
+    "sections.0": "General",
+    "sections.1": "Models & responses",
+    "sections.2": "Voice",
+    "sections.3": "Terminal",
+    "sections.4": "Access & data",
+    "sections.5": "About",
+    "terminal": "Open terminal"
+  },
+  "i18n/task-controls:inline1": {
+    "2": "Stop"
+  },
+  "i18n/task-presentation:labels": {
+    "10": "Download"
+  },
+  "i18n/task-workspace:inline1": {
+    "10": "Activity"
+  },
+  "i18n/theme-chooser:themeChooser": {
+    "title": "Choose a theme",
+    "browse": "Browse themes",
+    "search": "Search themes",
+    "empty": "No matching themes."
+  },
+  "i18n/voice-settings:copy": {
+    "6": "Voice"
+  },
+  "i18n/workspace-help:workspaceHelp": {
+    "help": "Help",
+    "close": "Close help"
+  },
+  "i18n/workspace-refinement:inline1": {
+    "clear": "Clear search"
+  },
+  "i18n/workspace-shell:inline1": {
+    "options": "Workspace options",
+    "collapse": "Collapse navigation",
+    "expand": "Expand navigation",
+    "navigation": "Primary navigation"
+  },
+  "core": {
+    "guidance.workspaceOptions": "Workspace options",
+    "shell.system": "System",
+    "shell.appearance": "Appearance",
+    "shell.theme": "Theme",
+    "shell.systemTheme": "System",
+    "shell.darkTheme": "Dark",
+    "shell.lightTheme": "Light",
+    "agentRuntime.copy": "Copy",
+    "agentRuntime.copied": "Copied",
+    "nav.chat": "Chat",
+    "nav.knowledge": "Knowledge",
+    "nav.agents": "Agents",
+    "nav.models": "Models",
+    "nav.activity": "Activity",
+    "nav.settings": "Settings",
+    "chat.title": "Chat",
+    "chat.placeholder": "Ask, draft, analyze, or plan…",
+    "chat.send": "Send",
+    "chat.stop": "Stop",
+    "chat.selectModel": "Select a model",
+    "chat.newChat": "New chat",
+    "chat.conversations": "Conversations",
+    "chat.copy": "Copy",
+    "chat.copied": "Copied",
+    "knowledge.title": "Knowledge",
+    "agents.title": "Agents",
+    "models.title": "Models",
+    "models.download": "Download",
+    "models.cancel": "Cancel",
+    "models.delete": "Delete",
+    "activity.title": "Activity",
+    "settings.title": "Settings",
+    "settings.knowledge": "Knowledge",
+    "common.refresh": "Refresh",
+    "common.retry": "Try again",
+    "common.loading": "Loading…",
+    "common.language": "Language"
+  },
+  "i18n/computer-experience:copy": {
+    "cancel": "Cancel",
+    "details": "Technical details"
+  }
+}

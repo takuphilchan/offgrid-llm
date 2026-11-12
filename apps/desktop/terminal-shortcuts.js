@@ -4,6 +4,7 @@
 function terminalShortcut(event, selection) {
   if (event.type !== 'keydown' || event.altKey || (!event.ctrlKey && !event.metaKey)) return '';
   if (event.code === 'KeyC' && (selection || event.shiftKey || event.metaKey)) return 'copy';
+  if (event.code === 'KeyV') return 'paste';
   if (event.code === 'KeyF' && event.shiftKey) return 'search';
   return '';
 }

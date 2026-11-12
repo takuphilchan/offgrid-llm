@@ -24,6 +24,7 @@ for (const installed of [true, false, 'unknown', 'browser'] as const) {
       } });
     }, installed);
     await page.goto('/ui/#/settings');
+    await page.getByRole('button',{name:'Access & data',exact:true}).click();
     const panel = page.locator('.settings-panel').filter({ has: page.getByRole('heading', { name: 'Computer use', exact: true }) });
     await expect(panel).toContainText(installed === true ? 'Computer access component installed' : installed === false ? 'component is missing' : installed === 'browser' ? 'No computer session connected' : 'Status unavailable');
     await expect(panel).not.toContainText('No platform driver installed');

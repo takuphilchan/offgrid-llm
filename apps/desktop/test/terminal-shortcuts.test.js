@@ -7,8 +7,10 @@ test('copying selected output never sends Ctrl+C to a running command',()=>{
   assert.equal(terminalShortcut({...control,shiftKey:true},''),'copy');
   assert.equal(terminalShortcut({...control,ctrlKey:false,metaKey:true},''),'copy');
 });
-test('paste, key release, AltGr and ordinary typing remain native',()=>{
-  for(const event of [{...control,code:'KeyV'},{...control,type:'keyup'},
+test('paste is explicit while key release, AltGr and ordinary typing remain native',()=>{
+  assert.equal(terminalShortcut({...control,code:'KeyV'},''),'paste');
+  assert.equal(terminalShortcut({...control,code:'KeyV',shiftKey:true},''),'paste');
+  for(const event of [{...control,type:'keyup'},
     {...control,altKey:true},{...control,ctrlKey:false}]) {
     assert.equal(terminalShortcut(event,'selected output'),'');
   }

@@ -4,6 +4,7 @@ export type DesktopBackend = { state: 'checking' | 'starting' | 'ready' | 'offli
 export type DesktopBridge = {
   bridgeProtocol?: number;
   terminalProtocol?: number;
+  onTerminalContext?: (callback:(context:unknown)=>boolean)=>()=>void;
   openTerminal?: () => Promise<{visible:boolean}>;
   getTerminalStatus?: () => Promise<{available:boolean}>;
   startExecutionWorkspace?: (request:{access:'read'|'edit'|'trusted'}) => Promise<{state:string;resource?:import('./api/client').ExecutionWorkspace}>;
@@ -23,9 +24,9 @@ export type DesktopBridge = {
   stopComputerBrowser?: () => Promise<{state:string;code?:string}>;
   stopComputerAccess?: (request:{requestId:string}|{session:string}) => Promise<{state:string;code?:string}>;
   isDesktop: true;
-  presentation?: { locale: string; theme: 'system' | 'dark' | 'light' };
-  getPresentation?: () => Promise<{ locale: string; theme: 'system' | 'dark' | 'light' }>;
-  setPresentation?: (preferences: { locale: string; theme: 'system' | 'dark' | 'light' }) => Promise<void>;
+  presentation?: { locale: string; theme: 'system' | 'dark' | 'light'; appearance?: unknown };
+  getPresentation?: () => Promise<{ locale: string; theme: 'system' | 'dark' | 'light'; appearance?: unknown }>;
+  setPresentation?: (preferences: { locale: string; theme: 'system' | 'dark' | 'light'; appearance?: unknown }) => Promise<void>;
   platform: string;
   getApiUrl: () => Promise<string>;
   getServerStatus: () => Promise<boolean>;

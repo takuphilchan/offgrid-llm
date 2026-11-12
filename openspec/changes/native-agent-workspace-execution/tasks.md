@@ -68,3 +68,11 @@
 - [x] 9.2 Add explicit scoped exact-revision defaults with atomic local persistence and inspect/clear controls; test changed origin/workspace/actor, stale/archived profiles, corrupt records and no inherited grants.
 - [x] 9.3 Resume from saved agent identity and add in-session agent navigation into a separate conversation; test conflicts, empty legacy history, retained old work, lease cleanup and no automatic submission/replay.
 - [x] 9.4 Run CLI/Go, packaged terminal and compatibility checks; update guides and evidence, keeping installation and release records distinct and unperformed human/platform checks open.
+
+## 10. Comfortable agent sessions (approved review, 2026-11-08)
+
+- [x] 10.1 Implement wrapped multiline input, grapheme-safe editing, newline shortcuts, bounded recoverable paste and history/draft preservation. Run Go editor/CLI checks and isolated PTY checks; document shortcuts and unverified accessibility/platform cases.
+- [x] 10.2 Add live steering and queued follow-ups with one input owner, explicit approval boundaries, truthful Stop and preserved drafts; test races, disconnects and cancellation without duplicate submissions.
+- [ ] 10.3 Add inspectable context selection and change review through service-owned references and revision checks; distinguish proposed/applied edits and preserve unrelated changes. Record qualification separately.
+
+Evidence: `docs/quality/evidence/cli-terminal-interaction-2026-11-08.md`.

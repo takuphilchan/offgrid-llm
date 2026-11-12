@@ -1,6 +1,16 @@
-import type { ChatMessage, ChatSession } from '../../api/client';
+import type { ChatMessage, ChatSession, Model } from '../../api/client';
 import { readPreference } from '../../lib/preferences';
 import { copyText } from '../../lib/clipboard';
+
+export type ChatPageProps = {
+  scope: string;
+  models: Model[];
+  model: string;
+  setModel: (model: string) => void;
+  onboardingPending: boolean;
+  onFirstResponse: () => void;
+  onOpenModels: () => void;
+};
 
 export async function copyChatMessage(key:string,content:string,copied:(key:string)=>void,failed:(message:string)=>void,fallback:string){
   try { await copyText(content); copied(key); }

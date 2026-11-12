@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 type Copy = { zone: string; search: string; noMatches: string; preview: string; hint: string; failed: string; refresh: string; advanced: string; asOf: string };
-const rows: Record<LocaleCode, string[]> = {
+const rows = defineMessages<string[]>("i18n/schedule-experience:rows", {
   en: ['Time zone', 'Search city or time zone', 'No matching time zones. You can enter an exact IANA name.', 'Upcoming calendar times', 'Preview only. Saving does not start work. Runs depend on the service being awake and the reviewed resources remaining available.', 'Calendar preview unavailable. Check the time zone, time and selected days, or retry.', 'Refresh preview', 'Advanced limits', 'Calculated at'],
   fr: ['Fuseau horaire', 'Rechercher une ville ou un fuseau', 'Aucun résultat. Vous pouvez saisir un nom IANA exact.', 'Prochains horaires', 'Aperçu uniquement. Enregistrer ne lance aucune tâche. Le service doit être actif et les ressources vérifiées disponibles.', 'Aperçu indisponible. Vérifiez le fuseau, l’heure et les jours, ou réessayez.', 'Actualiser l’aperçu', 'Limites avancées', 'Calculé à'],
   de: ['Zeitzone', 'Stadt oder Zeitzone suchen', 'Keine passende Zeitzone. Ein genauer IANA-Name ist möglich.', 'Nächste Kalendertermine', 'Nur Vorschau. Speichern startet keine Arbeit. Der Dienst muss aktiv sein und die geprüften Ressourcen müssen verfügbar bleiben.', 'Vorschau nicht verfügbar. Zeitzone, Uhrzeit und Tage prüfen oder erneut versuchen.', 'Vorschau aktualisieren', 'Erweiterte Limits', 'Berechnet um'],
@@ -11,6 +12,6 @@ const rows: Record<LocaleCode, string[]> = {
   sn: ['Nzvimbo yenguva', 'Tsvaga guta kana nzvimbo yenguva', 'Hapana zvawanikwa. Unogona kunyora zita chairo reIANA.', 'Nguva dzinotevera', 'Kuona chete. Kusevha hakutangi basa. Sevhisi inofanira kunge ichishanda uye zviwanikwa zvakaongororwa zviripo.', 'Nguva hadzioneki. Tarisa nzvimbo, nguva nemazuva kana kuedza zvakare.', 'Vandudza nguva', 'Miganhu yepamusoro', 'Zvaverengwa nenguva'],
   nd: ['Indawo yesikhathi', 'Dinga idolobho kumbe indawo yesikhathi', 'Akulanto etholakeleyo. Ungabhala ibizo le-IANA eliqondileyo.', 'Izikhathi ezilandelayo', 'Ukubona kuqala kuphela. Ukugcina akuqalisi umsebenzi. Isevisi kumele ivulwe lezinsiza ezihloliweyo zitholakale.', 'Izikhathi azitholakali. Hlola indawo, isikhathi lensuku kumbe uzame futhi.', 'Vuselela izikhathi', 'Imikhawulo ethuthukileyo', 'Kubaliwe ngo'],
   zu: ['Indawo yesikhathi', 'Sesha idolobha noma indawo yesikhathi', 'Akukho okufanayo. Ungafaka igama le-IANA eliqondile.', 'Izikhathi ezilandelayo', 'Ukubuka kuqala kuphela. Ukulondoloza akuqali umsebenzi. Isevisi kufanele ivulwe nezinsiza ezibuyekeziwe zitholakale.', 'Ukubuka kuqala akutholakali. Hlola indawo, isikhathi nezinsuku noma uzame futhi.', 'Vuselela izikhathi', 'Imikhawulo ethuthukile', 'Kubaliwe ngo'],
-};
+});
 const keys: (keyof Copy)[] = ['zone', 'search', 'noMatches', 'preview', 'hint', 'failed', 'refresh', 'advanced', 'asOf'];
 export const scheduleExperience = Object.fromEntries(Object.entries(rows).map(([locale, values]) => [locale, Object.fromEntries(keys.map((key, index) => [key, values[index]]))])) as Record<LocaleCode, Copy>;

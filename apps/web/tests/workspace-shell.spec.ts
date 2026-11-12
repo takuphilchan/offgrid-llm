@@ -1,4 +1,4 @@
-import { openSettings } from './helpers/workspace-actions';
+import { openSettings, changePreferences } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { workspaceShell } from '../src/i18n/workspace-shell';
 import { locales, type LocaleCode } from '../src/i18n';
@@ -73,13 +73,10 @@ test('compact shell preserves a draft across navigation layout, preferences, and
   await expect(page.locator('.sidebar').getByRole('link', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
   const options = page.getByRole('button', { name: 'Workspace options', exact: true });
   await options.click();
-  await expect(page.locator('.workspace-options-panel').getByRole('link',{name:'Settings',exact:true})).toBeVisible();
-  await expect.poll(() => page.locator('.workspace-options-panel select').evaluateAll(fields =>
-    fields[0].getBoundingClientRect().width - fields[1].getBoundingClientRect().width)).toBe(0);
-  await expect(page.getByLabel('Language', { exact: true })).toHaveCSS('border-width', '1px');
-  await page.getByLabel('Appearance', { exact: true }).selectOption('light');
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await page.getByLabel('Language', { exact: true }).selectOption('de');
+  await expect(page.locator('.workspace-options-panel select')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await changePreferences(page,{theme:'light',locale:'de'});
+  await expect(page.locator('html')).toHaveAttribute('data-theme','light');
   await expect(editor).toHaveValue('Keep this draft — لا ترسل');
   await page.keyboard.press('Escape');
   const before = state.reads;
@@ -109,7 +106,7 @@ test('workspace and voice utilities share keyboard and outside dismissal without
   await expect(options).toHaveAttribute('aria-expanded', 'true');
   await expect(panel.getByText('Workspace tester', { exact: true })).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Sign out' })).toBeVisible();
-  await page.getByLabel('Language', { exact: true }).focus();
+  await panel.getByRole('button', { name: 'Sign out' }).focus();
   await page.keyboard.press('Escape');
   await expect(panel).toBeHidden(); await expect(options).toBeFocused();
   await options.click(); await page.locator('.composer textarea').click();
@@ -126,10 +123,11 @@ test('workspace and voice utilities share keyboard and outside dismissal without
 
 test('workspace preferences still synchronize through the desktop presentation bridge', async ({ page }) => {
   await fixture(page, true);
-  await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
-  await page.getByLabel('Appearance', { exact: true }).selectOption('light');
-  await page.getByLabel('Language', { exact: true }).selectOption('ar');
-  await expect.poll(() => page.evaluate(() => (window as any).presentations.at(-1))).toEqual({ locale: 'ar', theme: 'light' });
+  await changePreferences(page,{theme:'light',locale:'ar'});
+  await expect.poll(() => page.evaluate(() => (window as any).presentations.at(-1))).toEqual({
+    locale: 'ar', theme: 'light',
+    appearance: { version: 1, light: 'offgrid', dark: 'offgrid', textSize: 100, reduceMotion: false },
+  });
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
@@ -137,14 +135,13 @@ test('workspace preferences still synchronize through the desktop presentation b
 test('every locale fits the compact mobile shell and options in light and dark', async ({ page }, info) => {
   await fixture(page);
   await page.setViewportSize({ width: 320, height: 480 });
-  await page.locator('.navigation-trigger').click();
   for (const theme of ['light', 'dark']) {
     for (const locale of Object.keys(locales) as LocaleCode[]) {
       const trigger = page.locator('.workspace-options > button');
+      await changePreferences(page,{locale,theme});
+      await page.locator('.navigation-trigger').click();
       await trigger.click();
-      await page.locator('.locale-picker select').selectOption(locale);
       const panel = page.getByRole('region', { name: workspaceShell[locale].options, exact: true });
-      await panel.getByLabel(locales[locale].messages.shell.appearance, { exact: true }).selectOption(theme);
       await expect(panel).toBeVisible();
       await expect.poll(async () => {
         const box = await panel.boundingBox();
@@ -157,6 +154,7 @@ test('every locale fits the compact mobile shell and options in light and dark',
       if (locale === 'ar') await page.screenshot({ path: info.outputPath(`shell-mobile-rtl-${theme}.png`) });
       await page.keyboard.press('Escape');
       await expect(trigger).toBeFocused();
+      await page.keyboard.press('Escape');
     }
   }
 });

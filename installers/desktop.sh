@@ -2,7 +2,7 @@
 # OffGrid LLM Desktop - Easy Installer for Linux/macOS
 # Installs both CLI and Desktop application
 
-set -e
+set -euo pipefail
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
@@ -33,6 +33,63 @@ print_step() { echo -e "${CYAN}[$(date +%H:%M:%S)]${NC} $1"; }
 print_success() { echo -e "${GREEN}[OK]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 print_warning() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+
+verify_release_checksum() {
+    local file="$1" asset="$2" manifest="$3" expected actual
+    expected=$(awk -v asset="$asset" '
+        { sub(/\r$/, ""); digest=substr($0,1,64); marker=substr($0,65,2); name=substr($0,67) }
+        name == asset && length(digest) == 64 && digest !~ /[^a-fA-F0-9]/ && (marker == "  " || marker == " *") { count++; hash=digest }
+        END { if (count != 1) exit 1; print tolower(hash) }
+    ' "$manifest") || { print_error "Expected exactly one checksum for $asset"; return 1; }
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual=$(sha256sum "$file") || return 1
+    elif command -v shasum >/dev/null 2>&1; then
+        actual=$(shasum -a 256 "$file") || return 1
+    else
+        print_error 'SHA-256 verification requires sha256sum or shasum'; return 1
+    fi
+    [ "${actual%% *}" = "$expected" ] || { print_error "Checksum mismatch for $asset. Installation stopped."; return 1; }
+}
+
+assert_cli_stopped() {
+    local status name
+    for name in offgrid llama-server; do
+        status=0
+        pgrep -x "$name" >/dev/null || status=$?
+        if [ "$status" -eq 0 ]; then
+            print_error "$name is running. Finish active work and close its owning service normally before retrying. No processes were stopped."
+            return 1
+        fi
+        [ "$status" -eq 1 ] || { print_error 'Unable to check running processes'; return 1; }
+    done
+}
+
+cpu_features_from_flags() {
+    local flags feature
+    flags=" $(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/avx1\.0/avx/g; s/avx2\.0/avx2/g; s/sse4\.2/sse4_2/g') "
+    for feature in sse4_2 avx avx2 f16c fma bmi2; do
+        case "$flags" in *" $feature "*) ;; *) echo basic; return ;; esac
+    done
+    for feature in avx512f avx512dq avx512bw avx512vl; do
+        case "$flags" in *" $feature "*) ;; *) echo avx2; return ;; esac
+    done
+    echo avx512
+}
+
+detect_cpu_features() {
+    local os arch flags
+    os=$(uname -s); arch=$(uname -m)
+    case "$os:$arch" in
+        Darwin:arm64) echo apple-silicon; return ;;
+        Linux:aarch64|Linux:arm64) echo neon; return ;;
+    esac
+    case "$os" in
+        Linux) flags=$(awk -F ': ' '/^flags[[:space:]]*:/ { print $2; exit }' /proc/cpuinfo) || return 1 ;;
+        Darwin) flags=$(sysctl -n machdep.cpu.features machdep.cpu.leaf7_features) || return 1 ;;
+        *) echo 'Use the native Windows desktop installer or installers/desktop.ps1; this shell entry point supports Linux and macOS.' >&2; return 1 ;;
+    esac
+    cpu_features_from_flags "$(printf '%s' "$flags" | tr '\n\t' '  ')"
+}
 
 print_banner
 
@@ -79,6 +136,19 @@ case "$INSTALL_CHOICE" in
         ;;
 esac
 
+# Refuse unsupported choices before downloads or changes to an existing CLI.
+if [ "$OS:$ARCH" = linux:arm64 ] && [ "$INSTALL_DESKTOP" = true ]; then
+    print_error 'Linux ARM64 has CLI/web support only. Select CLI only; no ARM64 desktop package is published.'
+    exit 1
+fi
+if [ "$INSTALL_CLI" = true ]; then
+    CPU_FEATURES=$(detect_cpu_features) || exit 1
+    if [ "$CPU_FEATURES" = basic ]; then
+        print_error 'CLI archives require AVX2, FMA, F16C and BMI2. SSE4.2 alone is insufficient; use a compatible host or custom runtime build.'
+        exit 1
+    fi
+fi
+
 # GitHub release info
 GITHUB_REPO="takuphilchan/offgrid-llm"
 
@@ -88,7 +158,7 @@ VERSION=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/lates
     grep '"tag_name":' | \
     sed -E 's/.*"tag_name": "v?([^"]+)".*/\1/')
 
-if [ -z "$VERSION" ]; then
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][A-Za-z0-9.-]+)?$ ]]; then
     print_error "Failed to fetch latest version from GitHub"
     exit 1
 fi
@@ -98,10 +168,13 @@ RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
 
 # Temporary directory
 TMP_DIR=$(mktemp -d)
-trap "rm -rf $TMP_DIR" EXIT
+trap 'rm -rf -- "$TMP_DIR"' EXIT
+MANIFEST="$TMP_DIR/checksums.sha256"
+curl -fsSL "${RELEASE_URL}/checksums-v${VERSION}.sha256" -o "$MANIFEST"
 
 # Install CLI
 if [ "$INSTALL_CLI" = true ]; then
+    assert_cli_stopped
     print_step "Installing CLI..."
     
     # Determine the correct bundle file based on OS and architecture
@@ -129,6 +202,7 @@ if [ "$INSTALL_CLI" = true ]; then
         exit 1
     fi
     
+    verify_release_checksum "${TMP_DIR}/${CLI_BUNDLE}" "$CLI_BUNDLE" "$MANIFEST"
     print_step "Extracting bundle..."
     cd "${TMP_DIR}"
     tar -xzf "${CLI_BUNDLE}"
@@ -154,12 +228,8 @@ if [ "$INSTALL_CLI" = true ]; then
     
     print_step "Installing to /usr/local/bin/..."
     
-    # Check if offgrid is currently running
-    if pgrep -x offgrid > /dev/null; then
-        print_warning "OffGrid is currently running. Stopping it first..."
-        pkill -x offgrid 2>/dev/null || true
-        sleep 1
-    fi
+    # Recheck before writing: never stop a service owned by another workflow.
+    assert_cli_stopped
     
     # Try to install binaries, retry if file is busy
     MAX_RETRIES=3
@@ -167,12 +237,12 @@ if [ "$INSTALL_CLI" = true ]; then
     while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         if [ "$EUID" -eq 0 ]; then
             if cp "$OFFGRID_BIN" /usr/local/bin/offgrid 2>/dev/null; then
-                [ -n "$LLAMA_BIN" ] && cp "$LLAMA_BIN" /usr/local/bin/llama-server 2>/dev/null
+                if [ -n "$LLAMA_BIN" ]; then cp "$LLAMA_BIN" /usr/local/bin/llama-server; fi
                 break
             fi
         else
             if sudo cp "$OFFGRID_BIN" /usr/local/bin/offgrid 2>/dev/null; then
-                [ -n "$LLAMA_BIN" ] && sudo cp "$LLAMA_BIN" /usr/local/bin/llama-server 2>/dev/null
+                if [ -n "$LLAMA_BIN" ]; then sudo cp "$LLAMA_BIN" /usr/local/bin/llama-server; fi
                 break
             fi
         fi
@@ -204,6 +274,18 @@ if [ "$INSTALL_CLI" = true ]; then
         fi
     fi
     done
+    # Keep the packaged executor and application-relative runtime/UI layouts.
+    for payload in execution-runtime audio web; do
+        if [ -d "$BUNDLE_DIR/$payload" ]; then
+            if [ "$EUID" -eq 0 ]; then
+                mkdir -p "/usr/local/bin/$payload"
+                cp -R "$BUNDLE_DIR/$payload/." "/usr/local/bin/$payload/"
+            else
+                sudo mkdir -p "/usr/local/bin/$payload"
+                sudo cp -R "$BUNDLE_DIR/$payload/." "/usr/local/bin/$payload/"
+            fi
+        fi
+    done
     print_success "CLI binaries installed"
     
     # Install audio components (whisper.cpp and piper)
@@ -213,14 +295,12 @@ if [ "$INSTALL_CLI" = true ]; then
         mkdir -p "$AUDIO_DIR/whisper" "$AUDIO_DIR/piper"
         
         if [ -d "$BUNDLE_DIR/audio/whisper" ]; then
-            cp -r "$BUNDLE_DIR/audio/whisper/"* "$AUDIO_DIR/whisper/" 2>/dev/null || true
-            chmod +x "$AUDIO_DIR/whisper/"* 2>/dev/null || true
+            cp -r "$BUNDLE_DIR/audio/whisper/." "$AUDIO_DIR/whisper/"
             print_success "Whisper (speech-to-text) installed"
         fi
         
         if [ -d "$BUNDLE_DIR/audio/piper" ]; then
-            cp -r "$BUNDLE_DIR/audio/piper/"* "$AUDIO_DIR/piper/" 2>/dev/null || true
-            chmod +x "$AUDIO_DIR/piper/"* 2>/dev/null || true
+            cp -r "$BUNDLE_DIR/audio/piper/." "$AUDIO_DIR/piper/"
             print_success "Piper (text-to-speech) installed"
         fi
     fi
@@ -239,13 +319,10 @@ if [ "$INSTALL_CLI" = true ]; then
         print_success "Web UI installed"
     fi
     
-    print_success "CLI installed successfully"
-    
     # Verify installation
-    if command -v offgrid &> /dev/null; then
-        VERSION_OUTPUT=$(offgrid --version 2>&1 || echo "version check failed")
-        print_success "Verification: $VERSION_OUTPUT"
-    fi
+    VERSION_OUTPUT=$(/usr/local/bin/offgrid --version 2>&1)
+    print_success "Verification: $VERSION_OUTPUT"
+    print_success "CLI installed successfully"
     echo ""
 fi
 
@@ -292,6 +369,7 @@ if [ "$INSTALL_DESKTOP" = true ]; then
                     exit 1
                 fi
                 
+                verify_release_checksum "${TMP_DIR}/OffGrid-LLM-Desktop.AppImage" "$DESKTOP_FILE" "$MANIFEST"
                 # Install AppImage
                 print_step "Installing AppImage..."
                 mkdir -p "$HOME/.local/bin"
@@ -314,6 +392,7 @@ EOF
                 print_success "Desktop app installed as AppImage"
                 print_step "Location: $HOME/.local/bin/OffGrid-LLM-Desktop.AppImage"
             else
+                verify_release_checksum "${TMP_DIR}/offgrid-desktop.deb" "$DESKTOP_FILE" "$MANIFEST"
                 # Install .deb package
                 print_step "Installing Debian package..."
                 if [ "$EUID" -eq 0 ]; then
@@ -338,6 +417,7 @@ EOF
                 exit 1
             fi
             
+            verify_release_checksum "${TMP_DIR}/OffGrid-LLM-Desktop.AppImage" "$DESKTOP_FILE" "$MANIFEST"
             # Install AppImage
             print_step "Installing AppImage..."
             mkdir -p "$HOME/.local/bin"
@@ -370,6 +450,7 @@ EOF
             print_error "Failed to download desktop application"
             exit 1
         fi
+        verify_release_checksum "${TMP_DIR}/offgrid-desktop.zip" "$DESKTOP_FILE" "$MANIFEST"
         mkdir -p "${TMP_DIR}/desktop"
         ditto -x -k "${TMP_DIR}/offgrid-desktop.zip" "${TMP_DIR}/desktop"
         APP_PATH="${TMP_DIR}/desktop/OffGrid.app"
@@ -427,14 +508,14 @@ if [ "$INSTALL_DESKTOP" = true ]; then
 fi
 
 echo "Next steps:"
-echo "  1. Download a model:"
-echo "     offgrid download llama-2-7b-chat"
+echo "  1. Open the desktop app, or run offgrid serve and open http://127.0.0.1:11611/ui/"
+echo "     Download a chat model from Models."
 echo ""
 echo "  2. Start using:"
 if [ "$INSTALL_DESKTOP" = true ]; then
     echo "     - Launch the desktop app"
 else
-    echo "     - Run: offgrid chat"
+    echo "     - Open Chat in the web UI and send a prompt."
 fi
 echo ""
 echo "Documentation: https://github.com/${GITHUB_REPO}"

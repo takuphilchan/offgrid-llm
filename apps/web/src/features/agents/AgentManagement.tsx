@@ -16,10 +16,10 @@ import { agentManagement } from '../../i18n/agent-management';
 
 // Management does not mount a task runner or poll execution/history endpoints.
 export function AgentManagement({ model, view }: { model: string; view: 'tools' | 'connections' | 'external' }) {
-  const { messages: text, locale } = useI18n();
+  const { messages: text, locale , language} = useI18n();
   const [tools, setTools] = useState<AgentTool[]>([]);
   const [toolQuery, setToolQuery] = useWorkspaceState('agent.tools.filter', '');
-  const visibleTools = tools.filter(tool => `${tool.name} ${tool.description} ${tool.source}`.toLocaleLowerCase(locale).includes(toolQuery.trim().toLocaleLowerCase(locale)));
+  const visibleTools = tools.filter(tool => `${tool.name} ${tool.description} ${tool.source}`.toLocaleLowerCase(language).includes(toolQuery.trim().toLocaleLowerCase(language)));
   const [enabledTools, setEnabledTools] = useState(0);
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [loadingRuntime, setLoadingRuntime] = useState(true);
@@ -185,7 +185,7 @@ type ExternalProvidersPanelProps = {
 
 function ExternalProvidersPanel({ integrations, loading, error, onRetry, busy, setup, copied, onSetup, onCopy, onClose }: ExternalProvidersPanelProps) {
   const { messages: text } = useI18n();
-  const { locale } = useI18n();
+  const { locale , language} = useI18n();
   const labels = externalIntegrations[locale];
   const setupTrigger = useRef<HTMLButtonElement | null>(null);
   return <section className="runtime-panel external-providers">
@@ -200,7 +200,7 @@ function ExternalProvidersPanel({ integrations, loading, error, onRetry, busy, s
         {item.warnings.length > 0 && <ul>{item.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>}
         <p className="provider-host-note">{labels.host}</p>
       </div>
-      <details><summary>{presentation[locale].details}</summary><dl><div><dt>{text.agentRuntime.provider}</dt><dd>{item.provider_id}</dd></div><div><dt>{text.agentRuntime.transport}</dt><dd>{item.transport}</dd></div><div><dt>{text.agentRuntime.model}</dt><dd>{item.model_id ?? '—'}</dd></div><div><dt>{text.agentRuntime.context}</dt><dd>{item.context_window.toLocaleString(locale)} / {item.minimum_context.toLocaleString(locale)}</dd></div></dl><p>{labels.workflow}</p></details>
+      <details><summary>{presentation[locale].details}</summary><dl><div><dt>{text.agentRuntime.provider}</dt><dd>{item.provider_id}</dd></div><div><dt>{text.agentRuntime.transport}</dt><dd>{item.transport}</dd></div><div><dt>{text.agentRuntime.model}</dt><dd>{item.model_id ?? '—'}</dd></div><div><dt>{text.agentRuntime.context}</dt><dd>{item.context_window.toLocaleString(language)} / {item.minimum_context.toLocaleString(language)}</dd></div></dl><p>{labels.workflow}</p></details>
       <footer><button className="secondary-button" disabled={busy === item.id || !item.model_id} onClick={event => { setupTrigger.current = event.currentTarget; onSetup(item); }}>{busy === item.id ? text.common.loading : externalSetupLabel[locale]}<Icon name="chevron-right" size={15} /></button></footer>
     </article>)}</div>
     {setup && <ProviderSetupDialog key={setup.id} name={setup.name} setup={setup.setup} copied={copied} onCopy={onCopy} close={onClose} returnFocus={setupTrigger.current} />}

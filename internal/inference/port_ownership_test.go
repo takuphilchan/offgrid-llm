@@ -13,6 +13,17 @@ import (
 
 // Exercise native process/port ownership without downloads or real inference.
 func TestMain(m *testing.M) {
+	if mode := os.Getenv("OFFGRID_TEST_READINESS_PROBE"); mode != "" {
+		if mode == "wait" {
+			time.Sleep(time.Minute)
+			os.Exit(3)
+		}
+		fmt.Println("--jinja --fit-ctx --cache-type-k")
+		if mode == "fail" {
+			os.Exit(2)
+		}
+		os.Exit(0)
+	}
 	if os.Getenv("OFFGRID_TEST_PORT_RUNTIME") == "1" {
 		port := ""
 		for i, arg := range os.Args {

@@ -16,11 +16,19 @@ function Specialist({ parent, child, children, observe }: { parent: string; chil
   // subscriptions. Inspecting an older, larger plan remains an explicit choice.
   const { run, connection, error } = useTaskRun(observe ? child.id : '');
   const owned = run?.parent_id === parent ? run : null;
-  return <li className="specialist-row">
+  const currentStatus = owned?.status ?? child.status ?? 'pending';
+  const phase = owned?.progress?.phase ?? child.phase;
+  const active = currentStatus === 'running';
+  const phaseLabel = phase === 'loading' ? messages.chatStreaming.loading
+    : phase === 'queued' ? messages.chatStreaming.queued
+    : phase === 'generating' ? messages.chatStreaming.generating
+    : phase === 'tool' || phase === 'preparing_tool' ? messages.agentLive.tool
+    : phase === 'processing' ? messages.chatStreaming.processing : '';
+  return <li className={`specialist-row${active ? ' specialist-row-active' : ''}`}>
     <details>
-      <summary><span>{child.spec.goal}</span><small>{owned ? status(owned.status, owned.outcome) : observe && connection === 'connecting' ? messages.common.loading : presentation.unavailable}</small></summary>
+      <summary title={child.spec.goal}><span className="specialist-title"><span className="specialist-state" aria-hidden="true" /><span className="specialist-name">{owned?.profile?.name ?? child.spec.goal}</span></span><small>{owned || child.status ? status(currentStatus, owned?.outcome) : observe && connection === 'connecting' ? messages.common.loading : presentation.unavailable}{active && phaseLabel ? ` · ${phaseLabel}` : ''}</small></summary>
       <div className="specialist-detail">
-        {owned?.profile && <p>{owned.profile.name}</p>}
+        {owned?.profile && <p>{child.spec.goal}</p>}
         {!!child.spec.depends_on?.length && <p>{copy.depends}: {child.spec.depends_on.map(key => children.find(item => item.spec.key === key)?.spec.goal ?? key).join(' · ')}</p>}
         {owned && <TaskResult run={owned} compact />}
         {owned?.error && <p>{owned.error}</p>}

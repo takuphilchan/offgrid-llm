@@ -1,5 +1,12 @@
 [
   {
+    "path": "apps/desktop/terminal-translations.js",
+    "owner": "Desktop maintainers",
+    "responsibility": "Nine authored terminal dictionaries with a small CommonJS/browser resolver; data dominates this no-growth baseline. Structural review is not native-language approval.",
+    "reviewDate": "2027-04-21",
+    "baselineLines": 821
+  },
+  {
     "path": "cmd/offgrid/hermes.go",
     "owner": "CLI maintainers",
     "responsibility": "Existing CLI implementation for hermes; no-growth baseline pending focused extraction.",
@@ -16,9 +23,9 @@
   {
     "path": "install.sh",
     "owner": "Installer maintainers",
-    "responsibility": "Standalone streamed installer; six-line net growth for tested historical/current desktop artifact selection during OffGrid rebranding.",
+    "responsibility": "Self-contained streamed installer with verified release downloads, hardware selection and process refusal. Retained standalone operation; removed unverified Piper fallback. Reviewed 17-line net increase for these safeguards.",
     "reviewDate": "2027-04-21",
-    "baselineLines": 659
+    "baselineLines": 676
   },
   {
     "path": "internal/agents/agent.go",

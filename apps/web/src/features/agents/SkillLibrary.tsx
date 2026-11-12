@@ -13,9 +13,9 @@ export function SkillLibrary({ skills, selected, onChange, inspect }: {
   skills: AgentSkill[]; selected: AgentSkillReference[];
   onChange: (refs: AgentSkillReference[]) => void; inspect: (ref: AgentSkillReference) => void;
 }) {
-  const { locale } = useI18n(), copy = skillLibraryText[locale], context = agentContextText[locale];
+  const { locale , language} = useI18n(), copy = skillLibraryText[locale], context = agentContextText[locale];
   const [query, setQuery] = useState(''), searchId = useId();
-  const visible = skills.filter(skill => `${skill.name} ${skill.description}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
+  const visible = skills.filter(skill => `${skill.name} ${skill.description}`.toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language)));
   const missing = selected.filter(ref => !skills.some(skill => sameSkill(ref, skill)));
   return <div className="skill-library">
     {!!skills.length && <div className="skill-search"><label htmlFor={searchId}>{copy.search}</label><input id={searchId} type="search" value={query} onChange={event => setQuery(event.target.value)} /></div>}

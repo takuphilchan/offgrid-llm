@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 type Labels = readonly [string, string, string, string, string, string, string, string, string, string, string, string];
-const labels: Record<LocaleCode, Labels> = {
+const labels = defineMessages<Labels>("i18n/workspace-management:labels", {
   en: ['Documents', 'Manage Knowledge', 'Manage document', 'Ask using Knowledge', 'Searches the permitted knowledge base, not just one selected document. Your draft is preserved; nothing is sent until you choose Send.', 'Indexed', 'Indexing', 'Indexing failed', 'No documents match this filter.', 'Preferences', 'Workspace', 'Diagnostics'],
   fr: ['Documents', 'Gérer les connaissances', 'Gérer le document', 'Questionner les connaissances', 'Recherche dans la base autorisée, pas uniquement dans un document sélectionné. Votre brouillon est conservé ; rien n’est envoyé avant Envoyer.', 'Indexé', 'Indexation', 'Échec de l’indexation', 'Aucun document ne correspond à ce filtre.', 'Préférences', 'Espace de travail', 'Diagnostics'],
   es: ['Documentos', 'Gestionar conocimientos', 'Gestionar documento', 'Preguntar con conocimientos', 'Busca en la base de conocimientos permitida, no solo en un documento. Tu borrador se conserva; nada se envía hasta elegir Enviar.', 'Indexado', 'Indexando', 'Error de indexación', 'Ningún documento coincide con este filtro.', 'Preferencias', 'Espacio de trabajo', 'Diagnóstico'],
@@ -10,11 +11,11 @@ const labels: Record<LocaleCode, Labels> = {
   sn: ['Magwaro', 'Tonga Ruzivo', 'Tonga gwaro', 'Bvunza uchishandisa Ruzivo', 'Inotsvaga muruzivo rwunobvumidzwa, kwete gwaro rimwe chete. Zvauri kunyora zvinochengetwa; hapana chinotumirwa kusvikira wasarudza Tumira.', 'Yakaiswa muindekisi', 'Iri kuisa muindekisi', 'Kuisa muindekisi kwakundikana', 'Hapana magwaro anoenderana nesefa iyi.', 'Zvaunofarira', 'Nzvimbo yebasa', 'Kuongorora'],
   nd: ['Amadokhumenti', 'Phatha Ulwazi', 'Phatha idokhumenti', 'Buza usebenzisa Ulwazi', 'Kudinga kulwazi oluvunyelweyo, hatshi idokhumenti eyodwa kuphela. Okubhalayo kuyagcinwa; akuthunyelwa lutho ungakakhethi Thumela.', 'Kufakwe ku-indeksi', 'Kufakwa ku-indeksi', 'Ukufakwa ku-indeksi kwehlulekile', 'Akulamadokhumenti ahambelana lalesi sihlungi.', 'Okuncamelayo', 'Indawo yokusebenza', 'Ukuhlola'],
   zu: ['Amadokhumenti', 'Phatha Ulwazi', 'Phatha idokhumenti', 'Buza usebenzisa Ulwazi', 'Kusesha olwazini oluvunyelwe, hhayi idokhumenti eyodwa kuphela. Okubhalayo kuyagcinwa; akuthunyelwa lutho uze ukhethe Thumela.', 'Kufakwe ku-indeksi', 'Kufakwa ku-indeksi', 'Ukufakwa ku-indeksi kwehlulekile', 'Awekho amadokhumenti afana nalesi sihlungi.', 'Okuncamelayo', 'Indawo yokusebenza', 'Ukuhlola'],
-};
+});
 export function workspaceManagement(locale: LocaleCode) {
   const [documents, manageKnowledge, manageDocument, askKnowledge, retrievalScope, indexed, indexing, indexFailed, noDocuments, preferences, workspace, diagnostics] = labels[locale];
-  const openTask: Record<LocaleCode, string> = { en: 'Open task', fr: 'Ouvrir la tâche', es: 'Abrir tarea', de: 'Aufgabe öffnen', ar: 'فتح المهمة', sw: 'Fungua kazi', sn: 'Vhura basa', nd: 'Vula umsebenzi', zu: 'Vula umsebenzi' };
-  const desktopStorage: Record<LocaleCode, string> = {
+  const openTask = defineMessages<string>("i18n/workspace-management:openTask", { en: 'Open task', fr: 'Ouvrir la tâche', es: 'Abrir tarea', de: 'Aufgabe öffnen', ar: 'فتح المهمة', sw: 'Fungua kazi', sn: 'Vhura basa', nd: 'Vula umsebenzi', zu: 'Vula umsebenzi' });
+  const desktopStorage = defineMessages<string>("i18n/workspace-management:desktopStorage", {
     en: 'Desktop application folders. An external service or container uses its own storage; these are not its workspace paths.',
     fr: 'Dossiers de l’application de bureau. Un service externe ou conteneur utilise son propre stockage ; ce ne sont pas ses chemins de travail.',
     es: 'Carpetas de la aplicación de escritorio. Un servicio externo o contenedor utiliza su propio almacenamiento; estas no son sus rutas de trabajo.',
@@ -24,8 +25,8 @@ export function workspaceManagement(locale: LocaleCode) {
     sn: 'Maforodha eapp yepakombiyuta. Sevhisi yekunze kana kontena inoshandisa nzvimbo yayo; idzi hadzisi nzira dzenzvimbo yayo yebasa.',
     nd: 'Amafolda ohlelo lwekhompyutha. Isevisi yangaphandle kumbe ikhontena isebenzisa indawo yayo yokugcina; lezi kayisizo izindlela zayo zokusebenza.',
     zu: 'Amafolda ohlelo lwekhompyutha. Isevisi yangaphandle noma ikhonthenela isebenzisa indawo yayo yokugcina; lezi akuzona izindlela zendawo yayo yokusebenza.',
-  };
-  const serviceState: Record<LocaleCode, string> = { en: 'Connection', fr: 'Connexion', es: 'Conexión', de: 'Verbindung', ar: 'الاتصال', sw: 'Muunganisho', sn: 'Kubatanidzwa', nd: 'Uxhumano', zu: 'Uxhumano' };
-  const searchDocuments: Record<LocaleCode, string> = { en: 'Search documents', fr: 'Rechercher des documents', es: 'Buscar documentos', de: 'Dokumente suchen', ar: 'البحث في المستندات', sw: 'Tafuta hati', sn: 'Tsvaga magwaro', nd: 'Dinga amadokhumenti', zu: 'Sesha amadokhumenti' };
+  });
+  const serviceState = defineMessages<string>("i18n/workspace-management:serviceState", { en: 'Connection', fr: 'Connexion', es: 'Conexión', de: 'Verbindung', ar: 'الاتصال', sw: 'Muunganisho', sn: 'Kubatanidzwa', nd: 'Uxhumano', zu: 'Uxhumano' });
+  const searchDocuments = defineMessages<string>("i18n/workspace-management:searchDocuments", { en: 'Search documents', fr: 'Rechercher des documents', es: 'Buscar documentos', de: 'Dokumente suchen', ar: 'البحث في المستندات', sw: 'Tafuta hati', sn: 'Tsvaga magwaro', nd: 'Dinga amadokhumenti', zu: 'Sesha amadokhumenti' });
   return { documents, manageKnowledge, manageDocument, askKnowledge, retrievalScope, indexed, indexing, indexFailed, noDocuments, preferences, workspace, diagnostics, searchDocuments: searchDocuments[locale], openTask: openTask[locale], desktopStorage: desktopStorage[locale], serviceState: serviceState[locale] };
 }

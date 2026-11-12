@@ -68,6 +68,7 @@ for (const locale of Object.keys(agentProfilesText) as LocaleCode[]) test(`optio
   await page.getByRole('button',{name:/Researcher/}).click();
   const editor=page.locator('.profile-editor'),knowledge=editor.locator('.profile-capability').filter({has:page.locator('summary').filter({hasText:copy.knowledge})});
   await expect(knowledge).toHaveAttribute('open');
+  await expect(knowledge).toHaveCSS('border-top-width','0px');
   await expect(knowledge.getByRole('checkbox',{name:'Design notes',exact:true})).toBeChecked();
   await knowledge.locator('summary').focus();await page.keyboard.press('Enter');
   await expect(knowledge).not.toHaveAttribute('open');

@@ -3,6 +3,7 @@ const { randomUUID } = require('node:crypto');
 
 const PROTOCOL = 1;
 const MAX_INPUT_BYTES = 16 * 1024;
+const MAX_PASTE_BYTES = 256 * 1024;
 const sessionID = value => typeof value === 'string' && /^[a-zA-Z0-9-]{1,80}$/.test(value);
 function keys(value, allowed) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !allowed.includes(key))) throw Error('terminal_invalid_request');
@@ -29,7 +30,7 @@ function createTerminalProtocol({ trustedURL, contents, operations, available })
     releaseStopped() { owned.clear(); },
     async dispatch(event, request) {
       trusted(event);
-      keys(request, ['protocol','generation','action','id','text','cols','rows','sequence','kind','height']);
+      keys(request, ['protocol','generation','action','id','text','cols','rows','sequence','kind','height','context']);
       if (request.protocol !== PROTOCOL) throw Error('terminal_protocol_mismatch');
       if (request.action === 'handshake') {
         keys(request,['protocol','action']);
@@ -63,6 +64,24 @@ function createTerminalProtocol({ trustedURL, contents, operations, available })
       }
       if (!sessionID(request.id) || !owned.has(request.id)) throw Error('terminal_unknown_session');
       switch(request.action) {
+        case 'paste': {
+          keys(request,[...base,'id']);
+          const text=await operations.paste();
+          if (request.generation !== generation || !owned.has(request.id)) throw Error('terminal_stale_renderer');
+          if(typeof text!=='string'||Buffer.byteLength(text,'utf8')>MAX_PASTE_BYTES||/[\x00-\x08\x0b-\x1f\x7f]/.test(text))throw Error('terminal_invalid_paste');
+          return text;
+        }
+        case 'share': {
+          keys(request,[...base,'id','context']);
+          const value=request.context;
+          keys(value,['version','command','cwd','output','question','truncated','source']);
+          if(value.version!==1||value.source!=='terminal_selection'||typeof value.truncated!=='boolean')throw Error('terminal_invalid_context');
+          for(const [name,limit] of Object.entries({command:4096,cwd:2048,output:32768,question:2000})) {
+            if(typeof value[name]!=='string'||value[name].length>limit||/[\x00-\x08\x0b-\x1f\x7f]/.test(value[name]))throw Error('terminal_invalid_context');
+          }
+          if(!value.output.trim()||!value.question.trim())throw Error('terminal_invalid_context');
+          return operations.share({...value});
+        }
         case 'attach':
           keys(request,[...base,'id']);
           return operations.attach(request.id);
@@ -86,4 +105,4 @@ function createTerminalProtocol({ trustedURL, contents, operations, available })
   };
 }
 
-module.exports = { createTerminalProtocol, PROTOCOL, MAX_INPUT_BYTES };
+module.exports = { createTerminalProtocol, PROTOCOL, MAX_INPUT_BYTES, MAX_PASTE_BYTES };

@@ -12,7 +12,7 @@
   .knowledge-import-actions, .knowledge-import-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
   .knowledge-import-heading { justify-content: space-between; }
   .knowledge-import-heading h3 { margin: 0; font-size: var(--type-body); }
-  .knowledge-import-recovery { margin-block: 20px; padding-block: 16px; border-block-start: 1px solid var(--line); }
+  .knowledge-import-recovery { margin-block: 20px; padding-block: 16px; border-block-start: 0; }
   .knowledge-import-recovery ul { list-style: none; padding: 0; margin: 12px 0; }
   .knowledge-import-recovery li { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-block: 12px; }
   .knowledge-import-recovery li > div:first-child { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
@@ -24,7 +24,7 @@
   .knowledge-format-details ul, .knowledge-import-results ul { list-style: none; padding: 0; margin: 12px 0; }
   .knowledge-format-details li { display: grid; gap: 4px; padding-block: 8px; overflow-wrap: anywhere; }
   .knowledge-format-details strong { color: var(--text); font-weight: 500; }
-  .knowledge-import-results { margin-block: 20px; padding-block: 16px; border-block: 1px solid var(--line); }
+  .knowledge-import-results { margin-block: 20px; padding-block: 16px; border-block: 0; }
   .knowledge-import-results li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; padding-block: 10px; }
   .knowledge-import-results bdi { overflow-wrap: anywhere; }
   .knowledge-import-results li > span { color: var(--muted); font-size: var(--type-meta); }

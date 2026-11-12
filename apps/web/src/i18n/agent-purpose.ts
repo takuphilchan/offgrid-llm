@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 type Purpose = { title: string; hint: string; examples: string; options: readonly (readonly [string, string])[] };
-export const agentPurpose: Record<LocaleCode, Purpose> = {
+export const agentPurpose = defineMessages<Purpose>("i18n/agent-purpose:agentPurpose", {
   en: { title: 'What should this agent help with?', hint: 'Describe the outcome, preferred style and limits. Tools and context are optional; add only what this work needs.', examples: 'Start from an example', options: [
     ['Draft and refine', 'Help me draft and refine clear, useful writing. Ask about the audience when it matters. Preserve my meaning, explain significant edits, and return the draft in Chat unless I explicitly ask you to save or publish it.'],
     ['Compare sources', 'Help me compare information from the sources I provide or authorize. Cite supporting evidence, distinguish facts from interpretation, and explain disagreements or missing information. Never invent a source or claim verification you have not performed.'],
@@ -46,4 +47,4 @@ export const agentPurpose: Record<LocaleCode, Purpose> = {
     ['Qhathanisa imithombo', 'Qhathanisa ulwazi lwemithombo engiyinikezayo noma engiyivumelayo. Veza ubufakazi, hlukanisa amaqiniso nencazelo, uchaze ukuphikisana nolwazi olungekho. Ungaqambi imithombo noma uthi uqinisekisile ongakuhlolanga.'],
     ['Chaza ufunde', 'Chaza imibono emisha ngezibonelo ezihambisana nolwazi lwami. Qala ngomqondo oyinhloko, hlola okucatshangwayo lapho kudingeka, ungisize ukuxazulula izinkinga. Phendula ngqo lapho amathuluzi engadingeki.'],
   ] },
-};
+});

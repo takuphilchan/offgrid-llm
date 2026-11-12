@@ -19,7 +19,7 @@ export function AgentSchedules() {
 }
 
 function SchedulePanel(){
-  const {locale,messages}=useI18n(),copy=agentSchedulesText[locale],status=useTaskStatus();
+  const {locale,messages, language}=useI18n(),copy=agentSchedulesText[locale],status=useTaskStatus();
   const [items,setItems]=useState<AgentSchedule[]>([]),[supported,setSupported]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState('');
   const [draft,setDraft]=useState<AgentSchedule|null|undefined>(undefined),[history,setHistory]=useState<{id:string;items:AgentScheduleOccurrence[]}|null>(null),[busy,setBusy]=useState(false);
   const alive=useRef(true),generation=useRef(0),historyGeneration=useRef(0);
@@ -47,7 +47,7 @@ function SchedulePanel(){
     catch(reason){if(alive.current)setError(reason instanceof Error?reason.message:messages.common.error);}
     finally{if(alive.current)setBusy(false);}
   };
-  const timestamp=(value:string,zone?:string)=>{try{return new Intl.DateTimeFormat(locale,{dateStyle:'medium',timeStyle:'short',timeZone:zone}).format(new Date(value));}catch{return value;}};
+  const timestamp=(value:string,zone?:string)=>{try{return new Intl.DateTimeFormat(language,{dateStyle:'medium',timeStyle:'short',timeZone:zone}).format(new Date(value));}catch{return value;}};
   return <section className="agent-schedules" aria-label={copy.title}>
     <SectionHeading title={copy.title} description={copy.hint} actions={<><button type="button" className="secondary-button" disabled={loading||busy} onClick={()=>void refresh()}>{copy.refresh}</button>{supported&&<button type="button" className="secondary-button" disabled={busy||draft!==undefined} onClick={()=>edit(null)}>{copy.create}</button>}</>}/>
     {error&&<ScopedNotice kind="error">{error}</ScopedNotice>}
@@ -68,7 +68,7 @@ function SchedulePanel(){
 }
 
 function ScheduleEditor({original,onCancel,onSaved}:{original:AgentSchedule|null;onCancel:()=>void;onSaved:()=>void}){
-  const {locale,messages}=useI18n(),copy=agentSchedulesText[locale],id=useId();
+  const {locale,messages, language}=useI18n(),copy=agentSchedulesText[locale],id=useId();
   const [profiles,setProfiles]=useState<AgentProfile[]>([]),[selected,setSelected]=useState(original?`${original.profile.id}:${original.profile.revision}`:'');
   const [name,setName]=useState(original?.settings.name??''),[prompt,setPrompt]=useState(original?.settings.prompt??'');
   const [zone,setZone]=useState(original?.settings.calendar.zone??'UTC'),[time,setTime]=useState(original?`${String(original.settings.calendar.hour).padStart(2,'0')}:${String(original.settings.calendar.minute).padStart(2,'0')}`:'09:00');
@@ -97,7 +97,7 @@ function ScheduleEditor({original,onCancel,onSaved}:{original:AgentSchedule|null
       <label htmlFor={field('prompt')}>{copy.prompt}</label><textarea id={field('prompt')} required maxLength={32000} rows={4} value={prompt} onChange={e=>setPrompt(e.target.value)}/>
       <label htmlFor={field('profile')}>{copy.profile}</label><select id={field('profile')} required value={selected} onChange={e=>{setSelected(e.target.value);const p=profiles.find(p=>`${p.id}:${p.revision}`===e.target.value);if(p)setBudget(p.settings.max_iterations);}}><option value="">—</option>{profiles.map(p=><option key={`${p.id}:${p.revision}`} value={`${p.id}:${p.revision}`}>{p.settings.name} · {p.revision} · {p.settings.model}</option>)}</select>
       <div className="schedule-calendar"><TimezoneField value={zone} onChange={value=>{setZone(value);setReviewed(false);}}/><label>{copy.time}<input required type="time" value={time} onChange={e=>setTime(e.target.value)}/></label></div>
-      <fieldset className="schedule-days"><legend>{copy.days}</legend><ActionGroup><button type="button" className="secondary-button" onClick={()=>{setDays([0,1,2,3,4,5,6]);setReviewed(false);}}>{copy.daily}</button><button type="button" className="secondary-button" onClick={()=>{setDays([1,2,3,4,5]);setReviewed(false);}}>{copy.weekdays}</button></ActionGroup><div>{[0,1,2,3,4,5,6].map(day=><label key={day}><input type="checkbox" checked={days.includes(day)} onChange={e=>setDays(e.target.checked?[...days,day].sort():days.filter(d=>d!==day))}/>{new Intl.DateTimeFormat(locale,{weekday:'short',timeZone:'UTC'}).format(new Date(Date.UTC(2026,9,25+day)))}</label>)}</div></fieldset>
+      <fieldset className="schedule-days"><legend>{copy.days}</legend><ActionGroup><button type="button" className="secondary-button" onClick={()=>{setDays([0,1,2,3,4,5,6]);setReviewed(false);}}>{copy.daily}</button><button type="button" className="secondary-button" onClick={()=>{setDays([1,2,3,4,5]);setReviewed(false);}}>{copy.weekdays}</button></ActionGroup><div>{[0,1,2,3,4,5,6].map(day=><label key={day}><input type="checkbox" checked={days.includes(day)} onChange={e=>setDays(e.target.checked?[...days,day].sort():days.filter(d=>d!==day))}/>{new Intl.DateTimeFormat(language,{weekday:'short',timeZone:'UTC'}).format(new Date(Date.UTC(2026,9,25+day)))}</label>)}</div></fieldset>
       <CalendarPreview zone={zone} time={time} days={days}/>
       <details className="schedule-limits"><summary>{scheduleExperience[locale].advanced} · {copy.budget}: {budget}</summary><label htmlFor={field('budget')}>{copy.budget}</label><input id={field('budget')} type="number" min={1} max={profile?.settings.max_iterations??50} required value={budget} onChange={e=>setBudget(Number(e.target.value))}/></details>
       <ExecutionWorkspace value={host} disabled={busy} onReady={setHostReady} ceiling={profile?.settings.execution} onChange={next=>{setHost(next);setReviewed(false);}}/>

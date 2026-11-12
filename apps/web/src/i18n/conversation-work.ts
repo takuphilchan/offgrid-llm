@@ -1,3 +1,4 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 const en = {
   activity: 'Agent activity', inspect: 'Inspect work', details: 'Activity details',
@@ -9,7 +10,7 @@ const en = {
   deleteHint: 'Keeping work preserves its canonical job. Stopping must be confirmed before this conversation can be removed.',
   preserveActive: 'Do not delete conversations with active work',
 };
-export const conversationWorkText: Record<LocaleCode, typeof en> = {
+export const conversationWorkText = defineMessages<typeof en>("i18n/conversation-work:conversationWorkText", {
   en,
   fr: {
     activity: 'Activité de l’agent', inspect: 'Inspecter le travail', details: 'Détails de l’activité', uncertain: 'Une action a été envoyée, mais son résultat n’est pas confirmé. Elle ne sera pas répétée automatiquement.',
@@ -51,4 +52,4 @@ export const conversationWorkText: Record<LocaleCode, typeof en> = {
     manualReport: 'Bika okubone', reportHint: 'Qala uhlole uhlelo oluthintekayo. Umbiko wakho ugcinwa njengokubonwe umuntu, hhayi ukuqinisekiswa okuzimele. Lokhu akuphindi isenzo.', recordReport: 'Londoloza okubone', savedJob: 'Umphumela ugcinwe nomsebenzi, kodwa awukanamathiselwa kule ngxoxo.', attach: 'Namathisela umphumela ogciniwe',
     update: 'Thumela umyalelo', unavailable: 'Lo msebenzi udinga ukunakwa ngaphambi kokwenziwa komunye umlayezo.', retain: 'Gcina umsebenzi ku-Agents', stop: 'Misa umsebenzi oqhubekayo kuqala', deleteChoice: 'Uma ingxoxo inomsebenzi oqhubekayo', deleteHint: 'Ukugcina umsebenzi kugcina umsebenzi wawo wokuqala. Ukuma kufanele kuqinisekiswe ngaphambi kokususa ingxoxo.', preserveActive: 'Ungasusi izingxoxo ezinomsebenzi oqhubekayo',
   },
-};
+});

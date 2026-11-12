@@ -20,7 +20,7 @@ Use the [official releases](https://github.com/takuphilchan/offgrid-llm/releases
 
 | Platform | Desktop package |
 | --- | --- |
-| Windows x64 | `OffGrid-X.Y.Z-windows-x64-setup.exe` (recommended); `OffGrid-X.Y.Z-windows-x64-portable.exe` for portable use |
+| Windows x64 | `OffGrid-X.Y.Z-windows-x64-setup.exe` (recommended) |
 | macOS Intel | `OffGrid-X.Y.Z-macos-x64.zip` |
 | macOS Apple Silicon | `OffGrid-X.Y.Z-macos-arm64.zip` |
 | Linux x64 | `OffGrid-X.Y.Z-linux-amd64.deb` for Debian/Ubuntu; `OffGrid-X.Y.Z-linux-x86_64.AppImage` for other distributions |
@@ -31,6 +31,17 @@ URLs, application IDs and existing data directories retain their established
 identities. CLI/runtime archives are separate downloads, not desktop installers.
 
 CLI/runtime archives also cover Linux ARM64. That does not imply a Linux ARM64 desktop package. Check the release's actual assets; do not assume Windows ARM64, RPM, or universal macOS packages exist.
+
+### Other downloads
+
+Windows portable (`OffGrid-X.Y.Z-windows-x64-portable.exe`), CLI CPU/Vulkan
+archives, containers, and source builds are alternatives for specific workflows.
+Most desktop users need only the package in the table above. Match Intel/AMD x64
+and ARM64 carefully. AVX2 and AVX512 CLI archives require those CPU instructions;
+AVX512 is not a general upgrade for every x64 machine. See
+[CPU support](../advanced/cpu-support.md). OS compatibility and tested hardware
+vary by release: consult its notes and evidence instead of assuming that an
+available asset qualifies every version of the OS.
 
 Calculate the file's SHA-256 and compare the entire digest with its entry in the checksum file:
 
@@ -55,6 +66,29 @@ On macOS, extract the archive and place the app in Applications. On Linux, use t
 
 Open the app. If port 11611 is free, it can start its bundled service. If a compatible service already runs there, it connects to that workspace. Follow the [quickstart](quickstart.md) to download a model; models are not included in the installer.
 
+## Platform capabilities
+
+This matrix describes packaged components and prerequisites, not qualification
+of every OS version or model. An external service uses its own runtimes.
+
+| Workflow | Windows x64 | macOS Intel / Apple Silicon | Linux x64 |
+| --- | --- | --- | --- |
+| Local chat | Model required; CPU runtime fallback download | Model required; CPU / Metal runtime fallback download | Model required; CPU runtime fallback download |
+| GPU acceleration | Compatible GPU runtime must be installed separately | Intel CPU default / Apple Silicon Metal | Compatible runtime and drivers required; GPU containers are another option |
+| Dictation | Whisper runtime bundled; model download required | Whisper runtime bundled; model download required | Whisper runtime bundled; model download required |
+| Speech playback | Piper bundled; voice download required | Piper excluded; separately configured compatible runtime required | Piper bundled; voice download required |
+| Documents | PDF/OCR workers bundled; OCR language download and embedding model as needed | Same prerequisites | Same prerequisites |
+| Integrated terminal | Available on x64 | Not currently available | Not currently available |
+| Computer access | Preview, local consent and supported controls required | Preview, Accessibility permissions and supported controls required | Preview, AT-SPI and supported desktop session required; Wayland limitations apply |
+
+The standard Windows CLI bundle is CPU/AVX2. Installing the CUDA Toolkit alone
+does not turn that binary into a GPU runtime. Supply a compatible GPU build with
+`OFFGRID_LLAMA_SERVER_PATH`; see [inference performance](../advanced/PERFORMANCE.md).
+First-use runtime downloads are separate from model downloads. For offline use,
+prepare the model and all runtimes, obtain a real reply, then repeat the intended
+workflow with networking disabled. See [voice setup](../guides/voice.md) and
+[computer tasks](../guides/computer-tasks.md) for additional limitations.
+
 ## Install the CLI
 
 Extract the matching CLI/runtime archive into an application directory. Preserve its bundled runtime and supporting files; consult the archive instructions and [llama.cpp integration](../advanced/llama-cpp.md) for custom runtime selection. Add the CLI directory to `PATH`, or use its full path.
@@ -74,6 +108,13 @@ On Windows, from the extracted directory:
 
 Open <http://127.0.0.1:11611/ui/>. If the UI is absent or cannot be located, use a matching desktop/container package or build its UI and configure `OFFGRID_UI_DIR`. Do not copy unrelated release assets.
 
+Current source builds discover `web/ui`, the sibling inference executable, and
+`audio/whisper` and `audio/piper` relative to the CLI executable, independent of
+the terminal's current directory. Keep the complete archive layout. Explicit
+`OFFGRID_UI_DIR` and `OFFGRID_LLAMA_SERVER_PATH` settings still take precedence.
+Older releases such as 0.4.28 need `OFFGRID_UI_DIR` set to the extracted `web/ui`
+directory before `offgrid serve`; rebuilding source does not update that release.
+
 Repository installer scripts are optional, separate workflows. Read [installer documentation](../../installers/README.md) and the script before running one; they may install dependencies or services. Running a remote script as administrator is not required for desktop first use.
 
 ## Update an existing installation
@@ -87,7 +128,16 @@ Finish active work, identify the service and data roots, and make a [verified ba
 | CLI archive replacement | Files in that installation directory | Running process, another CLI on `PATH`, or a container |
 | Source edit or build | Checkout and generated local outputs | Installed app or published release |
 
-For desktop plus Docker, update both to matching versions and UI builds, preserve the same volumes, then choose **Retry connection**. See [Docker upgrades](docker.md#upgrade-an-existing-workspace). Use an isolated workspace only if you deliberately want separate data.
+Desktop updates are manual: download and verify the new package, close active
+work, install it, and reopen the existing workspace. No integrated updater is
+provided. For desktop plus Docker, preserve the same volumes and update any
+component rejected by the compatibility check, then choose **Retry connection**.
+Compatible external versions can differ. See [Docker upgrades](docker.md#upgrade-an-existing-workspace).
+Use an isolated workspace only if you deliberately want separate data.
+
+For locally rebuilt or preview packages, record the revision and UI build from
+`/api/v2/system` along with the version. A local build sharing a public version
+number is not evidence that it is the same artifact as that release.
 
 Rollback needs compatible application and data snapshots. Replacing only the executable after a schema migration is not safe rollback.
 

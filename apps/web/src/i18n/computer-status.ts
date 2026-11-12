@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 // A connected service session is not evidence of a locally installed component.
-export const computerStatus: Record<LocaleCode, { installed: string; missing: string; idle: string; connected: string }> = {
+export const computerStatus = defineMessages<{ installed: string; missing: string; idle: string; connected: string }>("i18n/computer-status:computerStatus", {
   en: { installed: 'Computer access component installed. Access is requested when a task needs it.', missing: 'The desktop computer access component is missing. Repair the desktop installation.', idle: 'No computer session connected. Start access from a task in the desktop app.', connected: 'Computer session connected.' },
   fr: { installed: 'Le composant d’accès à l’ordinateur est installé. L’accès est demandé quand une tâche en a besoin.', missing: 'Le composant d’accès à l’ordinateur manque. Réparez l’installation de bureau.', idle: 'Aucune session ordinateur connectée. Démarrez l’accès depuis une tâche dans l’application de bureau.', connected: 'Session ordinateur connectée.' },
   de: { installed: 'Die Komponente für Computerzugriff ist installiert. Aufgaben fragen bei Bedarf nach Zugriff.', missing: 'Die Komponente für Computerzugriff fehlt. Repariere die Desktopinstallation.', idle: 'Keine Computersitzung verbunden. Starte den Zugriff über eine Aufgabe in der Desktop-App.', connected: 'Computersitzung verbunden.' },
@@ -11,4 +12,4 @@ export const computerStatus: Record<LocaleCode, { installed: string; missing: st
   sn: { installed: 'Chikamu chekuwana komputa chakaiswa. Mvumo inokumbirwa kana basa richiida.', missing: 'Chikamu chekuwana komputa hachipo. Gadzirisa kuiswa kweapp yedesktop.', idle: 'Hapana sesheni yekombiyuta yakabatana. Tanga kuwana kubva pabasa muapp yedesktop.', connected: 'Sesheni yekombiyuta yakabatana.' },
   nd: { installed: 'Ingxenye yokufinyelela ikhompuyutha ifakiwe. Imvumo icelwa nxa umsebenzi uyidinga.', missing: 'Ingxenye yokufinyelela ikhompuyutha ayikho. Lungisa ukufakwa kwe-app yedesktop.', idle: 'Akulasikhathi sekhompuyutha esixhunyiweyo. Qalisa ukufinyelela emsebenzini ku-app yedesktop.', connected: 'Isikhathi sekhompuyutha sixhunyiwe.' },
   zu: { installed: 'Ingxenye yokufinyelela ikhompuyutha ifakiwe. Imvume icelwa uma umsebenzi uyidinga.', missing: 'Ingxenye yokufinyelela ikhompuyutha ayikho. Lungisa ukufakwa kohlelo lwedeskithophu.', idle: 'Asikho isikhathi sekhompuyutha esixhunyiwe. Qala ukufinyelela emsebenzini kuhlelo lwedeskithophu.', connected: 'Isikhathi sekhompuyutha sixhunyiwe.' }
-};
+});

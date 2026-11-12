@@ -1,0 +1,1202 @@
+{
+  "pt-BR": {
+    "label": "Português (Brasil)",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "Tradução em prévia. A revisão por falantes nativos ainda está pendente.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "Conversas",
+        "knowledge": "Conhecimento",
+        "agents": "Agentes",
+        "models": "Modelos",
+        "activity": "Atividade",
+        "settings": "Configurações"
+      },
+      "common": {
+        "language": "Idioma",
+        "refresh": "Atualizar",
+        "retry": "Tentar novamente",
+        "loading": "Carregando…"
+      },
+      "chat": {
+        "send": "Enviar",
+        "stop": "Parar",
+        "newChat": "Nova conversa",
+        "placeholder": "Pergunte, escreva, analise ou planeje…",
+        "selectModel": "Selecionar um modelo",
+        "copy": "Copiar",
+        "copied": "Copiado",
+        "conversations": "Conversas",
+        "title": "Conversas"
+      },
+      "shell": {
+        "theme": "Tema",
+        "systemTheme": "Sistema",
+        "lightTheme": "Claro",
+        "darkTheme": "Escuro",
+        "appearance": "Aparência"
+      },
+      "knowledge": {
+        "title": "Conhecimento"
+      },
+      "agents": {
+        "title": "Agentes"
+      },
+      "models": {
+        "title": "Modelos"
+      },
+      "activity": {
+        "title": "Atividade"
+      },
+      "settings": {
+        "title": "Configurações"
+      }
+    }
+  },
+  "pt-PT": {
+    "label": "Português (Portugal)",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "Tradução em pré-visualização. A revisão por falantes nativos está pendente.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "Conversas",
+        "knowledge": "Conhecimento",
+        "agents": "Agentes",
+        "models": "Modelos",
+        "activity": "Atividade",
+        "settings": "Definições"
+      },
+      "common": {
+        "language": "Idioma",
+        "refresh": "Atualizar",
+        "retry": "Tentar novamente",
+        "loading": "A carregar…"
+      },
+      "chat": {
+        "send": "Enviar",
+        "stop": "Parar",
+        "newChat": "Nova conversa",
+        "placeholder": "Pergunte, escreva, analise ou planeie…",
+        "selectModel": "Selecionar um modelo",
+        "copy": "Copiar",
+        "copied": "Copiado",
+        "conversations": "Conversas",
+        "title": "Conversas"
+      },
+      "shell": {
+        "theme": "Tema",
+        "systemTheme": "Sistema",
+        "lightTheme": "Claro",
+        "darkTheme": "Escuro",
+        "appearance": "Aparência"
+      },
+      "knowledge": {
+        "title": "Conhecimento"
+      },
+      "agents": {
+        "title": "Agentes"
+      },
+      "models": {
+        "title": "Modelos"
+      },
+      "activity": {
+        "title": "Atividade"
+      },
+      "settings": {
+        "title": "Definições"
+      }
+    }
+  },
+  "it": {
+    "label": "Italiano",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "Traduzione in anteprima. La revisione da parte di madrelingua non è ancora stata completata.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "Chat",
+        "knowledge": "Conoscenze",
+        "agents": "Agenti",
+        "models": "Modelli",
+        "activity": "Attività",
+        "settings": "Impostazioni"
+      },
+      "common": {
+        "language": "Lingua",
+        "refresh": "Aggiorna",
+        "retry": "Riprova",
+        "loading": "Caricamento…"
+      },
+      "chat": {
+        "send": "Invia",
+        "stop": "Interrompi",
+        "newChat": "Nuova chat",
+        "placeholder": "Chiedi, scrivi, analizza o pianifica…",
+        "selectModel": "Seleziona un modello",
+        "copy": "Copia",
+        "copied": "Copiato",
+        "conversations": "Conversazioni",
+        "title": "Chat"
+      },
+      "shell": {
+        "theme": "Tema",
+        "systemTheme": "Sistema",
+        "lightTheme": "Chiaro",
+        "darkTheme": "Scuro",
+        "appearance": "Aspetto"
+      },
+      "knowledge": {
+        "title": "Conoscenze"
+      },
+      "agents": {
+        "title": "Agenti"
+      },
+      "models": {
+        "title": "Modelli"
+      },
+      "activity": {
+        "title": "Attività"
+      },
+      "settings": {
+        "title": "Impostazioni"
+      }
+    }
+  },
+  "ru": {
+    "label": "Русский",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "Предварительный перевод. Проверка носителями языка ещё не завершена.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "Чат",
+        "knowledge": "База знаний",
+        "agents": "Агенты",
+        "models": "Модели",
+        "activity": "Активность",
+        "settings": "Настройки"
+      },
+      "common": {
+        "language": "Язык",
+        "refresh": "Обновить",
+        "retry": "Повторить",
+        "loading": "Загрузка…"
+      },
+      "chat": {
+        "send": "Отправить",
+        "stop": "Остановить",
+        "newChat": "Новый чат",
+        "placeholder": "Задайте вопрос, создайте текст, проанализируйте данные или составьте план…",
+        "selectModel": "Выберите модель",
+        "copy": "Копировать",
+        "copied": "Скопировано",
+        "conversations": "Разговоры",
+        "title": "Чат"
+      },
+      "shell": {
+        "theme": "Тема",
+        "systemTheme": "Системная",
+        "lightTheme": "Светлая",
+        "darkTheme": "Тёмная",
+        "appearance": "Внешний вид"
+      },
+      "knowledge": {
+        "title": "База знаний"
+      },
+      "agents": {
+        "title": "Агенты"
+      },
+      "models": {
+        "title": "Модели"
+      },
+      "activity": {
+        "title": "Активность"
+      },
+      "settings": {
+        "title": "Настройки"
+      }
+    }
+  },
+  "uk": {
+    "label": "Українська",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "Попередній переклад. Перевірка носіями мови ще не завершена.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "Чат",
+        "knowledge": "База знань",
+        "agents": "Агенти",
+        "models": "Моделі",
+        "activity": "Активність",
+        "settings": "Налаштування"
+      },
+      "common": {
+        "language": "Мова",
+        "refresh": "Оновити",
+        "retry": "Спробувати ще раз",
+        "loading": "Завантаження…"
+      },
+      "chat": {
+        "send": "Надіслати",
+        "stop": "Зупинити",
+        "newChat": "Новий чат",
+        "placeholder": "Поставте запитання, напишіть текст, проаналізуйте дані або складіть план…",
+        "selectModel": "Виберіть модель",
+        "copy": "Копіювати",
+        "copied": "Скопійовано",
+        "conversations": "Розмови",
+        "title": "Чат"
+      },
+      "shell": {
+        "theme": "Тема",
+        "systemTheme": "Системна",
+        "lightTheme": "Світла",
+        "darkTheme": "Темна",
+        "appearance": "Вигляд"
+      },
+      "knowledge": {
+        "title": "База знань"
+      },
+      "agents": {
+        "title": "Агенти"
+      },
+      "models": {
+        "title": "Моделі"
+      },
+      "activity": {
+        "title": "Активність"
+      },
+      "settings": {
+        "title": "Налаштування"
+      }
+    }
+  },
+  "tr": {
+    "label": "Türkçe",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "Çeviri önizlemesi. Ana dili Türkçe olan kişilerce inceleme henüz tamamlanmadı.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "Sohbet",
+        "knowledge": "Bilgi tabanı",
+        "agents": "Ajanlar",
+        "models": "Modeller",
+        "activity": "Etkinlik",
+        "settings": "Ayarlar"
+      },
+      "common": {
+        "language": "Dil",
+        "refresh": "Yenile",
+        "retry": "Yeniden dene",
+        "loading": "Yükleniyor…"
+      },
+      "chat": {
+        "send": "Gönder",
+        "stop": "Durdur",
+        "newChat": "Yeni sohbet",
+        "placeholder": "Sorun, yazın, analiz edin veya planlayın…",
+        "selectModel": "Model seçin",
+        "copy": "Kopyala",
+        "copied": "Kopyalandı",
+        "conversations": "Sohbetler",
+        "title": "Sohbet"
+      },
+      "shell": {
+        "theme": "Tema",
+        "systemTheme": "Sistem",
+        "lightTheme": "Açık",
+        "darkTheme": "Koyu",
+        "appearance": "Görünüm"
+      },
+      "knowledge": {
+        "title": "Bilgi tabanı"
+      },
+      "agents": {
+        "title": "Ajanlar"
+      },
+      "models": {
+        "title": "Modeller"
+      },
+      "activity": {
+        "title": "Etkinlik"
+      },
+      "settings": {
+        "title": "Ayarlar"
+      }
+    }
+  },
+  "zh-Hans": {
+    "label": "简体中文",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "翻译预览：尚未完成母语审校。",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "对话",
+        "knowledge": "知识库",
+        "agents": "智能体",
+        "models": "模型",
+        "activity": "活动",
+        "settings": "设置"
+      },
+      "common": {
+        "language": "语言",
+        "refresh": "刷新",
+        "retry": "重试",
+        "loading": "正在加载…"
+      },
+      "chat": {
+        "send": "发送",
+        "stop": "停止",
+        "newChat": "新建对话",
+        "placeholder": "提问、写作、分析或规划…",
+        "selectModel": "选择模型",
+        "copy": "复制",
+        "copied": "已复制",
+        "conversations": "对话记录",
+        "title": "对话"
+      },
+      "shell": {
+        "theme": "主题",
+        "systemTheme": "跟随系统",
+        "lightTheme": "浅色",
+        "darkTheme": "深色",
+        "appearance": "外观"
+      },
+      "knowledge": {
+        "title": "知识库"
+      },
+      "agents": {
+        "title": "智能体"
+      },
+      "models": {
+        "title": "模型"
+      },
+      "activity": {
+        "title": "活动"
+      },
+      "settings": {
+        "title": "设置"
+      }
+    }
+  },
+  "zh-Hant": {
+    "label": "繁體中文",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "翻譯預覽：尚未完成母語審校。",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "對話",
+        "knowledge": "知識庫",
+        "agents": "代理程式",
+        "models": "模型",
+        "activity": "活動",
+        "settings": "設定"
+      },
+      "common": {
+        "language": "語言",
+        "refresh": "重新整理",
+        "retry": "重試",
+        "loading": "載入中…"
+      },
+      "chat": {
+        "send": "傳送",
+        "stop": "停止",
+        "newChat": "新增對話",
+        "placeholder": "提問、撰寫、分析或規劃…",
+        "selectModel": "選擇模型",
+        "copy": "複製",
+        "copied": "已複製",
+        "conversations": "對話紀錄",
+        "title": "對話"
+      },
+      "shell": {
+        "theme": "主題",
+        "systemTheme": "跟隨系統",
+        "lightTheme": "淺色",
+        "darkTheme": "深色",
+        "appearance": "外觀"
+      },
+      "knowledge": {
+        "title": "知識庫"
+      },
+      "agents": {
+        "title": "代理程式"
+      },
+      "models": {
+        "title": "模型"
+      },
+      "activity": {
+        "title": "活動"
+      },
+      "settings": {
+        "title": "設定"
+      }
+    }
+  },
+  "ja": {
+    "label": "日本語",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "翻訳プレビュー：母語話者による確認はまだ完了していません。",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "チャット",
+        "knowledge": "ナレッジ",
+        "agents": "エージェント",
+        "models": "モデル",
+        "activity": "アクティビティ",
+        "settings": "設定"
+      },
+      "common": {
+        "language": "言語",
+        "refresh": "更新",
+        "retry": "再試行",
+        "loading": "読み込み中…"
+      },
+      "chat": {
+        "send": "送信",
+        "stop": "停止",
+        "newChat": "新しいチャット",
+        "placeholder": "質問、下書き、分析、計画などを入力…",
+        "selectModel": "モデルを選択",
+        "copy": "コピー",
+        "copied": "コピーしました",
+        "conversations": "会話",
+        "title": "チャット"
+      },
+      "shell": {
+        "theme": "テーマ",
+        "systemTheme": "システムに合わせる",
+        "lightTheme": "ライト",
+        "darkTheme": "ダーク",
+        "appearance": "外観"
+      },
+      "knowledge": {
+        "title": "ナレッジ"
+      },
+      "agents": {
+        "title": "エージェント"
+      },
+      "models": {
+        "title": "モデル"
+      },
+      "activity": {
+        "title": "アクティビティ"
+      },
+      "settings": {
+        "title": "設定"
+      }
+    }
+  },
+  "ko": {
+    "label": "한국어",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "번역 미리 보기: 원어민 검토가 아직 완료되지 않았습니다.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "채팅",
+        "knowledge": "지식",
+        "agents": "에이전트",
+        "models": "모델",
+        "activity": "활동",
+        "settings": "설정"
+      },
+      "common": {
+        "language": "언어",
+        "refresh": "새로고침",
+        "retry": "다시 시도",
+        "loading": "불러오는 중…"
+      },
+      "chat": {
+        "send": "보내기",
+        "stop": "중지",
+        "newChat": "새 채팅",
+        "placeholder": "질문, 초안 작성, 분석 또는 계획을 입력하세요…",
+        "selectModel": "모델 선택",
+        "copy": "복사",
+        "copied": "복사됨",
+        "conversations": "대화",
+        "title": "채팅"
+      },
+      "shell": {
+        "theme": "테마",
+        "systemTheme": "시스템 설정 따르기",
+        "lightTheme": "밝게",
+        "darkTheme": "어둡게",
+        "appearance": "화면 모양"
+      },
+      "knowledge": {
+        "title": "지식"
+      },
+      "agents": {
+        "title": "에이전트"
+      },
+      "models": {
+        "title": "모델"
+      },
+      "activity": {
+        "title": "활동"
+      },
+      "settings": {
+        "title": "설정"
+      }
+    }
+  },
+  "hi": {
+    "label": "हिन्दी",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "अनुवाद पूर्वावलोकन। इस भाषा के मूल वक्ताओं द्वारा समीक्षा अभी बाकी है।",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "चैट",
+        "knowledge": "ज्ञान भंडार",
+        "agents": "एजेंट",
+        "models": "मॉडल",
+        "activity": "गतिविधि",
+        "settings": "सेटिंग"
+      },
+      "common": {
+        "language": "भाषा",
+        "refresh": "रीफ़्रेश करें",
+        "retry": "फिर से कोशिश करें",
+        "loading": "लोड हो रहा है…"
+      },
+      "chat": {
+        "send": "भेजें",
+        "stop": "रोकें",
+        "newChat": "नई चैट",
+        "placeholder": "सवाल पूछें, लिखें, विश्लेषण करें या योजना बनाएँ…",
+        "selectModel": "मॉडल चुनें",
+        "copy": "कॉपी करें",
+        "copied": "कॉपी हो गया",
+        "conversations": "बातचीत",
+        "title": "चैट"
+      },
+      "shell": {
+        "theme": "थीम",
+        "systemTheme": "सिस्टम के अनुसार",
+        "lightTheme": "हल्की",
+        "darkTheme": "गहरी",
+        "appearance": "दिखावट"
+      },
+      "knowledge": {
+        "title": "ज्ञान भंडार"
+      },
+      "agents": {
+        "title": "एजेंट"
+      },
+      "models": {
+        "title": "मॉडल"
+      },
+      "activity": {
+        "title": "गतिविधि"
+      },
+      "settings": {
+        "title": "सेटिंग"
+      }
+    }
+  },
+  "bn": {
+    "label": "বাংলা",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "অনুবাদের পূর্বরূপ। মাতৃভাষীদের পর্যালোচনা এখনও শেষ হয়নি।",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "চ্যাট",
+        "knowledge": "জ্ঞানভান্ডার",
+        "agents": "এজেন্ট",
+        "models": "মডেল",
+        "activity": "কার্যকলাপ",
+        "settings": "সেটিংস"
+      },
+      "common": {
+        "language": "ভাষা",
+        "refresh": "রিফ্রেশ করুন",
+        "retry": "আবার চেষ্টা করুন",
+        "loading": "লোড হচ্ছে…"
+      },
+      "chat": {
+        "send": "পাঠান",
+        "stop": "থামান",
+        "newChat": "নতুন চ্যাট",
+        "placeholder": "প্রশ্ন করুন, লিখুন, বিশ্লেষণ করুন বা পরিকল্পনা করুন…",
+        "selectModel": "মডেল নির্বাচন করুন",
+        "copy": "কপি করুন",
+        "copied": "কপি হয়েছে",
+        "conversations": "কথোপকথন",
+        "title": "চ্যাট"
+      },
+      "shell": {
+        "theme": "থিম",
+        "systemTheme": "সিস্টেম অনুযায়ী",
+        "lightTheme": "হালকা",
+        "darkTheme": "গাঢ়",
+        "appearance": "চেহারা"
+      },
+      "knowledge": {
+        "title": "জ্ঞানভান্ডার"
+      },
+      "agents": {
+        "title": "এজেন্ট"
+      },
+      "models": {
+        "title": "মডেল"
+      },
+      "activity": {
+        "title": "কার্যকলাপ"
+      },
+      "settings": {
+        "title": "সেটিংস"
+      }
+    }
+  },
+  "ta": {
+    "label": "தமிழ்",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "மொழிபெயர்ப்பு முன்னோட்டம். தாய்மொழி பேசுவோரின் மதிப்பாய்வு இன்னும் முடிவடையவில்லை.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "அரட்டை",
+        "knowledge": "அறிவுக் களஞ்சியம்",
+        "agents": "ஏஜெண்டுகள்",
+        "models": "மாதிரிகள்",
+        "activity": "செயல்பாடு",
+        "settings": "அமைப்புகள்"
+      },
+      "common": {
+        "language": "மொழி",
+        "refresh": "புதுப்பி",
+        "retry": "மீண்டும் முயற்சி",
+        "loading": "ஏற்றுகிறது…"
+      },
+      "chat": {
+        "send": "அனுப்பு",
+        "stop": "நிறுத்து",
+        "newChat": "புதிய அரட்டை",
+        "placeholder": "கேளுங்கள், எழுதுங்கள், பகுப்பாய்வு செய்யுங்கள் அல்லது திட்டமிடுங்கள்…",
+        "selectModel": "மாதிரியைத் தேர்ந்தெடு",
+        "copy": "நகலெடு",
+        "copied": "நகலெடுக்கப்பட்டது",
+        "conversations": "உரையாடல்கள்",
+        "title": "அரட்டை"
+      },
+      "shell": {
+        "theme": "தோற்றம்",
+        "systemTheme": "கணினி அமைப்பின்படி",
+        "lightTheme": "வெளிர்",
+        "darkTheme": "அடர்",
+        "appearance": "காட்சியமைப்பு"
+      },
+      "knowledge": {
+        "title": "அறிவுக் களஞ்சியம்"
+      },
+      "agents": {
+        "title": "ஏஜெண்டுகள்"
+      },
+      "models": {
+        "title": "மாதிரிகள்"
+      },
+      "activity": {
+        "title": "செயல்பாடு"
+      },
+      "settings": {
+        "title": "அமைப்புகள்"
+      }
+    }
+  },
+  "ur": {
+    "label": "اردو",
+    "direction": "rtl",
+    "stage": "preview",
+    "notice": "ترجمے کا پیش منظر۔ مادری زبان کے ماہرین کا جائزہ ابھی مکمل نہیں ہوا۔",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "چیٹ",
+        "knowledge": "معلوماتی ذخیرہ",
+        "agents": "ایجنٹس",
+        "models": "ماڈلز",
+        "activity": "سرگرمی",
+        "settings": "ترتیبات"
+      },
+      "common": {
+        "language": "زبان",
+        "refresh": "تازہ کریں",
+        "retry": "دوبارہ کوشش کریں",
+        "loading": "لوڈ ہو رہا ہے…"
+      },
+      "chat": {
+        "send": "بھیجیں",
+        "stop": "روکیں",
+        "newChat": "نئی چیٹ",
+        "placeholder": "سوال پوچھیں، لکھیں، تجزیہ کریں یا منصوبہ بنائیں…",
+        "selectModel": "ماڈل منتخب کریں",
+        "copy": "کاپی کریں",
+        "copied": "کاپی ہو گیا",
+        "conversations": "گفتگو",
+        "title": "چیٹ"
+      },
+      "shell": {
+        "theme": "تھیم",
+        "systemTheme": "سسٹم کے مطابق",
+        "lightTheme": "ہلکا",
+        "darkTheme": "گہرا",
+        "appearance": "ظاہری شکل"
+      },
+      "knowledge": {
+        "title": "معلوماتی ذخیرہ"
+      },
+      "agents": {
+        "title": "ایجنٹس"
+      },
+      "models": {
+        "title": "ماڈلز"
+      },
+      "activity": {
+        "title": "سرگرمی"
+      },
+      "settings": {
+        "title": "ترتیبات"
+      }
+    }
+  },
+  "fa": {
+    "label": "فارسی",
+    "direction": "rtl",
+    "stage": "preview",
+    "notice": "پیش‌نمایش ترجمه. بازبینی توسط گویشوران بومی هنوز کامل نشده است.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "گفتگو",
+        "knowledge": "پایگاه دانش",
+        "agents": "عامل‌ها",
+        "models": "مدل‌ها",
+        "activity": "فعالیت",
+        "settings": "تنظیمات"
+      },
+      "common": {
+        "language": "زبان",
+        "refresh": "تازه‌سازی",
+        "retry": "تلاش دوباره",
+        "loading": "در حال بارگذاری…"
+      },
+      "chat": {
+        "send": "ارسال",
+        "stop": "توقف",
+        "newChat": "گفتگوی جدید",
+        "placeholder": "بپرسید، بنویسید، تحلیل کنید یا برنامه‌ریزی کنید…",
+        "selectModel": "انتخاب مدل",
+        "copy": "کپی",
+        "copied": "کپی شد",
+        "conversations": "گفتگوها",
+        "title": "گفتگو"
+      },
+      "shell": {
+        "theme": "پوسته",
+        "systemTheme": "مطابق سیستم",
+        "lightTheme": "روشن",
+        "darkTheme": "تیره",
+        "appearance": "ظاهر"
+      },
+      "knowledge": {
+        "title": "پایگاه دانش"
+      },
+      "agents": {
+        "title": "عامل‌ها"
+      },
+      "models": {
+        "title": "مدل‌ها"
+      },
+      "activity": {
+        "title": "فعالیت"
+      },
+      "settings": {
+        "title": "تنظیمات"
+      }
+    }
+  },
+  "he": {
+    "label": "עברית",
+    "direction": "rtl",
+    "stage": "preview",
+    "notice": "תרגום בתצוגה מקדימה. הבדיקה של דוברי שפת אם טרם הושלמה.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "צ׳אט",
+        "knowledge": "מאגר ידע",
+        "agents": "סוכנים",
+        "models": "מודלים",
+        "activity": "פעילות",
+        "settings": "הגדרות"
+      },
+      "common": {
+        "language": "שפה",
+        "refresh": "רענון",
+        "retry": "ניסיון נוסף",
+        "loading": "בטעינה…"
+      },
+      "chat": {
+        "send": "שליחה",
+        "stop": "עצירה",
+        "newChat": "צ׳אט חדש",
+        "placeholder": "שאלו, כתבו, נתחו או תכננו…",
+        "selectModel": "בחירת מודל",
+        "copy": "העתקה",
+        "copied": "הועתק",
+        "conversations": "שיחות",
+        "title": "צ׳אט"
+      },
+      "shell": {
+        "theme": "ערכת נושא",
+        "systemTheme": "לפי המערכת",
+        "lightTheme": "בהירה",
+        "darkTheme": "כהה",
+        "appearance": "מראה"
+      },
+      "knowledge": {
+        "title": "מאגר ידע"
+      },
+      "agents": {
+        "title": "סוכנים"
+      },
+      "models": {
+        "title": "מודלים"
+      },
+      "activity": {
+        "title": "פעילות"
+      },
+      "settings": {
+        "title": "הגדרות"
+      }
+    }
+  },
+  "id": {
+    "label": "Bahasa Indonesia",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "Pratinjau terjemahan. Peninjauan oleh penutur asli belum selesai.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "Percakapan",
+        "knowledge": "Pengetahuan",
+        "agents": "Agen",
+        "models": "Model",
+        "activity": "Aktivitas",
+        "settings": "Pengaturan"
+      },
+      "common": {
+        "language": "Bahasa",
+        "refresh": "Muat ulang",
+        "retry": "Coba lagi",
+        "loading": "Memuat…"
+      },
+      "chat": {
+        "send": "Kirim",
+        "stop": "Hentikan",
+        "newChat": "Percakapan baru",
+        "placeholder": "Tanyakan, tulis, analisis, atau rencanakan…",
+        "selectModel": "Pilih model",
+        "copy": "Salin",
+        "copied": "Disalin",
+        "conversations": "Percakapan",
+        "title": "Percakapan"
+      },
+      "shell": {
+        "theme": "Tema",
+        "systemTheme": "Ikuti sistem",
+        "lightTheme": "Terang",
+        "darkTheme": "Gelap",
+        "appearance": "Tampilan"
+      },
+      "knowledge": {
+        "title": "Pengetahuan"
+      },
+      "agents": {
+        "title": "Agen"
+      },
+      "models": {
+        "title": "Model"
+      },
+      "activity": {
+        "title": "Aktivitas"
+      },
+      "settings": {
+        "title": "Pengaturan"
+      }
+    }
+  },
+  "vi": {
+    "label": "Tiếng Việt",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "Bản dịch xem trước. Việc rà soát bởi người bản ngữ chưa hoàn tất.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "Trò chuyện",
+        "knowledge": "Kho kiến thức",
+        "agents": "Tác nhân",
+        "models": "Mô hình",
+        "activity": "Hoạt động",
+        "settings": "Cài đặt"
+      },
+      "common": {
+        "language": "Ngôn ngữ",
+        "refresh": "Làm mới",
+        "retry": "Thử lại",
+        "loading": "Đang tải…"
+      },
+      "chat": {
+        "send": "Gửi",
+        "stop": "Dừng",
+        "newChat": "Cuộc trò chuyện mới",
+        "placeholder": "Đặt câu hỏi, viết, phân tích hoặc lập kế hoạch…",
+        "selectModel": "Chọn mô hình",
+        "copy": "Sao chép",
+        "copied": "Đã sao chép",
+        "conversations": "Cuộc trò chuyện",
+        "title": "Trò chuyện"
+      },
+      "shell": {
+        "theme": "Giao diện",
+        "systemTheme": "Theo hệ thống",
+        "lightTheme": "Sáng",
+        "darkTheme": "Tối",
+        "appearance": "Hiển thị"
+      },
+      "knowledge": {
+        "title": "Kho kiến thức"
+      },
+      "agents": {
+        "title": "Tác nhân"
+      },
+      "models": {
+        "title": "Mô hình"
+      },
+      "activity": {
+        "title": "Hoạt động"
+      },
+      "settings": {
+        "title": "Cài đặt"
+      }
+    }
+  },
+  "th": {
+    "label": "ไทย",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "ตัวอย่างคำแปล ยังไม่ได้รับการตรวจทานโดยเจ้าของภาษา",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "แชต",
+        "knowledge": "คลังความรู้",
+        "agents": "เอเจนต์",
+        "models": "โมเดล",
+        "activity": "กิจกรรม",
+        "settings": "การตั้งค่า"
+      },
+      "common": {
+        "language": "ภาษา",
+        "refresh": "รีเฟรช",
+        "retry": "ลองอีกครั้ง",
+        "loading": "กำลังโหลด…"
+      },
+      "chat": {
+        "send": "ส่ง",
+        "stop": "หยุด",
+        "newChat": "แชตใหม่",
+        "placeholder": "ถาม เขียน วิเคราะห์ หรือวางแผน…",
+        "selectModel": "เลือกโมเดล",
+        "copy": "คัดลอก",
+        "copied": "คัดลอกแล้ว",
+        "conversations": "บทสนทนา",
+        "title": "แชต"
+      },
+      "shell": {
+        "theme": "ธีม",
+        "systemTheme": "ตามระบบ",
+        "lightTheme": "สว่าง",
+        "darkTheme": "มืด",
+        "appearance": "รูปลักษณ์"
+      },
+      "knowledge": {
+        "title": "คลังความรู้"
+      },
+      "agents": {
+        "title": "เอเจนต์"
+      },
+      "models": {
+        "title": "โมเดล"
+      },
+      "activity": {
+        "title": "กิจกรรม"
+      },
+      "settings": {
+        "title": "การตั้งค่า"
+      }
+    }
+  },
+  "fil": {
+    "label": "Filipino",
+    "direction": "ltr",
+    "stage": "preview",
+    "notice": "Paunang salin. Hindi pa tapos ang pagsusuri ng mga katutubong tagapagsalita.",
+    "review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewedAt": null
+    },
+    "messages": {
+      "nav": {
+        "chat": "Chat",
+        "knowledge": "Kaalaman",
+        "agents": "Mga agent",
+        "models": "Mga modelo",
+        "activity": "Aktibidad",
+        "settings": "Mga setting"
+      },
+      "common": {
+        "language": "Wika",
+        "refresh": "I-refresh",
+        "retry": "Subukan muli",
+        "loading": "Naglo-load…"
+      },
+      "chat": {
+        "send": "Ipadala",
+        "stop": "Ihinto",
+        "newChat": "Bagong chat",
+        "placeholder": "Magtanong, sumulat, magsuri, o magplano…",
+        "selectModel": "Pumili ng modelo",
+        "copy": "Kopyahin",
+        "copied": "Nakopya",
+        "conversations": "Mga pag-uusap",
+        "title": "Chat"
+      },
+      "shell": {
+        "theme": "Tema",
+        "systemTheme": "Ayon sa system",
+        "lightTheme": "Maliwanag",
+        "darkTheme": "Madilim",
+        "appearance": "Hitsura"
+      },
+      "knowledge": {
+        "title": "Kaalaman"
+      },
+      "agents": {
+        "title": "Mga agent"
+      },
+      "models": {
+        "title": "Mga modelo"
+      },
+      "activity": {
+        "title": "Aktibidad"
+      },
+      "settings": {
+        "title": "Mga setting"
+      }
+    }
+  }
+}

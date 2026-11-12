@@ -89,6 +89,9 @@ func (d *agentLiveDisplay) phase(label string, active bool) {
 	d.clearLocked()
 	d.label = label
 	d.active = active && d.stop != nil
+	if sink, ok := d.progress.(interface{ AgentProgressPhase(string) }); ok {
+		sink.AgentProgressPhase(label)
+	}
 }
 func (d *agentLiveDisplay) close() {
 	if d.stop != nil {
@@ -137,7 +140,6 @@ func (d *agentDraft) update(w io.Writer, iteration int, text string) {
 		d.end(w, "Earlier draft replaced; not a completed answer.")
 	}
 	if !d.open {
-		fmt.Fprint(w, "\nReply in progress\n\n")
 		d.open = true
 		d.iteration = iteration
 		d.text = ""

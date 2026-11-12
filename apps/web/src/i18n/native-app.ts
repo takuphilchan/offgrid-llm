@@ -1,5 +1,6 @@
+import { defineMessages } from './catalog';
 import type {LocaleCode} from './index';
-const copy = {
+const copy = defineMessages("i18n/native-app:copy", {
  en:['Use this computer','Application window','Separate browser','Choose an application','Select a window','Connect application','No accessible windows were found. Open the application, then try again.','OffGrid controls only the selected window for this task. Existing browser windows can be selected too. The approval mode above applies within this scope; protected fields and blocked actions remain excluded.','This computer needs the matching OffGrid Desktop application. Open it to select an application locally.','Observe application','Replace text','Activate control','Verify control text'],
  fr:['Utiliser cet ordinateur','Fenêtre d’application','Navigateur séparé','Choisir une application','Sélectionner une fenêtre','Connecter l’application','Aucune fenêtre accessible. Ouvrez l’application et réessayez.','OffGrid contrôle uniquement la fenêtre sélectionnée pour cette tâche. Le mode d’autorisation ci-dessus s’applique dans cette portée ; les champs protégés et les actions bloquées restent exclus.','Ouvrez la version correspondante d’OffGrid Desktop pour sélectionner une application sur cet ordinateur.','Observer l’application','Remplacer le texte','Activer le contrôle','Vérifier le texte'],
  de:['Diesen Computer verwenden','Anwendungsfenster','Separater Browser','Anwendung auswählen','Fenster auswählen','Anwendung verbinden','Keine zugänglichen Fenster gefunden. Öffnen Sie die Anwendung und versuchen Sie es erneut.','OffGrid steuert für diese Aufgabe nur das ausgewählte Fenster. Der obige Freigabemodus gilt innerhalb dieses Bereichs; geschützte Felder und gesperrte Aktionen bleiben ausgeschlossen.','Öffnen Sie die passende OffGrid-Desktop-Version, um eine lokale Anwendung auszuwählen.','Anwendung prüfen','Text ersetzen','Steuerelement aktivieren','Text überprüfen'],
@@ -9,10 +10,10 @@ const copy = {
  sn:['Shandisa kombiyuta iyi','Hwindo rechirongwa','Bhurawuza rakaparadzana','Sarudza chirongwa','Sarudza hwindo','Batanidza chirongwa','Hapana mahwindo anowanikwa. Vhura chirongwa woedza zvakare.','OffGrid inodzora hwindo rakasarudzwa chete pabasa iri. Maitiro emvumo ari pamusoro anoshanda munzvimbo iyi; nzvimbo dzakachengetedzwa nezviito zvakavharwa zvinoramba zvisingabatanidzwi.','Vhura OffGrid Desktop inoenderana kuti usarudze chirongwa pakombiyuta iyi.','Ongorora chirongwa','Tsiva mashoko','Shandisa chinodzora','Simbisa mashoko'],
  nd:['Sebenzisa ikhompyutha le','Iwindi lohlelo','Ibhrawuza ehlukileyo','Khetha uhlelo','Khetha iwindi','Xhuma uhlelo','Akulamawindi atholakalayo. Vula uhlelo uzame futhi.','I-OffGrid ilawula iwindi elikhethiweyo kuphela kulumsebenzi. Indlela yemvumo engenhla isebenza kule indawo; izindawo ezivikelweyo lezenzo ezivinjiweyo zihlala zingafakwanga.','Vula i-OffGrid Desktop ehambelanayo ukuze ukhethe uhlelo kukhompyutha le.','Hlola uhlelo','Tshintsha umbhalo','Sebenzisa isilawuli','Qinisekisa umbhalo'],
  zu:['Sebenzisa le khompyutha','Iwindi lohlelo','Isiphequluli esihlukile','Khetha uhlelo','Khetha iwindi','Xhuma uhlelo','Awekho amawindi afinyelelekayo. Vula uhlelo bese uzama futhi.','I-OffGrid ilawula iwindi elikhethiwe kuphela kulo msebenzi. Imodi yokugunyaza engenhla isebenza kulo mkhawulo; izinkambu ezivikelwe nezenzo ezivinjiwe zihlala zingafakiwe.','Vula inguqulo ehambisanayo ye-OffGrid Desktop ukukhetha uhlelo kule khompyutha.','Hlola uhlelo','Shintsha umbhalo','Sebenzisa isilawuli','Qinisekisa umbhalo']
-};
+});
 export function nativeAppText(locale:LocaleCode) {
  const c=copy[locale];
- const launchMap:{[key:string]:readonly string[]}={
+ const launchMap:{[key:string]:readonly string[]}=defineMessages("i18n/native-app:launchMap", {
   en:['Open an application','Launch selected application','Applications opened by OffGrid can be selected below.','Choose upload file','Selected upload','Remove upload'],
   fr:['Ouvrir une application','Lancer l’application sélectionnée','Les applications ouvertes par OffGrid peuvent être sélectionnées ci-dessous.','Choisir un fichier à téléverser','Fichier sélectionné','Retirer le fichier'],
   de:['Anwendung öffnen','Ausgewählte Anwendung starten','Von OffGrid geöffnete Anwendungen können unten ausgewählt werden.','Datei zum Hochladen wählen','Ausgewählte Datei','Datei entfernen'],
@@ -22,13 +23,13 @@ export function nativeAppText(locale:LocaleCode) {
   sn:['Vhura chirongwa','Tanga chirongwa chasarudzwa','Zvirongwa zvakavhurwa neOffGrid zvinogona kusarudzwa pazasi.','Sarudza faira rekukwidza','Faira rasarudzwa','Bvisa faira'],
   nd:['Vula uhlelo','Qalisa uhlelo olukhethiweyo','Izinhlelo ezivulwe yi-OffGrid zingakhethwa ngezansi.','Khetha ifayela lokulayisha','Ifayela elikhethiweyo','Susa ifayela'],
   zu:['Vula uhlelo','Qalisa uhlelo olukhethiwe','Izinhlelo ezivulwe yi-OffGrid zingakhethwa ngezansi.','Khetha ifayela ozolilayisha','Ifayela elikhethiwe','Susa ifayela']
- };
+ });
  const launch=launchMap[locale] ?? launchMap.en;
  const ready=readinessCopy[locale];
  return {title:c[0],window:c[1],browser:c[2],choose:c[3],select:c[4],connect:c[5],empty:c[6],scope:c[7],desktop:c[8],actions:c.slice(9),open:launch[0],launch:launch[1],opened:launch[2],chooseUpload:launch[3],selectedUpload:launch[4],removeUpload:launch[5],connectHelp:ready[0],browserHelp:ready[1]};
 }
 
-const readinessCopy:Record<LocaleCode,readonly [string,string]> = {
+const readinessCopy = defineMessages<readonly [string,string]>("i18n/native-app:readinessCopy", {
  en:['Choose a window and connect it to start the task.','Open a browser session to start the task.'],
  fr:['Choisissez une fenêtre et connectez-la pour démarrer la tâche.','Ouvrez une session de navigateur pour démarrer la tâche.'],
  de:['Wählen und verbinden Sie ein Fenster, um die Aufgabe zu starten.','Öffnen Sie eine Browsersitzung, um die Aufgabe zu starten.'],
@@ -38,10 +39,10 @@ const readinessCopy:Record<LocaleCode,readonly [string,string]> = {
  sn:['Sarudza hwindo woribatanidza kuti utange basa.','Vhura chikamu chebhurawuza kuti utange basa.'],
  nd:['Khetha iwindi ulixhume ukuze uqale umsebenzi.','Vula iseshini yebhrawuza ukuze uqale umsebenzi.'],
  zu:['Khetha iwindi ulixhume ukuze uqale umsebenzi.','Vula iseshini yesiphequluli ukuze uqale umsebenzi.']
-};
+});
 
 
-const approvalCopy:Record<LocaleCode,readonly [string,string,string,string,string,string,string]> = {
+const approvalCopy = defineMessages<readonly [string,string,string,string,string,string,string]>("i18n/native-app:approvalCopy", {
  en:['Action approvals','Ask every time','Review every change before it runs.','Approve scoped changes','Automatically allow reversible work in the selected scope.','Full task access','Allow all available typed actions in scope. Credentials, payments, privilege changes, installation, permanent deletion, scripts, and uncertain retries stay blocked.'],
  fr:['Autorisations','Toujours demander','Vérifier chaque modification avant exécution.','Approuver les changements limités','Autoriser automatiquement les actions réversibles dans la portée choisie.','Accès complet à la tâche','Autoriser les actions typées disponibles. Les identifiants, paiements et actions système dangereuses restent bloqués.'],
  de:['Aktionsfreigaben','Immer fragen','Jede Änderung vor der Ausführung prüfen.','Begrenzte Änderungen erlauben','Umkehrbare Aktionen im gewählten Bereich automatisch zulassen.','Voller Aufgabenzugriff','Alle verfügbaren typisierten Aktionen im Bereich erlauben; sensible und gefährliche Aktionen bleiben gesperrt.'],
@@ -51,10 +52,10 @@ const approvalCopy:Record<LocaleCode,readonly [string,string,string,string,strin
  sn:['Mvumo yezviito','Bvunza nguva dzose','Ongorora shanduko yega yega isati yaitwa.','Bvumira shanduko dzine muganhu','Bvumira otomatiki zviito zvinogona kudzoserwa munzvimbo yakasarudzwa.','Mvumo yakazara yebasa','Bvumira zviito zvakatarwa; ruzivo rwakavanzika nezviito zvine ngozi zvinoramba zvakavharwa.'],
  nd:['Imvumo zezenzo','Buza isikhathi sonke','Hlola lonke utshintsho lungakenziwa.','Vumela izinguquko ezilinganiselweyo','Vumela izenzo ezibuyisekayo endaweni ekhethiweyo.','Ukufinyelela okupheleleyo','Vumela izenzo ezikhona; ulwazi oluyimfihlo lezenzo eziyingozi kuhlala kuvinjiwe.'],
  zu:['Izimvume zezenzo','Buza njalo','Buyekeza lonke ushintsho ngaphambi kokwenziwa.','Vumela izinguquko ezilinganiselwe','Vumela izenzo ezihlehlisekayo endaweni ekhethiwe.','Ukufinyelela okuphelele','Vumela izenzo ezikhona; imininingwane ebucayi nezenzo eziyingozi kuhlala kuvinjiwe.']
-};
+});
 export function approvalPolicyText(locale:LocaleCode){const [title,ask,askHelp,scoped,scopedHelp,full,fullHelp]=approvalCopy[locale];return {title,ask,askHelp,scoped,scopedHelp,full,fullHelp};}
 
-const approvalAuditCopy:Record<LocaleCode,readonly [string,string]> = {
+const approvalAuditCopy = defineMessages<readonly [string,string]>("i18n/native-app:approvalAuditCopy", {
  en:['Approved before execution','Automatically approved'],
  fr:['Approuvé avant exécution','Approuvé automatiquement'],
  de:['Vor der Ausführung genehmigt','Automatisch genehmigt'],
@@ -64,10 +65,10 @@ const approvalAuditCopy:Record<LocaleCode,readonly [string,string]> = {
  sn:['Zvabvumidzwa zvisati zvaitwa','Zvabvumidzwa otomatiki'],
  nd:['Kuvunyelwe kungakenziwa','Kuvunyelwe ngokuzenzakalela'],
  zu:['Kuvunyelwe ngaphambi kokwenziwa','Kuvunyelwe ngokuzenzakalelayo']
-};
+});
 export function approvalAuditText(locale:LocaleCode){const [exact,automatic]=approvalAuditCopy[locale];return {exact,automatic};}
 
-const feedback:Record<LocaleCode,readonly string[]>={
+const feedback=defineMessages<readonly string[]>("i18n/native-app:feedback", {
  en:['Stop control','Application connected','Allow accessibility access in your operating system settings, then reopen OffGrid Desktop. Elevated or protected applications cannot be controlled.','The selected window changed or closed. Stop this session, choose the window again and review any changes already made.','Update the local OffGrid service and desktop app to matching builds with application-control support. Your workspace is not changed.','Local approval was declined or expired. No further changes are authorized. Stop this session to choose another task.','Control is stopping. The application stays open; review any action already dispatched.','Another computer session is still active. Stop it, then choose the application again.','Application control could not connect. Stop any previous session and choose the window again. If this repeats, reopen OffGrid Desktop.'],
  fr:['Arrêter le contrôle','Application connectée','Autorisez l’accessibilité dans les réglages système, puis rouvrez OffGrid Desktop. Les applications protégées ou élevées sont exclues.','La fenêtre a changé ou a été fermée. Arrêtez la session, sélectionnez-la à nouveau et vérifiez les changements.','Mettez à jour le service local et le bureau vers des versions compatibles avec le contrôle des applications. Les données restent intactes.','L’autorisation locale a été refusée ou a expiré. Arrêtez la session avant une autre tâche.','Arrêt du contrôle. L’application reste ouverte ; vérifiez les actions déjà lancées.','Une autre session est encore active. Arrêtez-la, puis choisissez à nouveau l’application.','La connexion au contrôle de l’application a échoué. Arrêtez toute session précédente et choisissez de nouveau la fenêtre. Si le problème persiste, rouvrez OffGrid Desktop.'],
  de:['Steuerung stoppen','Anwendung verbunden','Erlauben Sie Bedienungshilfen in den Systemeinstellungen und öffnen Sie OffGrid Desktop erneut. Geschützte oder erhöhte Anwendungen sind ausgeschlossen.','Das Fenster wurde geändert oder geschlossen. Stoppen Sie die Sitzung, wählen Sie es erneut und prüfen Sie bisherige Änderungen.','Aktualisieren Sie Dienst und Desktop auf passende Versionen mit Anwendungssteuerung. Ihre Daten bleiben unverändert.','Die lokale Zustimmung wurde abgelehnt oder ist abgelaufen. Stoppen Sie die Sitzung vor einer neuen Aufgabe.','Steuerung wird gestoppt. Die Anwendung bleibt geöffnet; prüfen Sie bereits ausgelöste Aktionen.','Eine andere Computersitzung ist noch aktiv. Stoppen Sie sie und wählen Sie die Anwendung erneut.','Die Anwendungssteuerung konnte keine Verbindung herstellen. Stoppen Sie eine vorherige Sitzung und wählen Sie das Fenster erneut. Falls dies wiederholt auftritt, öffnen Sie OffGrid Desktop neu.'],
@@ -77,7 +78,7 @@ const feedback:Record<LocaleCode,readonly string[]>={
  sn:['Misa kudzora','Chirongwa chabatana','Bvumira accessibility mumarongero ekombiyuta wovhurazve OffGrid Desktop. Zvirongwa zvakachengetedzwa kana zvine mvumo yepamusoro hazvidzorwi.','Hwindo rachinja kana kuvharwa. Misa chikamu, sarudza zvakare woongorora shanduko.','Gadziridza sevhisi neDesktop kumavhezheni anoenderana anotsigira kudzora zvirongwa. Data harichinjwi.','Mvumo yarambwa kana kupera. Misa chikamu usati watanga rimwe basa.','Kudzora kuri kumiswa. Chirongwa chinoramba chakavhurwa; ongorora zviito zvakatotanga.','Chimwe chikamu chekudzora kombiyuta chichiri kushanda. Chimisa, wozosarudza chirongwa zvakare.','Kudzora chirongwa hakuna kukwanisa kubatana. Misa chikamu chekare wosarudza hwindo zvakare. Kana zvikadzokororwa, vhurazve OffGrid Desktop.'],
  nd:['Misa ukulawula','Uhlelo luxhunyiwe','Vumela ukufinyeleleka kuzilungiselelo zohlelo, uvule i-OffGrid Desktop futhi. Izinhlelo ezivikelweyo kumbe eziphakanyisiweyo azilawulwa.','Iwindi lintshintshile kumbe livaliwe. Misa iseshini, ukhethe futhi uhlole izinguquko.','Buyekeza isevisi leDesktop kube yizinguqulo ezihambelanayo ezilawula izinhlelo. Idatha yakho ayitshintshwa.','Imvumo yalapha yaliwe kumbe iphelile. Misa iseshini ngaphambi komunye umsebenzi.','Ukulawula kuyamiswa. Uhlelo luhlala luvulekile; hlola izenzo eseziqalile.','Enye iseshini yokulawula ikhompiyutha isasebenza. Yimise, ubusukhetha uhlelo futhi.','Ukulawula uhlelo kwehlulekile ukuxhuma. Misa iseshini endala ubusukhetha iwindi futhi. Nxa kuphindeka, vula i-OffGrid Desktop futhi.'],
  zu:['Misa ukulawula','Uhlelo luxhunyiwe','Vumela ukufinyeleleka kuzilungiselelo zesistimu, uvule i-OffGrid Desktop futhi. Izinhlelo ezivikelwe noma eziphakanyisiwe azilawulwa.','Iwindi lishintshile noma livaliwe. Misa iseshini, ulikhethe futhi ubuyekeze izinguquko.','Buyekeza isevisi neDesktop kube yizinguqulo ezihambisanayo ezilawula izinhlelo. Idatha yakho ayishintshwa.','Imvume yalapha yenqatshiwe noma iphelile. Misa iseshini ngaphambi komunye umsebenzi.','Ukulawula kuyamiswa. Uhlelo luhlala luvulekile; hlola izenzo eseziqalile.','Enye iseshini yokulawula ikhompuyutha isasebenza. Yimise, bese ukhetha uhlelo futhi.','Ukulawula uhlelo akukwazanga ukuxhuma. Misa iseshini yangaphambilini bese ukhetha iwindi futhi. Uma kuphinda, vula kabusha i-OffGrid Desktop.']
-};
+});
 export function nativeAppFeedback(locale:LocaleCode){const [stop,connected,permission,stale,upgrade,approval,stopping,busy,unavailable]=feedback[locale];return {stop,connected,permission,stale,upgrade,approval,stopping,busy,unavailable};}
 export function nativeAppError(locale:LocaleCode,code:string,fallback:string){
  const f=nativeAppFeedback(locale);

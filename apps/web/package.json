@@ -1,7 +1,7 @@
 {
   "name": "@offgrid/ui",
   "private": true,
-  "version": "0.4.28",
+  "version": "0.4.29",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,13 @@
     "api:check": "openapi-typescript ../../pkg/api/openapi.yaml -o src/api/schema.generated.ts --check",
     "build": "tsc --noEmit && vite build",
     "check": "tsc --noEmit --pretty false",
+    "i18n:check": "node ../../scripts/quality/check-translations.mjs",
+    "i18n:audit": "node ../../scripts/quality/translation-review.mjs audit",
+    "i18n:complete": "node ../../scripts/quality/translation-review.mjs complete",
+    "i18n:consistency": "node ../../scripts/quality/translation-consistency.mjs",
+    "i18n:rendered": "node ../../scripts/quality/run-rendered-audit.mjs",
+    "i18n:rendered:report": "node ../../scripts/quality/run-rendered-audit.mjs --report-only",
+    "i18n:ready": "node ../../scripts/quality/translation-review.mjs ready",
     "preview": "vite preview",
     "test:e2e": "playwright test"
   },

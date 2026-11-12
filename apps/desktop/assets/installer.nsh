@@ -2,6 +2,7 @@
 ; per-user/elevated installation, upgrade, and uninstallation behavior.
 !include LogicLib.nsh
 !include Util.nsh
+!include "${__FILEDIR__}\installer-process-guard.nsh"
 !define MUI_TEXTCOLOR "202020"
 !define MUI_BGCOLOR "FFFFFF"
 !define MUI_INSTFILESPAGE_COLORS "202020 FFFFFF"
@@ -171,6 +172,7 @@ FunctionEnd
   DetailPrint "Checking for a running OffGrid application..."
   IfFileExists "$INSTDIR\${APP_EXECUTABLE_FILENAME}" 0 offgrid_not_running
   ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+  !insertmacro OffGridRequireProcessInspection "${APP_EXECUTABLE_FILENAME}"
   ${If} $R0 == 603
     Goto offgrid_not_running
   ${EndIf}
@@ -195,6 +197,7 @@ FunctionEnd
   offgrid_wait_for_exit:
     Sleep 200
     ${nsProcess::FindProcess} "${APP_EXECUTABLE_FILENAME}" $R0
+    !insertmacro OffGridRequireProcessInspection "${APP_EXECUTABLE_FILENAME}"
     ${If} $R0 == 603
       Goto offgrid_not_running
     ${EndIf}
@@ -210,6 +213,9 @@ FunctionEnd
     StrCpy $R1 0
     Goto offgrid_wait_for_exit
   offgrid_not_running:
+  !insertmacro OffGridRequireProcessClosed "${APP_EXECUTABLE_FILENAME}"
+  !insertmacro OffGridRequireProcessClosed "offgrid.exe"
+  !insertmacro OffGridRequireProcessClosed "llama-server.exe"
   DetailPrint "Application is closed. Updating application files; saved workspace and models are kept."
 !macroend
 

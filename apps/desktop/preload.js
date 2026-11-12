@@ -73,7 +73,7 @@ window.addEventListener('hashchange',()=>{if(terminalVisible)void ipcRenderer.in
 // Hiding the native view leaves terminal processes and their tabs intact.
 document.addEventListener('click',event=>{
   if(!terminalVisible||event.defaultPrevented||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
-  const target=event.target instanceof Element?event.target.closest('#workspace-sidebar .primary-nav a[href^="#/"], #workspace-sidebar .new-chat-button'):null;
+  const target=event.target instanceof Element?event.target.closest('#workspace-sidebar a[href^="#/"], #workspace-sidebar .new-chat-button'):null;
   if(target&&!target.matches(':disabled,[aria-disabled="true"]'))void ipcRenderer.invoke('terminal-hide').catch(()=>{});
 },true);
 let presentation;
@@ -83,6 +83,16 @@ try { const value = process.argv.find(item => item.startsWith('--offgrid-present
 contextBridge.exposeInMainWorld('electron', {
   bridgeProtocol: 1,
   terminalProtocol: 1,
+  onTerminalContext: callback => {
+    const listener=(_event,value)=>{
+      if(!value||typeof value.id!=='string')return;
+      let accepted=false;
+      try {accepted=callback(value.context)===true;} catch {}
+      void ipcRenderer.invoke('terminal-context-response',value.id,accepted).catch(()=>{});
+    };
+    ipcRenderer.on('terminal-context',listener);
+    return ()=>ipcRenderer.removeListener('terminal-context',listener);
+  },
   openTerminal: () => ipcRenderer.invoke('terminal-open'),
   getTerminalStatus: () => ipcRenderer.invoke('terminal-status'),
   presentation,

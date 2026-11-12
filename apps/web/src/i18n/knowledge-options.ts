@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
-const labels: Record<LocaleCode, string> = {
+const labels = defineMessages<string>("i18n/knowledge-options:labels", {
   en: 'Document options',
   fr: 'Options des documents',
   de: 'Dokumentoptionen',
@@ -10,11 +11,11 @@ const labels: Record<LocaleCode, string> = {
   sn: 'Zvirongwa zvemagwaro',
   nd: 'Izinketho zemibhalo',
   zu: 'Izinketho zemibhalo',
-};
+});
 
 export function knowledgeOptions(locale: LocaleCode) { return labels[locale]; }
 
-const guidance: Record<LocaleCode, [string, string]> = {
+const guidance = defineMessages<[string, string]>("i18n/knowledge-options:guidance", {
   en: ['Add documents, then ask questions with sources.', 'Searches all documents you can access. Select sources to narrow your question.'],
   fr: ['Ajoutez des documents, puis posez des questions avec des sources.', 'Recherche dans tous les documents accessibles. Sélectionnez des sources pour cibler votre question.'],
   de: ['Dokumente hinzufügen und Fragen mit Quellen stellen.', 'Durchsucht alle zugänglichen Dokumente. Wählen Sie Quellen, um die Suche einzugrenzen.'],
@@ -24,7 +25,7 @@ const guidance: Record<LocaleCode, [string, string]> = {
   sn: ['Wedzera magwaro, wobva wabvunza mibvunzo ine zvinyorwa zvinotsigira.', 'Inotsvaga mumagwaro ose aunobvumirwa kuona. Sarudza zvinyorwa kuti utsanangure panotsvagwa mhinduro.'],
   nd: ['Faka imibhalo, ubusubuza imibuzo ele mithombo.', 'Isesha kuyo yonke imibhalo ovunyelwe ukuyibona. Khetha imithombo ukuze unciphise indawo yokusesha.'],
   zu: ['Faka imibhalo, bese ubuza imibuzo enemithombo.', 'Isesha kuyo yonke imibhalo ovunyelwe ukuyifinyelela. Khetha imithombo ukuze unciphise ukusesha.'],
-};
+});
 
 export function knowledgeGuidance(locale: LocaleCode) {
   const [intro, scope] = guidance[locale];

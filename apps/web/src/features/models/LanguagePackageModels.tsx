@@ -46,6 +46,7 @@ export function LanguagePackageModels() {
     catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); throw reason; }
     finally { locked.current = false; setBusy(false); }
   };
+  if (!loading && !error && packages.length === 0) return null;
   return <section className="model-section" aria-busy={loading}>
     {error && <div className="inline-error" role="alert">{error}<button className="secondary-button" onClick={() => void load()}>{text.common.retry}</button></div>}
     {packages.length > 0 && <div className="catalog-grid installed-package-list">{packages.map(item => <article className="catalog-card package-card" key={`${item.id}/${item.revision}`}>

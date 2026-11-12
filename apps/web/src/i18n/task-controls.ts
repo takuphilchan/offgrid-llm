@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 // Shared renderer labels. Speaker review remains a qualification requirement.
-const labels = {
+const labels = defineMessages<string[]>("i18n/task-controls:inline1", {
   en: ['Pause', 'Take over', 'Stop', 'Reconnect access', 'Update instruction', 'Save instruction', 'Work plan', 'Subtasks', 'Waiting for subtasks', 'Export evidence', 'Context usage', 'Estimated input tokens', 'Archived messages', 'Paused', 'Instruction saved. Resume when ready.', 'Model-reported progress; inspect the recorded evidence.'],
   fr: ['Pause', 'Prendre la main', 'Arrêter', 'Reconnecter l’accès', 'Modifier la consigne', 'Enregistrer la consigne', 'Plan de travail', 'Sous-tâches', 'En attente des sous-tâches', 'Exporter les preuves', 'Utilisation du contexte', 'Jetons d’entrée estimés', 'Messages archivés', 'En pause', 'Consigne enregistrée. Reprenez quand vous êtes prêt.', 'Progression annoncée par le modèle ; consultez les preuves enregistrées.'],
   de: ['Pausieren', 'Übernehmen', 'Stoppen', 'Zugriff neu verbinden', 'Anweisung ändern', 'Anweisung speichern', 'Arbeitsplan', 'Teilaufgaben', 'Warten auf Teilaufgaben', 'Nachweise exportieren', 'Kontextnutzung', 'Geschätzte Eingabetoken', 'Archivierte Nachrichten', 'Pausiert', 'Anweisung gespeichert. Bei Bereitschaft fortsetzen.', 'Vom Modell gemeldeter Fortschritt; gespeicherte Nachweise prüfen.'],
@@ -11,7 +12,7 @@ const labels = {
   sn: ['Imbomira', 'Tora udzori', 'Misa', 'Batanidzazve mvumo', 'Gadzirisa murayiro', 'Chengeta murayiro', 'Hurongwa hwebasa', 'Mabasa madiki', 'Kumirira mabasa madiki', 'Budisa humbowo', 'Kushandiswa kwemamiriro', 'Matokeni ekupinza anofungidzirwa', 'Mameseji akachengetwa', 'Yambomira', 'Murayiro wachengetwa. Enderera kana wagadzirira.', 'Kufambira mberi kunotaurwa nemodeli; ongorora humbowo hwakachengetwa.'],
   nd: ['Yima okwesikhatshana', 'Thatha ukulawula', 'Misa', 'Xhumanisa imvumo futhi', 'Lungisa umlayo', 'Gcina umlayo', 'Uhlelo lomsebenzi', 'Imisebenzi emincane', 'Ilinde imisebenzi emincane', 'Khipha ubufakazi', 'Ukusetshenziswa komongo', 'Amathokheni okufaka alinganiselweyo', 'Imilayezo egciniweyo', 'Imisiwe okwesikhatshana', 'Umlayo ugciniwe. Qhubeka nxa usulungile.', 'Inqubekela phambili ebikwa yimodeli; hlola ubufakazi obugciniweyo.'],
   zu: ['Misa okwesikhashana', 'Thatha ukulawula', 'Misa', 'Xhuma imvume futhi', 'Buyekeza umyalelo', 'Gcina umyalelo', 'Uhlelo lomsebenzi', 'Imisebenzi emincane', 'Ilinde imisebenzi emincane', 'Khipha ubufakazi', 'Ukusetshenziswa komongo', 'Amathokheni okufaka alinganiselwe', 'Imilayezo egciniwe', 'Imisiwe okwesikhashana', 'Umyalelo ugciniwe. Qhubeka uma usulungile.', 'Inqubekela phambili ebikwa yimodeli; hlola ubufakazi obugciniwe.'],
-} satisfies Record<LocaleCode, string[]>;
+});
 export function taskControls(locale: LocaleCode) {
   const [pause, takeover, stop, reconnect, instruction, save, plan, children, waiting, exportEvidence, context, tokens, archived, paused, saved, planHint] = labels[locale];
   return {pause, takeover, stop, reconnect, instruction, save, plan, children, waiting, exportEvidence, context, tokens, archived, paused, saved, planHint};

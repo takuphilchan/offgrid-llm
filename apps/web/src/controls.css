@@ -58,7 +58,7 @@
   .utility-action-panel button:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
   .utility-action-panel p { padding: 6px; font-size: 13px; line-height: 1.5; }
   @media (pointer: coarse) { .utility-action-panel button { min-height: 44px; } }
-  .history-work-choice { border: 0; border-block-start: 1px solid var(--line); padding: 16px 0 0; margin: 16px 0; min-width: 0; }
+  .history-work-choice { border: 0; border-block-start: 0; padding: 16px 0 0; margin: 16px 0; min-width: 0; }
   .history-work-choice legend { font-weight: var(--weight-medium); padding: 0 8px 0 0; }
   .history-work-choice label { display: flex; align-items: start; gap: 10px; padding-block: 8px; font-size: 14px; cursor: pointer; }
   .history-work-choice input { flex: none; margin-block-start: 4px; accent-color: var(--text); }
@@ -93,7 +93,7 @@
   .icon-button { width: var(--control-height); height: var(--control-height); flex-shrink: 0; border-radius: var(--control-radius); }
 
   /* Native disclosure semantics, with one quiet chevron throughout the app. */
-  summary { display: flex; align-items: baseline; gap: 10px; list-style: none; min-height: 32px; padding: 6px 4px; border-radius: 6px; color: var(--muted); cursor: pointer; }
+  summary { display: flex; align-items: baseline; gap: 10px; list-style: none; width: fit-content; max-width: 100%; overflow-wrap: anywhere; min-height: 32px; padding: 6px 4px; border-radius: 6px; color: var(--muted); cursor: pointer; }
   summary::-webkit-details-marker { display: none; }
   summary::marker { content: ''; }
   summary::before { content: ''; width: 6px; height: 6px; flex: 0 0 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); align-self: center; transition: transform var(--motion-press) ease; }
@@ -101,7 +101,7 @@
   details[open] > summary::before { transform: rotate(45deg); }
   summary:hover { color: var(--text); }
   summary:focus-visible { outline: 1px solid var(--muted); outline-offset: 2px; }
-  :is(.task-management, .model-library-tabs) { display: flex; flex-wrap: wrap; gap: 24px; width: 100%; padding: 0; border-block-end: 1px solid var(--line); }
+  :is(.task-management, .model-library-tabs) { display: flex; flex-wrap: wrap; gap: 24px; width: 100%; padding: 0; border-block-end: 1px solid var(--separator); }
   :is(.task-management, .model-library-tabs) > :is(a, button) { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 0; border: 0; border-block-end: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: var(--type-ui); font-weight: var(--weight-regular); }
   :is(.task-management, .model-library-tabs) > :is([aria-current='page'], [aria-selected='true'], [aria-pressed='true']) { background: transparent; color: var(--text); border-block-end-color: var(--text); font-weight: var(--weight-medium); }
   :is(.task-management, .model-library-tabs) > :is(a, button):hover:not(:disabled) { color: var(--text); background: transparent; }
@@ -217,7 +217,21 @@
   .model-search-form button { flex: 0 0 auto; }
   .model-search-files { gap: 8px; }
   .model-search-files > label { font-size: 13px; color: var(--muted); }
-  .model-section + .model-section { padding-block-start: 24px; border-block-start: 1px solid var(--line); }
+  /* Headings/disclosures already identify the next section; whitespace is enough. */
+  .model-section + .model-section { padding-block-start: 16px; border-block-start: 0; }
+  /* Rows divide siblings. The next section owns its own opening boundary. */
+  :is(.tool-list, .connector-list, .event-list) > article:last-child,
+  .model-list > .model-row:last-child,
+  .readiness-list > div:last-child,
+  .card-grid > .resource-card:last-child,
+  .knowledge-documents .resource-card:last-child,
+  .known-work-list > li:last-child,
+  .schedule-list > li:last-child,
+  .agent-management-page .tool-list > article:last-child,
+  .activity-history-row:last-child,
+  .execution-step:last-child,
+  .skill-card:last-child { border-block-end: 0; }
+  .task-artifact:first-child, .workspace-help details:first-child { border-block-start: 0; }
   .inline-error button { margin-inline-start: 12px; }
   .connector-list article > div { min-width: 0; }
   .connector-list strong { overflow-wrap: anywhere; }
@@ -269,9 +283,6 @@
     :is(.action-group, .history-dialog-actions) > :is(.primary-button, .secondary-button, .danger-button) { min-height: 36px; padding: 6px 12px; }
   }
   .workspace-options-panel .utility-popover-content { gap: 12px; }
-  .workspace-options-panel .field { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); align-items: center; gap: 12px; }
-  .workspace-options-panel .field label { overflow-wrap: anywhere; }
-  .workspace-options-panel[data-narrow-panel] .field { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .workspace-options-panel .secondary-button { justify-content: flex-start; text-align: start; border-color: transparent; background: transparent; }
   .workspace-options-panel .secondary-button:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
   .workspace-options-panel .workspace-account { font-size: 13px; padding-block-start: 12px; }
@@ -340,7 +351,7 @@
 }
 
 @layer controls {
-  .knowledge-management-menu .knowledge-menu-status { display: grid; gap: 4px; padding: 10px; margin-block-end: 4px; border-block-end: 1px solid var(--line); }
+  .knowledge-management-menu .knowledge-menu-status { display: grid; gap: 4px; padding: 10px; margin-block-end: 4px; border-block-end: 1px solid var(--separator); }
   .knowledge-menu-status span { font-size: var(--type-caption); color: var(--muted); }
   .knowledge-menu-status strong { font-size: var(--type-ui); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
   .knowledge-management-menu button { gap: 10px; }
@@ -361,7 +372,7 @@
   .provider-setup-dialog pre { max-height: 15rem; padding: 14px; margin: 8px 0 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; font: 13px/1.65 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
   .provider-setup-notes { margin: 0; padding-inline-start: 18px; color: var(--muted); font-size: var(--type-caption); line-height: 1.6; }
   .provider-setup-notes li + li { margin-block-start: 6px; }
-  .provider-manual { border-block-start: 1px solid var(--line); padding-block-start: 12px; }
+  .provider-manual { border-block-start: 0; padding-block-start: 12px; }
   .provider-manual summary { font-size: var(--type-ui); color: var(--muted); }
   .provider-manual section { margin-block-start: 16px; }
   @media (max-width: 600px) { .provider-setup-header { padding: 16px; } .provider-setup-body { padding: 0 16px 16px; } }

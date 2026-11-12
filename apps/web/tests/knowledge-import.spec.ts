@@ -28,6 +28,8 @@ test('batch import retains individual outcomes and rejects unavailable PDFs befo
   await page.goto('/ui/#/knowledge');
   await page.locator('[data-knowledge-import]').setInputFiles([file('Alpha 日本語.txt'), file('Report.pdf'), file('Bravo.txt')]);
   await expect(page.locator('.knowledge-import-results [data-state="added"]')).toHaveCount(2);
+  await expect(page.locator('.knowledge-import-results')).toHaveCSS('border-top-width','0px');
+  await expect(page.locator('.knowledge-import-results')).toHaveCSS('border-bottom-width','0px');
   await expect(page.locator('.knowledge-import-results [data-state="failed"]')).toContainText('Report.pdf');
   await expect(page.locator('.knowledge-import-results')).toContainText(knowledgeImport('en').missing);
   expect(uploaded).toHaveLength(2);

@@ -116,7 +116,7 @@ func runInteractiveAgent(ctx context.Context, args []string, env Environment) (r
 		var next *agents.AgentProfile
 		// Navigation is separate from the return error, so a lease-close error
 		// cannot be swallowed as a successful agent switch.
-		presentation := agentSessionPresentation{Profile: profile, Style: env.Style, ReadLine: env.Service.ReadAgentLine, ClearDisplay: env.Service.ClearAgentDisplay}
+		presentation := agentSessionPresentation{Profile: profile, Style: env.Style, ReadLine: env.Service.ReadAgentLine, ReadDraft: env.Service.ReadAgentDraft, Follow: env.Service.LiveAgentStream, ClearDisplay: env.Service.ClearAgentDisplay}
 		presentation.Default = func(text string, out io.Writer) {
 			agentDefaultCommand(ctx, client, env.Service.AgentDefaults, profile, text, out)
 		}

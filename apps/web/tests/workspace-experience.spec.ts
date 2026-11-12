@@ -1,3 +1,5 @@
+import {languageRegistry} from '../src/i18n/language';
+import {workspaceShell} from '../src/i18n/workspace-shell';
 import { openSettings } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 
@@ -58,11 +60,11 @@ test('language is directly discoverable in Settings and preserves the selected l
   await page.goto('/ui/#/settings');
   const language = page.locator('#settings-language');
   await expect(language).toHaveAccessibleName('Language');
-  await expect(language.locator('option')).toHaveCount(9);
+  await expect(language.locator('option')).toHaveCount(Object.keys(languageRegistry).length);
   for (const locale of ['en','fr','es','de','ar','sw','sn','nd','zu']) {
     await language.selectOption(locale);
     const options = page.locator('.workspace-options > button');
-    await expect(options).toHaveAccessibleName(await options.locator('span').innerText());
+    await expect(options).toHaveAccessibleName(workspaceShell[locale as keyof typeof workspaceShell].options);
   }
   await language.selectOption('ar');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -195,6 +197,7 @@ test('desktop diagnostics distinguish a compatible external service from an upgr
     } as unknown as NonNullable<Window['electron']>;
   });
   await page.goto('/ui/#/settings');
+  await page.getByRole('button', { name: 'About', exact: true }).click();
   await page.getByText('Diagnostics', {exact:true}).click();
   await expect(page.getByText('Reviewed legacy build · 1', {exact:true})).toBeVisible();
   await expect(page.getByText('Separately managed service', {exact:true})).toBeVisible();
@@ -207,27 +210,25 @@ test('southern African languages are complete, selectable, and persistent', asyn
   await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete', 'true'));
   await page.goto('/ui/#/settings');
 
-  const language = page.locator('.workspace-options-panel').getByLabel('Language');
-  await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
-  await expect(language.locator('option')).toHaveCount(9);
+  const language = page.locator('#settings-language');
+  await expect(language.locator('option')).toHaveCount(Object.keys(languageRegistry).length);
 
   await language.selectOption('sn');
   await expect(page.locator('html')).toHaveAttribute('lang', 'sn');
   await expect(page.getByRole('heading', { name: 'Zvirongwa', level: 1 })).toBeVisible();
 
-  await page.locator('.workspace-options-panel').getByLabel('Mutauro').selectOption('nd');
+  await page.locator('#settings-language').selectOption('nd');
   await expect(page.locator('html')).toHaveAttribute('lang', 'nd');
   await expect(page.getByRole('heading', { name: 'Izilungiselelo', level: 1 })).toBeVisible();
 
-  await page.locator('.workspace-options-panel').getByLabel('Ulimi').selectOption('zu');
+  await page.locator('#settings-language').selectOption('zu');
   await expect(page.locator('html')).toHaveAttribute('lang', 'zu');
-  await page.locator('.workspace-options-panel').getByLabel('Ulimi').selectOption('de');
+  await page.locator('#settings-language').selectOption('de');
   await expect(page.locator('html')).toHaveAttribute('lang', 'de');
   await expect(page.getByRole('heading', { name: 'Einstellungen', level: 1 })).toBeVisible();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('offgrid.locale'))).toBe('de');
   await page.reload();
-  await page.locator('.workspace-options > button').click();
-  await expect(page.locator('.workspace-options-panel').getByLabel('Sprache')).toHaveValue('de');
+  await expect(page.locator('#settings-language')).toHaveValue('de');
   await expect(page.locator('html')).toHaveAttribute('lang', 'de');
 });
 

@@ -22,6 +22,7 @@ type ExecutionLease interface {
 	Close() error
 }
 type ExecutionDependencies struct {
+	ChooseAccess  func(*bufio.Reader, io.Writer, PresentationStyle, bool) (string, error)
 	Trust         func() (*execution.FolderTrustStore, error)
 	OnDemand      func(context.Context, *serviceclient.Client) (bool, error)
 	CurrentFolder func() (string, error)
@@ -86,17 +87,15 @@ func openCLIWorkspacePolicy(ctx context.Context, client *serviceclient.Client, f
 		if approval.Backend == "isolated_linux" {
 			mode = fmt.Sprintf("access this folder and run commands in isolated Linux containers (image %s; network %s; %d MiB; %d CPU millis; %d processes). Only this folder is mounted at /workspace; writes to it affect your host files", TerminalSafe(approval.Isolation.Image), TerminalSafe(approval.Isolation.Network), approval.Isolation.MemoryBytes>>20, approval.Isolation.CPUMillis, approval.Isolation.Pids)
 		}
-		choices := "[y/N]"
-		if trust != nil {
-			choices = "[y/remember/N]"
-			fmt.Fprintln(out, "Choose remember to trust only this exact folder, account, host, service and access level. Inspect/revoke with offgrid agent workspace trust.")
+		fmt.Fprintf(out, "\nFolder access\n  %s\n  Allow OffGrid to %s\n  %s · %s\n\n", TerminalSafe(approval.Root), mode, TerminalSafe(approval.Host), TerminalSafe(approval.Service))
+		choose := env.Execution.ChooseAccess
+		if choose == nil {
+			choose = ChooseWorkspaceAccessPlain
 		}
-		fmt.Fprintf(out, "Local workspace: %s\nHost: %s · Service: %s\nAllow OffGrid to %s for this host session? %s ", TerminalSafe(approval.Root), TerminalSafe(approval.Host), TerminalSafe(approval.Service), mode, choices)
-		line, err := input.ReadString('\n')
+		answer, err := choose(input, out, env.Style, trust != nil)
 		if err != nil {
 			return false
 		}
-		answer := strings.ToLower(strings.TrimSpace(line))
 		if answer == "remember" && trust != nil && ctx.Err() == nil {
 			if err := trust.Remember(approval); err != nil {
 				fmt.Fprintln(out, "Could not safely remember folder access. No access granted.")

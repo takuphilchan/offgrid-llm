@@ -17,10 +17,11 @@ const require=createRequire(join(root,'apps/web/package.json'));
 const {_electron:electron}=require('playwright');
 const {expect}=require('@playwright/test');
 const agentMode=process.argv.includes('--agent');
-const inputs=process.argv.slice(2).filter(value=>value!=='--agent');
-assert.ok([3,4].includes(inputs.length),'Usage: node scripts/test/test-desktop-native-reply.mjs DESKTOP_EXE MODEL_GGUF VERIFIED_RUNTIME_DIRECTORY [EMBEDDING_GGUF] [--agent]');
+const gpuMode=process.argv.includes('--gpu');
+const inputs=process.argv.slice(2).filter(value=>!['--agent','--gpu'].includes(value));
+assert.ok([3,4].includes(inputs.length),'Usage: node scripts/test/test-desktop-native-reply.mjs DESKTOP_EXE MODEL_GGUF VERIFIED_RUNTIME_DIRECTORY [EMBEDDING_GGUF] [--agent] [--gpu]');
 const [binary,modelSource,runtimeSource,embeddingSource]=inputs.map(value=>resolve(value));
-assert.equal(process.platform,'win32','This qualification currently covers Windows CPU only');
+assert.equal(process.platform,'win32','This qualification currently covers Windows only');
 assert.match(modelSource,/\.gguf$/i);
 const evidence=await mkdtemp(join(tmpdir(),'offgrid-desktop-native-reply-'));
 console.log(`Native reply evidence: ${evidence}`);
@@ -42,7 +43,7 @@ assert.equal(await digest(modelFile),originalHash,'Model copy must preserve byte
 let embeddingHash;
 if(embeddingSource){assert.match(embeddingSource,/\.gguf$/i);assert.notEqual(basename(embeddingSource),basename(modelSource));embeddingHash=await digest(embeddingSource);await copyFile(embeddingSource,join(models,basename(embeddingSource)));assert.equal(await digest(join(models,basename(embeddingSource))),embeddingHash);}
 const manifest=JSON.parse(await readFile(join(runtimeSource,'runtime-dependencies.json'),'utf8'));
-assert.equal(manifest.schema_version,1);assert.equal(manifest.platform,'windows-amd64-cpu');
+assert.equal(manifest.schema_version,1);assert.equal(manifest.platform,gpuMode?'windows-amd64-cuda':'windows-amd64-cpu');
 assert.ok(manifest.files.some(file=>file.name==='llama-server.exe'));
 for(const file of manifest.files) {
   assert.match(file.name,/^[a-z0-9_.-]+\.(exe|dll)$/i);
@@ -55,9 +56,11 @@ const port=socket.address().port;await new Promise(done=>socket.close(done));
 const origin=`http://127.0.0.1:${port}`;
 // Do not inherit installed OffGrid pins, auth, external endpoints or config home.
 const env={SystemRoot:process.env.SystemRoot,WINDIR:process.env.SystemRoot,COMSPEC:process.env.COMSPEC,
+  // NVIDIA's Windows driver needs its machine installation roots for NVML.
+  ProgramFiles:process.env.ProgramFiles,ProgramW6432:process.env.ProgramW6432,
   PATH:join(process.env.SystemRoot,'System32'),TEMP:evidence,TMP:evidence,
   USERPROFILE:home,HOME:home,LOCALAPPDATA:join(home,'AppData','Local'),APPDATA:join(home,'AppData','Roaming'),
-  OFFGRID_DESKTOP_HOME:profile,OFFGRID_PORT:String(port),OFFGRID_ENABLE_GPU:'false',OFFGRID_GPU_LAYERS:'0',
+  OFFGRID_DESKTOP_HOME:profile,OFFGRID_PORT:String(port),OFFGRID_ENABLE_GPU:String(gpuMode),OFFGRID_GPU_LAYERS:gpuMode?'999':'0',
   OFFGRID_MAX_MODELS:'1',OFFGRID_NUM_THREADS:'2',OFFGRID_MAX_CONTEXT:agentMode?'8192':'2048',OFFGRID_CHAT_CONTEXT:agentMode?'8192':'2048',
   OFFGRID_BATCH_SIZE:'128',OFFGRID_PREWARM_MODELS:'false',OFFGRID_SMART_MLOCK:'false',OFFGRID_KV_CACHE_TYPE:'f16',
   OFFGRID_FLASH_ATTENTION:'false',OFFGRID_MODEL_LOAD_TIMEOUT:'90',OFFGRID_REQUIRE_AUTH:'false'};
@@ -91,6 +94,12 @@ async function closeOwned(){await app.close();app=null;await expect.poll(async()
 try {
   const first=await launch();
   await expect(page.locator('.onboarding')).toBeVisible();
+  const engine=page.getByRole('region',{name:'Inference engine',exact:true});
+  await engine.getByRole('button',{name:'Prepare engine',exact:true}).click();
+  await expect(engine.getByRole('status')).toContainText('Engine ready.',{timeout:30000});
+  const preparation=await api('/api/v2/runtime');
+  assert.equal(preparation.state,'ready');assert.equal(preparation.mode,gpuMode?'nvidia':'cpu');
+  assert.equal(await page.evaluate(()=>localStorage.getItem('offgrid.onboarding.complete')),null,'Engine preparation alone must not complete onboarding');
   await expect(page.locator('.onboarding .primary-button')).toHaveText('Start your first chat');
   await page.locator('.onboarding .primary-button').click();
   await expect(page.locator('.onboarding')).not.toBeVisible();
@@ -101,7 +110,8 @@ try {
   await page.locator('.composer textarea').fill(prompt);
   const started=Date.now();await page.getByRole('button',{name:'Send',exact:true}).click();
   await expect(page.locator('.message.assistant:not(.streaming-response) .message-body')).not.toBeEmpty({timeout:120000});
-  await expect(page.getByRole('button',{name:'Send',exact:true})).toBeVisible();
+  await expect(page.locator('.composer textarea')).toHaveValue('');
+  await expect(page.locator('.composer textarea')).toBeEnabled();
   const elapsedMs=Date.now()-started;
   const answer=(await page.locator('.message.assistant:not(.streaming-response) .message-body').innerText()).trim();
   const saved=await api('/v1/sessions');assert.equal(saved.sessions.length,1);
@@ -132,7 +142,7 @@ try {
   await closeOwned();
   assert.equal(await digest(modelSource),originalHash);assert.equal(await digest(modelFile),originalHash);
   if(embeddingSource){assert.equal(await digest(embeddingSource),embeddingHash);assert.equal(await digest(join(models,basename(embeddingSource))),embeddingHash);}
-  const result={passed:true,platform:process.platform,backend:'cpu',model:basename(modelSource),modelSha256:originalHash,embeddingSha256:embeddingHash,desktopSha256:desktopHash,serviceSha256:serviceHash,uiBuildId:identity.ui_build_id,workerSha256:manifest.files.find(file=>file.name==='llama-server.exe').sha256,serviceVersion:first.version,elapsedMs,answer,knowledge,agent,imageInput,submissions:submissions.length,preparedOfflineArtifacts:true,installedWorkspaceChanged:false,evidence};
+  const result={passed:true,platform:process.platform,backend:preparation.mode,preparation,model:basename(modelSource),modelSha256:originalHash,embeddingSha256:embeddingHash,desktopSha256:desktopHash,serviceSha256:serviceHash,uiBuildId:identity.ui_build_id,workerSha256:manifest.files.find(file=>file.name==='llama-server.exe').sha256,serviceVersion:first.version,elapsedMs,answer,knowledge,agent,imageInput,submissions:submissions.length,preparedOfflineArtifacts:true,installedWorkspaceChanged:false,evidence};
   await writeFile(join(evidence,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
 } catch(error) {
   await writeFile(join(evidence,'failure.txt'),String(error.stack??error));

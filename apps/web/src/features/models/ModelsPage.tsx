@@ -28,6 +28,7 @@ import { workspaceOrder } from '../../i18n/workspace-order';
 import { modelBundles } from '../../i18n/model-bundles';
 import { workspaceAudit } from '../../i18n/workspace-audit';
 import { OfflineModelImport } from './OfflineModelImport';
+import { catalogDescription } from '../../i18n/catalog-descriptions';
 
 function fileName(path: string): string {
   return path.split('/').pop() ?? path;
@@ -43,7 +44,7 @@ function downloadFor(model: CatalogModel, progress: Record<string, DownloadProgr
 }
 
 export function ModelsPage({ models, selected, setSelected, onRefresh, onImportRefresh, onboardingPending }: { models: Model[]; selected: string; setSelected: (model: string) => void; onRefresh: () => Promise<void>; onImportRefresh: () => Promise<void>; onboardingPending: boolean }) {
-  const { messages: text, locale } = useI18n();
+  const { messages: text, locale , language} = useI18n();
   const { admin } = useWorkspace();
   const [bundles, setBundles] = useState(false);
   const [offlineImport, setOfflineImport] = useState(false);
@@ -80,7 +81,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
   const categories: ModelCategory[] = ['language', 'embeddings', 'speech_recognition', 'speech_generation'];
   const categoryCopy = modelAcquisition[locale];
   const categoryModels = models.filter(model => category === 'embeddings' ? model.type === 'embedding' : supportsChat(model));
-  const visibleModels = categoryModels.filter(model => model.id.toLocaleLowerCase(locale).includes(filter.trim().toLocaleLowerCase(locale)));
+  const visibleModels = categoryModels.filter(model => model.id.toLocaleLowerCase(language).includes(filter.trim().toLocaleLowerCase(language)));
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
   const progressRevision = useRef(0);
   const [discarding, setDiscarding] = useState<DownloadProgress | null>(null);
@@ -100,8 +101,8 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
     return rank(b) - rank(a);
   });
   const compared = sortedCatalog.filter(item => comparisons[category]?.includes(item.id)).slice(0, 3);
-  const catalogQuery = (catalogFilters[category] ?? '').trim().toLocaleLowerCase(locale);
-  const filteredCatalog = sortedCatalog.filter(item => [item.name, item.id, item.description, item.parameters, item.quant].some(value => value?.toLocaleLowerCase(locale).includes(catalogQuery)));
+  const catalogQuery = (catalogFilters[category] ?? '').trim().toLocaleLowerCase(language);
+  const filteredCatalog = sortedCatalog.filter(item => [item.name, item.id, catalogDescription(language,item.id,item.description), item.parameters, item.quant].some(value => value?.toLocaleLowerCase(language).includes(catalogQuery)));
 
   const load = async () => {
     setLoading(true);
@@ -260,7 +261,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
         const installed = installedCatalogModel(model, models);
         return <article className="catalog-card" key={model.id}>
           <div className="catalog-card-top"><div className="model-glyph"><Icon name="models" /></div>{model.recommended && <span className="status-pill">{text.models.recommended}</span>}</div>
-          <ModelIdentity model={catalogDisplay(model)} /><p>{model.description}</p>
+          <ModelIdentity model={catalogDisplay(model)} /><p>{catalogDescription(language,model.id,model.description)}</p>
           <label className="catalog-compare-choice"><input type="checkbox" checked={compared.some(item => item.id === model.id)} disabled={compared.length >= 3 && !compared.some(item => item.id === model.id)} onChange={event => setComparisons(old => ({ ...old, [category]: event.target.checked ? [...compared.map(item => item.id), model.id] : compared.filter(item => item.id !== model.id).map(item => item.id) }))} />{modelComparison[locale].choose}<span className="sr-only"> {model.name}</span></label>
           <div className="model-meta"><span>{model.parameters}</span>{model.min_ram_gb > 0 && <span>{model.min_ram_gb} GB RAM</span>}</div>
           {review === model.id && !installed && <LegacyDownloadReview bundles={bundles} repository={model.repo} file={model.file} bytes={model.size_bytes} license={model.license} />}

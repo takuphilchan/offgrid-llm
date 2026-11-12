@@ -9,6 +9,7 @@ import {join, resolve, sep, extname} from 'node:path';
 import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
+import {dismissWorkspaceSetup} from './desktop-onboarding.mjs';
 const root = resolve(import.meta.dirname,'../..');
 const require = createRequire(join(root, 'apps/web/package.json'));
 const {_electron: electron} = require('playwright');
@@ -82,6 +83,17 @@ const deadline = setTimeout(() => {
   process.exit(1);
 }, 180000);
 deadline.unref();
+// Capture the owned Electron surface directly. An occluded WebContentsView can
+// stop producing the compositor frames awaited by Playwright's screenshot API.
+async function capture(page,file) {
+  const png=await app.evaluate(async({webContents},url)=>{
+    const view=webContents.getAllWebContents().find(view=>view.getURL()===url);
+    if(!view)throw Error('Missing capture surface');
+    return (await view.capturePage(undefined,{stayHidden:true,stayAwake:true})).toPNG().toString('base64');
+  },page.url());
+  assert.ok(png.length>0,'Capture must contain an image');
+  await writeFile(file,Buffer.from(png,'base64'));
+}
 async function launch() {
   console.log('Launching isolated packaged theme check');
   app = await electron.launch({executablePath:binary,env,timeout:30000});
@@ -97,9 +109,7 @@ async function launch() {
     win.unmaximize();win.setContentSize(1280,900);win.webContents.setZoomFactor(1);
   });
   await expect.poll(()=>page.evaluate(()=>innerWidth)).toBeGreaterThan(1023);
-  await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete','true'));
-  await page.evaluate(() => localStorage.setItem('offgrid.onboarding.complete','true'));
-  await page.reload();
+  await dismissWorkspaceSetup(page,'packaged-theme-fixture');
 
   console.log('Packaged theme fixture connected');
   return page;
@@ -123,12 +133,19 @@ try {
      assert.equal(fit.color,fit.sidebar);
    }
    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1));
-   await page.screenshot({path:join(evidence,'native-chrome-dark.png')});
+   await capture(page,join(evidence,'native-chrome-dark.png'));
  }
  assert.equal(await page.evaluate(()=>typeof window.terminalDesktop),'undefined');
  await app.evaluate(({dialog},folder)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[folder]});dialog.showMessageBox=async()=>({response:1});},evidence);
  console.log('Opening dock');
- await app.evaluate(({Menu})=>Menu.getApplicationMenu().items.find(x=>x.role==='viewmenu').submenu.items.find(x=>x.label==='Terminal').click());
+ // Localized menus use explicit labels instead of Electron's viewmenu role.
+ // Select the same native terminal action by its stable keyboard accelerator.
+ await app.evaluate(({Menu})=>{
+   const actions=Menu.getApplicationMenu().items.flatMap(item=>item.submenu?.items??[])
+     .filter(item=>item.accelerator==='CommandOrControl+`');
+   if(actions.length!==1)throw Error('Expected one native terminal menu action');
+   actions[0].click();
+ });
  await expect.poll(()=>app.context().pages().some(x=>x.url().endsWith('/terminal.html'))).toBe(true);
  const terminal=app.context().pages().find(x=>x.url().endsWith('/terminal.html'));
  terminal.setDefaultTimeout(15000);
@@ -136,26 +153,42 @@ try {
  if(process.platform==='win32') await expect.poll(()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].contentView.children.at(-1).getBounds().y)).toBeGreaterThanOrEqual(36);
  terminal.on('pageerror',error=>console.error('TERMINAL PAGE ERROR',error));
  await expect(terminal.locator('#start-agent')).toBeVisible();
- // Opening the terminal focuses its first launch card. Keep that cue quiet,
- // but preserve keyboard traversal and the system high-contrast indicator.
- await terminal.locator('#start').focus();
+ // Resting state has no selected card. Keyboard traversal still has a subtle
+ // focus cue and the system high-contrast indicator.
+ await expect(terminal.locator('#terminal-welcome-title')).toBeFocused();
+ await capture(terminal,join(evidence,'terminal-welcome-resting.png'));
+ await terminal.keyboard.press('Tab');
  await expect(terminal.locator('#start')).toBeFocused();
  const outlineWidth=selector=>terminal.locator(selector).evaluate(el=>parseFloat(getComputedStyle(el).outlineWidth));
- // Chromium rounds strokes to device pixels at fractional Windows scaling.
- assert.ok(await outlineWidth('#start')>0 && await outlineWidth('#start')<=1);
+ // The focused card uses its muted border and background without a text decoration.
+ await expect(terminal.locator('#start')).toHaveCSS('outline-style','none');
+ assert.notEqual(await terminal.locator('#start').evaluate(el=>getComputedStyle(el).borderTopColor),await terminal.locator('#start').evaluate(el=>getComputedStyle(el).color));
+ await expect(terminal.locator('#start strong')).toHaveCSS('text-decoration-line','none');
  await terminal.keyboard.press('Tab');
  await expect(terminal.locator('#start-agent')).toBeFocused();
- assert.ok(await outlineWidth('#start-agent')>0 && await outlineWidth('#start-agent')<=1);
+ await expect(terminal.locator('#start-agent')).toHaveCSS('outline-style','none');
  await terminal.emulateMedia({forcedColors:'active'});
  assert.ok(await outlineWidth('#start-agent')>1);
  await terminal.emulateMedia({forcedColors:'none'});
- await terminal.screenshot({path:join(evidence,'terminal-welcome.png')});
+ await capture(terminal,join(evidence,'terminal-welcome.png'));
  // The sidebar must reveal Chat even when its route is already selected.
  await page.getByRole('link',{name:'Chat',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>document.documentElement.hasAttribute('data-native-terminal-visible'))).toBe(false);
  await page.getByRole('button',{name:'Open terminal',exact:true}).click();
  await page.getByRole('button',{name:'New chat',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>document.documentElement.hasAttribute('data-native-terminal-visible'))).toBe(false);
+ // Settings lives in the sidebar footer, outside the primary navigation.
+ // Returning to the same route must hide the native view without resetting it.
+ await page.getByRole('button',{name:'Workspace options',exact:true}).click();
+ await page.getByRole('link',{name:'Settings',exact:true}).click();
+ await page.getByRole('button',{name:'Terminal',exact:true}).click();
+ await page.locator('.settings-content').getByRole('button',{name:'Open terminal',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.hasAttribute('data-native-terminal-visible'))).toBe(true);
+ await page.getByRole('button',{name:'Workspace options',exact:true}).click();
+ await page.getByRole('link',{name:'Settings',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.hasAttribute('data-native-terminal-visible'))).toBe(false);
+ await expect(page.locator('.settings-navigation').getByRole('button',{name:'Terminal',exact:true})).toHaveAttribute('aria-current','page');
+ await page.getByRole('link',{name:'Chat',exact:true}).click();
  await page.getByRole('button',{name:'Open terminal',exact:true}).click();
  if(process.env.OFFGRID_DOC_CAPTURES){
    const demoFolder=join(evidence,'OffGrid Demo');await mkdir(demoFolder);
@@ -167,11 +200,32 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');
  await input.pressSequentially('offgrid --help');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('agent');
+
+ // Exercise the installed renderer with real PowerShell markers, not injected snapshots.
+ await expect.poll(()=>terminal.evaluate(()=>tabs.get(current).commands.commands.at(-1)?.finished)).toBe(true);
+ await terminal.locator('#commands').click();
+ await expect(terminal.getByRole('dialog',{name:'Command context',exact:true})).toBeVisible();
+ await expect(terminal.locator('#context-output')).toHaveValue(/Start here/);
+ await expect(terminal.locator('#context-state')).toContainText('exit 0');
+ await terminal.keyboard.press('Escape');
+ await input.pressSequentially("Start-Sleep -Seconds 2; Write-Output 'CONTEXT_FINISHED'");await input.press('Enter');
+ await expect.poll(()=>terminal.evaluate(()=>tabs.get(current).commands.commands.at(-1)?.command)).toContain('CONTEXT_FINISHED');
+ await terminal.locator('#commands').click();
+ await expect(terminal.locator('#context-state')).toContainText('Command still running');
+ await expect(terminal.locator('#context-output')).toHaveValue(/CONTEXT_FINISHED/);
+ await expect(terminal.locator('#context-state')).toContainText('exit 0');
+ await terminal.keyboard.press('Escape');
+ await terminal.locator('#search').click();await terminal.locator('#query').fill('CONTEXT_FINISHED');
+ await expect(terminal.locator('#find-result')).toContainText('of');
+ await terminal.locator('#query').fill('');
+ await expect.poll(()=>terminal.locator('.xterm-decoration').count()).toBe(0);
+ await expect(terminal.locator('#next')).toBeDisabled();
+ await terminal.locator('#find-close').click();
  if(process.env.OFFGRID_DOC_CAPTURES){
    await input.pressSequentially("function prompt { 'PS OffGrid Demo> ' }; Clear-Host; offgrid --help");await input.press('Enter');
    await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS OffGrid Demo>');
    await expect.poll(()=>terminal.evaluate(()=>{const t=tabs.get(current).term;return t.buffer.active.getLine(t.buffer.active.baseY+t.buffer.active.cursorY)?.translateToString(true)||'';})).toBe('PS OffGrid Demo> ');
-   await terminal.screenshot({path:join(root,'build/documentation-captures/desktop-terminal.png')});
+   await capture(terminal,join(root,'build/documentation-captures/desktop-terminal.png'));
    await app.evaluate(({dialog},folder)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[folder]});},evidence);
  }
  await terminal.getByRole('button',{name:'Close OffGrid CLI',exact:true}).click();
@@ -186,7 +240,7 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');
  await input.pressSequentially("[Console]::WriteLine(('SECOND_' + 'TAB'))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('SECOND_TAB');
- await app.evaluate(({clipboard})=>{global.__terminalCopy=[];clipboard.writeText=text=>global.__terminalCopy.push(text);});
+ await app.evaluate(({clipboard})=>{global.__terminalCopy=[];clipboard.writeText=text=>global.__terminalCopy.push(text);clipboard.readText=()=>"[Console]::WriteLine(('PASTE_'+'caf\u00e9_\u65e5\u672c\u8a9e'))";});
  await terminal.getByTitle('Search terminal output').click();await terminal.getByRole('searchbox',{name:'Search terminal output'}).fill('SECOND_TAB');
  await expect(terminal.locator('#query')).toHaveCSS('outline-style','none');
  // Electron rounds a one-CSS-pixel border to device pixels at Windows scaling.
@@ -220,9 +274,9 @@ try {
  await input.pressSequentially("[Console]::WriteLine(('INTERRUPT_'+'RETURNED'))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('INTERRUPT_RETURNED',{timeout:5000});
  await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();})).toMatch(/^PS .*>$/);
- // Exercise Chromium's paste-event path without changing the user's clipboard.
- // Pasting inserts a command; it must not submit until Enter is pressed.
- await input.evaluate(el=>{const data=new DataTransfer();data.setData('text/plain',"[Console]::WriteLine(('PASTE_'+'caf\u00e9_\u65e5\u672c\u8a9e'))");el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));});
+ // Exercise the actual accelerator through the owned clipboard bridge. Pasting
+ // inserts a command and must not submit until Enter is pressed.
+ await input.press('Control+V');
  await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active,y=b.baseY+b.cursorY;return Array.from({length:4},(_,i)=>b.getLine(Math.max(0,y-3)+i)?.translateToString(true)||'').join('');})).toContain("'caf\u00e9_\u65e5\u672c\u8a9e'");
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).not.toContainText('PASTE_caf\u00e9_\u65e5\u672c\u8a9e');
  await input.press('Enter');
@@ -253,10 +307,10 @@ try {
  await input.pressSequentially("$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 300' -WindowStyle Hidden -PassThru; [Console]::WriteLine(('CHILD' + 'PID:' + $p.Id))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText(/CHILDPID:[0-9]+/);
  const output=await terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree').innerText();const pid=Number(output.match(/CHILDPID:([0-9]+)/)[1]);
- await terminal.screenshot({path:join(evidence,'terminal-dark.png')});
+ await capture(terminal,join(evidence,'terminal-dark.png'));
  await page.evaluate(()=>window.electron.setPresentation({theme:'light',locale:'en'}));
  await expect(terminal.locator('html')).toHaveAttribute('data-theme','light');
- await terminal.screenshot({path:join(evidence,'terminal-light.png')});
+ await capture(terminal,join(evidence,'terminal-light.png'));
  await terminal.getByRole('button',{name:'Close PowerShell',exact:true}).last().click();
  await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(1);
  const {execFileSync}=require('node:child_process');const alive=()=>execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`if(Get-Process -Id ${pid} -ErrorAction SilentlyContinue){'alive'}else{'gone'}`],{encoding:'utf8',windowsHide:true}).trim();
@@ -300,7 +354,7 @@ try {
  const optionsBox=await optionsPanel.boundingBox(),sidebarBox=await page.locator('.sidebar').boundingBox();
  assert.ok(optionsBox.x+optionsBox.width<=sidebarBox.x+sidebarBox.width,'menu crosses native terminal');
  assert.equal(await nativeVisible(),true);
- await page.screenshot({path:join(evidence,'terminal-sidebar-options.png')});
+ await capture(page,join(evidence,'terminal-sidebar-options.png'));
  await page.keyboard.press('Escape');await expect(options).toBeFocused();
  // Collapsed-sidebar and modal overlays cannot fit beside the view. Suspending
  // its display must retain the same shell/buffer without stealing dismiss focus.
@@ -321,9 +375,9 @@ try {
 	await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1440,900));
 	await expect.poll(()=>terminal.evaluate(()=>innerWidth)).toBeGreaterThan(1100);
 	assert.equal(await terminal.evaluate(()=>{const pane=document.querySelector('.pane:not([hidden])'),surface=pane.querySelector('.terminal-surface');const a=pane.getBoundingClientRect(),b=surface.getBoundingClientRect();return Math.abs(b.left-a.left-24)<2&&Math.abs(b.right-a.right+24)<2;}),true,'terminal content does not use the available pane width');
- await terminal.screenshot({path:join(evidence,'agent-profile-picker.png')});
+ await capture(terminal,join(evidence,'agent-profile-picker.png'));
 	await terminal.evaluate(()=>appearance({theme:'dark'}));
-	await terminal.screenshot({path:join(evidence,'agent-profile-picker-dark.png')});
+	await capture(terminal,join(evidence,'agent-profile-picker-dark.png'));
 	await terminal.evaluate(()=>appearance({theme:'light'}));
  await input.pressSequentially('0');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Choose a listed profile number');
@@ -348,14 +402,16 @@ try {
 	 }
 	 return false;
 	})).toBe(true);
-	await terminal.screenshot({path:join(evidence,'agent-slash-menu.png')});
+	await capture(terminal,join(evidence,'agent-slash-menu.png'));
 	await input.press('Escape');
 	await input.pressSequentially('help');await input.press('Enter');
 	await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('All commands and recovery controls');
  await input.pressSequentially('/clear');await input.press('Enter');
  await expect.poll(()=>terminal.evaluate(()=>{const t=tabs.get(current).term;return Array.from({length:t.buffer.active.length},(_,i)=>t.buffer.active.getLine(i)?.translateToString()).join('\n');})).not.toContain('Search or number:');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Terminal fixture 1');
- await input.pressSequentially('/ses');
+ await app.evaluate(({clipboard})=>{clipboard.readText=()=>'/ses';});
+ await input.press('Control+V');
+ await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('> /ses');
  await terminal.getByRole('tab',{name:'PowerShell',exact:true}).click();
  await terminal.getByRole('tab',{name:'Agent',exact:true}).click();
  await expect(input).toBeFocused();await input.pressSequentially('sion');await input.press('Enter');
@@ -375,7 +431,7 @@ try {
  await expect.poll(()=>savedSessions.size).toBe(2);assert.equal(submittedTurns,0);
  await input.pressSequentially('/default clear');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Default forgotten');
- await terminal.screenshot({path:join(evidence,'agent-profile-continuity.png')});
+ await capture(terminal,join(evidence,'agent-profile-continuity.png'));
  await input.pressSequentially('/exit');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Conversation saved');
  await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();})).toMatch(/^PS .*>$/);
@@ -384,7 +440,7 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).not.toContainText('[Process exited:');
  await input.pressSequentially('offgrid --help');await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Start here');
- await terminal.screenshot({path:join(evidence,'agent-returned-to-shell.png')});
+ await capture(terminal,join(evidence,'agent-returned-to-shell.png'));
  await terminal.getByRole('button',{name:'Close Agent',exact:true}).click();
 	await expect(input).toBeFocused();
 
@@ -395,9 +451,8 @@ try {
  await expect(terminal.locator('#resize')).toHaveCount(0);
  await expect.poll(()=>terminal.evaluate(()=>Array.from(document.querySelectorAll('.tools button')).every(button=>{const r=button.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;}))).toBe(true);
  assert.equal(await terminal.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- const capture=await app.evaluate(async({webContents})=>(await webContents.getAllWebContents().find(w=>w.getURL().endsWith('/terminal.html')).capturePage()).toPNG().toString('base64'));
- await writeFile(join(evidence,'terminal-narrow-200.png'),Buffer.from(capture,'base64'));
+ await capture(terminal,join(evidence,'terminal-narrow-200.png'));
  await app.close();app=undefined;
  assert.equal(execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`if(Get-Process -Id ${quitPID} -ErrorAction SilentlyContinue){'alive'}else{'gone'}`],{encoding:'utf8',windowsHide:true}).trim(),'gone');
- console.log(JSON.stringify({passed:true,evidence,reloadChild:true,search:true,copy:true,oscClipboardBlocked:true,cliInteractive:true,agentClear:true,agentDraft:true,cursorPreserved:true,mainWorkspace:true,zoom200:true,tabs:true,unicode:true,hiddenRetained:true,closeChild:true,quitChild:true,serviceIdentity:true}));
+ console.log(JSON.stringify({passed:true,evidence,reloadChild:true,search:true,copy:true,paste:true,agentPaste:true,oscClipboardBlocked:true,cliInteractive:true,agentClear:true,agentDraft:true,cursorPreserved:true,mainWorkspace:true,zoom200:true,tabs:true,unicode:true,hiddenRetained:true,closeChild:true,quitChild:true,serviceIdentity:true}));
 }finally{await app?.close();server.close();clearTimeout(deadline);}

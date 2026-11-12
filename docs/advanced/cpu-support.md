@@ -1,163 +1,68 @@
-# CPU Compatibility
+# CPU and runtime compatibility
 
-offgrid-llm automatically detects and uses the correct binary for your CPU, ensuring maximum compatibility and performance.
+Choose the [desktop download](../setup/installation.md#download-and-verify-a-release)
+for ordinary first use. CLI/runtime archives are separate packages with explicit
+instruction requirements. CPU model names and purchase dates alone do not establish
+compatibility, especially inside a virtual machine.
 
-## Supported CPU Types
+## Published CLI targets
 
-### x86-64 (Intel/AMD)
+| Platform | Archive suffix | Runtime requirements |
+| --- | --- | --- |
+| Linux x64 | cpu-avx2 or vulkan-avx2 | SSE4.2, AVX, AVX2, F16C, FMA and BMI2 |
+| Linux x64 | cpu-avx512 or vulkan-avx512 | AVX2 requirements plus AVX512F/DQ/BW/VL |
+| Linux ARM64 | cpu-neon | ARMv8-A/AArch64 with NEON; CLI/web service only |
+| macOS Intel | cpu-avx2 | AVX2 runtime requirements above |
+| macOS Apple Silicon | metal-apple-silicon | Native Apple Silicon and the packaged Metal runtime |
+| Windows x64 | cpu-avx2 | AVX2 runtime with F16C, FMA and BMI2; matching bundled DLLs |
 
-| CPU Feature Set | Examples | Build Flags |
-|----------------|----------|-------------|
-| **AVX-512** | Intel Ice Lake+, Sapphire Rapids | `-march=x86-64-v4` |
-| **AVX2** | Intel Haswell+ (2013+), AMD Zen+ | `-march=x86-64-v3 -mno-avx512f` |
+There is no published basic/SSE4.2-only x64 CLI archive, Windows ARM64 desktop or
+CLI archive, or Linux ARM64 desktop package. SSE4.2 alone is **not sufficient** for
+the AVX2 archives. AVX512 is not automatically faster for every workload.
 
-### ARM
+The root and compatibility Unix installers select the exact ARM archive names.
+On x64 they inspect the instruction families used by the runtime and refuse an
+unsupported CPU before downloading or changing the installation. All four listed
+AVX512 families must be present before selecting that variant; an unavailable
+AVX512 download can fall back to AVX2 on the already compatible host.
 
-| Architecture | Examples | Build Flags |
-|-------------|----------|-------------|
-| **Apple Silicon** | M1, M2, M3, M4 | `-mcpu=apple-m1` with Metal |
-| **ARM64/NEON** | Raspberry Pi 4+, AWS Graviton | `-march=armv8-a` |
+The Unix desktop helper uses AVX2 for an eligible x64 CLI installation and refuses
+Linux ARM64 desktop choices before making changes. The Windows PowerShell helper
+checks native x64 architecture and OS-visible AVX2 support. A machine whose OS does
+not report support is refused rather than assumed compatible. These checks do not
+qualify every OS, driver, virtual machine or model; run a real response after setup.
+Use Windows Setup or the PowerShell helper on Windows; the root shell installer
+supports Linux and macOS.
 
-## Automatic Detection
+## Desktop and GPU support
 
-The installer automatically:
-1. Detects your CPU capabilities (`/proc/cpuinfo` on Linux, `sysctl` on macOS)
-2. Downloads the appropriate binary (AVX-512 or AVX2)
-3. Falls back to AVX2 if AVX-512 binary unavailable (maximum compatibility)
+Desktop bundles the OffGrid service, not a general guarantee of inference hardware
+support. When needed, it prepares a separate pinned CPU/Metal engine. Its engine
+and chosen model must work on the actual computer. Keep downloaded runtimes and
+their supporting libraries together. The [platform matrix](../setup/installation.md#platform-capabilities)
+distinguishes bundled components from separately required runtimes.
 
-### Detection Logic
+Windows CUDA and Linux GPU operation require compatible runtimes and drivers.
+Installing a CUDA toolkit does not convert the CPU archive into a GPU build.
+Configure a compatible executable with OFFGRID_LLAMA_SERVER_PATH, or use the
+supported GPU container. See [inference performance](PERFORMANCE.md) and
+[Docker setup](../setup/docker.md). Apple Silicon uses Metal; the Intel Mac
+archive is CPU-only.
 
-```bash
-# Linux
-if grep -q "avx512" /proc/cpuinfo; then
-    # Use AVX-512 build
-elif grep -q "avx2" /proc/cpuinfo; then
-    # Use AVX2 build
-fi
+## If a runtime cannot start
 
-# macOS
-if sysctl | grep -qi "avx512"; then
-    # Use AVX-512 build
-else
-    # Use AVX2 build (most Macs)
-fi
-```
+An Illegal instruction error can mean the binary needs instructions unavailable
+to the host or hidden by its virtual machine. Reinstalling the same archive cannot
+add CPU instructions. Preserve models and workspace data, check the selected
+archive and host capabilities, then use a compatible machine, remote OffGrid
+service, or a custom llama.cpp build qualified for that host. Do not repeatedly
+retry an incompatible executable or substitute an unrelated release's libraries.
 
-## Why Multiple Builds?
+Inspect OS-visible flags with grep -m1 '^flags' /proc/cpuinfo on Linux, or
+sysctl machdep.cpu.features machdep.cpu.leaf7_features on Intel macOS.
 
-**The Problem:**
-- llama.cpp uses advanced CPU instructions (AVX-512, AVX2) for performance
-- Binaries compiled with newer instructions crash on older CPUs (SIGILL error)
-- Previous offgrid-llm releases only had AVX-512 binaries
-
-**The Solution:**
-- Build separate binaries for each CPU architecture
-- Installer automatically selects the correct one
-- Users never encounter CPU incompatibility issues
-
-## Minimum Requirements
-
-### x86-64 (Intel/AMD)
-- **Recommended:** Intel Haswell (2013) or AMD Zen+ or newer
-- **Minimum:** x86-64 with SSE4.2 support
-
-### ARM
-- **Apple Silicon:** M1 or newer
-- **Linux ARM:** ARMv8-A (AArch64) with NEON
-
-## Manual Override
-
-If you need to force a specific CPU variant:
-
-```bash
-**Standard Installation:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
-```
-
-## Troubleshooting
-
-### "Illegal instruction" (SIGILL)
-This means the binary was compiled for a newer CPU than yours. The universal installer prevents this, but if you manually downloaded a release:
-
-```bash
-# Solution: Re-run installer (auto-detects correct variant)
-curl -fsSL https://raw.githubusercontent.com/takuphilchan/offgrid-llm/main/install.sh | bash
-```
-
-### Check Your CPU Features
-
-```bash
-# Linux
-grep -o -E 'avx512|avx2|sse4_2' /proc/cpuinfo | sort -u
-
-# macOS
-sysctl machdep.cpu.features machdep.cpu.leaf7_features
-
-# Output example:
-# avx2         [Compatible] Compatible with AVX2 builds
-# avx512f      [Compatible] Compatible with AVX-512 builds
-```
-
-### Performance Comparison
-
-| CPU Type | Speed | Compatibility |
-|----------|-------|---------------|
-| AVX-512 | Fastest | Intel Ice Lake+ only |
-| AVX2 | Fast | Most CPUs from 2013+ |
-| Basic | Slower | All x86-64 CPUs |
-
-**Recommendation:** Let the installer auto-detect. It chooses the fastest variant your CPU supports.
-
-## Technical Details
-
-### Build Matrix
-
-The GitHub Actions workflow builds:
-
-**Linux:**
-- `linux-amd64-cpu-avx2` - CPU inference, AVX2
-- `linux-amd64-cpu-avx512` - CPU inference, AVX-512
-- `linux-amd64-vulkan-avx2` - Vulkan GPU, AVX2 CPU fallback
-- `linux-amd64-vulkan-avx512` - Vulkan GPU, AVX-512 CPU fallback
-- `linux-arm64-cpu-neon` - ARM64 with NEON
-
-**macOS:**
-- `darwin-arm64-metal-apple-silicon` - M1/M2/M3 with Metal
-- `darwin-amd64-cpu-avx2` - Intel Macs (AVX2)
-
-**Windows:**
-- `windows-amd64-cpu-avx2` - AVX2 (maximum compatibility)
-
-### Compiler Flags Reference
-
-```cmake
-# AVX2 (compatible mode - no AVX-512)
--march=x86-64-v3 -mno-avx512f
-
-# AVX-512 (performance mode)
--march=x86-64-v4
-
-# ARM Apple Silicon
--mcpu=apple-m1
-
-# ARM Generic
--march=armv8-a
-```
-
-## FAQ
-
-**Q: Will AVX2 work on my old laptop?**
-A: If it's from 2013 or newer (Intel Haswell, AMD Zen+), yes!
-
-**Q: Do I need to manually choose?**
-A: No! The installer automatically detects and downloads the correct binary.
-
-**Q: Can I use GPU acceleration with AVX2?**
-A: Yes! GPU (Vulkan/Metal) and CPU features are independent. You can have Vulkan GPU with AVX2 CPU.
-
-**Q: What about AMD CPUs?**
-A: AMD Zen and newer support AVX2. The installer works perfectly with AMD.
-
-**Q: My CPU has AVX-512 but installer chose AVX2?**
-A: This happens if the AVX-512 binary isn't available yet. AVX2 still works, just slightly slower.
+Memory is a separate requirement. The project targets lightweight workflows on
+8 GB systems and recommends 16 GB; model weights, context, KV cache, the OS and
+other applications all use memory. A matching instruction set does not guarantee
+that a selected model fits or performs well. See the
+[quickstart](../setup/quickstart.md) and [qualification evidence](../quality/README.md).

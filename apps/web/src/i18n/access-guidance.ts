@@ -1,5 +1,6 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
-export const accessGuidance: Record<LocaleCode, { body: string }> = {
+export const accessGuidance = defineMessages<{ body: string }>("i18n/access-guidance:accessGuidance", {
  en: { body: 'Ask the administrator of this workspace for access. You can return to Chat; your current draft is kept.' },
  fr: { body: 'Demandez l’accès à l’administrateur de cet espace. Vous pouvez revenir à la discussion ; votre brouillon est conservé.' },
  de: { body: 'Bitten Sie die Administration dieses Arbeitsbereichs um Zugriff. Sie können zum Chat zurückkehren; Ihr Entwurf bleibt erhalten.' },
@@ -9,4 +10,4 @@ export const accessGuidance: Record<LocaleCode, { body: string }> = {
  sn: { body: 'Kumbira mvumo kumutungamiriri wenzvimbo ino yebasa. Unogona kudzokera kuHurukuro; gwaro rako rekutanga rinochengetwa.' },
  nd: { body: 'Cela imvumo kumphathi wale ndawo yokusebenzela. Ungabuyela kuNgxoxo; umbhalo wakho osalungiswayo uyagcinwa.' },
  zu: { body: 'Cela imvume kumphathi wale ndawo yokusebenzela. Ungabuyela kuNgxoxo; umbhalo wakho osalungiswa uyagcinwa.' },
-};
+});

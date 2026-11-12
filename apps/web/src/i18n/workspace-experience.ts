@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 type ExperienceCopy = { context: string; knowledgeOn: string; responseDetails: string; manageHistory: string; returnDraft: string };
-export const workspaceExperience = {
+export const workspaceExperience = defineMessages<ExperienceCopy>("i18n/workspace-experience:inline1", {
   en: { context: 'Context & response', knowledgeOn: 'Knowledge on', responseDetails: 'Response details', manageHistory: 'Manage history', returnDraft: 'Return to your draft' },
   fr: { context: 'Contexte et réponse', knowledgeOn: 'Connaissances activées', responseDetails: 'Détails de la réponse', manageHistory: 'Gérer l’historique', returnDraft: 'Revenir au brouillon' },
   es: { context: 'Contexto y respuesta', knowledgeOn: 'Conocimiento activado', responseDetails: 'Detalles de la respuesta', manageHistory: 'Gestionar historial', returnDraft: 'Volver al borrador' },
@@ -11,4 +12,4 @@ export const workspaceExperience = {
   sn: { context: 'Zvinoenderana nemhinduro', knowledgeOn: 'Ruzivo rwabatidzwa', responseDetails: 'Tsananguro yemhinduro', manageHistory: 'Ronga nhoroondo', returnDraft: 'Dzokera kune zvawanga uchinyora' },
   nd: { context: 'Umongo lempendulo', knowledgeOn: 'Ulwazi luvuliwe', responseDetails: 'Imininingwane yempendulo', manageHistory: 'Phatha imbali', returnDraft: 'Buyela kokubhalileyo' },
   zu: { context: 'Umongo nempendulo', knowledgeOn: 'Ulwazi luvuliwe', responseDetails: 'Imininingwane yempendulo', manageHistory: 'Phatha umlando', returnDraft: 'Buyela kokubhalile' },
-} satisfies Record<LocaleCode, ExperienceCopy>;
+});

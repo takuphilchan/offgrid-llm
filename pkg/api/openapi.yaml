@@ -415,6 +415,35 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SystemIdentity' }
+  /api/v2/runtime:
+    get:
+      operationId: getInferenceRuntimeReadiness
+      description: Reports engine preparation separately from model readiness; requires models permission. No download is started.
+      responses:
+        '200':
+          description: Runtime preparation status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InferenceRuntimeReadiness' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { description: Native inference preparation unavailable }
+    post:
+      operationId: prepareInferenceRuntime
+      description: Requires models management permission. Checks the configured runtime or downloads the pinned CPU/Metal engine. Bounded to five minutes; disconnect cancels the request. Poll GET for progress. Does not load a model or prove a first answer.
+      responses:
+        '200':
+          description: Engine prepared
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InferenceRuntimeReadiness' }
+        '409':
+          description: Another preparation is running
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InferenceRuntimeReadiness' }
+        '503':
+          description: Preparation failed or unavailable; query status before retrying
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /health:
     get:
       operationId: getHealth
@@ -2329,6 +2358,21 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
   schemas:
+    InferenceRuntimeReadiness:
+      type: object
+      description: Native engine preparation only. Ready verifies runtime startup flags, not model inference or workflow quality. Progress is service-local and is not durable across restart.
+      required: [state, mode, gpu_detected, download_required, download_bytes, downloaded_bytes, revision]
+      properties:
+        state: { type: string, enum: [unchecked, missing, checking, downloading, installing, ready, failed, cancelled] }
+        mode: { type: string, enum: [cpu, metal, nvidia, amd] }
+        gpu_detected: { type: boolean }
+        download_required: { type: boolean }
+        download_bytes: { type: integer, format: int64 }
+        downloaded_bytes: { type: integer, format: int64 }
+        revision:
+          type: string
+          description: Pinned CPU/Metal fallback revision; not an inferred version of a separately configured engine.
+        message: { type: string }
     ComputerModelCheckTimings:
       type: object
       description: Milliseconds for the shared synthetic tool check, not an individual observer's wait. Admission includes queue/model readiness; probe includes runtime metadata and synthetic generation. Excludes separate vision checks. Absent for a caller that cancels before the shared result completes.
@@ -3752,6 +3796,8 @@ components:
       required: [id, spec]
       properties:
         id: { type: string }
+        status: { type: string, description: Last persisted child status, enum: [pending, running, waiting_for_approval, waiting_for_input, waiting_for_children, interrupted, uncertain, completed, failed, cancelled] }
+        phase: { type: string, description: Last persisted public progress phase }
         spec:
           type: object
           required: [key, goal, depends_on, tools]

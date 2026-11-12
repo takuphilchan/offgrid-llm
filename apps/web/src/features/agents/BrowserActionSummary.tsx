@@ -38,7 +38,7 @@ export function BrowserActivity({steps}:{steps:AgentStep[]}) {
    return <li key={step.id??index}><strong>{browserActionLabel(locale,step.tool_name!)}</strong>
     {step.authorization && <p className="agent-action-authorization">{step.authorization==='exact_approval'?audit.exact:`${audit.automatic} · ${step.authorization==='automatic:full_task'?policy.full:step.authorization==='automatic:scoped_changes'?policy.scoped:policy.ask}`}</p>}
     {['browser_verify','computer_verify','computer_verify_checked'].includes(step.tool_name??'') && <p>{result.verified===true?text.verified:text.notVerified}{typeof result.text==='string'?`: ${result.text}`:typeof result.checked==='boolean'?`: ${text.checkboxStates[result.checked?0:1]}`:''}</p>}
-    {step.tool_name==='browser_download' && result.verified===true && typeof artifact?.name==='string' && <p>{text.verified}: {String(artifact.name)} · {String(artifact.size)} bytes</p>}
+    {step.tool_name==='browser_download' && result.verified===true && typeof artifact?.name==='string' && <p>{text.verified}: <bdi>{artifact.name}</bdi> · {typeof artifact.size==='number'?new Intl.NumberFormat(locale,{style:'unit',unit:'byte',unitDisplay:'short'}).format(artifact.size):'—'}</p>}
     {step.tool_name==='browser_upload' && result.verified===true && typeof file?.name==='string' && <p>{text.verified}: {String(file.name)}</p>}
     {step.tool_name==='browser_capture' && result.captured===true && <p>{String(result.width)} × {String(result.height)}</p>}
     {step.type==='rejected' && typeof result.message==='string' && <p role="status">{String(result.message)}</p>}

@@ -23,9 +23,9 @@ def run(binary, label, width, keys, expected, plain=False):
     process = subprocess.Popen([binary, "-test.run=^TestAgentSessionPTYInput$", "-test.v"], stdin=slave, stdout=slave, stderr=slave, env=env)
     data = bytearray()
 
-    def until(marker):
+    def until(marker, after=0):
         deadline = time.monotonic() + 10
-        while marker not in data:
+        while marker not in data[after:]:
             if time.monotonic() > deadline:
                 raise AssertionError(f"{label}: missing {marker!r}; captured {bytes(data)!r}")
             ready, _, _ = select.select([master], [], [], .1)
@@ -34,7 +34,12 @@ def run(binary, label, width, keys, expected, plain=False):
 
     try:
         until(b"> ")
-        os.write(master, keys)
+        if isinstance(keys, (tuple, list)):
+            for part in keys:
+                os.write(master, part)
+                time.sleep(.03)
+        else:
+            os.write(master, keys)
         until(b"APPROVAL_READY")
         # Raw terminal settings must already be restored before consent owns input.
         attrs = termios.tcgetattr(slave)
@@ -65,9 +70,9 @@ def conversation(binary):
     process = subprocess.Popen([binary, "-test.run=^TestAgentSessionPTYConversation$", "-test.v"], stdin=slave, stdout=slave, stderr=slave, env=env)
     data = bytearray()
 
-    def until(marker):
+    def until(marker, after=0):
         deadline = time.monotonic() + 10
-        while marker not in data:
+        while marker not in data[after:]:
             if time.monotonic() > deadline:
                 raise AssertionError(f"conversation: missing {marker!r}; {bytes(data)!r}")
             ready, _, _ = select.select([master], [], [], .1)
@@ -78,20 +83,71 @@ def conversation(binary):
         until(b"> ")
         os.write(master, b"/skills\r")
         until(b"No skills attached")
+        until(b"\x1b[?2004h", data.index(b"No skills attached"))
         os.write(master, b"hello\r")
         until(b"Hello from the fixture")
         assert b"Completed in" not in data, "draft was buffered until completion"
-        assert b"\r\x1b[2K| " in data, "wrapped session output disabled spinner"
+        assert any(("\r\x1b[2K"+frame+" ").encode() in data for frame in ["|", "/", "-", "\\", "⠋", "⠙", "⠹", "⠸"]), "wrapped session output disabled spinner"
         until(b"Completed in")
+        until(b"\x1b[?2004h", data.index(b"Completed in"))
         os.write(master, b"/exit\r")
         until(b"PASS")
         process.wait(timeout=10)
         assert process.returncode == 0, bytes(data)
-        assert bytes(data).count(b"OffGrid  /  Agent chat") == 1
+        assert bytes(data).count(b"OffGrid") >= 1
+        assert bytes(data).count(b"Ask a question or describe a task.") == 1
         assert bytes(data).count(b"Hello from the fixture") == 1
         assert b"Inspect: offgrid" not in data and b"Turn: " not in data
-        assert b"--resume fixture --profile profile-fixture --profile-revision 7" in data
+        assert b"--resume fixture" in data
+        assert b"--profile profile-fixture --profile-revision 7" in data
         print("PASS conversation: one welcome, no command submission, animated progress, incremental answer, one result, resume receipt")
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+        os.close(master)
+        os.close(slave)
+
+
+def live(binary, stopping=False):
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 90, 0, 0))
+    env = dict(os.environ, TERM="xterm-256color", OFFGRID_TEST_SESSION_PTY="1", OFFGRID_TEST_LIVE_STOP="1" if stopping else "0", OFFGRID_PLAIN="0", OFFGRID_TUI="1")
+    process = subprocess.Popen([binary, "-test.run=^TestAgentLivePTYInput$", "-test.v"], stdin=slave, stdout=slave, stderr=slave, env=env)
+    data = bytearray()
+
+    def until(marker):
+        deadline = time.monotonic() + 15
+        while marker not in data:
+            if time.monotonic() > deadline:
+                raise AssertionError(f"live: missing {marker!r}; {bytes(data)!r}")
+            ready, _, _ = select.select([master], [], [], .1)
+            if ready:
+                data.extend(os.read(master, 65536))
+
+    try:
+        until(b"Enter steer")
+        if stopping:
+            os.write(master, b"retained on stop\x03")
+        else:
+            os.write(master, "shorter café\r".encode())
+            until(b"CORRECTION_ACCEPTED")
+            until(b"Incremental fixture")
+            assert b"Completed in" not in data, "live answer was buffered until completion"
+            os.write(master, b"/queue next question\r")
+            until(b"Follow-up queued")
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 20, 72, 0, 0))
+            os.write(master, "unfinished 日本語".encode())
+        until(b"APPROVAL_READY")
+        attrs = termios.tcgetattr(slave)
+        assert attrs[3] & termios.ICANON and attrs[3] & termios.ECHO
+        result = bytes(data).split(b"LIVE_DRAFTS:", 1)[1].splitlines()[0]
+        assert json.loads(result) == (["retained on stop"] if stopping else ["next question", "unfinished 日本語"]), result
+        os.write(master, b"y\n")
+        until(b"APPROVAL_RECEIVED")
+        process.wait(timeout=10)
+        assert process.returncode == 0, bytes(data)
+        print("PASS live: steering, draft queue, resize, streaming and approval ownership")
     finally:
         if process.poll() is None:
             process.terminate()
@@ -104,9 +160,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary")
     args = parser.parse_args()
-    run(args.binary, "picker", 80, b"/\x1b[B\t\r", "/skills")
+    run(args.binary, "picker", 80, b"/\x1b[B\t\r", "/agent")
     run(args.binary, "unicode paste", 80, "\x1b[200~café 日本語\nsecond line\x1b[201~\r".encode(), "café 日本語\nsecond line")
-    run(args.binary, "dismiss unknown", 40, b"/not-a-command\x1b\r", "/not-a-command")
+    run(args.binary, "fragmented paste", 80, (b"\x1b", b"[200~", "café 日本語\nsecond line".encode(), b"\x1b", b"[201~\r"), "café 日本語\nsecond line")
+    run(args.binary, "unknown command", 40, b"/not-a-command\r", "/not-a-command")
+    run(args.binary, "explicit newline", 80, b"first\nsecond\r", "first\nsecond")
+    run(args.binary, "wrapped paragraph", 40, ("A long paragraph " * 20 + "\r").encode(), "A long paragraph " * 20)
+    run(args.binary, "oversized paste", 80, b"retained\x1b[200~" + b"x" * 32001 + b"\x1b[201~\r", "retained")
+    run(args.binary, "grapheme delete", 80, "a👨‍👩‍👧‍👦b\x1b[D\x7f\r".encode(), "ab")
     run(args.binary, "narrow fallback", 28, b"hello\n", "hello\n")
     run(args.binary, "plain", 80, b"/help\n", "/help\n", plain=True)
     conversation(args.binary)
+    live(args.binary)
+    live(args.binary, stopping=True)

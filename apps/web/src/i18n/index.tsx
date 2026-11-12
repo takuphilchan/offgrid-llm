@@ -10,6 +10,10 @@ import { sw } from './locales/sw';
 import { zu } from './locales/zu';
 import type { LocaleDefinition, Messages } from './types';
 import { readPreference, writePreference } from '../lib/preferences';
+import packs from './language-packs.json' with { type: 'json' };
+import { resolveLanguage, dictionaryLocale, languageRegistry, type LanguageCode } from './language';
+import {resolveMessages,featureTranslations} from './catalog';
+export type { LanguageCode } from './language';
 
 export const locales = {
   en: { code: 'en', label: 'English', direction: 'ltr', messages: en },
@@ -23,32 +27,48 @@ export const locales = {
   de: { code: 'de', label: 'Deutsch', direction: 'ltr', messages: de }
 } as const satisfies Record<string, LocaleDefinition>;
 
-export type LocaleCode = keyof typeof locales;
-type I18nValue = { locale: LocaleCode; setLocale: (locale: LocaleCode) => void; messages: Messages; available: LocaleDefinition[] };
+export type LocaleCode = LanguageCode;
+// Both names identify the selected language. Feature catalogs resolve their own
+// per-message fallbacks; a global English substitution must not bypass packs.
+type I18nValue = { locale: LocaleCode; language: LanguageCode; setLocale: (language: LanguageCode) => void; messages: Messages; available: Array<{code:string;label:string;direction:'ltr'|'rtl';preview:boolean}>; translationNotice: string | null };
 const I18nContext = createContext<I18nValue | null>(null);
 
-function initialLocale(): LocaleCode {
-  const candidates = [readPreference('offgrid.locale'), window.electron?.presentation?.locale,
-    ...navigator.languages, navigator.language];
+function initialLocale(): LanguageCode {
+  for (const explicit of [readPreference('offgrid.locale'),window.electron?.presentation?.locale]) {
+    const language=resolveLanguage(explicit); if(language)return language;
+  }
+  const candidates = [...navigator.languages, navigator.language];
   for (const candidate of candidates) {
-    const language = candidate?.trim().toLowerCase().replace('_', '-').split('-')[0];
-    if (language && Object.hasOwn(locales, language)) return language as LocaleCode;
+    const language = resolveLanguage(candidate);
+    // Unreviewed packs are an explicit preview choice, never an automatic switch.
+    if (language && languageRegistry[language].stage !== 'preview') return language;
   }
   return 'en';
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, updateLocale] = useState<LocaleCode>(initialLocale);
-  const setLocale = (next: LocaleCode) => { if (Object.hasOwn(locales, next)) updateLocale(next); };
-  const definition = locales[locale];
+  const [language, updateLocale] = useState<LanguageCode>(initialLocale);
+  const locale = language;
+  const setLocale = (next: LanguageCode) => { const resolved=resolveLanguage(next); if (resolved) updateLocale(resolved); };
+  const definition = locales[dictionaryLocale(language)];
+  const pack = Object.hasOwn(packs,language) ? packs[language as keyof typeof packs] : null;
+  const direction = languageRegistry[language].direction;
+  useEffect(() => { const changed = (event: StorageEvent) => { if(event.key === 'offgrid.locale') updateLocale(initialLocale()); }; window.addEventListener('storage',changed);return()=>window.removeEventListener('storage',changed); }, []);
   useEffect(() => {
-    writePreference('offgrid.locale', locale);
-    document.documentElement.lang = locale;
-    document.documentElement.dir = definition.direction;
-  }, [definition.direction, locale]);
-  const value = useMemo<I18nValue>(() => ({
-    locale, setLocale, messages: definition.messages, available: Object.values(locales)
-  }), [definition.messages, locale]);
+    writePreference('offgrid.locale', language);
+    document.documentElement.lang = language;
+    document.documentElement.dir = direction;
+  }, [direction, language]);
+  const value = useMemo<I18nValue>(() => {
+    const messages = {...definition.messages};
+    if (pack) for (const key of Object.keys(pack.messages) as (keyof typeof pack.messages)[]) {
+      Object.assign(messages, {[key]:{...messages[key],...pack.messages[key]}});
+    }
+    return {locale,language,setLocale,messages:resolveMessages(messages,featureTranslations(language,'core')),translationNotice:pack?.notice ?? null,available:[
+      ...Object.values(locales).map(item=>({...item,preview:false})),
+      ...Object.entries(packs).map(([code,item])=>({code,label:item.label,direction:item.direction as 'ltr'|'rtl',preview:true}))
+    ]};
+  }, [definition.messages, locale, language, pack]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 

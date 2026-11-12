@@ -273,3 +273,17 @@ retention guidance. Preserve folder and per-user/all-user choices, application
 identity, existing backup behavior, saved data, native keyboard navigation and
 high-contrast support. Verify isolated clean installation, repair, Finish launch,
 running-app refusal and uninstallation before packaging for users.
+
+## Searchable Settings follow-up (2026-11-08)
+
+Replace the long preferences/diagnostics sheet with General, Models & responses, Voice, Terminal, Access & data and Advanced/About sections. Search reveals matching settings without changing them. Reuse existing scoped response/voice preferences and capability controls; explain desktop-only features. Opening Settings must not allocate models, start microphones, grant access or change resources. Preserve all nine locales and keyboard/narrow-screen usability.
+
+## Approved personalization extension (2026-11-11)
+
+Implement the user-supplied themes, workspace interaction, localization and settings plan. This explicitly permits named palettes beyond the previous monochrome freeze while retaining defaults and existing work. Group 31 tracks implementation and qualification separately. No installation, release, automatic access grant or model download is implied.
+
+The owner's follow-up includes actual selected-language routing throughout feature
+catalogs, accurate whole-app translation coverage, theme-aware in-app branding,
+and an app-wide horizontal-divider audit. Repair the reported stacked Models
+rules and theme-incompatible decorative lines while preserving meaningful control
+boundaries. Translation completion and native-language review remain separate gates.

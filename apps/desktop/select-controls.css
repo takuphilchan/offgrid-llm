@@ -1,0 +1,29 @@
+/* Shared native select presentation. The browser still owns keyboard, type-ahead,
+   options, accessibility and popup placement. Only the closed control is styled. */
+select:not([multiple]):not([size]), #terminal-display select, #terminal-commands select {
+  appearance: none;
+  min-inline-size: 5rem;
+  min-block-size: 40px;
+  padding-inline: 12px 36px;
+  padding-block: 8px;
+  font-size: var(--type-ui, 13px);
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  background-image:
+    linear-gradient(45deg, transparent 42%, var(--muted) 42%, var(--muted) 58%, transparent 58%),
+    linear-gradient(135deg, transparent 42%, var(--muted) 42%, var(--muted) 58%, transparent 58%);
+  background-size: 6px 6px;
+  background-position: right 18px center, right 12px center;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+select:not([multiple]):not([size]):dir(rtl), #terminal-display select:dir(rtl), #terminal-commands select:dir(rtl) {
+  background-position: left 12px center, left 18px center;
+}
+select:focus-visible { outline: 2px solid var(--text, var(--fg)); outline-offset: 2px; }
+select:disabled { cursor: not-allowed; }
+@media (pointer: coarse) { select:not([multiple]):not([size]), #terminal-display select, #terminal-commands select { min-block-size: 44px; } }
+@media (forced-colors: active) {
+  select:not([multiple]):not([size]), #terminal-display select, #terminal-commands select { appearance: auto; background-image: none; padding-inline-end: 12px; }
+  select:focus-visible { outline: 2px solid Highlight; }
+}

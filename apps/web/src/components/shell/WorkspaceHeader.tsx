@@ -1,12 +1,12 @@
-import { useEffect, useId, useState } from 'react';
-import { useI18n, type LocaleCode } from '../../i18n';
+import { useEffect, useState } from 'react';
+import { useI18n } from '../../i18n';
 import { workspaceShell } from '../../i18n/workspace-shell';
-import type { ThemeChoice } from '../../theme';
 import type { ServiceHealth } from '../../lib/navigation';
 import { Icon } from '../Icon';
 import { UtilityPopover } from '../UtilityPopover';
 import { KnownWork } from './KnownWork';
 import { workspaceHelp } from '../../i18n/workspace-help';
+import { settingsNavigation } from '../../i18n/settings-navigation';
 
 export function WorkspaceHeader({ title, shortcut, onCommands, onHelp, navigationOpen, onNavigation }: {
   title: string; shortcut: string; onCommands: () => void; onHelp:()=>void; navigationOpen: boolean; onNavigation: () => void;
@@ -21,26 +21,20 @@ export function WorkspaceHeader({ title, shortcut, onCommands, onHelp, navigatio
     return () => { current = false; };
   }, []);
   return <header className="topbar">
-    <div className="topbar-leading"><button className="secondary-button navigation-trigger" aria-label={workspaceShell[locale].navigation} aria-expanded={navigationOpen} aria-controls="workspace-sidebar" onClick={onNavigation}><Icon name="menu" size={18} /><span>{workspaceShell[locale].navigation}</span></button><h1>{title}</h1></div>
-    <div className="topbar-actions"><KnownWork />{terminalAvailable && <button className="utility-button icon-button" title="Terminal (Ctrl+`)" aria-label="Open terminal" onClick={() => void window.electron?.openTerminal?.()}><Icon name="terminal" size={18} /></button>}<button className="utility-button icon-button help-trigger" onClick={onHelp} aria-label={workspaceHelp[locale].help} title={workspaceHelp[locale].help}><Icon name="help" size={18}/></button><button className="command-trigger" onClick={onCommands} aria-label={`${text.shell.quickActions} (${shortcut})`} title={`${text.shell.quickActions} (${shortcut})`}><Icon name="search" size={16} /><span>{text.shell.quickActions}</span><kbd>{shortcut}</kbd></button></div>
+    <div className="topbar-leading"><button className="utility-button icon-button navigation-trigger" title={workspaceShell[locale].navigation} aria-label={workspaceShell[locale].navigation} aria-expanded={navigationOpen} aria-controls="workspace-sidebar" onClick={onNavigation}><Icon name="menu" size={20} /></button><h1>{title}</h1></div>
+    <div className="topbar-actions"><KnownWork />{terminalAvailable && <button className="utility-button icon-button" title={`${settingsNavigation[locale].terminal} (Ctrl+\u0060)`} aria-label={settingsNavigation[locale].terminal} onClick={() => void window.electron?.openTerminal?.()}><Icon name="terminal" size={18} /></button>}<button className="utility-button icon-button help-trigger" onClick={onHelp} aria-label={workspaceHelp[locale].help} title={workspaceHelp[locale].help}><Icon name="help" size={18}/></button><button className="command-trigger" onClick={onCommands} aria-label={`${text.shell.quickActions} (${shortcut})`} title={`${text.shell.quickActions} (${shortcut})`}><Icon name="search" size={16} /><span>{text.shell.quickActions}</span><kbd>{shortcut}</kbd></button></div>
   </header>;
 }
 
-export function WorkspaceOptions({ refreshing, onRefresh, theme, onThemeChange, username, onLogout, health }: {
+export function WorkspaceOptions({ refreshing, onRefresh, username, onLogout, health }: {
   refreshing: boolean; onRefresh: () => void; health?: ServiceHealth;
-  theme: ThemeChoice; onThemeChange: (theme: ThemeChoice) => void; username?: string; onLogout: () => void;
+  username?: string; onLogout: () => void;
 }) {
-  const { messages: text, locale, setLocale, available } = useI18n();
-  const id = useId();
-  return <UtilityPopover label={workspaceShell[locale].options} className="workspace-options" triggerClassName="utility-button" panelClassName="workspace-options-panel" trigger={<><Icon name="settings" size={18} /><span>{text.guidance.workspaceOptions}</span><Icon name="more" size={16} /></>}>
-        {username !== undefined && <strong className="workspace-options-identity">{username}</strong>}
-        {health && <p className="workspace-secondary" role="status">{health === 'ready' ? text.status.ready : health === 'offline' ? text.status.offline : text.status.checking}</p>}
-        <a className="secondary-button" href="#/settings" aria-current={location.hash === '#/settings' ? 'page' : undefined}><Icon name="settings" size={16} />{text.nav.settings}</a>
-        <div className="field locale-picker"><label htmlFor={`${id}-locale`}>{text.common.language}</label><select id={`${id}-locale`} value={locale} onChange={event => setLocale(event.target.value as LocaleCode)}>{available.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</select></div>
-        <div className="field"><label htmlFor={`${id}-theme`}>{text.shell.appearance}</label><select id={`${id}-theme`} value={theme} onChange={event => onThemeChange(event.target.value as ThemeChoice)}>
-          <option value="system">{text.shell.systemTheme}</option><option value="light">{text.shell.lightTheme}</option><option value="dark">{text.shell.darkTheme}</option>
-        </select></div>
-        <button className="secondary-button" disabled={refreshing} aria-busy={refreshing} onClick={onRefresh}><Icon name="refresh" size={16} />{text.common.refresh}</button>
-        {username !== undefined && <div className="workspace-account"><button className="text-button" onClick={onLogout}>{text.auth.signOut}</button></div>}
-      </UtilityPopover>;
+  const { messages: text, locale } = useI18n();
+  return <UtilityPopover compact label={workspaceShell[locale].options} className="workspace-options" triggerClassName="utility-button icon-button" panelClassName="workspace-options-panel" trigger={<Icon name="more" size={18} />}>
+    {username !== undefined && <strong className="workspace-options-identity">{username}</strong>}
+    {health && <p className="workspace-secondary" role="status">{health === 'ready' ? text.status.ready : health === 'offline' ? text.status.offline : text.status.checking}</p>}
+    <button className="secondary-button" disabled={refreshing} aria-busy={refreshing} onClick={onRefresh}><Icon name="refresh" size={16} />{text.common.refresh}</button>
+    {username !== undefined && <div className="workspace-account"><button type="button" className="text-button" onClick={onLogout}>{text.auth.signOut}</button></div>}
+  </UtilityPopover>;
 }

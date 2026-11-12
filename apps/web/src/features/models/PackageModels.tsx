@@ -20,11 +20,12 @@ import { SearchField } from '../../components/SearchField';
 import { ModelChoice } from '../../components/ModelChoice';
 import { EmptyState, SectionHeading } from '../../components/WorkspacePresentation';
 import { workspaceRefinement } from '../../i18n/workspace-refinement';
+import { catalogDescription } from '../../i18n/catalog-descriptions';
 
 const packageOf = (operation: ModelOperation) => operation.target.kind === 'package' ? operation.target.package : undefined;
 
 export function PackageModels({ category, view, onDiscover }: { category: ModelCategory; view: LibraryView; onDiscover: () => void }) {
-  const { messages: text, locale } = useI18n();
+  const { messages: text, locale , language} = useI18n();
   const copy = modelAcquisition[locale], readiness = speechModels[locale];
   const feedback = operationFeedback(locale);
   const metadata = useRecoverableRead(text.common.error);
@@ -125,13 +126,13 @@ export function PackageModels({ category, view, onDiscover }: { category: ModelC
   };
   const accepted = operations.find(o => o.request_id === installRequest);
   const availableOperations = operations.filter(o => !o.discarded && (o.state !== 'complete' || o.retained_bytes > 0));
-  const filtered = installed.filter(item => `${item.id} ${item.name}`.toLocaleLowerCase(locale).includes(filter.trim().toLocaleLowerCase(locale)));
+  const filtered = installed.filter(item => `${item.id} ${item.name}`.toLocaleLowerCase(language).includes(filter.trim().toLocaleLowerCase(language)));
 
   const downloadDetails = preview && <div className="package-download-details">
     <p className="model-identity">{copy.source}: {preview.resolution.provenance.repository} · {preview.resolution.provenance.revision || preview.resolution.manifest.revision}</p>
-    <dl className="package-facts"><dt>{copy.transfer}</dt><dd>{formatBytes(preview.preflight.transfer_bytes)}</dd><dt>{copy.space}</dt><dd>{formatBytes(preview.preflight.required_free_bytes)}</dd><dt>{copy.license}</dt><dd>{preview.resolution.manifest.license}</dd></dl>
+    <dl className="package-facts"><dt>{copy.transfer}</dt><dd>{formatBytes(preview.preflight.transfer_bytes, locale)}</dd><dt>{copy.space}</dt><dd>{formatBytes(preview.preflight.required_free_bytes, locale)}</dd><dt>{copy.license}</dt><dd>{preview.resolution.manifest.license}</dd></dl>
     {(preview.preflight.warnings ?? []).map((warning, index) => <p className="model-readiness" key={index}>{warning}</p>)}
-    <details><summary>{copy.files} ({preview.resolution.manifest.artifacts.length})</summary><ul className="package-files">{preview.resolution.manifest.artifacts.map(a => <li key={a.path}><span>{a.path} · {a.license}</span><span>{formatBytes(a.size)}</span></li>)}</ul></details>
+    <details><summary>{copy.files} ({preview.resolution.manifest.artifacts.length})</summary><ul className="package-files">{preview.resolution.manifest.artifacts.map(a => <li key={a.path}><span>{a.path} · {a.license}</span><span>{formatBytes(a.size, locale)}</span></li>)}</ul></details>
     {(preview.resolution.source_notices ?? []).map((notice, index) => <details key={index}><summary>{copy.license}</summary><p>{notice}</p></details>)}
     <div className="model-actions"><button className="primary-button" disabled={!admin || busy || !!accepted} onClick={() => void perform(async () => { await api.installPackage(preview.id, installRequest); setPreview(null); }).catch(() => {})}>{accepted ? copy[accepted.state] : text.models.download}</button></div>
   </div>;
@@ -159,7 +160,7 @@ export function PackageModels({ category, view, onDiscover }: { category: ModelC
           {!source && state.integrity === 'failed' && <p>{copy.localRepair}</p>}
           <div className="model-actions">
             <button className="secondary-button" disabled={!admin || busy || inUse} onClick={() => void perform(() => api.verifyModelPackage(item.id, item.revision!, new AbortController().signal)).catch(() => {})}>{text.models.verify}</button>
-            {source && state.integrity === 'failed' && <button className="secondary-button" disabled={!admin || busy || inUse} onClick={() => { const requestID = crypto.randomUUID(); setConfirm({ title: `${copy.repair}: ${item.name}`, body: `${copy.transfer}: ${formatBytes(source.bytes_total)}. ${state.issue || ''}`, run: () => api.repairPackage(source.id, requestID) }); }}>{copy.repair}</button>}
+            {source && state.integrity === 'failed' && <button className="secondary-button" disabled={!admin || busy || inUse} onClick={() => { const requestID = crypto.randomUUID(); setConfirm({ title: `${copy.repair}: ${item.name}`, body: `${copy.transfer}: ${formatBytes(source.bytes_total, locale)}. ${state.issue || ''}`, run: () => api.repairPackage(source.id, requestID) }); }}>{copy.repair}</button>}
             <button className="danger-button" disabled={!admin || busy || inUse} onClick={() => setConfirm({ title: item.name, body: readiness.remove, run: () => api.removeModelPackage(item.id, item.revision!, new AbortController().signal) })}>{text.models.delete}</button>
           </div>
         </article>;
@@ -177,7 +178,7 @@ export function PackageModels({ category, view, onDiscover }: { category: ModelC
       </form>
       {metadata.pending && <p role="status">{text.common.loading}</p>}
       {repositories?.length === 0 && <p role="status">{text.modelSearch.empty}</p>}
-      {repositories?.map(repo => <article className="model-search-result" key={repo.id}><div className="model-search-repo"><div><h3>{repo.id}</h3><p className="model-identity">{modelLibrary(locale).repositorySize}: {repo.size_bytes && repo.size_bytes > 0 ? formatBytes(repo.size_bytes) : text.modelSearch.unknownSize}</p></div><button className="secondary-button" disabled={!admin || busy} onClick={() => void choose(repo.id)}>{copy.preview}</button></div>
+      {repositories?.map(repo => <article className="model-search-result" key={repo.id}><div className="model-search-repo"><div><h3>{repo.id}</h3><p className="model-identity">{modelLibrary(locale).repositorySize}: {repo.size_bytes && repo.size_bytes > 0 ? formatBytes(repo.size_bytes, locale) : text.modelSearch.unknownSize}</p></div><button className="secondary-button" disabled={!admin || busy} onClick={() => void choose(repo.id)}>{copy.preview}</button></div>
         {discovery?.repository === repo.id && discovery.choices.filter(c => c.supported).length > 1 && <ModelChoice defaultOpen label={copy.variant} placeholder={copy.variant} disabled={busy} value={variant} onChange={value => {
           setVariant(value); setPreview(null);
           const choice = discovery.choices.find(c => c.id === value);
@@ -189,7 +190,7 @@ export function PackageModels({ category, view, onDiscover }: { category: ModelC
     <section className="model-section" aria-label={text.models.catalog}>
       {catalogError && <div className="inline-error" role="alert">{catalogError}<button className="secondary-button" disabled={busy} onClick={() => void refreshCatalog()}>{feedback.refreshCatalog}</button></div>}
       <h2>{text.models.catalog}</h2>{!catalogError && !catalog.length && <p role="status">{modelLibrary(locale).emptyCatalog}</p>}<div className="catalog-grid">{catalog.map(item => <article className="catalog-card package-card" key={item.id}>
-        <ModelIdentity model={packageCatalogDisplay(item)} /><p>{item.description}</p>
+        <ModelIdentity model={packageCatalogDisplay(item)} /><p>{catalogDescription(language,item.id,item.description)}</p>
         <div className="catalog-actions"><button className="secondary-button" aria-expanded={catalogReview === item.id} disabled={!admin || busy || !item.variants.length} onClick={() => chooseCatalog(item)}>{copy.preview}</button></div>
         {catalogReview === item.id && item.variants.length > 1 && <ModelChoice defaultOpen label={copy.variant} placeholder={copy.variant} value={variant} disabled={busy} onChange={value => {
           setVariant(value); setPreview(null);
@@ -197,7 +198,7 @@ export function PackageModels({ category, view, onDiscover }: { category: ModelC
           // Each package target has its own existing curated resolution. Never
           // silently use the first variant or construct a new source authority.
           if (choice?.target.kind === 'package') void resolve({ catalog_id: choice.target.package.id });
-        }} options={item.variants.map(choice => ({ id: choice.id, name: choice.name, disabled: choice.target.kind !== 'package', details: [choice.size_bytes > 0 ? formatBytes(choice.size_bytes) : modelLibrary(locale).unknown, choice.target.kind === 'package' ? `${choice.target.package.id}@${choice.target.package.revision}` : '', choice.readiness?.issue].filter(Boolean).join(' · ') }))} />}
+        }} options={item.variants.map(choice => ({ id: choice.id, name: choice.name, disabled: choice.target.kind !== 'package', details: [choice.size_bytes > 0 ? formatBytes(choice.size_bytes, locale) : modelLibrary(locale).unknown, choice.target.kind === 'package' ? `${choice.target.package.id}@${choice.target.package.revision}` : '', choice.readiness?.issue].filter(Boolean).join(' · ') }))} />}
         {!discovery && catalogReview === item.id && downloadDetails}
       </article>)}</div>
     </section>

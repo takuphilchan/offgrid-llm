@@ -27,16 +27,16 @@
   .agent-purpose-examples { display: flex; flex-wrap: wrap; gap: 8px; }
   .profile-basics > label, .profile-advanced > label { display: grid; gap: .5rem; font-size: .875rem; }
   .profile-basics .model-select { display: grid; gap: 8px; padding: 0; border: 0; background: none; width: 100%; justify-self: start; }
-  .profile-capability { border-block-start: 1px solid var(--line); }
+  .profile-capability { border-block-start: 0; }
   .profile-capability > summary { cursor: pointer; padding-block: 12px; font-size: var(--type-body); line-height: 1.5; }
   .profile-capability-count { float: inline-end; color: var(--muted); font-variant-numeric: tabular-nums; padding-inline: 8px; }
   .profile-capability-body { padding-block-end: 12px; }
   .profile-capability .profile-options { max-height: 16rem; }
-  .profile-editor > .profile-actions { padding-block: 12px; border-block-start: 1px solid var(--line); }
+  .profile-editor > .profile-actions { padding-block: 12px; }
   .profile-fields :is(input:not([type="checkbox"]), textarea, select), .profile-library-list input { width: 100%; min-width: 0; }
   .profile-fields textarea { resize: vertical; min-height: 8rem; }
   .profile-fields .profile-hint { margin: 0; }
-  .profile-resources { min-width: 0; padding: 1rem 0 0; margin: 0; border: 0; border-block-start: 1px solid var(--line); }
+  .profile-resources { min-width: 0; padding: 1rem 0 0; margin: 0; border: 0; border-block-start: 0; }
   .profile-resources legend { padding-inline: 0 .5rem; font-size: .875rem; font-weight: 600; }
   .profile-resources details { margin-block-start: 1rem; }
   .profile-options { display: grid; gap: .8rem; max-height: 20rem; overflow: auto; padding: .5rem; margin-inline: -.5rem; }
@@ -50,7 +50,7 @@
   .profile-context-field { display: grid; gap: .5rem; margin-block: .75rem; }
   .profile-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
   @media (min-width: 960px) and (min-height: 600px) {
-    .profile-editor > .profile-actions { position: sticky; bottom: 0; z-index: 2; background: var(--surface-1); }
+    .profile-editor > .profile-actions { position: sticky; bottom: 0; z-index: 2; background: var(--surface-1); border-block-start: 1px solid var(--separator); }
     .profile-editor :is(input, textarea, select, button, summary) { scroll-margin-block: 80px; }
   }
   .profile-issues { padding: 1rem; border-inline-start: 3px solid var(--line-strong); background: var(--surface-2); overflow-wrap: anywhere; }

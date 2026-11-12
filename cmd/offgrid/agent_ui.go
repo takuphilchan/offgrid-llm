@@ -37,6 +37,7 @@ func renderAgentStreamTo(w, progress io.Writer, body io.Reader) error {
 }
 
 func renderAgentStreamMode(w, progress io.Writer, body io.Reader, terminal, animate bool, style cli.PresentationStyle) error {
+	_, liveEditor := progress.(interface{ AgentProgressPhase(string) })
 	display := newAgentLiveDisplay(progress, animate)
 	defer display.close()
 	w, progress = agentDisplayWriter{display, w}, agentDisplayWriter{display, progress}
@@ -47,7 +48,7 @@ func renderAgentStreamMode(w, progress io.Writer, body io.Reader, terminal, anim
 	scanner.Buffer(make([]byte, 64*1024), 8*1024*1024)
 	runID := ""
 	lastPhase := ""
-	lastChildren := ""
+	lastChildren := map[string]string{}
 	observed := map[string]bool{}
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -91,11 +92,27 @@ func renderAgentStreamMode(w, progress io.Writer, body io.Reader, terminal, anim
 		if runID == "" && event.RunID != "" {
 			runID = event.RunID
 		}
-		if event.Status == "waiting_for_children" {
-			data, _ := json.Marshal(event.Children)
-			if string(data) != lastChildren {
-				renderAgentSnapshot(progress, event.agentRunSnapshot)
-				lastChildren = string(data)
+		// Child completion can first arrive after the parent resumes, or in a
+		// recovered terminal snapshot. Do not lose the last specialist's result.
+		if len(event.Children) > 0 {
+			active := false
+			label := "Waiting for specialists"
+			for _, child := range event.Children {
+				state := string(child.Status)
+				if state == "" {
+					state = "pending"
+				}
+				if state == "running" {
+					active = true
+					label = "Specialists working"
+				}
+				if lastChildren[child.ID] != state {
+					fmt.Fprintf(progress, "  %s · %s\n", cli.TerminalSafe(child.Spec.Key), cli.TerminalSafe(state))
+					lastChildren[child.ID] = state
+				}
+			}
+			if event.Status == "waiting_for_children" {
+				display.phase(label, active)
 			}
 		}
 		if p := event.Progress; p != nil && event.Type == "status" {
@@ -122,7 +139,7 @@ func renderAgentStreamMode(w, progress io.Writer, body io.Reader, terminal, anim
 				display.phase(label, !draft.open)
 				// An interactive terminal already animates the current phase in
 				// place. Keep only actual tool actions in the transcript.
-				if !animate || p.Tool != "" || p.Phase == "approval" {
+				if (!animate && !liveEditor) || p.Tool != "" || p.Phase == "approval" {
 					fmt.Fprintf(progress, "  %s%s%s\n", style.Muted, label, style.Reset)
 				}
 				lastPhase = phase

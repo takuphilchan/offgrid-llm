@@ -6,7 +6,7 @@ import { taskPresentation } from '../../i18n/task-presentation';
 import { BrowserActionSummary } from './BrowserActionSummary';
 
 export function TaskApproval({ run, busy, refresh, act }: { run: AgentRun; busy: boolean; refresh: () => void; act: (action: 'approve' | 'deny') => void }) {
-  const { locale, messages } = useI18n(), copy = taskPresentation(locale), details = computerExperience(locale);
+  const { locale, messages , language} = useI18n(), copy = taskPresentation(locale), details = computerExperience(locale);
   const approval = run.pending_approval!;
   const [now, setNow] = useState(Date.now());
   const expiry = Date.parse(approval.expires_at);
@@ -22,7 +22,7 @@ export function TaskApproval({ run, busy, refresh, act }: { run: AgentRun; busy:
     {/* Exact canonical arguments preserve large numbers and consequential values.
         Unknown tools must show them, not conceal uncertainty under friendly copy. */}
     <details open={!supported}><summary>{copy.exact}</summary><pre>{approval.canonical_arguments ?? JSON.stringify(approval.arguments, null, 2)}</pre></details>
-    {expired ? <p role="status">{copy.expired}</p> : <p>{copy.expires}: <time dateTime={approval.expires_at}>{new Date(expiry).toLocaleString(locale)}</time></p>}
+    {expired ? <p role="status">{copy.expired}</p> : <p>{copy.expires}: <time dateTime={approval.expires_at}>{new Date(expiry).toLocaleString(language)}</time></p>}
     <div className="button-row">
       <button className="secondary-button" disabled={busy} onClick={() => act('deny')}>{messages.agents.deny}</button>
       {expired ? <button className="secondary-button" disabled={busy} onClick={refresh}>{messages.common.refresh}</button> : <button className="primary-button" disabled={busy} onClick={() => { if (expiry > Date.now()) act('approve'); else setNow(Date.now()); }}>{messages.agents.approve}</button>}

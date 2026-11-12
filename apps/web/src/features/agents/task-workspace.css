@@ -79,7 +79,7 @@
     font-size: 0.875rem;
     grid-column: 1 / -1;
     padding: 0 0 .5rem;
-    border-block-end: 1px solid var(--line);
+    border-block-end: 1px solid var(--separator);
     width: fit-content;
     max-width: 100%;
   }
@@ -89,7 +89,7 @@
   .agent-management-page { display: grid; gap: 1.5rem; max-width: 72rem; width: 100%; container-type: inline-size; container-name: agent-management; }
   .agent-management-page .runtime-panel { padding: 0; border: 0; border-radius: 0; background: transparent; }
   .agent-management-page .tool-list { display: grid; grid-template-columns: minmax(0,1fr); gap: 0; max-height: none; overflow: visible; border: 0; margin-block-start: .75rem; }
-  .agent-management-page .tool-list article { padding: 1rem 0; border: 0; border-block-end: 1px solid var(--line); border-radius: 0; align-items: start; }
+  .agent-management-page .tool-list article { padding: 1rem 0; border: 0; border-block-end: 1px solid var(--separator); border-radius: 0; align-items: start; }
   .agent-management-page .tool-list strong, .agent-management-page .connector-list strong { font-size: 1rem; overflow-wrap: anywhere; }
   .agent-management-page .tool-list p { font-size: var(--type-ui); line-height: 1.6; margin-block: .25rem; max-width: 72ch; }
   .agent-management-page .tool-list small, .agent-management-page .connector-list small { font-size: .8rem; line-height: 1.5; }
@@ -105,7 +105,7 @@
   .agent-management-page .provider-grid { align-items: stretch; gap: 16px; }
   .agent-management-page .provider-card { display: flex; flex-direction: column; padding: 24px; gap: 20px; border: 1px solid var(--line); border-radius: 16px; background: transparent; }
   .agent-management-page .provider-card header p { margin: 8px 0 0; color: var(--muted); max-width: 48ch; }
-  .agent-management-page .provider-card .provider-readiness { padding-block: 16px 0; border-block-start: 1px solid var(--line); }
+  .agent-management-page .provider-card .provider-readiness { padding-block: 16px 0; border-block-start: 0; }
   .agent-management-page .provider-card .provider-readiness-label { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text); font-weight: var(--weight-medium); }
   .agent-management-page .provider-readiness-label svg { flex-shrink: 0; }
   .agent-management-page .provider-card .provider-host-note { margin: 8px 0 0; color: var(--muted); font-size: var(--type-caption); }
@@ -126,7 +126,7 @@
   }
   .activity-history-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
   .activity-history-heading h2 { font-size: 1.1rem; margin: 0; }
-  .activity-history-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; border-block-end: 1px solid var(--line); padding-inline-end: .5rem; }
+  .activity-history-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; border-block-end: 1px solid var(--separator); padding-inline-end: .5rem; }
   .activity-history-row .run-row { min-width: 0; border: 0; }
   .activity-history-row .run-row > span { min-width: 0; }
   .activity-page .run-list { max-height: 65vh; overflow-y: auto; }
@@ -142,7 +142,7 @@
   .task-surface > h2:focus { outline: none; }
   .task-inspector-toolbar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
   .task-inspector-toolbar a { text-decoration: none; }
-  .activity-diagnostics { max-width: 56rem; width: 100%; margin-inline: auto; padding-block-start: 1.5rem; border-block-start: 1px solid var(--line); }
+  .activity-diagnostics { max-width: 56rem; width: 100%; margin-inline: auto; padding-block-start: 1.5rem; border-block-start: 0; }
   .task-access p {
     margin: 0;
     line-height: 1.6;
@@ -151,7 +151,7 @@
     display: grid;
     gap: 1rem;
     padding: 1rem;
-    border: 1px solid var(--border, #8884);
+    border: 1px solid var(--line);
     border-radius: 0.75rem;
   }
   .task-access h3 {
@@ -179,7 +179,7 @@
   .task-children li { overflow-wrap: anywhere; }
   .task-artifacts li { overflow-wrap: anywhere; }
   .task-artifacts ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-  .task-artifact { display: flex; flex-wrap: wrap; gap: 12px; align-items: start; padding-block: 16px; border-block-start: 1px solid var(--line); }
+  .task-artifact { display: flex; flex-wrap: wrap; gap: 12px; align-items: start; padding-block: 16px; border-block-start: 1px solid var(--separator); }
   .task-artifact > div:first-child { flex: 1 1 16rem; min-width: 0; }
   .artifact-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.5; }
   .artifact-name-details { font-size: .875rem; margin-block-start: 8px; }
@@ -192,7 +192,7 @@
   .artifact-preview-content pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .875rem; line-height: 1.65; }
   .task-result { display: grid; gap: 12px; }
   .task-result h3, .task-steering h3 { margin: 0; }
-  .task-steering { padding-block: 20px; border-block-start: 1px solid var(--line); }
+  .task-steering { padding-block: 20px; border-block-start: 0; }
   .task-continuation-new { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 16px; padding-block: 12px; border-block-start: 0; }
   .task-continuation-new h3 { font-size: 1rem; }
   .task-continuation-new p { margin: 0; max-width: 70ch; font-size: .875rem; line-height: 1.6; color: var(--muted); }

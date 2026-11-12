@@ -13,6 +13,9 @@ spin(){ :; };spin_done(){ :; };spin_fail(){ :; }
 LEGACY_INSTALL=no
 INSTALL_DIR="$fixture_root/bin"
 mkdir -p "$INSTALL_DIR" "$fixture_root/bundle/execution-runtime" "$fixture_root/legacy"
+mkdir -p "$fixture_root/bundle/audio/piper" "$fixture_root/bundle/web/ui"
+printf 'speech payload\n' > "$fixture_root/bundle/audio/piper/piper"
+printf 'ui payload\n' > "$fixture_root/bundle/web/ui/index.html"
 for bundle in bundle legacy; do
   printf 'fixture cli\n' > "$fixture_root/$bundle/offgrid"
   printf 'fixture inference\n' > "$fixture_root/$bundle/llama-server"
@@ -25,6 +28,8 @@ printf '#!/bin/sh\nexit 0\n' > "$fixture_root/bundle/offgrid-ocr-worker"
 printf 'fixture ocr notices\n' > "$fixture_root/bundle/ocr-NOTICE.txt"
 VERSION=v0.4.20
 install_cli "$fixture_root/bundle" linux
+cmp "$fixture_root/bundle/audio/piper/piper" "$INSTALL_DIR/audio/piper/piper"
+cmp "$fixture_root/bundle/web/ui/index.html" "$INSTALL_DIR/web/ui/index.html"
 cmp "$fixture_root/bundle/offgrid-document-worker" "$INSTALL_DIR/offgrid-document-worker"
 cmp "$fixture_root/bundle/document-NOTICE.txt" "$INSTALL_DIR/document-NOTICE.txt"
 test -x "$INSTALL_DIR/offgrid-document-worker"

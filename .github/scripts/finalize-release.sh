@@ -3,6 +3,11 @@ set -euo pipefail
 
 version="${1:?release tag required}"
 repo="${2:?GitHub repository required}"
+channel="${3:-signed}"
+case "$channel" in
+  signed|unsigned-preview) ;;
+  *) echo '::error::Invalid release channel'; exit 1 ;;
+esac
 if [[ ! "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "::error::Expected a vX.Y.Z release tag, got ${version}"
   exit 1
@@ -26,6 +31,8 @@ expected=(
   "OffGrid-${package_version}-macos-x64.zip"
   "OffGrid-${package_version}-windows-x64-portable.exe"
   "OffGrid-${package_version}-windows-x64-setup.exe"
+  'trust-windows.json'
+  'trust-macos.json'
 )
 
 # gh resolves both drafts and published releases. The REST tag endpoint only
@@ -102,8 +109,25 @@ if [[ ! -s "${notes_path}" ]]; then
   exit 1
 fi
 
+publish_flags=(--prerelease=false)
+if [[ "$channel" == unsigned-preview ]]; then
+  if ! grep -Fq 'Unsigned preview' "$notes_path"; then
+    echo '::error::Unsigned preview release notes must disclose the signing status'; exit 1
+  fi
+  publish_flags=(--prerelease --latest=false --title "OffGrid ${version} - Unsigned preview")
+elif grep -Fq 'Unsigned preview' "$notes_path"; then
+  echo '::error::Unsigned preview notes cannot publish through the signed channel'; exit 1
+fi
+
+# Retain source/channel provenance after replacing the draft's temporary notes.
+notes_file=$(mktemp)
+trap 'rm -f "$notes_file"' EXIT
+cat "$notes_path" > "$notes_file"
+source_sha=$(git rev-parse HEAD)
+printf '\n<!-- offgrid-source: %s -->\n<!-- offgrid-channel: %s -->\n' "$source_sha" "$channel" >> "$notes_file"
+
 gh release upload "${version}" "${checksum_file}" --repo "${repo}" --clobber
-gh release edit "${version}" --repo "${repo}" --notes-file "${notes_path}" --draft=false
+gh release edit "${version}" --repo "${repo}" --notes-file "$notes_file" --draft=false "${publish_flags[@]}"
 published_assets="$(gh release view "${version}" --repo "${repo}" \
   --json assets --jq '.assets[].name')"
 if ! grep -Fxq "${checksum_file}" <<< "${published_assets}"; then

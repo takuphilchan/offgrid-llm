@@ -10,11 +10,11 @@ import { modelLibrary, modelProviderDetails } from '../i18n/model-library';
 import './model-select.css';
 
 export function ModelSelect({ models, value, onChange }: { models: Model[]; value: string; onChange: (value: string) => void }) {
-  const { messages: text, locale } = useI18n(), copy = modelLibrary(locale), runtime = modelProviderDetails(locale);
+  const { messages: text, locale , language} = useI18n(), copy = modelLibrary(locale), runtime = modelProviderDetails(locale);
   const [query, setQuery] = useState('');
   const root = useRef<HTMLDivElement>(null);
   const eligible = models.filter(supportsChat);
-  const matches = eligible.filter(model => `${readableModelName(model.id)} ${model.id}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
+  const matches = eligible.filter(model => `${readableModelName(model.id)} ${model.id}`.toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language)));
   const choose = (id: string) => {
     onChange(id);
     root.current?.querySelector<HTMLElement>('[popover]')?.hidePopover();
@@ -39,7 +39,7 @@ export function ModelSelect({ models, value, onChange }: { models: Model[]; valu
         {matches.map((model, index) => <button type="button" role="option" aria-selected={model.id === value} tabIndex={model.id === value || !matches.some(m => m.id === value) && index === 0 ? 0 : -1} key={model.id} onClick={() => choose(model.id)}>
           <span className="model-select-name"><strong>{readableModelName(model.id)}</strong>{model.id === value && <Icon name="check" size={16} />}</span>
           <small className="model-select-id" dir="auto" title={model.id}>{model.id}</small>
-          <small>{model.loaded ? copy.loaded : model.runtime_ready === true ? runtime.ready : model.runtime_ready === false ? `${runtime.ready}: ${runtime.no}` : copy.unchecked}{model.context_window ? ` · ${runtime.context}: ${model.context_window.toLocaleString(locale)}` : ''}</small>
+          <small>{model.loaded ? copy.loaded : model.runtime_ready === true ? runtime.ready : model.runtime_ready === false ? `${runtime.ready}: ${runtime.no}` : copy.unchecked}{model.context_window ? ` · ${runtime.context}: ${model.context_window.toLocaleString(language)}` : ''}</small>
         </button>)}
       </div>
       {!matches.length && <p role="status">{text.history.noMatches}</p>}

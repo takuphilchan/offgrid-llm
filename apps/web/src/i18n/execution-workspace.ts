@@ -1,3 +1,4 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 const en = {
@@ -8,10 +9,10 @@ const en = {
   refresh: 'Refresh hosts', read: 'Read files', edit: 'Edit files', commands: 'Project commands', local: 'Local host · commands are not sandboxed', isolated: 'Isolated Linux · commands use /workspace',
 };
 type Copy = { [K in keyof typeof en]: string };
-export const attachWorkspaceText: Record<LocaleCode,string> = {
+export const attachWorkspaceText = defineMessages<string>("i18n/execution-workspace:attachWorkspaceText", {
   en:'Use this workspace',fr:'Utiliser cet espace',de:'Diesen Arbeitsbereich verwenden',es:'Usar este espacio',ar:'استخدام مساحة العمل هذه',sw:'Tumia eneo hili la kazi',sn:'Shandisa nzvimbo iyi',nd:'Sebenzisa indawo le yokusebenza',zu:'Sebenzisa le ndawo yokusebenza',
-};
-export const executionPolicyText: Record<LocaleCode,{inherit:string;limit:string;hint:string;exit:string;incomplete:string}>={
+});
+export const executionPolicyText=defineMessages<{inherit:string;limit:string;hint:string;exit:string;incomplete:string}>("i18n/execution-workspace:executionPolicyText", {
   en:{inherit:'Use the approved folder permissions',limit:'Limit this agent',hint:'A limit cannot create access. Local host approval is still required.',exit:'Exit code',incomplete:'Output is incomplete'},
   fr:{inherit:'Hériter des limites de l’hôte',limit:'Limiter cet agent',hint:'Une limite ne crée aucun accès. L’accord local reste nécessaire.',exit:'Code de sortie',incomplete:'Sortie incomplète'},
   de:{inherit:'Grenzen des gewählten Hosts übernehmen',limit:'Diesen Agenten begrenzen',hint:'Ein Limit erteilt keinen Zugriff. Lokale Genehmigung bleibt erforderlich.',exit:'Exitcode',incomplete:'Ausgabe unvollständig'},
@@ -21,8 +22,8 @@ export const executionPolicyText: Record<LocaleCode,{inherit:string;limit:string
   sn:{inherit:'Tevedzera miganhu yemuchina wakasarudzwa',limit:'Ganhurira agent uyu',hint:'Muganhu haupi mvumo. Mvumo yemuchina ichiri kudiwa.',exit:'Kodhi yekubuda',incomplete:'Zvakabuda hazvina kukwana'},
   nd:{inherit:'Sebenzisa imikhawulo yomtshina okhethiweyo',limit:'Nciphisa i-agent le',hint:'Imikhawulo ayiphi imvumo. Imvumo yalapha isadingeka.',exit:'Ikhodi yokuphuma',incomplete:'Imiphumela ayiphelelanga'},
   zu:{inherit:'Sebenzisa imikhawulo yomshini okhethiwe',limit:'Nciphisa le-agent',hint:'Imikhawulo ayinikezi imvume. Imvume yalapha isadingeka.',exit:'Ikhodi yokuphuma',incomplete:'Imiphumela ayiphelele'},
-};
-export const executionNativeText: Record<LocaleCode,{choose:string;stop:string;access:string;preparing:string}> = {
+});
+export const executionNativeText = defineMessages<{choose:string;stop:string;access:string;preparing:string}>("i18n/execution-workspace:executionNativeText", {
   en:{choose:'Choose a local folder',stop:'Stop workspace access',access:'Folder access',preparing:'Preparing local access…'},
   fr:{choose:'Choisir un dossier local',stop:'Arrêter l’accès au dossier',access:'Accès au dossier',preparing:'Préparation de l’accès local…'},
   de:{choose:'Lokalen Ordner wählen',stop:'Ordnerzugriff beenden',access:'Ordnerzugriff',preparing:'Lokaler Zugriff wird vorbereitet…'},
@@ -32,8 +33,8 @@ export const executionNativeText: Record<LocaleCode,{choose:string;stop:string;a
   sn:{choose:'Sarudza folda yemuno',stop:'Misa mvumo yefolda',access:'Mvumo yefolda',preparing:'Kugadzirira mvumo yemuno…'},
   nd:{choose:'Khetha ifolda yalapha',stop:'Misa ukufinyelela ifolda',access:'Ukufinyelela ifolda',preparing:'Kulungiselelwa ukufinyelela kwalapha…'},
   zu:{choose:'Khetha ifolda yalapha',stop:'Misa ukufinyelela ifolda',access:'Ukufinyelela ifolda',preparing:'Kulungiselelwa ukufinyelela kwalapha…'},
-};
-export const executionWorkspaceText: Record<LocaleCode, Copy> = {
+});
+export const executionWorkspaceText = defineMessages<Copy>("i18n/execution-workspace:executionWorkspaceText", {
   en,
   fr: {label:'Espace de travail',none:'Aucun dossier hôte',help:'Sélectionnez un hôte connecté et approuvé localement. Aucun droit ni dossier du service n’est ajouté.',empty:'Aucun hôte approuvé. Lancez offgrid agent workspace start FOLDER puis actualisez.',unavailable:'Hôte sélectionné indisponible. Reconnectez-le ou choisissez un autre espace avant l’envoi.',unsupported:'Exécution native indisponible sur ce service. Aucun accès accordé.',refresh:'Actualiser les hôtes',read:'Lire les fichiers',edit:'Modifier les fichiers',commands:'Commandes du projet',local:'Hôte local · commandes non isolées',isolated:'Linux isolé · commandes dans /workspace'},
   de: {label:'Arbeitsordner',none:'Kein Hostordner',help:'Einen verbundenen, lokal genehmigten Host wählen. Dies erteilt keine Rechte und nutzt keinen Dienstordner.',empty:'Kein genehmigter Host verbunden. offgrid agent workspace start FOLDER starten, dann aktualisieren.',unavailable:'Gewählter Host nicht verfügbar. Vor dem Senden neu verbinden oder bewusst einen anderen Ordner wählen.',unsupported:'Native Ausführung auf diesem Dienst nicht verfügbar. Keine Rechte erteilt.',refresh:'Hosts aktualisieren',read:'Dateien lesen',edit:'Dateien bearbeiten',commands:'Projektbefehle',local:'Lokaler Host · Befehle nicht isoliert',isolated:'Isoliertes Linux · Befehle in /workspace'},
@@ -43,4 +44,4 @@ export const executionWorkspaceText: Record<LocaleCode, Copy> = {
   sn: {label:'Nzvimbo yebasa',none:'Hapana folda yemuchina',help:'Sarudza muchina wakabatana uye wakatenderwa pano. Izvi hazvipi mvumo kana kushandisa folda yesevhisi.',empty:'Hapana muchina wakatenderwa. Mhanyisa offgrid agent workspace start FOLDER wobva wavandudza.',unavailable:'Muchina wakasarudzwa hauwanikwi. Batanidza zvakare kana kusarudza imwe nzvimbo usati watumira.',unsupported:'Kuitisa pamuchina hakuwanikwi pasevhisi iyi. Hapana mvumo yakapiwa.',refresh:'Vandudza michina',read:'Verenga mafaira',edit:'Gadzirisa mafaira',commands:'Mirairo yeprojekiti',local:'Muchina wemuno · mirairo haina kuparadzaniswa',isolated:'Linux yakaparadzaniswa · mirairo mu /workspace'},
   nd: {label:'Indawo yomsebenzi',none:'Akulafolda yomtshina',help:'Khetha umtshina oxhunyiweyo ovunywe lapha. Lokhu akuphi imvumo kumbe kusebenzise ifolda yesevisi.',empty:'Akulamtshina ovunyweyo. Sebenzisa offgrid agent workspace start FOLDER ubusuvuselela.',unavailable:'Umtshina okhethiweyo kawutholakali. Xhuma futhi kumbe ukhethe enye indawo ungakathumeli.',unsupported:'Ukusebenza emtshineni akutholakali kule sevisi. Akulamvumo enikiweyo.',refresh:'Vuselela imitshina',read:'Bala amafayela',edit:'Lungisa amafayela',commands:'Imilayo yeprojekithi',local:'Umtshina walapha · imilayo ayihlukaniswanga',isolated:'Linux ehlukanisiweyo · imilayo ku /workspace'},
   zu: {label:'Indawo yokusebenza',none:'Ayikho ifolda yomshini',help:'Khetha umshini oxhunyiwe ovunywe lapha. Lokhu akunikezi imvume noma kusebenzise ifolda yesevisi.',empty:'Awukho umshini ovunyelwe. Sebenzisa offgrid agent workspace start FOLDER bese uvuselela.',unavailable:'Umshini okhethiwe awutholakali. Xhuma futhi noma ukhethe enye indawo ngaphambi kokuthumela.',unsupported:'Ukusebenza emshinini akutholakali kule sevisi. Ayikho imvume enikeziwe.',refresh:'Vuselela imishini',read:'Funda amafayela',edit:'Hlela amafayela',commands:'Imiyalo yephrojekthi',local:'Umshini walapha · imiyalo ayihlukanisiwe',isolated:'Linux ehlukanisiwe · imiyalo ku /workspace'},
-};
+});

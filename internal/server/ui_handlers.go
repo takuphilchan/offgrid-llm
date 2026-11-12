@@ -32,13 +32,25 @@ func (s *Server) handleWebUI(w http.ResponseWriter, r *http.Request) {
 }
 
 func resolveUIRoot() string {
+	executable, _ := os.Executable()
+	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
+		executable = resolved
+	}
+	return resolveUIRootForExecutable(executable)
+}
+
+func resolveUIRootForExecutable(executable string) string {
 	candidates := []string{}
 	if configured := strings.TrimSpace(os.Getenv("OFFGRID_UI_DIR")); configured != "" {
 		candidates = append(candidates, configured)
 	}
+	if executable != "" {
+		directory := filepath.Dir(executable)
+		candidates = append(candidates, filepath.Join(directory, "web", "ui"), filepath.Join(directory, "..", "ui"))
+	}
 	candidates = append(candidates, "apps/web/dist", "/var/lib/offgrid/web/ui")
 	for _, candidate := range candidates {
-		if _, err := os.Stat(filepath.Join(candidate, "index.html")); err == nil {
+		if info, err := os.Stat(filepath.Join(candidate, "index.html")); err == nil && info.Mode().IsRegular() {
 			return candidate
 		}
 	}

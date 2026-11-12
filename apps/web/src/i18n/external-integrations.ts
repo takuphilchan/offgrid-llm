@@ -1,15 +1,16 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
-export const externalSetupLabel: Record<LocaleCode, string> = {
+export const externalSetupLabel = defineMessages<string>("i18n/external-integrations:externalSetupLabel", {
   en: 'Setup instructions', fr: 'Instructions de configuration',
   es: 'Instrucciones de configuración', de: 'Einrichtungsanleitung',
   ar: 'تعليمات الإعداد', sw: 'Maelekezo ya usanidi',
   sn: 'Mirayiridzo yekugadzira', nd: 'Imiyalelo yokulungisa', zu: 'Imiyalelo yokusetha',
-};
+});
 
 // Service compatibility is not a host installation or workflow qualification.
 // Independent speaker review remains part of locale qualification.
-export const externalIntegrations: Record<LocaleCode, { ready: string; blocked: string; host: string; workflow: string; manual: string }> = {
+export const externalIntegrations = defineMessages<{ ready: string; blocked: string; host: string; workflow: string; manual: string }>("i18n/external-integrations:externalIntegrations", {
   en: { ready: 'Model compatible', blocked: 'Check requirements', host: 'Setup on this computer has not been checked.', workflow: 'Tool workflow: unverified', manual: 'Manual configuration reference' },
   fr: { ready: 'Modèle compatible', blocked: 'Vérifier les prérequis', host: 'La configuration sur cet ordinateur n’a pas été vérifiée.', workflow: 'Parcours avec outils : non vérifié', manual: 'Référence de configuration manuelle' },
   es: { ready: 'Modelo compatible', blocked: 'Revisar requisitos', host: 'No se ha comprobado la configuración en este equipo.', workflow: 'Flujo con herramientas: sin verificar', manual: 'Referencia de configuración manual' },
@@ -19,4 +20,4 @@ export const externalIntegrations: Record<LocaleCode, { ready: string; blocked: 
   sn: { ready: 'Modhi inoenderana', blocked: 'Ongorora zvinodiwa', host: 'Kugadzirirwa kwekombiyuta iyi hakuna kuongororwa.', workflow: 'Kushanda nematurusi: hakuna kusimbiswa', manual: 'Gwaro rekugadzirisa nemaoko' },
   nd: { ready: 'Imodeli iyahambelana', blocked: 'Hlola izidingo', host: 'Ukulungiswa kwalikhompyutha akukahlolwa.', workflow: 'Umsebenzi wamathuluzi: awukaqinisekiswa', manual: 'Umhlahlandlela wokulungisa ngesandla' },
   zu: { ready: 'Imodeli iyahambelana', blocked: 'Hlola izidingo', host: 'Ukulungiswa kule khompyutha akukahlolwa.', workflow: 'Umsebenzi wamathuluzi: awukaqinisekiswa', manual: 'Umhlahlandlela wokulungisa ngesandla' },
-};
+});

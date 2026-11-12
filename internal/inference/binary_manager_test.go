@@ -41,6 +41,26 @@ func TestBinaryManager_GetLlamaServer_Local(t *testing.T) {
 	}
 }
 
+func TestBundledInferenceDiscoveryWithoutPATH(t *testing.T) {
+	root := t.TempDir()
+	manager := &BinaryManager{version: "b10516", binDir: t.TempDir(), serviceExecutable: filepath.Join(root, "offgrid.exe"), hasNVIDIA: true}
+	path := filepath.Join(root, llamaServerBinaryName())
+	if err := os.WriteFile(path, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", "")
+	if manager.GetInstalledPath() != path || !manager.IsInstalled() {
+		t.Fatal("bundled runtime not discovered")
+	}
+	if got := manager.installedGPURuntime(func(string) bool { return true }, func(candidate, kind string) bool { return candidate == path && kind == "nvidia" }); got != path {
+		t.Fatalf("bundled GPU candidate missing: %q", got)
+	}
+	manager.serviceExecutable = filepath.Join(root, "another", "offgrid.exe")
+	if manager.IsInstalled() || manager.GetInstalledPath() != "" {
+		t.Fatal("cross-install runtime discovered")
+	}
+}
+
 func TestBinaryManagerRejectsOldLocalBinary(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "llama-server")
 	if err := os.WriteFile(path, []byte("old binary"), 0o755); err != nil {

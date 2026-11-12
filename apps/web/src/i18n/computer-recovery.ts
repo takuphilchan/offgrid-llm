@@ -1,7 +1,8 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
 
-export const computerRecovery: Record<LocaleCode, { missing: string; unpaired: string; setup: string }> = {
+export const computerRecovery = defineMessages<{ missing: string; unpaired: string; setup: string }>("i18n/computer-recovery:computerRecovery", {
  en: { missing: 'The selected task is no longer available in this workspace. Your draft is preserved.', unpaired: 'Browser not paired', setup: 'Run npm.cmd start in the computer folder. Press Enter for the local service address. Choose demo for an isolated local test, or enter a public HTTPS origin. Complete browser checks before generating a pairing code.' },
  fr: { missing: 'La tâche sélectionnée n’est plus disponible dans cet espace. Votre brouillon est conservé.', unpaired: 'Navigateur non associé', setup: 'Lancez npm.cmd start dans le dossier computer. Appuyez sur Entrée pour le service local. Choisissez demo pour un test local isolé, ou une origine HTTPS publique. Vérifiez le navigateur avant de générer le code.' },
  de: { missing: 'Die ausgewählte Aufgabe ist in diesem Arbeitsbereich nicht mehr verfügbar. Ihr Entwurf bleibt erhalten.', unpaired: 'Browser nicht verbunden', setup: 'Starten Sie npm.cmd start im Ordner computer. Bestätigen Sie die lokale Dienstadresse mit Enter. Wählen Sie demo für einen isolierten lokalen Test oder eine öffentliche HTTPS-Adresse. Prüfen Sie den Browser vor dem Erstellen des Kopplungscodes.' },
@@ -11,4 +12,4 @@ export const computerRecovery: Record<LocaleCode, { missing: string; unpaired: s
  sn: { missing: 'Basa rakasarudzwa harichawanikwi munzvimbo ino. Gwaro rako rekutanga rakachengetwa.', unpaired: 'Bhurawuza harina kubatanidzwa', setup: 'Mhanyisa npm.cmd start mufolda computer. Dzvanya Enter pakero yesevhisi. Sarudza demo kuti uedze pakombiyuta kana saiti yeHTTPS. Tarisa bhurawuza usati wagadzira kodhi.' },
  nd: { missing: 'Umsebenzi okhethiweyo awusatholakali lapha. Okubhalileyo kugciniwe.', unpaired: 'Ibhrawuza ayixhunyiwe', setup: 'Qalisa npm.cmd start kufolda computer. Cindezela Enter kusevisi yalapha. Khetha demo ukuhlola kumbe iwebhusayithi yeHTTPS. Hlola ibhrawuza ungakakhi ikhodi.' },
  zu: { missing: 'Umsebenzi okhethiwe awusatholakali lapha. Okubhalile kugciniwe.', unpaired: 'Isiphequluli asixhunyiwe', setup: 'Qalisa npm.cmd start kufolda computer. Cindezela Enter kusevisi yasendaweni. Khetha demo ukuhlola noma isayithi leHTTPS. Hlola isiphequluli ngaphambi kokwenza ikhodi.' }
-};
+});

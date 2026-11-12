@@ -158,7 +158,7 @@ func runConversationServiceWithAccess(ctx context.Context, client *serviceclient
 			return err
 		}
 		defer response.Body.Close()
-		return renderStream(stdout, stdout, response.Body)
+		return followConversationStream(ctx, client, result.Job.RunID, stdout, stdout, response.Body, renderStream)
 	}
 	return nil
 }

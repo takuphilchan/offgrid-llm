@@ -10,6 +10,7 @@ import (
 // interrupted generations retain their conservative charge on restart.
 type Checkpoint struct {
 	SkillAnswerRepairs         int                                `json:"skill_answer_repairs,omitempty"`
+	DelegationAnswerRepairs    int                                `json:"delegation_answer_repairs,omitempty"`
 	WorkspaceCompletionRepairs int                                `json:"workspace_completion_repairs,omitempty"`
 	ExecutionIntent            *ExecutionIntent                   `json:"execution_intent,omitempty"`
 	ExecutionReceipt           *ExecutionReceipt                  `json:"execution_receipt,omitempty"`

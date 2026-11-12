@@ -3,12 +3,14 @@
 const path=require('node:path');
 const {verifyPack}=require('../computer/pack.cjs');
 module.exports=async context=>{
- require('./service-pack.cjs').verifyBundledServices(context.packager.getResourcesDir(context.appOutDir),context.electronPlatformName,require('./package.json').version);
+ const version=require('./build-version.cjs').buildVersion(context);
+ require('./presentation-pack.cjs').verify(context.packager.getResourcesDir(context.appOutDir));
+ require('./service-pack.cjs').verifyBundledServices(context.packager.getResourcesDir(context.appOutDir),context.electronPlatformName,version);
  await require('./speech-pack.cjs').verify(path.join(context.packager.getResourcesDir(context.appOutDir),'speech-runtime'),context.electronPlatformName,require('builder-util').Arch[context.arch]);
  await require('./document-pack.cjs').verify(path.join(context.packager.getResourcesDir(context.appOutDir),'bin'),context.electronPlatformName,require('builder-util').Arch[context.arch]);
- await require('./terminal-pack.cjs').verify(path.join(context.packager.getResourcesDir(context.appOutDir),'terminal-runtime'),require('./package.json').version,context.electronPlatformName,require('builder-util').Arch[context.arch]);
+ await require('./terminal-pack.cjs').verify(path.join(context.packager.getResourcesDir(context.appOutDir),'terminal-runtime'),version,context.electronPlatformName,require('builder-util').Arch[context.arch]);
  const executionRoot=path.join(context.packager.getResourcesDir(context.appOutDir),'execution-runtime');
- await require('./execution-pack.cjs').verify(executionRoot,require('./package.json').version,context.electronPlatformName,require('builder-util').Arch[context.arch]);
+ await require('./execution-pack.cjs').verify(executionRoot,version,context.electronPlatformName,require('builder-util').Arch[context.arch]);
  require('./compatibility.cjs').verifyUI(path.join(context.packager.getResourcesDir(context.appOutDir),'ui'));
  const root=path.join(context.packager.getResourcesDir(context.appOutDir),'computer');
  const arch=require('builder-util').Arch[context.arch];

@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
-const labels: Record<LocaleCode, readonly string[]> = {
+const labels = defineMessages<readonly string[]>("i18n/document-reader:labels", {
  en: ['Document', 'Open document', 'Close document', 'Search extracted text', 'Previous page', 'Next page', 'Zoom', 'Original page', 'Extracted text', 'Some image content has not been read. Available text can be inspected here.', 'Use available text only', 'Preparing document', 'Structured text preview; original layout is not preserved.', 'No matching text', 'Document attached to this request'],
  fr: ['Document', 'Ouvrir le document', 'Fermer le document', 'Rechercher dans le texte extrait', 'Page précédente', 'Page suivante', 'Zoom', 'Page originale', 'Texte extrait', 'Certains contenus visuels ne sont pas lus. Le texte disponible reste consultable.', 'Utiliser le texte disponible uniquement', 'Préparation du document', 'Aperçu du texte structuré ; mise en page originale non conservée.', 'Aucun texte correspondant', 'Document joint à cette demande'],
  de: ['Dokument', 'Dokument öffnen', 'Dokument schließen', 'Extrahierten Text durchsuchen', 'Vorherige Seite', 'Nächste Seite', 'Zoom', 'Originalseite', 'Extrahierter Text', 'Einige Bildinhalte wurden nicht gelesen. Verfügbarer Text kann hier geprüft werden.', 'Nur verfügbaren Text verwenden', 'Dokument wird vorbereitet', 'Strukturierte Textvorschau; das Originallayout bleibt nicht erhalten.', 'Kein passender Text', 'Dokument ist dieser Anfrage beigefügt'],
@@ -10,7 +11,7 @@ const labels: Record<LocaleCode, readonly string[]> = {
  sn: ['Gwaro', 'Vhura gwaro', 'Vhara gwaro', 'Tsvaga mashoko akabudiswa', 'Peji yapfuura', 'Peji inotevera', 'Kukudza', 'Peji yekutanga', 'Mashoko akabudiswa', 'Zvimwe zviri mumifananidzo hazvina kuverengwa. Mashoko aripo anogona kuongororwa.', 'Shandisa mashoko aripo chete', 'Kugadzirira gwaro', 'Mashoko akarongwa; marongerwo ekutanga haana kuchengetwa.', 'Hapana mashoko anoenderana', 'Gwaro rakabatanidzwa pachikumbiro ichi'],
  nd: ['Umbhalo', 'Vula umbhalo', 'Vala umbhalo', 'Dinga umbhalo okhutshiweyo', 'Ikhasi elidlulileyo', 'Ikhasi elilandelayo', 'Khulisa', 'Ikhasi lokuqala', 'Umbhalo okhutshiweyo', 'Okunye okusemifanekisweni akubalwanga. Umbhalo okhona ungahlolwa.', 'Sebenzisa umbhalo okhona kuphela', 'Kulungiswa umbhalo', 'Umbhalo ohleliweyo; ukuhleleka kokuqala akugcinwanga.', 'Akulambhalo ohambelanayo', 'Umbhalo unamathiselwe kulesisicelo'],
  zu: ['Idokhumenti', 'Vula idokhumenti', 'Vala idokhumenti', 'Sesha umbhalo okhishiwe', 'Ikhasi elidlule', 'Ikhasi elilandelayo', 'Khulisa', 'Ikhasi lokuqala', 'Umbhalo okhishiwe', 'Okunye okuqukethwe yizithombe akufundiwe. Ungahlola umbhalo otholakalayo.', 'Sebenzisa umbhalo otholakalayo kuphela', 'Kulungiswa idokhumenti', 'Ukubuka umbhalo ohleliwe; ukwakheka kokuqala akugcinwanga.', 'Awukho umbhalo ofanayo', 'Idokhumenti inamathiselwe kulesi sicelo'],
-};
+});
 export const documentReader = (locale: LocaleCode) => {
  const [document, open, close, search, previous, next, zoom, original, extracted, partial, textOnly, preparing, structured, noMatch, attached] = labels[locale];
  return { document, open, close, search, previous, next, zoom, original, extracted, partial, textOnly, preparing, structured, noMatch, attached };

@@ -212,6 +212,7 @@ jobs:
           node scripts/release/test-desktop-branding.mjs
           node scripts/release/test-release-context.mjs
           node scripts/release/test-release-ci.mjs
+          node --test scripts/release/verify-desktop-trust.test.mjs scripts/build/desktop-preview.test.mjs
           node scripts/release/test-release-containers.mjs
 
       - name: Check maintained documentation
@@ -247,6 +248,7 @@ jobs:
         run: |
           bash scripts/maintenance/test-installer-entrypoints.sh
           bash scripts/maintenance/test-executor-install.sh
+          node --test scripts/maintenance/desktop-installers.test.mjs
 
       - name: Test Go packages
         run: go test ./...
@@ -259,11 +261,18 @@ jobs:
         run: |
           npm ci
           npm run api:check
+          npm run i18n:check
+          npm run i18n:audit
+          npm run i18n:complete
+          npm run i18n:consistency
           npm run check
           npm run build
 
       - name: Test first-party OpenClaw provider controls
         run: node --test scripts/test/test-openclaw-provider.mjs scripts/test/test-verification-hooks.mjs
+
+      - name: Test translation audit and consistency guards
+        run: node --test scripts/quality/*.test.mjs
 
       - name: Retrieve verified OCR build assets
         uses: actions/download-artifact@v7
@@ -317,6 +326,11 @@ jobs:
           node scripts/test/test-web-workspace.mjs build/linux/offgrid-model-fixtures --model-fixtures model-acquisition.spec.ts --workers=1
           node scripts/test/test-web-workspace.mjs build/linux/offgrid-model-fixtures --model-fixtures model-restart.spec.ts --workers=1
 
+      - name: Exercise isolated agent input and streaming ownership
+        run: |
+          go test -c -o build/agent-session-input.test ./cmd/offgrid
+          python3 scripts/test/test-agent-session-pty.py build/agent-session-input.test
+
       - name: Preserve failed browser diagnostics
         if: failure() && steps.browser-tests.outcome == 'failure'
         uses: actions/upload-artifact@v7
@@ -340,6 +354,9 @@ jobs:
           node --check preload.js
           npm test
           npx electron-builder --dir --linux
+
+      - name: Check terminal display preferences and search
+        run: node scripts/test/test-terminal-display.mjs
 
       - name: Test real Linux AT-SPI controls in an isolated desktop
         env:
@@ -406,7 +423,21 @@ jobs:
         run: go test -p 1 -v -timeout 90s ./internal/computer ./cmd/offgrid-computer -run TestNative -count=1
       - name: Test desktop compatibility and IPC trust policy
         working-directory: apps/desktop
-        run: npm test
+        run: |
+          # Translation contract tests parse the shared renderer with TypeScript.
+          npm ci --prefix ../web
+          # Install native terminal dependencies before the Windows shell check.
+          npm ci --prefix ../computer --ignore-scripts
+          npm ci
+          npm test
+
+      - name: Test isolated PowerShell command context
+        if: runner.os == 'Windows'
+        run: node scripts/test/test-terminal-command-windows.cjs --isolated-native-test
+
+      - name: Test alternative installers with disposable files
+        if: runner.os == 'Windows'
+        run: node --test scripts/maintenance/desktop-installers.test.mjs
 
       - name: Retrieve verified OCR build assets
         uses: actions/download-artifact@v7
@@ -421,7 +452,6 @@ jobs:
         shell: bash
         run: |
           cd apps/web
-          npm ci
           npm run build
           cd ../..
           version=$(node -p "require('./apps/desktop/package.json').version")
@@ -442,8 +472,6 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
           cd apps/desktop
-          npm ci --prefix ../computer --ignore-scripts
-          npm ci
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             npx electron-builder --dir --win --x64 --publish never
             node ../../scripts/test/test-desktop-startup.mjs 'dist/win-unpacked/OffGrid LLM Desktop.exe'

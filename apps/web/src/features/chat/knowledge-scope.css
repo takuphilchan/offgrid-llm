@@ -1,11 +1,11 @@
 @layer components {
   .knowledge-selection, .composer-source-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-block: 12px; }
-  .composer-source-scope { border-block-start: 1px solid var(--line); font-size: var(--type-caption); }
+  .composer-source-scope { border-block-start: 0; font-size: var(--type-caption); }
   .composer-source-scope > span { flex: 1; min-width: 0; overflow-wrap: anywhere; max-height: 6rem; overflow: auto; }
   .composer-source-scope > button { flex: 0 0 auto; }
   .knowledge-source-select { display: inline-flex; gap: 8px; align-items: center; min-height: 32px; cursor: pointer; }
   .knowledge-source-select input { width: 16px; height: 16px; }
-  .knowledge-passages { margin-block: 12px; border-block-start: 1px solid var(--line); padding-block-start: 12px; }
+  .knowledge-passages { margin-block: 12px; border-block-start: 0; padding-block-start: 12px; }
   .knowledge-passages summary { cursor: pointer; font-weight: 500; }
   .knowledge-passages p, .knowledge-passages small { color: var(--muted); font-size: var(--type-caption); }
   .knowledge-passages section { margin-block: 16px; }

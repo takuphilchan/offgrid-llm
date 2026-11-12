@@ -46,7 +46,7 @@ export function OfflineModelImport({onRefresh}: {onRefresh:()=>Promise<void>}) {
    setInvalid(!valid); setFile(valid?candidate:undefined); setState({phase:'idle'});
   }}/>
   {invalid&&<p role="alert">{copy.invalid}</p>}
-  {file&&state.phase==='idle'&&<div className="model-actions"><span>{formatBytes(file.size)}</span><button type="button" className="primary-button" onClick={()=>void start()}>{copy.submit}</button></div>}
+  {file&&state.phase==='idle'&&<div className="model-actions"><span>{formatBytes(file.size, locale)}</span><button type="button" className="primary-button" onClick={()=>void start()}>{copy.submit}</button></div>}
   {state.phase==='rejected'&&<p role="alert">{state.error}</p>}
   {state.phase!=='idle'&&state.phase!=='rejected'&&<p role="status">{state.phase==='uploading'&&<span className="offline-import-spinner" aria-hidden="true"/>}{state.phase==='uploading'?copy.busy:state.phase==='done'?copy.done:copy.uncertain}{state.name&&<> {state.name}</>}</p>}
   {state.phase==='uploading'&&<button type="button" className="text-button" onClick={()=>{active.current?.abort();active.current=null;setState({phase:'uncertain',name:file?.name});}}>{messages.models.cancel}</button>}

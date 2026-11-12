@@ -4,6 +4,18 @@ set -euo pipefail
 event_name="${1:?GitHub event name required}"
 ref="${2:?GitHub ref required}"
 requested_version="${3:-}"
+unsigned_preview="${4:-false}"
+channel=signed
+case "$unsigned_preview" in
+  false) ;;
+  true)
+    if [[ "$event_name" != workflow_dispatch ]]; then
+      echo '::error::Unsigned previews require an explicit manual dispatch'; exit 1
+    fi
+    channel=unsigned-preview
+    ;;
+  *) echo '::error::Invalid unsigned preview selection'; exit 1 ;;
+esac
 
 case "${event_name}:${ref}" in
   workflow_dispatch:*)
@@ -32,4 +44,5 @@ output="${GITHUB_OUTPUT:-/dev/stdout}"
   # Builds always use the immutable tag. A repair branch supplies only the
   # current workflow definition and must never change packaged source code.
   echo "source_ref=${version}"
+  echo "channel=${channel}"
 } >> "${output}"

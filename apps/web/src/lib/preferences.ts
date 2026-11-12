@@ -8,10 +8,12 @@ export function readPreference(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
 }
 
-export function writePreference(key: string, value: string | null): void {
+export function writePreference(key: string, value: string | null): boolean {
   try {
     if (value === null) localStorage.removeItem(key);
     else localStorage.setItem(key, value);
     volatile.delete(key);
-  } catch { volatile.set(key, value); }
+    window.dispatchEvent(new CustomEvent('offgrid-preference-save', {detail:{key,saved:true}}));
+    return true;
+  } catch { volatile.set(key, value); window.dispatchEvent(new CustomEvent('offgrid-preference-save', {detail:{key,saved:false}})); return false; }
 }

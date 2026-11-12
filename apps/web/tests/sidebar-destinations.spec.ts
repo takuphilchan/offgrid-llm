@@ -11,7 +11,7 @@ for (const collapsed of [false, true]) test(`one Chat destination on management 
     const sidebar = page.locator('#workspace-sidebar');
     await expect(sidebar.getByRole('link', { name: 'Chat', exact: true })).toHaveCount(1);
     await expect(sidebar.getByRole('button', { name: 'Chat', exact: true })).toHaveCount(0);
-    await expect(sidebar.locator('.brand img')).toBeVisible();
+    await expect(sidebar.locator('.brand svg.brand-symbol')).toBeVisible();
     await sidebar.getByRole('link', { name: 'Chat', exact: true }).click();
     await expect(page.locator('.composer textarea')).toBeVisible();
     await expect(sidebar.locator('.sidebar-collapse')).toBeVisible();

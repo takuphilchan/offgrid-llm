@@ -1,3 +1,5 @@
+import {openSettings} from './helpers/workspace-actions';
+import {languageRegistry} from '../src/i18n/language';
 import { expect, test, type Page } from '@playwright/test';
 
 async function fixture(page: Page, locale = 'en', theme = 'dark') {
@@ -42,8 +44,8 @@ for (const theme of ['dark', 'light'] as const) {
     await fixture(page, 'en', theme);
     for (const route of ['chat', 'agents', 'settings']) {
       await page.goto(`/ui/#/${route}`);
-      await page.locator('.workspace-options > button').click();
-      await expect(page.locator('.locale-picker select')).toBeVisible();
+      await openSettings(page);
+      await expect(page.locator('#settings-language')).toBeVisible();
       const options = await page.locator('select option:not(:disabled)').evaluateAll(elements => elements.map(element => {
         const style = getComputedStyle(element);
         return { color: style.color, background: style.backgroundColor, scheme: style.colorScheme };
@@ -55,10 +57,10 @@ for (const theme of ['dark', 'light'] as const) {
         expect(option.scheme).toBe(theme);
       }
     }
-    const language = page.locator('.locale-picker select');
+    const language = page.locator('#settings-language');
     await language.selectOption('ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    await expect(language.locator('option')).toHaveCount(9);
+    await expect(language.locator('option')).toHaveCount(Object.keys(languageRegistry).length);
     await language.selectOption('en');
     await language.focus();
     await language.press('ArrowDown');
@@ -72,8 +74,8 @@ test('native select options respect forced colors instead of locking the applica
   await fixture(page);
   await page.emulateMedia({ forcedColors: 'active', colorScheme: 'light' });
   await page.goto('/ui/#/chat');
-  const language = page.locator('.locale-picker select');
-  await page.locator('.workspace-options > button').click();
+  const language = page.locator('#settings-language');
+  await openSettings(page);
   await expect(language).toBeVisible();
   for (const element of [language, language.locator('option').first()]) {
     await expect(element).toHaveCSS('forced-color-adjust', 'auto');

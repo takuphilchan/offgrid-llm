@@ -1,6 +1,7 @@
+import { defineMessages } from './catalog';
 import type { LocaleCode } from './index';
 
-export const presentation = {
+export const presentation = defineMessages<{ unknown: string; details: string; filterModels: string }>("i18n/presentation:inline1", {
   en: { unknown: 'Status unavailable', details: 'Technical details', filterModels: 'Filter suggested models' },
   de: { unknown: 'Status nicht verfügbar', details: 'Technische Details', filterModels: 'Modellvorschläge filtern' },
   fr: { unknown: 'État indisponible', details: 'Détails techniques', filterModels: 'Filtrer les modèles suggérés' },
@@ -10,4 +11,4 @@ export const presentation = {
   sn: { unknown: 'Mamiriro haawanikwi', details: 'Ruzivo rwehunyanzvi', filterModels: 'Sefa mamodhi akakurudzirwa' },
   nd: { unknown: 'Isimo asitholakali', details: 'Imininingwane yobuchwepheshe', filterModels: 'Hlunga amamodeli anconyiweyo' },
   zu: { unknown: 'Isimo asitholakali', details: 'Imininingwane yobuchwepheshe', filterModels: 'Hlunga amamodeli anconyiwe' }
-} satisfies Record<LocaleCode, { unknown: string; details: string; filterModels: string }>;
+});

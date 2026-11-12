@@ -11,7 +11,7 @@ export function ModelChoice({ label, value, options, placeholder, missing, summa
   label: string; value: string; options: ModelChoiceOption[]; placeholder: string; missing?: string;
   summary?: string; disabled?: boolean; defaultOpen?: boolean; onChange: (id: string) => void;
 }) {
-  const id = useId(), { locale, messages } = useI18n(), copy = modelChoiceText[locale];
+  const id = useId(), { locale, language, messages } = useI18n(), copy = modelChoiceText[locale];
   const [open, setOpen] = useState(defaultOpen), [query, setQuery] = useState('');
   const trigger = useRef<HTMLButtonElement>(null), root = useRef<HTMLDivElement>(null);
   const returnFocus = useRef(false);
@@ -23,7 +23,7 @@ export function ModelChoice({ label, value, options, placeholder, missing, summa
     if (document.activeElement === document.body || root.current?.contains(document.activeElement)) trigger.current?.focus();
   }, [disabled, open]);
   const selected = options.find(option => option.id === value);
-  const matches = options.filter(option => `${option.name} ${option.id} ${option.details ?? ''}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
+  const matches = options.filter(option => `${option.name} ${option.id} ${option.details ?? ''}`.toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language)));
   const choose = (option: ModelChoiceOption) => {
     if (disabled || option.disabled) return;
     returnFocus.current = true; onChange(option.id); setOpen(false);
@@ -52,7 +52,7 @@ export function ModelChoice({ label, value, options, placeholder, missing, summa
           <span><strong>{option.name}</strong>{option.id && <code dir="auto">{option.id}</code>}{option.details && <small>{option.details}</small>}</span>
         </label>)}
       </div>
-      {!matches.length && <p role="status">{messages.history.noMatches}</p>}
+      {!matches.length && <p role="status">{copy.empty}</p>}
     </div>}
   </div>;
 }

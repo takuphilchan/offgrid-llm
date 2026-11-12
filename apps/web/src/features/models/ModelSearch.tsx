@@ -81,7 +81,7 @@ export function ModelSearch({ category, models, progress, busy, download, cancel
         {repo === result.id && !filesLoading && <div className="model-search-files">
           {!files.some(file => file.supported) ? <p role="status">{copy.noFiles}</p> : <>
             {files.filter(file => file.supported).length > 1 && <ModelChoice defaultOpen label={copy.file} placeholder={copy.noFiles} value={selected} disabled={busy} onChange={setSelected}
-              options={files.map(file => ({ id: file.id, name: file.file, disabled: !file.supported, details: [file.size_bytes > 0 ? formatBytes(file.size_bytes) : copy.unknownSize, file.quant, !file.supported ? copy.unsupported : ''].filter(Boolean).join(' · ') }))} />}
+              options={files.map(file => ({ id: file.id, name: file.file, disabled: !file.supported, details: [file.size_bytes > 0 ? formatBytes(file.size_bytes, locale) : copy.unknownSize, file.quant, !file.supported ? copy.unsupported : ''].filter(Boolean).join(' · ') }))} />}
             {choice && <LegacyDownloadReview repository={repo} file={choice.file} bytes={choice.size_bytes} bundles={bundles} />}
             {current && current.status !== 'complete' && <ModelDownloadProgress download={current} />}
             <div className="catalog-actions">{installed && !bundles ? <span className="installed-status" role="status">{text.models.installed}</span> : current && isActiveDownload(current)

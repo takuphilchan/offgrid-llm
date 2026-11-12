@@ -1,4 +1,9 @@
+import { personalization } from './i18n/personalization';
+import { RuntimePreparation } from './features/models/RuntimePreparation';
+import { readOnboarding, saveOnboarding } from './features/models/onboarding-state';
+import { readAppearance } from './appearance';
 import { refreshWorkspace } from './lib/workspace-refresh';
+import { TerminalContextProvider } from './lib/terminal-context';
 import { chatAvailable, initialChatModel } from './api/model-capabilities';
 import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react';
 import { APIError, api, setAgentReplayScope, type Model, type PublicUser } from './api/client';
@@ -44,7 +49,7 @@ class PageBoundary extends Component<{ children: ReactNode; message: string; ret
 }
 
 export function App() {
-  const { messages: text, locale } = useI18n();
+  const { messages: text, locale, language } = useI18n();
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationWasOpen = useRef(false);
   navigationWasOpen.current = navigationOpen;
@@ -65,9 +70,11 @@ export function App() {
     return () => media.removeEventListener('change', changed);
   }, []);
   const theme = useTheme();
+  const [appearance, setAppearance] = useState(readAppearance);
+  useEffect(() => { const changed = () => setAppearance(readAppearance()); window.addEventListener('offgrid-appearance', changed); return () => window.removeEventListener('offgrid-appearance', changed); }, []);
   useEffect(() => {
-    if (window.electron?.setPresentation) void window.electron.setPresentation({ locale, theme: theme.choice }).catch(() => console.warn('Desktop appearance preferences could not be saved.'));
-  }, [locale, theme.choice]);
+    if (window.electron?.setPresentation) void window.electron.setPresentation({ locale:language, theme: theme.choice, appearance }).then(() => window.dispatchEvent(new CustomEvent('offgrid-preference-save',{detail:{key:'desktop-presentation',saved:true}}))).catch(() => window.dispatchEvent(new CustomEvent('offgrid-preference-save',{detail:{key:'desktop-presentation',saved:false}})));
+  }, [language, theme.choice, appearance]);
   const [page, setPage] = useState<Page>(pageFromLocation);
   const [health, setHealth] = useState<Health>('checking');
   const [models, setModels] = useState<Model[]>([]);
@@ -85,8 +92,17 @@ export function App() {
   const [workSummary, setWorkSummary] = useState(false);
   const [workSearch, setWorkSearch] = useState(false);
   const [offlineImport, setOfflineImport] = useState(false);
+  const actor = authUser?.id ?? (authRequired && guest ? 'guest' : 'local');
+  const onboardingIdentity = workspaceID ? JSON.stringify([actor, workspaceID]) : '';
+  const activeOnboardingIdentity = useRef(onboardingIdentity);
+  activeOnboardingIdentity.current = onboardingIdentity;
   const [onboardingPending, setOnboardingPending] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true');
   const [showOnboarding, setShowOnboarding] = useState(() => readPreference('offgrid.onboarding.complete') !== 'true' && readPreference('offgrid.onboarding.stage') !== 'working');
+  useEffect(() => {
+    if (!onboardingIdentity) return;
+    const state = readOnboarding(onboardingIdentity);
+    setOnboardingPending(state.pending); setShowOnboarding(state.visible);
+  }, [onboardingIdentity]);
   const [showCommands, setShowCommands] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -184,11 +200,11 @@ export function App() {
   }, [showOnboarding, showHelp]);
 
   const finishOnboarding = useCallback(() => {
-    writePreference('offgrid.onboarding.complete', 'true');
-    writePreference('offgrid.onboarding.stage', null);
+    if (activeOnboardingIdentity.current !== onboardingIdentity) return;
+    saveOnboarding(onboardingIdentity, 'complete');
     setOnboardingPending(false);
     setShowOnboarding(false);
-  }, []);
+  }, [onboardingIdentity]);
 
   const refreshCurrentWorkspace = async () => {
     if (refreshLock.current) return;
@@ -200,7 +216,7 @@ export function App() {
   };
 
   const continueSetup = (target: 'chat' | 'models' | 'models/discover' | 'models/import') => {
-    if (onboardingPending) writePreference('offgrid.onboarding.stage', 'working');
+    if (onboardingPending) saveOnboarding(onboardingIdentity, 'working');
     setShowOnboarding(false);
     window.location.hash = `#/${target}`;
   };
@@ -208,6 +224,9 @@ export function App() {
   const chatReady = chatModels.some(item => item.id === model);
   const suggestedModel = !chatReady && chatModels.length ? initialChatModel(chatModels) : '';
   const commandActions: CommandAction[] = [
+    {id:'settings-appearance',label:personalization[locale][0],group:text.nav.settings,icon:'settings',run:()=>{location.hash='#/settings/appearance';}},
+    {id:'settings-language',label:text.common.language,group:text.nav.settings,icon:'settings',run:()=>{location.hash='#/settings/language';}},
+    {id:'settings-text-size',label:personalization[locale][3],group:text.nav.settings,icon:'settings',run:()=>{location.hash='#/settings/text-size';}},
     ...navigationGroups.flatMap(group => group.items.map(item => ({ id: `page-${item}`, label: text.nav[item], group: text.shell[group.label], icon: item, run: () => { window.location.hash = `#/${item}`; } }))),
     { id:'help',label:workspaceHelp[locale].help,group:text.shell.system,icon:'help',run:()=>setShowHelp(true) },
     { id: 'theme-system', label: text.shell.systemTheme, group: text.shell.appearance, icon: 'settings', keywords: text.shell.theme, run: () => theme.setChoice('system') },
@@ -228,10 +247,9 @@ export function App() {
   };
 
   const admin = !authRequired || authUser?.role === 'admin';
-  const actor = authUser?.id ?? (authRequired && guest ? 'guest' : 'local');
   const workspaceScope = JSON.stringify([actor, workspaceID, admin, authUser?.role]);
-  return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><ActiveWorkProvider taskFirst={taskFirst} compact={workSummary}><WorkSearchNavigation><SidebarContext.Provider value={{ target: historyTarget, actionTarget, close: closeNavigation }}><div className={`app-shell${collapsed && !narrow ? ' sidebar-collapsed' : ''}`}>
-    <WorkspaceNavigation page={page} health={health} open={navigationOpen} narrow={narrow} collapsed={collapsed && !narrow} onToggle={toggleSidebar} onClose={closeNavigation} historyRef={setHistoryTarget} actionRef={setActionTarget} footer={<WorkspaceOptions health={health} refreshing={refreshing} onRefresh={() => void refreshCurrentWorkspace()} theme={theme.choice} onThemeChange={theme.setChoice} username={authUser?.username} onLogout={() => void logout()} />} />
+  return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><TerminalContextProvider><ActiveWorkProvider taskFirst={taskFirst} compact={workSummary}><WorkSearchNavigation><SidebarContext.Provider value={{ target: historyTarget, actionTarget, close: closeNavigation }}><div className={`app-shell${collapsed && !narrow ? ' sidebar-collapsed' : ''}`}>
+    <WorkspaceNavigation page={page} health={health} open={navigationOpen} narrow={narrow} collapsed={collapsed && !narrow} onToggle={toggleSidebar} onClose={closeNavigation} historyRef={setHistoryTarget} actionRef={setActionTarget} footer={<WorkspaceOptions health={health} refreshing={refreshing} onRefresh={() => void refreshCurrentWorkspace()} username={authUser?.username} onLogout={() => void logout()} />} />
     {narrow && navigationOpen && <button className="navigation-scrim" tabIndex={-1} aria-label={text.models.cancel} onClick={closeNavigation} />}
 
     <main className={`workspace${page === 'chat' ? ' chat-page' : ''}`} inert={narrow && navigationOpen}>
@@ -255,11 +273,12 @@ export function App() {
     </main>
     {showHelp && !showOnboarding && <WorkspaceHelp close={()=>setShowHelp(false)} guide={()=>{setShowHelp(false);setShowOnboarding(true);}} />}
     {showCommands && !showOnboarding && !showHelp && <CommandPalette workSearch={workSearch} actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
-    {showOnboarding && <Onboarding health={health} inventoryState={inventoryState} inventoryError={inventoryError} chatModelCount={chatModels.length} chatReady={chatReady} suggestedModel={suggestedModel} pending={onboardingPending} onImport={admin && offlineImport ? () => continueSetup('models/import') : undefined} onAction={() => continueSetup(chatReady ? 'chat' : chatModels.length ? 'models' : 'models/discover')} onSelectSuggested={() => { setModel(suggestedModel); continueSetup('chat'); }} onRetry={refreshBase} onClose={() => { if (onboardingPending) writePreference('offgrid.onboarding.stage', 'working'); setShowOnboarding(false); }} />}
-  </div></SidebarContext.Provider></WorkSearchNavigation></ActiveWorkProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
+    {showOnboarding && <Onboarding key={onboardingIdentity} canPrepare={admin} health={health} inventoryState={inventoryState} inventoryError={inventoryError} chatModelCount={chatModels.length} chatReady={chatReady} suggestedModel={suggestedModel} pending={onboardingPending} onImport={admin && offlineImport ? () => continueSetup('models/import') : undefined} onAction={() => continueSetup(chatReady ? 'chat' : chatModels.length ? 'models' : 'models/discover')} onSelectSuggested={() => { setModel(suggestedModel); continueSetup('chat'); }} onRetry={refreshBase} onClose={() => { if (onboardingPending) saveOnboarding(onboardingIdentity, 'working'); setShowOnboarding(false); }} />}
+  </div></SidebarContext.Provider></WorkSearchNavigation></ActiveWorkProvider></TerminalContextProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
 }
 
-function Onboarding({ health, inventoryState, inventoryError, chatModelCount, chatReady, suggestedModel, pending, onImport, onAction, onSelectSuggested, onRetry, onClose }: {
+function Onboarding({ health, inventoryState, inventoryError, chatModelCount, chatReady, suggestedModel, pending, canPrepare, onImport, onAction, onSelectSuggested, onRetry, onClose }: {
+  canPrepare: boolean;
   health: Health;
   inventoryState: 'checking' | 'ready' | 'failed';
   inventoryError: string;
@@ -296,6 +315,7 @@ function Onboarding({ health, inventoryState, inventoryError, chatModelCount, ch
     <button className="onboarding-close icon-button" onClick={onClose} aria-label={text.onboarding.close}><Icon name="close" size={18} /></button>
     <div className="onboarding-heading"><div className="onboarding-mark"><Icon name="models" size={24} /></div><h2 id="onboarding-title">{text.onboarding.title}</h2></div>
     <p>{text.onboarding.body}</p>
+    {pending && health === 'ready' && <RuntimePreparation canPrepare={canPrepare} />}
     <details className="onboarding-connection">
       <summary><span>{text.onboarding.service}</span><strong>{health === 'ready' ? text.status.ready : health === 'checking' ? text.status.checking : text.status.offline}</strong></summary>
       <p>{text.guidance.connectionMeaning}</p>

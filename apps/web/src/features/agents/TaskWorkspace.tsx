@@ -27,7 +27,7 @@ export function taskFromLocation() {
 
 /** One canonical inspector, shared with Chat. Navigation never dispatches work. */
 export function TaskWorkspace({ scope, workspace }: { scope: string; workspace: string }) {
-  const { locale, messages: text } = useI18n();
+  const { locale, messages: text , language} = useI18n();
   const { admin } = useWorkspace();
   const statusText = useTaskStatus();
   const work = useWorkActions();
@@ -91,7 +91,7 @@ export function TaskWorkspace({ scope, workspace }: { scope: string; workspace: 
   roots.forEach(task => counts[workBucket(task.status)]++);
   chats.forEach(chat => counts[workBucket(chat.status,chat.stale)]++);
   const filter = choice ?? (counts.attention ? 'attention' : 'all');
-  const matches = (value:string) => value.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale));
+  const matches = (value:string) => value.toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language));
   const filtered = roots.filter(task => (filter === 'all' || workBucket(task.status) === filter) && matches(`${task.prompt} ${task.id} ${task.status}`))
     .sort((a,b) => ({attention:0,running:1,history:2}[workBucket(a.status)] - {attention:0,running:1,history:2}[workBucket(b.status)]));
   const visibleChats = chats.filter(chat => (filter === 'all' || workBucket(chat.status,chat.stale) === filter) && matches(chat.title));
@@ -108,7 +108,7 @@ export function TaskWorkspace({ scope, workspace }: { scope: string; workspace: 
         </div>
       </div>
       <h2 id="task-title" tabIndex={-1} ref={heading}>{title}</h2>
-      {run ? <ConversationWork key={run.run_id} run={run} refresh={() => { refresh(); void refreshHistory(); }} connection={connection} readError={readError} outputSaved={false} recover={async () => {}} recoveryNeeded={false} inspector childStatus={childID => { const child = tasks.find(task => task.id === childID); return child ? status(child) : taskPresentation(locale).unavailable; }} />
+      {run ? <ConversationWork key={run.run_id} run={run} refresh={() => { refresh(); void refreshHistory(); }} connection={connection} readError={readError} outputSaved={false} recover={async () => {}} recoveryNeeded={false} inspector />
         : readError ? <ScopedNotice kind="error" action={<button className="secondary-button" onClick={refresh}>{text.common.retry}</button>}>{readError}</ScopedNotice>
         : <p role="status">{text.common.loading}</p>}
     </section> : !admin ? <PermissionNotice /> : known.compact ? <WorkHistory/> : <section className="task-list" aria-label={text.agentRuntime.history}>
@@ -122,7 +122,7 @@ export function TaskWorkspace({ scope, workspace }: { scope: string; workspace: 
       <ul>{filtered.slice(0,limit).map(task => <li key={task.id} className="task-history-row">
         <button className="task-list-item" onClick={() => select(task.id)} title={task.prompt}>
           <span>{task.prompt}</span><small>{status(task)}</small>
-          <time dateTime={task.created_at}>{new Date(task.created_at).toLocaleDateString(locale)}</time>
+          <time dateTime={task.created_at}>{new Date(task.created_at).toLocaleDateString(language)}</time>
         </button>
         <HistoryItemActions title={task.prompt} label={text.history.deleteTask} disabled={!task.deletable} protection={text.history.protectedTasks} onDelete={() => setDeleting([{id:task.id,label:task.prompt}])} />
       </li>)}</ul>

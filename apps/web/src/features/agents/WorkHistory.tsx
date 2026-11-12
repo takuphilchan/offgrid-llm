@@ -27,7 +27,7 @@ const locationBucket = () => window.location.hash.match(/^#\/activity\/(attentio
 
 /** Only metadata is paged. The inspector separately reads the selected job. */
 export function WorkHistory() {
-  const {locale,messages:text}=useI18n(), copy=activityText(locale), status=useTaskStatus();
+  const {locale,messages:text, language}=useI18n(), copy=activityText(locale), status=useTaskStatus();
   const archiveCopy=activityArchive(locale);
   const [archiving,setArchiving]=useState<WorkItem | null>(null);
   const work=useWorkActions(), known=useKnownWork();
@@ -100,7 +100,7 @@ export function WorkHistory() {
   const chats=known.entries.filter(entry=>entry.kind==='chat' && workBucket(entry.status,entry.stale)!=='history');
   const counts=known.counts ? {...known.counts} : undefined;
   if(counts)for(const chat of chats){counts.all++;counts[workBucket(chat.status,chat.stale)]++;}
-  const visibleChats=chats.filter(chat=>(filter==='all'||workBucket(chat.status,chat.stale)===filter)&&chat.title.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
+  const visibleChats=chats.filter(chat=>(filter==='all'||workBucket(chat.status,chat.stale)===filter)&&chat.title.toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language)));
   const names={attention:attentionWorkText[locale],running:text.recovery.running,history:workspaceAudit(locale).history,all:workspaceAudit(locale).allWork,archived:archiveCopy.archived};
   const empty=activityEmpty(locale);
   const hasArchive=(counts?.archived ?? 0)>0;
@@ -120,7 +120,7 @@ export function WorkHistory() {
         :<a className="text-button" href="#/chat">{text.nav.chat}</a>}/>)}
     {!!visibleChats.length && <section className="activity-known-chats"><p className="workspace-secondary">{knownWorkText[locale].scope}</p><WorkLinks entries={visibleChats}/></section>}
     <ul>{rows.map(item=><li className="task-history-row" key={item.id}>
-      <a className="task-list-item" href={`#/activity/task/${item.id}`} title={item.title}><span>{item.title}</span><small>{status(item.status,item.outcome)}</small><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleDateString(locale)}</time></a>
+      <a className="task-list-item" href={`#/activity/task/${item.id}`} title={item.title}><span>{item.title}</span><small>{status(item.status,item.outcome)}</small><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleDateString(language)}</time></a>
       <HistoryItemActions title={item.title} label={text.history.deleteTask} disabled={!item.deletable || busy} protection={copy.protection(item.protection)} onDelete={()=>setDeleting([{id:item.id,label:item.title}])}>
         {item.archivable && <button className="text-button" disabled={busy} onClick={event=>{event.currentTarget.closest<HTMLElement>('[popover]')?.hidePopover();setArchiving(item);}}>{item.archived_at?archiveCopy.restore:archiveCopy.archive}</button>}
       </HistoryItemActions>

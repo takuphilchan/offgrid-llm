@@ -27,12 +27,11 @@ import { SpecialistActivity } from '../agents/SpecialistActivity';
 export const workSettled = (status: string) => ['completed', 'failed', 'cancelled'].includes(status);
 
 /** A view of the canonical job, never a second runner or conversation store. */
-export function ConversationWork({ run, refresh, connection, readError, outputSaved, recover, recoveryNeeded, liveSubmission = false, inspector = false, childStatus }: {
+export function ConversationWork({ run, refresh, connection, readError, outputSaved, recover, recoveryNeeded, liveSubmission = false, inspector = false }: {
   run: AgentRun; refresh: () => void; connection: string; readError: string; outputSaved: boolean;
   recover: () => Promise<void>; recoveryNeeded: boolean;
   liveSubmission?: boolean;
   inspector?: boolean;
-  childStatus?: (id: string) => string;
 }) {
   const { messages, locale } = useI18n(), copy = conversationWorkText[locale], presentation = taskPresentation(locale);
   const { workspace, scope, admin } = useWorkspace();
@@ -86,10 +85,10 @@ export function ConversationWork({ run, refresh, connection, readError, outputSa
   return <section className={`conversation-work${inspector ? ' work-inspector' : ''}`} tabIndex={-1} aria-label={copy.activity}>
     <header><div><span className="work-status" role="status">{status}</span>{run.profile && <small className="conversation-work-profile">{run.profile.name} · {agentProfilesText[locale].revision.replace('{revision}', String(run.profile.revision))}</small>}</div>{!inspector && <a className="utility-button" href={`#/agents/task/${encodeURIComponent(run.run_id)}`}>{copy.inspect}</a>}
     {!workSettled(run.status) && <div className="button-row"><TaskLifecycle run={run} busy={busy} act={action => void act(action)} />{run.resumable && !run.computer_session_expired && ['pending', 'interrupted'].includes(run.status) && <button type="button" className="secondary-button" disabled={busy} onClick={() => void act('resume')}>{messages.models.resume}</button>}</div>}</header>
-    <TaskResult run={run} compact hideOutput={outputSaved} explainOutcome={inspector} />
-    {inspector && run.output && <p className="workspace-secondary">{presentation.generated}</p>}
     <DocumentProgress run={run} />
     <SpecialistActivity run={run} />
+    <TaskResult run={run} compact hideOutput={outputSaved} explainOutcome={inspector} />
+    {inspector && run.output && <p className="workspace-secondary">{presentation.generated}</p>}
     {connection !== 'live' && !workSettled(run.status) && <p role="status">{messages.agentLive.reconnectHint}</p>}
     {stopping !== 'idle' && <ScopedNotice kind={stopping === 'unconfirmed' ? 'error' : 'status'}>{taskStopText(locale)[stopping]}</ScopedNotice>}
     {run.pending_input && run.status === 'waiting_for_input' && <TaskAccess key={run.pending_input.id} run={run} workspace={workspace} onResolved={refresh} cancelSignal={accessCancellation.signal} initialConsentPending={consentPending} />}
@@ -107,7 +106,7 @@ export function ConversationWork({ run, refresh, connection, readError, outputSa
       <AgentProgress run={run} connection={connection === 'live' ? 'live' : connection === 'connecting' ? 'connecting' : 'reconnecting'} showPreview={showPreview} setShowPreview={setShowPreview} />
       <AgentPreview run={run} showPreview={showPreview} />
       <TaskEvidence run={run} />
-      <TaskDetails run={run} onError={setError} childStatus={childStatus ?? (() => presentation.unavailable)} />
+      <TaskDetails run={run} onError={setError} />
       {run.computer_session ? <><BrowserActivity steps={run.steps} />{run.steps.filter(step=>step.tool_name?.startsWith('workspace_')).map((step,index)=><ExecutionActivity key={`${step.id??index}:${step.type}`} step={step}/>)}</> : run.steps.map((step, index) => step.tool_name?.startsWith('workspace_')?<ExecutionActivity key={`${step.id??index}:${step.type}`} step={step}/>:<details key={`${step.id ?? index}:${step.type}`}><summary>{step.tool_name || step.type}</summary><pre>{step.tool_result || step.content || presentation.unavailable}</pre></details>)}
       <p className="workspace-secondary">{messages.chat.model}: {run.model}</p>
     </details>

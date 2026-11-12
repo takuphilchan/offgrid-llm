@@ -20,6 +20,10 @@ on:
         required: false
         type: boolean
         default: false
+      promote_latest:
+        required: false
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       version:
@@ -103,7 +107,7 @@ jobs:
           latest_tag="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n 1)"
           source_version="${{ steps.version.outputs.source_ref }}"
           source_version="${source_version#refs/tags/}"
-          if [[ "${source_version}" == "${latest_tag}" ]]; then
+          if [[ "${source_version}" == "${latest_tag}" && "${{ toJSON(inputs.promote_latest) != 'false' }}" == true ]]; then
             echo "is_latest=true" >> "${GITHUB_OUTPUT}"
           else
             echo "is_latest=false" >> "${GITHUB_OUTPUT}"
@@ -256,7 +260,7 @@ jobs:
             latest=false
           tags: |
             type=semver,pattern={{version}},value=v${{ needs.prepare.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.prepare.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.prepare.outputs.version }},enable=${{ needs.prepare.outputs.is_latest == 'true' }}
             type=raw,value=latest,enable=${{ needs.prepare.outputs.is_latest == 'true' }}
             type=raw,value=${{ needs.prepare.outputs.version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') }}
             type=raw,value=${{ needs.prepare.outputs.minor_version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') && needs.prepare.outputs.is_latest == 'true' }}
@@ -370,7 +374,7 @@ jobs:
             suffix=-gpu,onlatest=true
           tags: |
             type=semver,pattern={{version}},value=v${{ needs.prepare.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.prepare.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.prepare.outputs.version }},enable=${{ needs.prepare.outputs.is_latest == 'true' }}
             type=raw,value=latest,enable=${{ needs.prepare.outputs.is_latest == 'true' }}
             type=raw,value=${{ needs.prepare.outputs.version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') }}
             type=raw,value=${{ needs.prepare.outputs.minor_version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') && needs.prepare.outputs.is_latest == 'true' }}
