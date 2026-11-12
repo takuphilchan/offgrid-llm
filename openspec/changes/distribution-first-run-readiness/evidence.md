@@ -605,3 +605,49 @@ channel/indexing fixtures, actionlint and the source-size check passed locally.
 Against the current public registry, both CPU platforms passed and the incorrect
 GPU revision was rejected with the intended mismatch status. The corrected GPU
 image, native macOS retry and final public release are still pending.
+
+### Final public release and listing verification (2026-11-12)
+
+Release run [43181581522](https://github.com/takuphilchan/offgrid-llm/actions/runs/43181581522)
+completed successfully from automation `820a9352`: 19 jobs passed and two
+CPU-build jobs were skipped through verified reuse. The native macOS build
+passed after the empty signing-variable correction. The NVIDIA image was rebuilt
+with application revision `9d33af62035f63382294dc983d9461054a1d4c4c`.
+The same automation revision passed all 14 CI jobs in
+[43181516257](https://github.com/takuphilchan/offgrid-llm/actions/runs/43181516257).
+The immutable application tag remains at its separately qualified revision.
+
+Independent public downloads hashed all 17 assets against their GitHub API
+SHA-256 digests and checked all 16 manifest entries. The first connection ended
+after 11 verified assets; the remaining six were downloaded on retry. Successful
+earlier checks were retained only after matching their asset IDs, sizes and
+digests against the unchanged release metadata. The final check passed after
+accounting for the user's explicit Latest promotion. Local receipts are
+`build/release-0.4.30-public-verification.json`, the original/retry download logs,
+and `build/release-0.4.30-public-final-check.log`.
+
+The Windows Setup digest is
+`cc0387c20c32d5d5aa28d7ade353641e7b4b5e4f47aa923cd89f50e0b3718335`.
+Native local inspection reports `NotSigned`; both public trust reports remain
+inspection reports with `trusted: false`. The payload was extracted and 1,188
+files were hashed for upgrade preflight. No installed upgrade has occurred:
+the user's Computer Use interruption was respected, and the local app remains
+0.4.29 pending their response about resuming installation.
+
+Digest-bound public OCI checks confirmed both CPU platform configurations and
+the NVIDIA configuration identify the immutable application source. The CPU
+index is `sha256:4bfabc3e01b9a99886dca8379db523a428d8460c1e62f41aaa15641cecb1e2a6`;
+the corrected NVIDIA index is
+`sha256:a8ce595c40514f6896dddf671402a116124495cff99a4b2f1b1228b0dfafd6d1`.
+Attached attestation descriptors were present; this is not a claim of independent
+cryptographic attestation-identity verification. All four stable Docker aliases
+matched their saved pre-release baseline.
+
+With explicit user approval, 11 obsolete GitHub drafts were removed. Before/after
+API comparison confirmed all 53 published releases and their asset IDs/digests
+were preserved, with the associated Git tags still present. The user then
+explicitly requested Latest promotion and the clean title `OffGrid v0.4.30`.
+GitHub's latest endpoint now selects 0.4.30 with `draft: false` and
+`prerelease: false`. Unsigned/unnotarized disclosures, trust reports and
+source/channel markers remain; no application tag, asset or Docker alias was
+replaced by this metadata change.

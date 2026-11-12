@@ -29,5 +29,5 @@
 ## 6. Authorized commit and release
 
 - [x] 6.1 Review the final source changes and release identity, prepare accurate release notes, and create focused commits after the installed upgrade is verified; preserve unrelated work and record validation.
-- [ ] 6.2 Push the reviewed release source, require passing CI for its exact revision, publish through the maintained release workflow with actual trust checks, and verify the public assets, checksums and release identity.
+- [x] 6.2 Push the reviewed release source, require passing CI for its exact revision, publish through the maintained release workflow with actual trust checks, and verify the public assets, checksums and release identity. Release run 43181581522 passed; all 17 public asset byte digests and 16 manifest entries passed independent verification. The user subsequently authorized GitHub Latest promotion and the clean title, preserving unsigned disclosures and Docker aliases.
 - [x] 6.3 Implement and verify the user-authorized unsigned-preview publication channel with explicit manual selection, truthful notes/reports, prerelease marking and no stable container alias promotion; retain signed-channel enforcement.

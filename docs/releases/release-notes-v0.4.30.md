@@ -1,4 +1,4 @@
-# OffGrid 0.4.30 - Unsigned preview
+# OffGrid v0.4.30
 
 This is an **unsigned preview**. Windows installers do not have a verified
 publisher signature, and the macOS apps are not Developer ID signed or notarized.
@@ -62,8 +62,9 @@ isolated test data. That observation does not qualify the final 0.4.30 installed
 upgrade: local installation and a real reply from that installed artifact remain
 pending.
 
-Independent downloading and hashing of every public asset is still in progress;
-the Windows Setup bytes already match the published manifest. The web build retains its existing large-chunk
+Independent download verification checked all 17 public assets against GitHub's
+SHA-256 digests and all 16 entries in the published checksum manifest. The web
+build retains its existing large-chunk
 advisory. Publisher signing/notarization, native-language review, successful CPU
 model inference, vision inference and broader hardware qualification are not
 implied by these checks.

@@ -36,6 +36,14 @@ Release checks SHALL verify actual artifact signing/notarization when claiming t
   aliases are not promoted, and exact-source CI and payload checks still pass
 - **AND** the default signed channel continues to reject untrusted artifacts
 
+#### Scenario: Explicit promotion of the published unsigned release
+- **WHEN** the maintainer subsequently requests that 0.4.30 be GitHub's Latest
+  release with the title `OffGrid v0.4.30`
+- **THEN** its GitHub prerelease flag is cleared and Latest selects 0.4.30,
+  while unsigned/unnotarized disclosures, source/channel markers, trust reports,
+  release assets and Git tag identity are preserved
+- **AND** Docker stable aliases and future signed-release enforcement remain unchanged
+
 ### Requirement: Supported downloads have accurate requirements
 Download guidance SHALL lead with desktop choices and distinguish hardware instructions, platform limitations, offline prerequisites and manual upgrades.
 

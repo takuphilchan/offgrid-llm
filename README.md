@@ -7,7 +7,7 @@ control.
 
 ![OffGrid Chat in dark mode, showing a sample community workshop plan](docs/images/chat-dark.png)
 
-[Download 0.4.30 (unsigned preview)](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.30) ·
+[Download OffGrid v0.4.30](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.30) ·
 [Quickstart](docs/setup/quickstart.md) · [Interface tour](docs/guides/interface-tour.md)
 
 The project is being hardened from a prototype into a dependable local tool.
@@ -33,7 +33,7 @@ For help and responsible disclosure, see [Support](SUPPORT.md) and
 ## Desktop download
 
 The newest download for Windows, macOS and Linux is
-[OffGrid 0.4.30 (unsigned preview)](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.30).
+[OffGrid v0.4.30](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.30).
 Windows packages are unsigned; macOS apps are not Developer ID signed or
 notarized. Read the release's OS trust guidance before installing.
 GitHub's **Latest** release is 0.4.30. This designation does not establish
