@@ -14,5 +14,5 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --prefix apps/desktop --ignore-scripts --no-audit --no-fund
-      - name: Compare fixed shell startup cases in temporary profiles
-        run: node scripts/test/diagnose-terminal-startup.cjs
+      - name: Verify command context with canonical temporary paths
+        run: node scripts/test/test-terminal-command-windows.cjs --isolated-native-test
