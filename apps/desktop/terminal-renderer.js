@@ -1,6 +1,8 @@
 'use strict';
 const bridge=window.terminalDesktop, $=id=>document.getElementById(id), tabs=new Map();
 let generation='',current='',creating=false,ready=false,visible=false,fitFrame=0,focusPending=false;
+// Host visibility events can arrive before the initial handshake resolves.
+let visibilityObserved=false;
 let noticeMessageKey=null;
 const clearErrorDetails=()=>{$('terminal-error-details').hidden=true;$('terminal-error-details').open=false;$('terminal-error-text').textContent='';};
 const notice=message=>{noticeMessageKey=null;$('notice').textContent=message||'';clearErrorDetails();};
@@ -99,6 +101,6 @@ bridge.onEvent(event=>{
  else if(event.type==='layout'){activate(false);}
  else if(event.type==='appearance')appearance(event);
  else if(event.type==='availability'){ready=event.available;setLaunchDisabled(!ready||tabs.size>=4);if(ready)notice('');}
- else if(event.type==='visibility'){visible=event.visible;for(const item of tabs.values()){item.term.options.disableStdin=!visible||searchControls.isOpen()||(displayControls.isOpen()||commandControls.isOpen())||item.id!==current;if(!visible)item.term.blur();}if(visible)activate(event.focus!==false);}
+ else if(event.type==='visibility'){visibilityObserved=true;visible=event.visible;for(const item of tabs.values()){item.term.options.disableStdin=!visible||searchControls.isOpen()||(displayControls.isOpen()||commandControls.isOpen())||item.id!==current;if(!visible)item.term.blur();}if(visible)activate(event.focus!==false);}
 });
-void bridge.request({protocol:1,action:'handshake'}).then(value=>{generation=value.generation;ready=value.available;visible=value.presentation?.visible===true;appearance(value.presentation||{});activate();setLaunchDisabled(!ready);if(!ready)noticeKey('The native terminal runtime is unavailable on this build. Chat and Knowledge are still available.');}).catch(showError);
+void bridge.request({protocol:1,action:'handshake'}).then(value=>{generation=value.generation;ready=value.available;if(!visibilityObserved)visible=value.presentation?.visible===true;appearance(value.presentation||{});activate(!visibilityObserved);setLaunchDisabled(!ready);if(!ready)noticeKey('The native terminal runtime is unavailable on this build. Chat and Knowledge are still available.');}).catch(showError);
