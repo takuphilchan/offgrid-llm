@@ -356,3 +356,16 @@ desktop xterm version, so terminal queries receive normal parser responses.
 The existing native command/Unicode/exit/directory/cleanup assertions remain
 intact and passed locally. This is a test-only dependency and harness change;
 remote Windows confirmation remains required.
+
+Run `43143526633` at `a5a2797c` finished with 12 of 13 jobs passing; the
+Windows shell fixture still exceeded its 20-second prompt deadline. The
+isolated diagnostic run `43147100437` recorded all six shell probes and owned
+shell shutdowns before its diagnostic Node process lingered until the job's
+12-minute timeout (the run is cancelled, not passing qualification evidence).
+With the stripped environment, startup took 12-24 seconds; the same production
+shell integration with the inherited Windows environment started in 555 ms.
+The fixture now inherits the Windows environment like the desktop while
+redirecting profile, home and temporary paths to its disposable directory,
+keeping `-NoProfile`, fixed commands, terminal replies and all assertions.
+The corrected fixture passed locally, including Unicode, command boundaries,
+exit status, directory changes and owned-shell exit. A new remote run is required.
