@@ -5,7 +5,8 @@ if(process.platform!=='win32'||!process.argv.includes('--isolated-native-test'))
 const pty=require('../../apps/desktop/node_modules/node-pty');
 const {Terminal}=require('../../apps/desktop/node_modules/@xterm/headless');
 const {launchCommand}=require('../../apps/desktop/terminal-sessions');
-const dir=fs.mkdtempSync(path.join(os.tmpdir(),'offgrid-command-check-'));fs.mkdirSync(path.join(dir,'child'));
+// Hosted Windows TEMP may use an 8.3 alias; PowerShell reports the long path.
+const dir=fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(),'offgrid-command-check-')));fs.mkdirSync(path.join(dir,'child'));
 const launch=launchCommand('shell',path.join(dir,'offgrid.exe'));
 let text='',exited=false;
 // A PTY needs a terminal peer, including device/cursor query replies. CI's
@@ -32,7 +33,7 @@ async function until(check){const end=Date.now()+20000;while(Date.now()<end){if(
   if(exit===null)assert.equal(markers().filter(m=>m.event==='end').at(-1).failed,true);
   assert.equal(markers().filter(m=>m.event==='begin').at(-1).command,command);
  }
- await until(()=>markers().filter(m=>m.event==='prompt').at(-1).cwd===path.join(dir,'child'));
+ await until(()=>markers().filter(m=>m.event==='prompt').at(-1).cwd.toLowerCase()===path.join(dir,'child').toLowerCase());
  child.write('exit\r');await until(()=>exited);
  console.log(JSON.stringify({passed:true,checks:['native command boundaries','Unicode','native exit status','changed directory','owned shell exit'],state:dir}));
 }finally{try{if(!exited){child.kill();await until(()=>exited);}}finally{terminal.dispose();}}})().then(()=>process.exit(0),error=>{console.error(error);process.exit(1);});
