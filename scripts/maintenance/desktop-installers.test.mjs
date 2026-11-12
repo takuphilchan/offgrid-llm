@@ -11,7 +11,13 @@ const windows = readFileSync('installers/desktop.ps1', 'utf8');
 const bash = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : 'bash';
 const ps = process.platform === 'win32' ? 'powershell.exe' : 'pwsh';
 const run = (command, args) => {
-  const result = spawnSync(command, args, { encoding: 'utf8', windowsHide: true });
+  const env = { ...process.env };
+  // CI launches Node from pwsh. Windows PowerShell must discover its own
+  // built-in modules instead of inheriting PowerShell 7's PSModulePath.
+  if (process.platform === 'win32' && command === ps) {
+    for (const key of Object.keys(env)) if (key.toLowerCase() === 'psmodulepath') delete env[key];
+  }
+  const result = spawnSync(command, args, { encoding: 'utf8', windowsHide: true, env });
   assert.equal(result.status, 0, result.error?.message || result.stdout + result.stderr);
 };
 

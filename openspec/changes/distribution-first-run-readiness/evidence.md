@@ -389,3 +389,13 @@ alias and signature-verifier fixtures passed locally. Actionlint, documentation
 checks and source-size checks passed. Local Bash fixtures used the existing
 binary-mode jq wrapper; initial missing-jq/CRLF harness failures were corrected
 without weakening the payload digest checks. Public publication is still pending.
+
+Full-source run `43151142842` passed the corrected Windows terminal fixture,
+then the installer fixture's Windows PowerShell subprocess could not discover
+`Get-FileHash` under the parent PowerShell 7 module path. The test launcher now
+removes only inherited `PSModulePath` for that legacy PowerShell child so its
+built-in modules are discovered normally. All nine installer tests passed
+locally with an intentionally conflicting PowerShell 7 module path. Hosted
+Windows diagnostic run `43152327502` (job `130964207324`) also passed both the
+terminal fixture and installer tests. Product installer code is unchanged by
+this harness fix; the final revised source still requires full CI.
