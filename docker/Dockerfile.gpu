@@ -19,7 +19,7 @@ RUN set -eu; \
         sleep $((attempt * 5)); \
     done
 COPY apps/web/ ./
-COPY apps/desktop/compatibility.cjs /build/apps/desktop/compatibility.cjs
+COPY apps/desktop/compatibility.cjs apps/desktop/theme-palettes.json apps/desktop/language-registry.json apps/desktop/select-controls.css apps/desktop/theme-NOTICE.txt /build/apps/desktop/
 RUN npm run build
 
 # Pinned parser assets are acquired only while building, never on import.

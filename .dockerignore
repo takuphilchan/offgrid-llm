@@ -23,6 +23,10 @@ apps/desktop/
 !apps/desktop/
 apps/desktop/*
 !apps/desktop/compatibility.cjs
+!apps/desktop/theme-palettes.json
+!apps/desktop/language-registry.json
+!apps/desktop/select-controls.css
+!apps/desktop/theme-NOTICE.txt
 apps/computer/
 examples/
 installers/

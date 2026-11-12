@@ -14,6 +14,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  container-ui:
+    name: Container renderer build contexts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Build renderer through both production Docker contexts
+        run: |
+          docker build --target ui-builder --file docker/Dockerfile .
+          docker build --target ui-builder --file docker/Dockerfile.gpu .
+
   document-ocr-runtime:
     uses: ./.github/workflows/document-ocr-runtime.yml
 
