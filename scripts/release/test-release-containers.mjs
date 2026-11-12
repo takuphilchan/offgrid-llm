@@ -71,3 +71,28 @@ assert.equal(eventuallyComplete.status, 0, eventuallyComplete.stdout + eventuall
 assert.match(eventuallyComplete.stdout, /not fully indexed/);
 
 console.log('Container release verification checks both CPU platforms, GPU, and registry indexing retries');
+
+// Exercise the workflow's alias decision with an immutable source that would
+// otherwise be the latest tag. Preview publication must still disable aliases.
+const workflow=readFileSync(join(repo,'.github/workflows/docker-publish.yml'),'utf8').replace(/\r\n/g,'\n');
+const sourceStep=workflow.split('- name: Record source revision\n')[1].split('\n      - name:')[0];
+const sourceScript=sourceStep.split('        run: |\n')[1].split('\n')
+  .filter(line=>line.startsWith('          ')).map(line=>line.slice(10)).join('\n');
+for(const promote of [true,false]) {
+  const root=mkdtempSync(join(tmpdir(),'offgrid-container-channel-'));
+  try {
+    const input=sourceScript
+      .replaceAll('${{ steps.version.outputs.source_ref }}','v0.4.29')
+      .replaceAll("${{ toJSON(inputs.promote_latest) != 'false' }}",String(promote));
+    assert.ok(!input.includes('${{'),'Every workflow expression must be resolved');
+    const result=spawnSync('bash',['-euo','pipefail','-s'],{cwd:root,encoding:'utf8',
+      env:{...process.env,GITHUB_OUTPUT:join(root,'output')},
+      input:`git() { if [[ "$1" == tag ]]; then echo v0.4.29; else echo ${'a'.repeat(40)}; fi; }\n`+input});
+    assert.equal(result.status,0,result.stdout+result.stderr);
+    assert.match(readFileSync(join(root,'output'),'utf8'),new RegExp(`is_latest=${promote}`));
+  } finally {rmSync(root,{recursive:true,force:true});}
+}
+const aliasLines=workflow.split('\n').filter(line=>line.includes('type=semver,pattern={{major}}.{{minor}}')||line.includes('type=raw,value=latest,'));
+assert.equal(aliasLines.length,4);
+for(const line of aliasLines)assert.ok(line.includes("enable=${{ needs.prepare.outputs.is_latest == 'true' }}"));
+console.log('Preview CPU/GPU publication cannot promote latest or minor-version aliases');

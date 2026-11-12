@@ -34,6 +34,17 @@ disable OS security settings to turn a failing report into a passing one.
 
 ## Public release credentials and gates
 
+The default release channel requires publisher verification. A maintainer can
+explicitly dispatch `release-unified.yml` with `unsigned_preview=true` when the
+tagged release notes disclose `Unsigned preview`. This publishes a GitHub
+prerelease, leaves `latest` and minor-version container aliases unchanged, and
+attaches native trust reports with the actual unsigned/not-notarized status.
+It retains exact-source CI, all expected platform assets, container checks and
+SHA-256 verification. It does not qualify the artifacts as publisher-trusted.
+Automatic tag pushes cannot select this exception; drafts from different
+channels cannot reuse each other's artifacts. A future signed release requires
+a new version after an unsigned preview has been published.
+
 The release workflow verifies the **downloaded draft assets**, including reused
 assets on reruns, before final publication. It checks the GitHub asset digest
 and then runs native trust checks on both Windows installers or both macOS
@@ -52,7 +63,8 @@ architecture ZIPs. A reused asset is not trusted because it has a matching name.
   Ad-hoc signatures do not pass. Native macOS build and verification hosts are
   required; Windows fixture tests cannot qualify this path.
 
-The workflow preserves the trust report as a CI artifact. Missing credentials,
+The workflow preserves the trust report as a CI artifact and release asset.
+In the default signed channel, missing credentials,
 wrong publisher, unsigned/modified artifacts, or failed notarization prevent
 publication. Credential availability and successful native release runs remain
 external qualification requirements; implementing this gate does not satisfy

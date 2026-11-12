@@ -29,6 +29,13 @@ Release checks SHALL verify actual artifact signing/notarization when claiming t
 - **WHEN** no signing identity is available
 - **THEN** a local build is labelled as a preview and is not reported as publisher-signed or release-qualified
 
+#### Scenario: Explicit public unsigned preview
+- **WHEN** the maintainer explicitly selects unsigned-preview publication
+- **THEN** release notes disclose unsigned and unnotarized status, actual native
+  trust reports accompany the assets, the release is marked prerelease, stable
+  aliases are not promoted, and exact-source CI and payload checks still pass
+- **AND** the default signed channel continues to reject untrusted artifacts
+
 ### Requirement: Supported downloads have accurate requirements
 Download guidance SHALL lead with desktop choices and distinguish hardware instructions, platform limitations, offline prerequisites and manual upgrades.
 

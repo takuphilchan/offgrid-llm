@@ -369,3 +369,23 @@ redirecting profile, home and temporary paths to its disposable directory,
 keeping `-NoProfile`, fixed commands, terminal replies and all assertions.
 The corrected fixture passed locally, including Unicode, command boundaries,
 exit status, directory changes and owned-shell exit. A new remote run is required.
+
+Run `43149272418` at `9910102a` reached and passed all shell command assertions,
+then failed the literal current-directory comparison. The fixture now resolves
+the temporary directory to its native long path and compares Windows paths
+without case sensitivity. The exact updated fixture passed locally and on a
+fresh hosted Windows runner in diagnostic run `43150945412` (job `130959670915`).
+This targeted success does not substitute for final full-source CI.
+
+The user explicitly changed release direction on 2026-11-12: publish without
+waiting for signing credentials. The manual unsigned-preview channel preserves
+source CI, all platform assets, actual digest/native trust inspection and
+container checks. It publishes trust reports, requires visible unsigned notes,
+marks the release prerelease, and prevents stable container alias promotion.
+Signed publication remains the default; signed/notarized qualification in task
+4.3 remains unavailable and is not claimed for this preview. Finalizer, draft
+asset access/channel isolation, release context, exact-source CI, container
+alias and signature-verifier fixtures passed locally. Actionlint, documentation
+checks and source-size checks passed. Local Bash fixtures used the existing
+binary-mode jq wrapper; initial missing-jq/CRLF harness failures were corrected
+without weakening the payload digest checks. Public publication is still pending.

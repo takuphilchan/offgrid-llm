@@ -95,17 +95,18 @@ console.log('Workflow draft preflight and reuse queries pass with empty, complet
 
 const source = 'a'.repeat(40);
 for (const [draft, rebuild, succeeds, operations] of [
-  [{isDraft:true,body:`<!-- offgrid-source: ${source} -->`},'false',true,''],
-  [{isDraft:true,body:'old source'},'false',false,''],
-  [{isDraft:true,body:'old source'},'true',true,'delete\ncreate\n'],
+  [{isDraft:true,body:`<!-- offgrid-source: ${source} --> <!-- offgrid-channel: signed -->`},'false',true,''],
+  [{isDraft:true,body:'old source <!-- offgrid-channel: signed -->'},'false',false,''],
+  [{isDraft:true,body:'old source <!-- offgrid-channel: signed -->'},'true',true,'delete\ncreate\n'],
   [{isDraft:false,body:'published'},'true',false,''],
-  [{isDraft:false,body:'published'},'false',true,''],
+  [{isDraft:false,body:'published <!-- offgrid-channel: signed -->'},'false',false,''],
+  [{isDraft:true,body:`<!-- offgrid-source: ${source} --> <!-- offgrid-channel: unsigned-preview -->`},'false',false,''],
 ]) {
   const root=mkdtempSync(join(tmpdir(),'offgrid-draft-rebuild-'));
   try {
     writeFileSync(join(root,'draft.json'),JSON.stringify(draft));
     const result=spawnSync('bash',['-euo','pipefail','-s'],{cwd:root,encoding:'utf8',
-      env:{...process.env,RUNNER_TEMP:root,REBUILD_DRAFT:rebuild,SOURCE_SHA:source},
+      env:{...process.env,RUNNER_TEMP:root,REBUILD_DRAFT:rebuild,SOURCE_SHA:source,RELEASE_CHANNEL:'signed'},
       input:`gh() {
         case "$1 $2" in
           'release view') cat draft.json ;;

@@ -1,7 +1,10 @@
-# OffGrid 0.4.29
+# OffGrid 0.4.29 - Unsigned preview
 
-Release candidate: installed and tested locally on Windows. Public release
-qualification is pending; this document does not announce publication.
+This is an **unsigned preview**. Windows installers do not have a verified
+publisher signature, and the macOS apps are not Developer ID signed or notarized.
+Windows may show an unknown-publisher warning; macOS may block opening the app.
+Checksums verify downloaded bytes, not publisher trust. This release does not
+claim a warning-free first installation or signed-release qualification.
 
 ## Changes
 
@@ -14,9 +17,10 @@ qualification is pending; this document does not announce publication.
 - Windows Setup refuses replacement while a separately running OffGrid service
   or inference worker remains active, and stops if process inspection fails.
   The existing desktop quit flow and saved-work preservation remain in place.
-- Release automation checks actual downloaded artifacts and publisher identity
-  before publication. Local preview builds have a distinct version and report
-  their actual signing status.
+- Release automation checks actual downloaded artifacts and records native
+  trust results. This explicitly selected preview retains CI and integrity checks,
+  publishes trust reports, and does not promote stable download/container aliases.
+  The default signed-release path still requires publisher verification.
 - Settings, appearance controls and desktop terminal interactions are refined.
   All 29 registered languages have authored text for the 1,356-message catalog;
   preview language labels remain until the required human reviews are recorded.
@@ -35,10 +39,11 @@ consistency checks, and 202 desktop tests with one platform skip. Translation
 regression tests passed 11 cases; installer/trust/preview fixtures passed 15.
 The web build retains its existing large-chunk advisory.
 
-The full browser run passed 1,569 tests, skipped 32 and failed five. Missing
-document-worker packaging in the test launch and three outdated test assumptions
-were corrected. All five affected files then passed against the packaged service:
-108 passed, one skip. This is a full run followed by a focused rerun.
+After correcting document-worker packaging in the test launch and outdated test
+assumptions, a subsequent full CI browser run passed 1,574 tests with 32 skips.
+Linux desktop tests passed 203, and both macOS native CI jobs passed. Each CI
+result applies to its recorded revision; publication also requires a passing
+full CI run for the exact tagged source.
 
 The installed Windows upgrade matched all 1,186 package files. The 576 workspace
 files retained metadata, and files at most 16 MiB retained checked hashes.
@@ -50,14 +55,15 @@ The rollback installer remains available locally.
 See the [distribution evidence](../../openspec/changes/distribution-first-run-readiness/evidence.md)
 and [publisher credential requirements](../development/distribution-builds.md).
 The local installer is unsigned and was built before the final commits.
-Exact-revision CI, signed/notarized platform artifacts, container qualification
-and public checksum verification must pass before publication. Native-language
+Exact-revision CI, container qualification and public checksum verification
+remain required for this preview. Signing and notarization are unavailable;
+the attached trust reports record that limitation. Native-language
 review, successful CPU-model inference and broader native-platform/hardware
 qualification are not implied by the local Windows checks.
 
 ## Downloads and upgrades
 
-When this version is published, Windows desktop users should choose
+Windows desktop users should choose
 `OffGrid-0.4.29-windows-x64-setup.exe` and verify it against the release checksum
 manifest. Choose other packages using the [platform guide](../setup/installation.md).
 Finish active tasks, quit OffGrid and stop independently managed OffGrid services

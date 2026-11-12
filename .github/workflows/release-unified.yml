@@ -15,6 +15,10 @@ on:
         description: 'Discard an unpublished draft from another source revision and rebuild'
         type: boolean
         default: false
+      unsigned_preview:
+        description: 'Publish an explicitly unsigned prerelease without promoting stable download/container aliases'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -41,6 +45,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       source_ref: ${{ steps.release.outputs.source_ref }}
       source_sha: ${{ steps.qualified.outputs.source_sha }}
+      channel: ${{ steps.release.outputs.channel }}
     steps:
       - name: Check out release automation
         uses: actions/checkout@v6
@@ -50,7 +55,7 @@ jobs:
         shell: bash
         run: |
           bash .github/scripts/resolve-release-context.sh \
-            "${GITHUB_EVENT_NAME}" "${GITHUB_REF}" "${{ inputs.version || '' }}"
+            "${GITHUB_EVENT_NAME}" "${GITHUB_REF}" "${{ inputs.version || '' }}" "${{ inputs.unsigned_preview || false }}"
           version="$(sed -n 's/^version=//p' "${GITHUB_OUTPUT}")"
           git ls-remote --exit-code --tags origin "refs/tags/${version}" >/dev/null
 
@@ -60,9 +65,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_CHANNEL: ${{ steps.release.outputs.channel }}
         run: |
           git fetch --no-tags --depth=1 origin "refs/tags/${RELEASE_VERSION}"
           source_sha="$(git rev-parse 'FETCH_HEAD^{commit}')"
+          git show "${source_sha}:docs/releases/release-notes-${RELEASE_VERSION}.md" > "$RUNNER_TEMP/release-notes.md"
+          if grep -Fq 'Unsigned preview' "$RUNNER_TEMP/release-notes.md"; then
+            if [[ "$RELEASE_CHANNEL" != unsigned-preview ]]; then
+              echo '::error::This source requires explicit unsigned_preview manual dispatch'; exit 1
+            fi
+          elif [[ "$RELEASE_CHANNEL" == unsigned-preview ]]; then
+            echo '::error::Unsigned preview disclosure is missing from release notes'; exit 1
+          fi
           node .github/scripts/verify-release-ci.mjs "${GITHUB_REPOSITORY}" "$source_sha"
           echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
 
@@ -80,6 +94,7 @@ jobs:
       version: ${{ needs.release-context.outputs.version }}
       source_ref: ${{ needs.release-context.outputs.source_ref }}
       publish_gpu: true
+      promote_latest: ${{ needs.release-context.outputs.channel == 'signed' }}
       force_rebuild: ${{ inputs.rebuild_draft || github.event.forced || false }}
     secrets: inherit
 
@@ -98,15 +113,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REBUILD_DRAFT: ${{ inputs.rebuild_draft || github.event.forced || false }}
           SOURCE_SHA: ${{ needs.release-context.outputs.source_sha }}
+          RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
         run: |
           set -euo pipefail
           version="${{ needs.release-context.outputs.version }}"
           marker="<!-- offgrid-source: ${SOURCE_SHA} -->"
+          channel_marker="<!-- offgrid-channel: ${RELEASE_CHANNEL} -->"
           exists=false
           if gh release view "${version}" --repo "${{ github.repository }}" --json isDraft,body > "$RUNNER_TEMP/release-state.json"; then
             exists=true
-            if [[ "$REBUILD_DRAFT" == true ]] && ! jq -e '.isDraft' "$RUNNER_TEMP/release-state.json" >/dev/null; then
-              echo "::error::Refusing to rebuild a published release"; exit 1
+            if ! jq -e --arg marker "$channel_marker" '(.body // "") | contains($marker)' "$RUNNER_TEMP/release-state.json" >/dev/null; then
+              echo '::error::Release channel is different or unverified; refusing asset reuse'; exit 1
+            fi
+            if ! jq -e '.isDraft' "$RUNNER_TEMP/release-state.json" >/dev/null; then
+              echo "::error::Refusing to modify a published release; use a new version"; exit 1
             fi
             if jq -e '.isDraft' "$RUNNER_TEMP/release-state.json" >/dev/null && ! jq -e --arg marker "$marker" '(.body // "") | contains($marker)' "$RUNNER_TEMP/release-state.json" >/dev/null; then
               if [[ "$REBUILD_DRAFT" != true ]]; then
@@ -123,7 +143,7 @@ jobs:
               --repo "${{ github.repository }}" \
               --verify-tag \
               --title "OffGrid ${version}" \
-              --notes "Release is being built. Artifacts will appear after verification. ${marker}" \
+              --notes "Release is being built. Artifacts will appear after verification. ${marker} ${channel_marker}" \
               --draft
           fi
 
@@ -1036,10 +1056,11 @@ jobs:
         if: steps.existing.outputs.skip != 'true'
         working-directory: apps/desktop
         env:
-          CSC_LINK: ${{ matrix.os == 'windows' && secrets.WINDOWS_CSC_LINK || matrix.os == 'macos' && secrets.MACOS_CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ matrix.os == 'windows' && secrets.WINDOWS_CSC_KEY_PASSWORD || matrix.os == 'macos' && secrets.MACOS_CSC_KEY_PASSWORD || '' }}
-          APPLE_ID: ${{ matrix.os == 'macos' && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          CSC_LINK: ${{ needs.release-context.outputs.channel == 'signed' && (matrix.os == 'windows' && secrets.WINDOWS_CSC_LINK || matrix.os == 'macos' && secrets.MACOS_CSC_LINK) || '' }}
+          CSC_KEY_PASSWORD: ${{ needs.release-context.outputs.channel == 'signed' && (matrix.os == 'windows' && secrets.WINDOWS_CSC_KEY_PASSWORD || matrix.os == 'macos' && secrets.MACOS_CSC_KEY_PASSWORD) || '' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ needs.release-context.outputs.channel == 'unsigned-preview' && 'false' || 'true' }}
+          APPLE_ID: ${{ needs.release-context.outputs.channel == 'signed' && matrix.os == 'macos' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ needs.release-context.outputs.channel == 'signed' && matrix.os == 'macos' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
         run: |
           echo "Building desktop app for ${{ matrix.os }}..."
@@ -1235,6 +1256,7 @@ jobs:
           RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
           TRUST_PLATFORM: ${{ matrix.os }}
+          RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
         run: |
           set -euo pipefail
           target="build/release-trust-${TRUST_PLATFORM}"
@@ -1247,7 +1269,11 @@ jobs:
             gh api "repos/${GITHUB_REPOSITORY}/releases/assets/${id}" -H 'Accept: application/octet-stream' > "$target/$name"
             ARTIFACT="$target/$name" EXPECTED="$expected" node --input-type=module -e 'import {createReadStream} from "node:fs"; import {createHash} from "node:crypto"; const hash=createHash("sha256"); for await(const data of createReadStream(process.env.ARTIFACT)) hash.update(data); if("sha256:"+hash.digest("hex")!==process.env.EXPECTED) throw Error("Downloaded release artifact digest mismatch")'
           done < "$target/expected.txt"
-          node scripts/release/verify-desktop-trust.mjs --directory "$target" --platform "$TRUST_PLATFORM" --version "$RELEASE_VERSION" --report "$target/trust.json"
+          mode=release
+          if [[ "$RELEASE_CHANNEL" == unsigned-preview ]]; then mode=inspect; fi
+          node scripts/release/verify-desktop-trust.mjs --directory "$target" --platform "$TRUST_PLATFORM" --version "$RELEASE_VERSION" --mode "$mode" --report "$target/trust.json"
+          cp "$target/trust.json" "$target/trust-${TRUST_PLATFORM}.json"
+          gh release upload "$RELEASE_VERSION" "$target/trust-${TRUST_PLATFORM}.json" --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Preserve desktop trust evidence
         if: always() && matrix.os != 'linux'
@@ -1266,6 +1292,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release-context.outputs.source_ref }}
 
       - name: Get version
         id: version
@@ -1276,8 +1304,9 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
         run: |
           bash .github/scripts/verify-release-containers.sh \
             "${{ steps.version.outputs.version }}"
           bash .github/scripts/finalize-release.sh \
-            "${{ steps.version.outputs.version }}" "${{ github.repository }}"
+            "${{ steps.version.outputs.version }}" "${{ github.repository }}" "$RELEASE_CHANNEL"

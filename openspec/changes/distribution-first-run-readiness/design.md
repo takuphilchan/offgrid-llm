@@ -14,6 +14,13 @@ Deliver the requested safe installation and first-response workflow on this Wind
 - Retain complete app-local runtime layouts and extend discovery using executable-relative paths, not the current directory. Preserve explicitly configured paths and legacy workspace runtime resolution.
 - Reuse the pinned inference runtime manager behind a preparation/readiness API with bounded downloads, state/progress and cancellation. Reuse existing onboarding first-reply tracking. CPU/GPU suitability and runtime availability remain distinct.
 - Release trust verification checks actual packaged files; unsigned preview builds are explicitly labelled and release trust checks must not pass without real evidence. Signing credentials are an external prerequisite.
+- The user's later release-without-credentials instruction authorizes a manual
+  unsigned-preview channel. Native trust inspection still runs and records
+  failure to establish publisher trust; it is not converted into a passing
+  signed-release check. Publish as a prerelease without stable alias promotion,
+  retain source/channel markers, reject cross-channel asset reuse, and require
+  all normal source, payload and container checks. Future signed publication
+  remains separate qualification with a new release version.
 - Build a distinguishable preview from the current workspace after project checks, test installation with disposable identity/data, then upgrade the identified user installation. Back up application metadata/config and verify workspace preservation; do not move or erase model stores.
 
 ## Risks / Trade-offs
