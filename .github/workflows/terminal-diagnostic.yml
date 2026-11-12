@@ -1,0 +1,18 @@
+name: Isolated Windows terminal diagnostic
+on:
+  push:
+    branches: [diagnostic/terminal-ci-20261112]
+permissions:
+  contents: read
+jobs:
+  shell:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: npm ci --prefix apps/desktop --ignore-scripts --no-audit --no-fund
+      - name: Compare fixed shell startup cases in temporary profiles
+        run: node scripts/test/diagnose-terminal-startup.cjs
