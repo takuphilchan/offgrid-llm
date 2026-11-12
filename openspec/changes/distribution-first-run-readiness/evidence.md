@@ -399,3 +399,27 @@ locally with an intentionally conflicting PowerShell 7 module path. Hosted
 Windows diagnostic run `43152327502` (job `130964207324`) also passed both the
 terminal fixture and installer tests. Product installer code is unchanged by
 this harness fix; the final revised source still requires full CI.
+
+Run `43152537860` passed both macOS jobs and the Windows shell/installer
+fixtures, but failed two stale UI harness assumptions. The Windows terminal
+test selected an obsolete menu role/label; it now identifies the unique native
+terminal action by its accelerator. Both that fixture and the browser identity
+isolation scenario now explicitly dismiss workspace-scoped onboarding before
+interacting with controls behind its modal. The observed engine-preparation
+warning belonged to the isolated mock service, which lacks that endpoint.
+The Linux browser run passed 1,573 tests with 32 skips and one failure at the
+obstructed control; it is not qualifying full-source evidence.
+
+During diagnosis, deferred-handshake regression tests independently demonstrated
+that an old terminal visibility snapshot could overwrite a newer host event.
+The renderer now preserves the newer visibility and focus instruction. This
+ordering issue was not the cause of the observed onboarding obstruction.
+All four ordering tests passed; the complete desktop unit suite passed 206
+tests with one skip. A freshly built isolated Windows package, whose renderer
+bytes matched source, passed the full native terminal fixture (input, Unicode,
+search, clipboard policy, tabs, zoom, reload and owned-child shutdown).
+Evidence: `C:/Users/phil/AppData/Local/Temp/offgrid-desktop-theme-GEyx7w`.
+The corrected browser workspace/actor isolation test passed three consecutive
+runs without retries. Source-size, syntax and strict OpenSpec checks passed.
+These changes still require a new complete CI run. The local diagnostic package
+was not installed over the user's app or designated a public release artifact.

@@ -476,6 +476,12 @@ test('profile and tool choices do not leak into another workspace or actor',asyn
     f.identity(workspace,actor);
     await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
     await page.getByRole('region', { name: 'Workspace options', exact: true }).getByRole('button',{name:'Refresh',exact:true}).click();
+    // Each new workspace/actor has its own setup state. Wait for that identity
+    // transition, then dismiss setup before inspecting its agent selection.
+    const onboarding=page.locator('dialog.onboarding');
+    await expect(onboarding).toBeVisible();
+    await onboarding.locator('.onboarding-close').click();
+    await expect(onboarding).toHaveCount(0);
     await page.keyboard.press('Escape');
     await page.locator('.composer-context-menu > button').click();await expect(page.getByRole('button',{name:'Agent',exact:true})).toContainText('No agent');
     await page.keyboard.press('Escape');

@@ -97,9 +97,12 @@ async function launch() {
     win.unmaximize();win.setContentSize(1280,900);win.webContents.setZoomFactor(1);
   });
   await expect.poll(()=>page.evaluate(()=>innerWidth)).toBeGreaterThan(1023);
-  await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete','true'));
-  await page.evaluate(() => localStorage.setItem('offgrid.onboarding.complete','true'));
-  await page.reload();
+  // Setup is workspace-scoped. Dismiss it through the real UI instead of
+  // changing a legacy preference after that preference has already migrated.
+  const onboarding=page.locator('dialog.onboarding');
+  await expect(onboarding).toBeVisible();
+  await onboarding.locator('.onboarding-close').click();
+  await expect(onboarding).toHaveCount(0);
 
   console.log('Packaged theme fixture connected');
   return page;
@@ -128,7 +131,14 @@ try {
  assert.equal(await page.evaluate(()=>typeof window.terminalDesktop),'undefined');
  await app.evaluate(({dialog},folder)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[folder]});dialog.showMessageBox=async()=>({response:1});},evidence);
  console.log('Opening dock');
- await app.evaluate(({Menu})=>Menu.getApplicationMenu().items.find(x=>x.role==='viewmenu').submenu.items.find(x=>x.label==='Terminal').click());
+ // Localized menus use explicit labels instead of Electron's viewmenu role.
+ // Select the same native terminal action by its stable keyboard accelerator.
+ await app.evaluate(({Menu})=>{
+   const actions=Menu.getApplicationMenu().items.flatMap(item=>item.submenu?.items??[])
+     .filter(item=>item.accelerator==='CommandOrControl+`');
+   if(actions.length!==1)throw Error('Expected one native terminal menu action');
+   actions[0].click();
+ });
  await expect.poll(()=>app.context().pages().some(x=>x.url().endsWith('/terminal.html'))).toBe(true);
  const terminal=app.context().pages().find(x=>x.url().endsWith('/terminal.html'));
  terminal.setDefaultTimeout(15000);
