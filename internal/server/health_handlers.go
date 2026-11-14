@@ -64,6 +64,9 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"cache": s.cache.Stats(),
 	}
 
+	if s.providerScheduler != nil {
+		health["scheduling"] = s.providerScheduler.AdmissionStatus()
+	}
 	if err := json.NewEncoder(w).Encode(health); err != nil {
 		log.Printf("Error encoding health response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)

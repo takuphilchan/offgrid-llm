@@ -9,19 +9,32 @@ import (
 // The worker still validates its private credential, binding and journal. No
 // HTTP/model payload may construct this endpoint or turn on process authority.
 type LocalEndpoint struct {
-	Worker   *Worker
-	mu       sync.Mutex
-	jobs     map[string]context.CancelFunc
-	contexts map[string]context.Context
-	closed   bool
-	dispatch sync.Mutex
+	Worker        *Worker
+	mu            sync.Mutex
+	jobs          map[string]context.CancelFunc
+	contexts      map[string]context.Context
+	closed        bool
+	dispatch      sync.Mutex
+	preparing     sync.Mutex
+	WorkingCopies *WorkingCopies
+	prepared      map[string]*PreparedWorker
+	boundJob      string
+	preparations  map[string]*workerPreparation
+	seals         map[string]*workerSeal
+	preparationWG sync.WaitGroup
 }
 
 func NewLocalEndpoint(worker *Worker) *LocalEndpoint {
-	return &LocalEndpoint{Worker: worker, jobs: map[string]context.CancelFunc{}, contexts: map[string]context.Context{}}
+	return &LocalEndpoint{Worker: worker, WorkingCopies: worker.WorkingCopies, jobs: map[string]context.CancelFunc{}, contexts: map[string]context.Context{}}
 }
 
 func (e *LocalEndpoint) Check(ctx context.Context, b Binding) (Context, error) {
+	if child, err := e.childEndpoint(b); child != nil || err != nil {
+		if err != nil {
+			return Context{}, err
+		}
+		return child.Check(ctx, b)
+	}
 	e.mu.Lock()
 	closed := e.closed
 	e.mu.Unlock()
@@ -32,6 +45,15 @@ func (e *LocalEndpoint) Check(ctx context.Context, b Binding) (Context, error) {
 }
 
 func (e *LocalEndpoint) Admit(ctx context.Context, b Binding) error {
+	if child, err := e.childEndpoint(b); child != nil || err != nil {
+		if err != nil {
+			return err
+		}
+		return child.Admit(ctx, b)
+	}
+	if e.boundJob != "" && e.boundJob != b.Job {
+		return ErrAuthority
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -58,6 +80,12 @@ func (e *LocalEndpoint) Admit(ctx context.Context, b Binding) error {
 }
 
 func (e *LocalEndpoint) Call(ctx context.Context, r Request) (Response, error) {
+	if child, err := e.childEndpoint(r.Binding); child != nil || err != nil {
+		if err != nil {
+			return Response{}, err
+		}
+		return child.Call(ctx, r)
+	}
 	e.dispatch.Lock()
 	defer e.dispatch.Unlock()
 	e.mu.Lock()
@@ -85,17 +113,60 @@ func (e *LocalEndpoint) Call(ctx context.Context, r Request) (Response, error) {
 }
 
 func (e *LocalEndpoint) Cancel(ctx context.Context, b Binding) error {
+	if child, err := e.childEndpoint(b); child != nil || err != nil {
+		if err != nil {
+			return err
+		}
+		return child.Cancel(ctx, b)
+	}
 	if _, err := e.Check(ctx, b); err != nil {
 		return err
 	}
 	e.mu.Lock()
 	cancel := e.jobs[b.Job]
+	children := []*PreparedWorker{}
+	pending := []<-chan struct{}{}
+	for _, preparation := range e.preparations {
+		if preparation.parent == b {
+			pending = append(pending, preparation.done)
+		}
+	}
+	for _, operation := range e.seals {
+		if operation.parent == b && operation.done != nil {
+			pending = append(pending, operation.done)
+		}
+	}
+	for _, child := range e.prepared {
+		if child.Record.Source == b {
+			children = append(children, child)
+		}
+	}
 	e.mu.Unlock()
 	if cancel == nil {
 		return ErrAuthority
 	}
 	cancel()
-	return e.Worker.Processes.CancelJob(ctx, b)
+	if err := e.Worker.Processes.CancelJob(ctx, b); err != nil {
+		return err
+	}
+	for _, done := range pending {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	for _, child := range children {
+		select {
+		case <-child.done:
+			if child.closeErr != nil {
+				return child.closeErr
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
 }
 
 func (e *LocalEndpoint) Close() error {
@@ -104,13 +175,23 @@ func (e *LocalEndpoint) Close() error {
 	for _, cancel := range e.jobs {
 		cancel()
 	}
+	children := make([]*PreparedWorker, 0, len(e.prepared))
+	for _, child := range e.prepared {
+		children = append(children, child)
+	}
 	e.mu.Unlock()
 	e.Worker.Session.Revoke()
+	e.preparationWG.Wait()
 	// Revoke first, then settle the last private dispatch before waiting on
 	// receipt goroutines. No concurrent Handle may add work after Wait begins.
 	e.dispatch.Lock()
 	defer e.dispatch.Unlock()
 	err := e.Worker.Processes.Close()
 	e.Worker.finishing.Wait()
+	for _, child := range children {
+		if childErr := child.Close(); childErr != nil && err == nil {
+			err = childErr
+		}
+	}
 	return err
 }

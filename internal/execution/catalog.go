@@ -39,6 +39,7 @@ func Tools() []api.Tool {
 		return map[string]any{"path": path, "offset": map[string]any{"type": "integer", "minimum": 0, "maximum": maxOffset, "description": "First page: omit/0. Continue with this target's next_offset and revision."}, "limit": map[string]any{"type": "integer", "minimum": 0, "maximum": maxLimit, "description": "Page size; omit/0 uses default."}, "revision": revision}
 	}
 	return []api.Tool{
+		tool(IntegrateTool, "Apply a current combined candidate from a completed test worker to the approved original folder. Requires retained successful validation covering the editing results. Preserves displaced files and reports conflicts/partial outcomes. Never resubmit uncertain integration or claim semantic completion from file receipts alone.", map[string]any{"worker_run_id": map[string]any{"type": "string", "minLength": 1, "maxLength": 256}}, "worker_run_id"),
 		tool("workspace_info", "Inspect the explicitly approved execution host, root and current directory. This is not the service filesystem.", map[string]any{}),
 		tool("workspace_list", "List approved workspace entries, not file contents. First call: {\"path\":\".\"}. New targets omit revision; continuation uses their own next_offset/revision.", page(MaxEntriesPerPage, MaxDirectoryEntries)),
 		tool("workspace_read", "Read exact UTF-8 text without line prefixes; data is original base64 bytes, including binary/split characters. Follow next_offset/revision to complete a file. Never treat partial pages as complete or repeat mutations.", page(MaxPageBytes, MaxFileBytes), "path"),
@@ -123,7 +124,7 @@ func Descriptor(name string) (capabilities.Descriptor, bool) {
 			encoded, _ := json.Marshal(tool)
 			sum := sha256.Sum256(encoded)
 			kind := capabilities.Read
-			if name == "workspace_write" || name == InputWriteTool || name == "workspace_change_directory" {
+			if name == "workspace_write" || name == InputWriteTool || name == "workspace_change_directory" || name == IntegrateTool {
 				kind = capabilities.Write
 			}
 			if name == "workspace_process_start" || name == "workspace_process_stop" {
@@ -136,6 +137,9 @@ func Descriptor(name string) (capabilities.Descriptor, bool) {
 }
 
 func Permitted(name string, p Permissions) bool {
+	if name == IntegrateTool {
+		return p.Read && p.Write
+	}
 	if name == "workspace_process_start" || name == "workspace_process_stop" || name == "workspace_process_wait" || name == "workspace_process_output" {
 		return p.Processes
 	}

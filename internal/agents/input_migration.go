@@ -1,8 +1,10 @@
 package agents
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -13,12 +15,23 @@ import (
 )
 
 // Schema 3 introduced interruptions; schema 4 adds durable context and child
-// graphs. Gate older binaries even though the SQLite table layout is stable.
+// graphs; schema 5 adds correction epochs and stale dependency versions;
+// schema 6 adds canonical conversation control; schema 7 adds user preferences.
+// Schema 8 adds conversation inbox fences that older runners cannot enforce.
+// Schema 9 retains work attempts and cumulative worker-session limits.
+// Schema 10 retains child allocation settlement receipts across recovery.
+// Schema 11 enforces pinned input-token reservations across runs and probes.
+// Schema 12 enforces tool invocation reservations and settlement receipts.
+// Schema 13 retains owned-process reservations and authenticated usage evidence.
+// Older binaries must not open unsupported state.
+// Schema 23 retains primary worker-question reviews and their pinned commands.
+// Schema 24 pins worker admission, concurrency and allocation policy per work.
+// Schema 25 seals canonical results and their source provenance independently of runs.
 func migrateTaskInputs(db *sql.DB, directory string) error {
 	return migrateTaskVersion(db, directory, 2, taskSchemaVersion)
 }
 
-func migrateTaskVersion(db *sql.DB, directory string, from, to int) error {
+func migrateTaskVersion(db *sql.DB, directory string, from, to int) (resultErr error) {
 	if err := validateTaskActivityDatabase(db); err != nil {
 		return err
 	}
@@ -77,11 +90,42 @@ func migrateTaskVersion(db *sql.DB, directory string, from, to int) error {
 	if err != nil {
 		return err
 	}
-	tx, err := db.Begin()
+	// A dedicated connection prevents temporarily disabled foreign-key checks
+	// from reaching another caller. Rebuild the referenced record table using
+	// SQLite's documented create/copy/drop/rename migration sequence.
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err = conn.ExecContext(ctx, `PRAGMA foreign_keys=OFF`); err != nil {
+		return err
+	}
+	defer func() {
+		_, restoreErr := conn.ExecContext(ctx, `PRAGMA foreign_keys=ON`)
+		if restoreErr != nil {
+			// Never return an unchecked connection to the pool.
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+			if resultErr == nil {
+				resultErr = restoreErr
+			}
+		}
+	}()
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+	if _, err = tx.Exec(controlSchema); err != nil {
+		return err
+	}
+	if err = migrateControlRecordKinds(tx); err != nil {
+		return err
+	}
+	if err = migrateControlResults(tx); err != nil {
+		return err
+	}
 	if _, err = tx.Exec(`INSERT INTO agent_migrations(version,manifest) VALUES(?,?)`, to, manifest); err != nil {
 		return err
 	}
@@ -95,6 +139,9 @@ func migrateTaskVersion(db *sql.DB, directory string, from, to int) error {
 	}
 	if count != 1 {
 		return fmt.Errorf("task schema changed during migration")
+	}
+	if err = checkControlForeignKeys(tx); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

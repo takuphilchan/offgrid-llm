@@ -47,6 +47,9 @@ func (sm *SessionManager) removeConversationFiles(name string) error {
 func (s *ScopedManager) DeleteAttachment(name, id string) error {
 	s.manager.mutationMu.Lock()
 	defer s.manager.mutationMu.Unlock()
+	if err := s.checkCanonicalName(name); err != nil {
+		return err
+	}
 	session, err := s.Load(name)
 	if err != nil {
 		return err

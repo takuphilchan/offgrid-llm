@@ -126,5 +126,46 @@
   "i18n/computer-experience:copy": {
     "cancel": "Cancel",
     "details": "Technical details"
+  },
+  "i18n/conversation-input:conversationInputText": {
+    "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+  },
+  "i18n/work-changes:labels": {
+    "0": "Changes",
+    "1": "Worker proposal",
+    "2": "Tested candidate",
+    "3": "Files",
+    "4": "Validation",
+    "5": "Integration receipts",
+    "6": "Load more",
+    "7": "Refresh",
+    "8": "No saved changes",
+    "9": "Source access is unavailable. Saved status remains visible.",
+    "10": "Earlier instructions",
+    "11": "Tests and file writes do not establish task completion.",
+    "12": "Original retained",
+    "13": "Download proposed file",
+    "14": "Inspect worker",
+    "15": "Created",
+    "16": "Updated",
+    "17": "Deleted",
+    "18": "Integrated",
+    "19": "Partial",
+    "20": "Conflict",
+    "21": "Uncertain",
+    "22": "Passed",
+    "23": "Failed",
+    "24": "Not verified"
+  },
+  "i18n/work-change-recovery:labels": {
+    "0": "Preserved files",
+    "1": "Download retained file",
+    "2": "Review these copies before restoring a file. Unconfirmed copies may contain staged changes."
+  },
+  "i18n/conversation-input-mode:conversationInputModeText": {
+    "label": "Send as",
+    "answer": "Answer the question",
+    "message": "Message about this work",
+    "newWork": "New task"
   }
 }

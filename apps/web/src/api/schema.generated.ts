@@ -4,6 +4,483 @@
  */
 
 export interface paths {
+    "/api/v2/user-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getUserPreferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/user-preferences/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Replaces preferences only. Empty payload inherits service defaults. Does not change accepted runs, restrictions, host grants or memory consent. */
+        post: operations["configureUserPreferences"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCanonicalConversations"];
+        put?: never;
+        /** @description Preview admission must be enabled. Creates a conversation or explicitly imports an owned inactive legacy session. Creates a private default project when none is selected. No profile or model call is required. Imports retain source bytes and atomically switch write authority. */
+        post: operations["createCanonicalConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getCanonicalConversation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Target must match the path. Identical retries return the original receipt before checking mutable resource readiness. New work is committed with its run before the existing coordinator can dispatch it. */
+        post: operations["commandCanonicalConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/events": {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getCanonicalConversationEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/inputs": {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getConversationInputs"];
+        put?: never;
+        /** @description Accepts text independently of model readiness. Preview admission must be enabled for new input; identical retries return their original receipt. Pending-question answers and approvals use existing work controls. */
+        post: operations["submitConversationInput"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/inputs/{input_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                input_id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getConversationInput"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/inputs/{input_id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                input_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Stop withdraws unapplied input, separately from stopping work. Continue resumes the pinned interrupted foreground attempt and its remaining budget. Revalidate explicitly approves applying the saved exact correction against the specified current work instruction version. No command grants host access. */
+        post: operations["controlConversationInput"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/conversations/{id}/configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getCanonicalConversationConfiguration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listConversationProjects"];
+        put?: never;
+        /** @description Creates private preferences and resource references. Does not grant resource access or enroll execution hosts. */
+        post: operations["createConversationProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/projects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getConversationProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/projects/{id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["commandConversationProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/results/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Retrieve immutable output with settlement provenance. Requires current owner and source access. Reads never resume execution. Byte offsets must start at a UTF-8 boundary; a tiny limit returns at least one complete character. */
+        get: operations["getConversationResult"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/work-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listConversationWorkItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/work-items/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getConversationWorkItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/work-items/{id}/changes": {
+        parameters: {
+            query?: {
+                after?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Lists retained proposals and tested candidates, including unavailable-source status. Reading never grants access, dispatches or integrates work. */
+        get: operations["listWorkChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/work-items/{id}/changes/{change_id}": {
+        parameters: {
+            query?: {
+                view?: "files" | "validation" | "integration" | "recovery" | "content" | "preserved";
+                offset?: number;
+                /** @description Maximum 64 entries or 65536 content bytes. */
+                limit?: number;
+                /** @description Required result or observed retained-file SHA-256 for byte pages. */
+                hash?: string;
+                /** @description Required recovery artifact identity for preserved byte pages. */
+                artifact?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Reads exact captured evidence through current source access. No dispatch, recovery command, integration or new grant occurs. Content is base64 encoded; next_offset is an entry offset or byte offset according to view. */
+        get: operations["inspectWorkChange"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/work-items/{id}/events": {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getConversationWorkEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/work-items/{id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Commits graph fences and command receipt before cancellation. Controls require no model slot. Stop and Pause remain available after source revocation with content redacted. Continuation preserves consumed budgets and requires settled, recoverable state. */
+        post: operations["commandConversationWork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listWorkerSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getWorkerSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workers/{id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Messages fence outdated proposals and are applied once at a checkpoint. Continue creates another run under the same worker and root allowance; stopped workers require an explicit user continuation. Source access is rechecked; no grant is inherited from membership. */
+        post: operations["commandWorkerSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workers/{id}/messages": {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getWorkerMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/workers/{id}/events": {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getWorkerEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/models/import/gguf": {
         parameters: {
             query?: never;
@@ -1720,6 +2197,640 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        InferenceAdmissionStatus: {
+            policy: string;
+            /** @description Requests admitted before acquiring provider-family and runtime resources; not a count of active generations. */
+            admitted: number;
+            capacity: number;
+            foreground_queued: number;
+            background_queued: number;
+            queue_capacity: number;
+        };
+        WorkControlCommand: {
+            request_id: string;
+            target_id: string;
+            /** Format: int64 */
+            expected_revision: number;
+            /** @enum {string} */
+            kind: "stop" | "pause" | "correct" | "continue";
+            payload: {
+                /** @description Required only for correct. No budget is replenished. */
+                instruction?: string;
+            };
+        };
+        ConversationPreferences: {
+            model?: string;
+            profile_id?: string;
+            profile_revision?: number;
+            restrictions?: components["schemas"]["AgentResourceRestrictions"];
+            delegation?: boolean;
+        };
+        CanonicalConversation: {
+            pending_question?: components["schemas"]["ConversationQuestion"];
+            /**
+             * Format: int64
+             * @description Version of explicit project/folder selection. Ordinary messages do not advance it; late access approval preserves a newer selection.
+             */
+            context_revision?: number;
+            /** @description False when migrated browser-only configuration has no persisted evidence. */
+            configuration_known: boolean;
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            project_id: string;
+            title: string;
+            preferences: components["schemas"]["ConversationPreferences"];
+            focused_work_id?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @description Read-only projection of the focused work's pending primary clarification. Observation never answers or resumes work. */
+        ConversationQuestion: {
+            id: string;
+            work_id: string;
+            run_id: string;
+            content: string;
+        };
+        CanonicalConversationPage: {
+            items: components["schemas"]["CanonicalConversation"][];
+            next_cursor?: string;
+            has_more: boolean;
+        };
+        ConversationProject: {
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            name: string;
+            default: boolean;
+            preferences: components["schemas"]["ConversationPreferences"];
+            resources?: components["schemas"]["ProjectResourceReference"][];
+            /** @description SHA-256 of the accepted project TOML bytes. Absent after an explicit service preference edit. */
+            configuration_digest?: string;
+            /** @description Opaque host/folder identity. Project membership grants no access. */
+            folder_identity?: string;
+            /**
+             * @description Explicit service edits survive later folder refreshes.
+             * @enum {string}
+             */
+            configuration_source?: "file" | "service";
+        };
+        ProjectResourceReference: {
+            /** @enum {string} */
+            kind: "skill" | "knowledge" | "connection" | "instructions";
+            id: string;
+            /** @description Skill revision number */
+            revision?: string;
+            required?: boolean;
+        };
+        ResourceResolution: {
+            kind: string;
+            id: string;
+            revision?: string;
+            required?: boolean;
+            selected: boolean;
+            reason: string;
+        };
+        ProjectCommand: {
+            request_id: string;
+            /** @description Empty only for create_project. */
+            target_id: string;
+            /** Format: int64 */
+            expected_revision: number;
+            /** @enum {string} */
+            kind: "create_project" | "configure_project";
+            payload: {
+                name: string;
+                /** @description Version 1 UTF-8 project configuration */
+                configuration_toml?: string;
+                preferences?: components["schemas"]["ProjectPreferences"];
+                resources?: components["schemas"]["ProjectResourceReference"][];
+            };
+        };
+        UserDefaultValues: {
+            model?: string;
+            delegation?: boolean;
+        };
+        UserPreferences: {
+            /** @constant */
+            id: "user-defaults";
+            /** Format: int64 */
+            revision: number;
+            preferences: components["schemas"]["UserDefaultValues"];
+        };
+        UserPreferencesCommand: {
+            request_id: string;
+            /** @constant */
+            target_id: "user-defaults";
+            /** Format: int64 */
+            expected_revision: number;
+            /** @constant */
+            kind: "configure_user_preferences";
+            payload: components["schemas"]["UserDefaultValues"];
+        };
+        ProjectPreferences: {
+            model?: string;
+            delegation?: boolean;
+            /** @description Empty compatibility field only. Project preferences cannot grant or widen authority. */
+            restrictions?: Record<string, never>;
+        };
+        ConversationWorkItem: {
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            project_id: string;
+            /** Format: int64 */
+            project_revision: number;
+            objective: string;
+            acceptance: string[];
+            run_id: string;
+            /** @description Ordered retained execution attempts. run_id identifies the current attempt; prior outcomes are not rewritten. */
+            run_ids?: string[];
+            status: string;
+            instruction_version: number;
+            control_epoch: number;
+            result_reference?: string;
+            /** @description Completion does not imply independent verification. */
+            independently_verified: boolean;
+            worker_policy?: components["schemas"]["WorkerPolicy"];
+        };
+        /** @description Service-owned resource policy pinned at work admission; never an authority grant. Absent on older work, which retains version 1 defaults. */
+        WorkerPolicy: {
+            /** @enum {integer} */
+            version: 1;
+            max_sessions: number;
+            max_active: number;
+            /** @enum {integer} */
+            max_depth: 1;
+            initial_model_calls: number;
+        };
+        ConversationCommand: {
+            request_id: string;
+            /** @description Empty only when creating or importing a conversation. */
+            target_id: string;
+            /** Format: int64 */
+            expected_revision: number;
+            /** @enum {string} */
+            kind: "create_conversation" | "import_conversation" | "configure_conversation" | "rename_conversation" | "select_project" | "use_project_folder" | "clear_project_folder" | "link_work" | "focus_work" | "create_work";
+            payload: {
+                title?: string;
+                /** @description Required only for import_conversation with empty target and revision zero. Imports an owned inactive legacy session transactionally and retains its original files. */
+                legacy_name?: string;
+                /** @description link_work attaches owned accessible work and focuses it. focus_work requires an existing link; omit work_id to clear focus. Neither command dispatches or copies grants. */
+                work_id?: string;
+                project_id?: string;
+                /** @description Required only for use_project_folder. Resolves a live approved host and imports safe fixed-path project metadata. Does not create authority or rewrite existing work. */
+                folder?: components["schemas"]["ExecutionReference"];
+                preferences?: components["schemas"]["ConversationPreferences"];
+                input?: {
+                    content: string;
+                    model?: string;
+                    acceptance?: string[];
+                };
+            };
+        };
+        ConversationCommandReceipt: {
+            input?: components["schemas"]["ConversationInboxEntry"];
+            user_preferences?: components["schemas"]["UserPreferences"];
+            request_id: string;
+            target_id: string;
+            /** Format: int64 */
+            revision: number;
+            /** Format: int64 */
+            event_cursor: number;
+            conversation?: components["schemas"]["CanonicalConversation"];
+            work?: components["schemas"]["ConversationWorkItem"];
+            project?: components["schemas"]["ConversationProject"];
+            worker?: components["schemas"]["WorkerSession"];
+            message?: components["schemas"]["WorkerMessage"];
+            import?: components["schemas"]["ConversationImportManifest"];
+        };
+        ConversationInboxInput: {
+            /** @description Required for answer intent. Exact saved primary clarification identity; never authorizes host access. Omit for other intents. */
+            question_id?: string;
+            content: string;
+            model?: string;
+            /** @enum {string} */
+            intent?: "message" | "correction" | "new_work" | "answer";
+            /** @description Omitted uses current focus. Empty string selects unbound conversation input. */
+            focused_work_id?: string;
+            /** @enum {string} */
+            origin?: "typed" | "dictation" | "steering";
+        };
+        /** @description Preview text-input envelope. Acceptance is independent of inference readiness. Answer intent binds an exact primary clarification and records its mailbox/history/continuation transaction without another model turn. Host approvals retain their existing access controls. */
+        ConversationInputCommand: {
+            request_id: string;
+            target_id: string;
+            /** Format: int64 */
+            expected_revision: number;
+            /** @constant */
+            kind: "submit_input";
+            payload: components["schemas"]["ConversationInboxInput"];
+        };
+        ConversationInputControlCommand: {
+            request_id: string;
+            /** @description Input identity. */
+            target_id: string;
+            /**
+             * Format: int64
+             * @description Current containing-conversation revision.
+             */
+            expected_revision: number;
+            /** @enum {string} */
+            kind: "stop" | "continue" | "revalidate";
+            payload: {
+                /** @description Required and positive for revalidate; must match the current focused work instruction version. Otherwise omit or use zero. */
+                instruction_version?: number;
+            };
+        };
+        ConversationInboxEntry: {
+            question?: components["schemas"]["ConversationQuestion"];
+            /** @description Derived decision and result references withheld because actor or source access changed. Original user input and control state remain inspectable. */
+            context_unavailable?: boolean;
+            /** Format: date-time */
+            stopped_at?: string;
+            /** Format: date-time */
+            hold_released_at?: string;
+            /** Format: date-time */
+            revalidated_at?: string;
+            revalidated_instruction_version?: number;
+            decision?: components["schemas"]["ConversationDecision"];
+            decision_issue?: components["schemas"]["ConversationDecisionIssue"];
+            delivery_issue?: {
+                code: string;
+                message: string;
+                /** Format: date-time */
+                retry_at: string;
+            };
+            id: string;
+            /** Format: int64 */
+            sequence: number;
+            conversation_id: string;
+            /** Format: int64 */
+            conversation_revision: number;
+            request_id: string;
+            work_id?: string;
+            instruction_version?: number;
+            input: components["schemas"]["ConversationInboxInput"];
+            /** @description Work admitted from this input. The original work_id still identifies the input's previous focus. */
+            created_work_id?: string;
+            state: string;
+            run_id?: string;
+            /** Format: date-time */
+            accepted_at: string;
+            /** Format: date-time */
+            delivered_at?: string;
+            /** Format: date-time */
+            settled_at?: string;
+            run_status?: string;
+            result_reference?: string;
+            /** @enum {string} */
+            incorporation?: "answered" | "correction" | "new_work" | "worker_answer";
+            /** Format: date-time */
+            applied_at?: string;
+            applied_instruction_version?: number;
+        };
+        /** @description Durable foreground proposal. Only applied_at and applied_instruction_version confirm incorporation; a reply or recorded proposal alone does not. */
+        ConversationDecision: {
+            /** @enum {string} */
+            kind: "answered" | "correction" | "new_work";
+            /** @description Current work instruction version for a correction; otherwise zero. */
+            instruction_version: number;
+            /** @description Required only for new_work. A proposed acceptance condition; the objective remains the exact accepted user input. */
+            expected_result?: string;
+        };
+        ConversationDecisionIssue: {
+            code: string;
+            message: string;
+            /** Format: date-time */
+            retry_at: string;
+        };
+        ConversationInboxPage: {
+            items: components["schemas"]["ConversationInboxEntry"][];
+            /** Format: int64 */
+            next_cursor: number;
+            has_more: boolean;
+        };
+        ConversationImportManifest: {
+            /** @constant */
+            version: 1;
+            legacy_name: string;
+            conversation_id: string;
+            source_sha256: string;
+            /** @constant */
+            authority: "agent_control_store";
+            configuration_known: boolean;
+            legacy_run_ids: string[] | null;
+            /** Format: date-time */
+            imported_at: string;
+        };
+        WorkerSession: {
+            question?: components["schemas"]["WorkerQuestion"];
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            work_id: string;
+            root_run_id: string;
+            current_run_id: string;
+            run_ids: string[];
+            assignment_version: number;
+            assignment: {
+                goal: string;
+                expected_result: string;
+                /**
+                 * @description Assignment execution mode. Older stored assignments may omit it.
+                 * @enum {string}
+                 */
+                mode?: "research" | "edit" | "test";
+                /** @description Recorded delegation rationale when supplied; absent for legacy assignments. */
+                reason?: string;
+                tools: string[] | null;
+                depends_on: string[] | null;
+                instruction_version: number;
+                model_calls: number;
+                profile_id?: string;
+            };
+            status: string;
+            stopped: boolean;
+            closed: boolean;
+            result_reference?: string;
+        };
+        WorkerCommand: {
+            request_id: string;
+            target_id: string;
+            /** Format: int64 */
+            expected_revision: number;
+            /** @enum {string} */
+            kind: "message" | "stop" | "close" | "continue" | "answer";
+            payload: {
+                /** @description Required for message */
+                content?: string;
+                /** @description Required only for answer; identifies the exact pending question. */
+                question_id?: string;
+            };
+        };
+        WorkerQuestion: {
+            id: string;
+            worker_id: string;
+            run_id: string;
+            content: string;
+            instruction_version: number;
+            assignment_version: number;
+            /** @enum {string} */
+            state: "pending" | "answered";
+            /** Format: date-time */
+            requested_at: string;
+            /** @description Accepted answer's mailbox identity; consult its state for delivery and application. */
+            answer_message_id?: string;
+        };
+        WorkerMessage: {
+            question_id?: string;
+            id: string;
+            worker_id: string;
+            run_id: string;
+            content: string;
+            /** @enum {string} */
+            state: "accepted" | "delivered" | "applied" | "abandoned";
+            instruction_version: number;
+            /** Format: date-time */
+            accepted_at: string;
+            /** Format: date-time */
+            delivered_at?: string;
+            /** Format: date-time */
+            applied_at?: string;
+            /** Format: date-time */
+            abandoned_at?: string;
+            resolution_reason?: string;
+        };
+        WorkerMessagePage: {
+            items: components["schemas"]["WorkerMessage"][];
+            /** Format: int64 */
+            next_cursor: number;
+            has_more: boolean;
+        };
+        WorkChange: {
+            id: string;
+            work_id: string;
+            run_id: string;
+            worker_run_id: string;
+            /** @enum {string} */
+            kind: "proposal" | "candidate";
+            state: string;
+            /** Format: int64 */
+            instruction_version: number;
+            /** Format: int64 */
+            control_epoch: number;
+            current: boolean;
+            operation_count: number;
+            validation_state: string;
+            validation_count: number;
+            integration_id?: string;
+            integrated_count: number;
+            available: boolean;
+            limitation?: string;
+        };
+        ConversationResultPage: {
+            id: string;
+            run_id: string;
+            work_id?: string;
+            worker_id?: string;
+            conversation_id?: string;
+            instruction_version: number;
+            control_epoch: number;
+            status: string;
+            independently_verified: boolean;
+            evidence_steps: number[];
+            content: string;
+            offset: number;
+            next_offset: number;
+            total_bytes: number;
+            complete: boolean;
+        };
+        WorkChangeList: {
+            items: components["schemas"]["WorkChange"][];
+            next_cursor: string;
+            has_more: boolean;
+        };
+        WorkFileVersion: {
+            kind: string;
+            /** Format: int64 */
+            bytes: number;
+            mode: number;
+            sha256?: string;
+        };
+        WorkFileChange: {
+            path: string;
+            kind: string;
+            base?: components["schemas"]["WorkFileVersion"];
+            result?: components["schemas"]["WorkFileVersion"];
+        };
+        WorkValidationCheck: {
+            id: string;
+            state: string;
+            exit_code?: number;
+            request_digest: string;
+            receipt_digest: string;
+        };
+        WorkFileReceipt: {
+            ordinal: number;
+            path: string;
+            operation: string;
+            state: string;
+            dispatched: boolean;
+            original_retained: boolean;
+            displaced_digest?: string;
+            result_digest?: string;
+            error?: string;
+        };
+        WorkChangeContent: {
+            sha256: string;
+            /** Format: int64 */
+            bytes: number;
+            /** Format: int64 */
+            offset: number;
+            /** Format: byte */
+            data: string;
+        };
+        /** @description Observed retained content. Unconfirmed files do not prove a replacement occurred. Reads never restore files or settle uncertain work. */
+        WorkRecoveryFile: {
+            id: string;
+            path: string;
+            /** @enum {string} */
+            role: "displaced" | "unconfirmed";
+            /** Format: int64 */
+            bytes: number;
+            sha256?: string;
+            limitation?: string;
+        };
+        WorkChangeDetail: {
+            change: components["schemas"]["WorkChange"];
+            /** @enum {string} */
+            view: "files" | "validation" | "integration" | "recovery" | "content" | "preserved";
+            files?: components["schemas"]["WorkFileChange"][];
+            checks?: components["schemas"]["WorkValidationCheck"][];
+            receipts?: components["schemas"]["WorkFileReceipt"][];
+            recovery?: components["schemas"]["WorkRecoveryFile"][];
+            content?: components["schemas"]["WorkChangeContent"];
+            /** Format: int64 */
+            next_offset?: number;
+            conflict_path?: string;
+            error?: string;
+        };
+        EffectiveConversationPreferences: {
+            /** @description Observed availability of the saved folder reference. No grant is restored by inspection. */
+            folder?: {
+                session: string;
+                available: boolean;
+                reason: string;
+            };
+            /** Format: int64 */
+            user_preferences_revision?: number;
+            project_id: string;
+            /** Format: int64 */
+            project_revision: number;
+            resources: components["schemas"]["ResourceResolution"][];
+            configuration_known: boolean;
+            model: string;
+            delegation: boolean;
+            profile_id?: string;
+            profile_revision?: number;
+            restrictions: components["schemas"]["AgentResourceRestrictions"];
+            provenance: {
+                [key: string]: string;
+            };
+        };
+        ControlEventPage: {
+            events: {
+                /** Format: int64 */
+                cursor: number;
+                target_id: string;
+                /** Format: int64 */
+                revision: number;
+                kind: string;
+                /** Format: date-time */
+                recorded_at: string;
+                payload: {
+                    [key: string]: unknown;
+                };
+            }[];
+            /** Format: int64 */
+            next_cursor: number;
+            has_more: boolean;
+            history_gap: boolean;
+            snapshot?: components["schemas"]["CanonicalConversation"] | components["schemas"]["ConversationWorkItem"] | components["schemas"]["WorkerSession"];
+        };
+        AgentConversationConfiguration: {
+            /** @enum {integer} */
+            version: 1;
+            profile: components["schemas"]["AgentProfile"] | null;
+            model: string;
+            restrictions: components["schemas"]["AgentResourceRestrictions"];
+        };
+        /** @description Run accounting. Root attempts inherit prior root charges; do not sum attempts. Child allocations include pending reservations and retained spent slots. Context preparation is part of the inference allowance, not an additional time charge. */
+        TaskResourceUsage: {
+            model_call_limit: number;
+            model_calls: number;
+            child_call_allocations: number;
+            /** @description Service-observed invocation accounting; does not measure a process after its start invocation returns. Legacy reservations are conservative, not measured historical tool calls. */
+            tools?: {
+                version: number;
+                calls_per_decision: number;
+                /** Format: int64 */
+                per_call_ns: number;
+                reserved_calls: number;
+                legacy_reserved_calls: number;
+                /** Format: int64 */
+                charged_ns: number;
+                /** Format: int64 */
+                measured_ns: number;
+                unsettled_calls: number;
+            };
+            /** @description Owned-process supervised elapsed time, not CPU time. Start reservations remain charged until authenticated terminal timing is received. Missing legacy timing does not mean zero usage. Invocation and process timings overlap and must not be summed as elapsed latency. */
+            processes?: {
+                version: number;
+                /** Format: int64 */
+                per_decision_ns: number;
+                starts_per_decision: number;
+                reserved_starts: number;
+                legacy_reserved_starts: number;
+                /** Format: int64 */
+                charged_ns: number;
+                /** Format: int64 */
+                measured_ns: number;
+                unsettled_starts: number;
+            };
+            /** @description Root work reservation for private worker copies in logical file bytes, not physical disk allocation or an OS quota. Unknown preparation retains its full reservation; only confirmed artifact release refunds it. Measurements are last observed retained content, not a live disk scan. */
+            storage?: {
+                version: number;
+                /** Format: int64 */
+                limit_bytes: number;
+                /** Format: int64 */
+                charged_bytes: number;
+                retained_copies: number;
+                /** Format: int64 */
+                measured_bytes: number;
+                unmeasured_copies: number;
+            };
+            /** @description Absent for historical runs without input accounting; absence does not mean zero usage. */
+            input?: {
+                window: number;
+                /** Format: int64 */
+                charged_tokens: number;
+                /** Format: int64 */
+                measured_tokens: number;
+                unmeasured_calls: number;
+            };
+            /** Format: int64 */
+            charged_output_tokens: number;
+            /** Format: int64 */
+            measured_output_tokens: number;
+            /** Format: int64 */
+            charged_inference_ns: number;
+            /** Format: int64 */
+            measured_inference_ns: number;
+            context_preparations: number;
+            /** Format: int64 */
+            measured_context_preparation_ns: number;
+        };
         /** @description Native engine preparation only. Ready verifies runtime startup flags, not model inference or workflow quality. Progress is service-local and is not durable across restart. */
         InferenceRuntimeReadiness: {
             /** @enum {string} */
@@ -1869,6 +2980,7 @@ export interface components {
             inference?: {
                 [key: string]: unknown;
             };
+            scheduling?: components["schemas"]["InferenceAdmissionStatus"];
             system?: {
                 [key: string]: unknown;
             };
@@ -2484,6 +3596,10 @@ export interface components {
             metrics?: components["schemas"]["ChatTimings"];
         };
         ChatSession: {
+            /** @description Stable conversation identity after the canonical ownership switch. */
+            canonical_id?: string;
+            /** Format: int64 */
+            control_revision?: number;
             turn?: components["schemas"]["SessionTurn"];
             jobs?: {
                 turn_id: string;
@@ -2992,9 +4108,9 @@ export interface components {
             id: string;
             call_id: string;
             /** @enum {string} */
-            kind: "computer" | "workspace";
+            kind: "computer" | "workspace" | "worker_question" | "worker_clarification";
             /** @enum {string} */
-            mode: "app" | "browser" | "desktop" | "read" | "edit" | "trusted";
+            mode: "app" | "browser" | "desktop" | "read" | "edit" | "trusted" | "clarification";
             /** @description Model-proposed label only; never a host identity or consent grant. */
             target: string;
             /** @description Proposed HTTPS address for local review. */
@@ -3011,6 +4127,10 @@ export interface components {
         };
         TaskChild: {
             id: string;
+            /** @description Stable resumable worker session; absent for legacy child runs. */
+            worker_id?: string;
+            /** @description The assignment or prerequisite result was superseded; retained output is evidence only. */
+            invalidated?: boolean;
             /**
              * @description Last persisted child status
              * @enum {string}
@@ -3134,6 +4254,10 @@ export interface components {
             processes: boolean;
         };
         ExecutionWorkspace: {
+            /** @description Approved host supports stable folder identity and bounded project configuration retrieval. */
+            project_context?: boolean;
+            /** @description Admission-time host support for independently prepared workers. This metadata is not authority; live host policy is rechecked before preparation. */
+            prepared_workers?: boolean;
             reference: components["schemas"]["ExecutionReference"];
             backend: string;
             /** @description Provider-local approved root */
@@ -3147,6 +4271,8 @@ export interface components {
             };
         };
         AgentRunResponse: {
+            /** @description Stable work identity */
+            work_id?: string;
             schedule?: components["schemas"]["AgentScheduleOrigin"];
             origin?: {
                 workspace: string;
@@ -3199,8 +4325,14 @@ export interface components {
             }[];
             parent_id?: string;
             children?: components["schemas"]["TaskChild"][] | null;
-            /** @description Running parent work queues corrections for the next safe boundary; settled interrupted work applies them without resuming. Children */
+            /** @description Running parent work queues corrections for the next safe boundary; delegated work fences child dispatch and waits for operations to settle. Paused work stays paused. Children and unresolved parent effects cannot accept new instructions. Rechecked at admission. */
             can_steer?: boolean;
+            /** @description Applied instruction version; retained results from earlier versions are evidence rather than current completion. */
+            instruction_version?: number;
+            /** @description Persisted control generation advanced by accepted corrections and lifecycle commands. */
+            control_epoch?: number;
+            conversation_configuration?: components["schemas"]["AgentConversationConfiguration"];
+            resource_usage?: components["schemas"]["TaskResourceUsage"];
             plan?: components["schemas"]["TaskPlanItem"][] | null;
             context?: components["schemas"]["TaskContext"] | null;
             last_access?: components["schemas"]["AgentInputRequest"] | null;
@@ -3360,6 +4492,958 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getUserPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current actor/workspace defaults. Revision zero means no saved defaults; this read creates no state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferences"];
+                };
+            };
+        };
+    };
+    configureUserPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserPreferencesCommand"];
+            };
+        };
+        responses: {
+            /** @description Committed preference command, or the identical recorded receipt on retry. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Invalid envelope or unsupported preference. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request identity conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listCanonicalConversations: {
+        parameters: {
+            query?: {
+                after?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Actor/workspace scoped page; observing does not create a default project or dispatch work. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CanonicalConversationPage"];
+                };
+            };
+        };
+    };
+    createCanonicalConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationCommand"];
+            };
+        };
+        responses: {
+            /** @description Identical recorded retry; no execution is resumed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Command committed with revision, event and outbox. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Request identity conflicts with previously accepted content. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description New admission disabled; existing resources remain readable and controllable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getCanonicalConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authoritative conversation snapshot. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CanonicalConversation"];
+                };
+            };
+            /** @description Conversation unavailable in this actor/workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    commandCanonicalConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationCommand"];
+            };
+        };
+        responses: {
+            /** @description Previously accepted command. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Accepted command. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Revision or request identity conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Required model or scoped resource unavailable. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description New admission disabled. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getCanonicalConversationEvents: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered page. Expired cursors include history_gap and a current snapshot. GET never approves, continues or dispatches work. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlEventPage"];
+                };
+            };
+        };
+    };
+    getConversationInputs: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered durable inbox state. Observation never prepares, resumes or dispatches execution. Result retrieval retains its own source-access checks. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationInboxPage"];
+                };
+            };
+            /** @description Invalid cursor or limit. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conversation unavailable in this actor/workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    submitConversationInput: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationInputCommand"];
+            };
+        };
+        responses: {
+            /** @description Recorded identical receipt; no new dispatch. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Input, conversation event and affected work fences committed. Execution is service-owned. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Invalid input or envelope. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Focused work sources unavailable. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conversation or focused work unavailable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request identity conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pending-question answers require their existing work control. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description New input admission disabled or service storage unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getConversationInput: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                input_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted input and its delivery/incorporation state, including any preparation limitation. No execution is resumed by this read. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationInboxEntry"];
+                };
+            };
+            /** @description Input unavailable in this conversation and actor/workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    controlConversationInput: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                input_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationInputControlCommand"];
+            };
+        };
+        responses: {
+            /** @description Recorded identical control receipt. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Control committed. Stop remains stopping until active operations and hold release settle. Already applied input returns its recorded outcome. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Invalid envelope or control. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current actor or source access does not permit continuation or revalidation. Stop remains available to the authorized owner. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Input unavailable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description State */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getCanonicalConversationConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resolved preferences and provenance. This response is not a host grant or proof of live resource authority. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveConversationPreferences"];
+                };
+            };
+        };
+    };
+    listConversationProjects: {
+        parameters: {
+            query?: {
+                after?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private scoped project metadata. Membership grants no access. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ConversationProject"][];
+                        next_cursor?: string;
+                        has_more: boolean;
+                    };
+                };
+            };
+        };
+    };
+    createConversationProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectCommand"];
+            };
+        };
+        responses: {
+            /** @description Committed project command or its recorded identical receipt. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Request identity conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getConversationProject: {
+        parameters: {
+            query?: {
+                /** @description Omit for the current project; supply to inspect an immutable admitted revision. */
+                revision?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Project preferences. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationProject"];
+                };
+            };
+        };
+    };
+    commandConversationProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectCommand"];
+            };
+        };
+        responses: {
+            /** @description Committed revision or previously recorded identical command. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Revision or request identity conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getConversationResult: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded saved output */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationResultPage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    listConversationWorkItems: {
+        parameters: {
+            query?: {
+                after?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scoped work identities and current state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ConversationWorkItem"][];
+                        next_cursor?: string;
+                        has_more: boolean;
+                    };
+                };
+            };
+        };
+    };
+    getConversationWorkItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Work identity and current run. Host grant material remains private. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        work: components["schemas"]["ConversationWorkItem"];
+                        run: components["schemas"]["AgentRunResponse"];
+                    };
+                };
+            };
+        };
+    };
+    listWorkChanges: {
+        parameters: {
+            query?: {
+                after?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned work changes without host grants or private paths. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkChangeList"];
+                };
+            };
+        };
+    };
+    inspectWorkChange: {
+        parameters: {
+            query?: {
+                view?: "files" | "validation" | "integration" | "recovery" | "content" | "preserved";
+                offset?: number;
+                /** @description Maximum 64 entries or 65536 content bytes. */
+                limit?: number;
+                /** @description Required result or observed retained-file SHA-256 for byte pages. */
+                hash?: string;
+                /** @description Required recovery artifact identity for preserved byte pages. */
+                artifact?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded authorized evidence. Validation and file integration are not semantic task-completion claims. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkChangeDetail"];
+                };
+            };
+            /** @description Source authority is unavailable or revoked. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Owned work or change reference was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Native evidence is unavailable or does not match the captured reference. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getConversationWorkEvents: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Work events committed alongside run state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlEventPage"];
+                };
+            };
+        };
+    };
+    commandConversationWork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkControlCommand"];
+            };
+        };
+        responses: {
+            /** @description Identical recorded retry; no control is re-applied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Accepted control. Stopping and pausing remain pending until active operations settle. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Changed revision */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listWorkerSessions: {
+        parameters: {
+            query?: {
+                after?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scoped worker metadata, excluding revoked-source content. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["WorkerSession"][];
+                        next_cursor?: string;
+                        has_more: boolean;
+                    };
+                };
+            };
+        };
+    };
+    getWorkerSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Worker assignment, stable identity and run history. Completion is separate from verification. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerSession"];
+                };
+            };
+        };
+    };
+    commandWorkerSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerCommand"];
+            };
+        };
+        responses: {
+            /** @description Previously committed identical command; not applied twice. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Committed worker command. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationCommandReceipt"];
+                };
+            };
+            /** @description Revision conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getWorkerMessages: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered durable mailbox with accepted, delivered, applied and abandoned states. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerMessagePage"];
+                };
+            };
+        };
+    };
+    getWorkerEvents: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered worker control events; reading never delivers or applies messages. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlEventPage"];
+                };
+            };
+        };
+    };
     importOfflineGGUF: {
         parameters: {
             query: {

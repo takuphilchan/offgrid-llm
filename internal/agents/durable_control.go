@@ -24,6 +24,7 @@ func (r *Runner) Stop(id, actor, action, approvalID string) (*Task, error) {
 		if task.Status == TaskCompleted || task.Status == TaskFailed || task.Status == TaskCancelled {
 			return ErrRunConflict
 		}
+		task.ControlEpoch++
 		finishTask(task, TaskCancelled, "Stopped by user.")
 		if HasOwnedExecutionProcesses(task) {
 			task.Status, task.ErrorCode, task.Error, task.CompletedAt = TaskInterrupted, "execution_stopping", "Stopping owned local processes; termination is not yet confirmed.", nil

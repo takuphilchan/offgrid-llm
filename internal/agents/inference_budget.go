@@ -29,9 +29,10 @@ func (r *Runner) BeginSyntheticProbe(ctx context.Context, id, actor string, maxO
 		if task.Actor != actor {
 			return ErrTaskNotFound
 		}
-		if task.DeletedAt != nil || task.ParentID != "" || task.Status != TaskInput || task.PendingInput == nil || task.PendingInput.Kind != "computer" || task.Checkpoint == nil {
+		if task.DeletedAt != nil || hasConversationHold(task) || task.ParentID != "" || task.Status != TaskInput || task.PendingInput == nil || task.PendingInput.Kind != "computer" || task.Checkpoint == nil {
 			return ErrRunConflict
 		}
+		r.pinInputContext(task)
 		if err := reserveSyntheticProbeBudget(task, maxOutput, maxTime); err != nil {
 			return fmt.Errorf("%w: %v", ErrInferenceBudget, err)
 		}
@@ -70,9 +71,10 @@ func (r *Runner) ReserveSyntheticProbeBudget(id, actor string, maxOutput int, ma
 		if task.Actor != actor {
 			return ErrTaskNotFound
 		}
-		if task.DeletedAt != nil || task.ParentID != "" || task.Status != TaskInput || task.PendingInput == nil || task.PendingInput.Kind != "computer" || task.Checkpoint == nil {
+		if task.DeletedAt != nil || hasConversationHold(task) || task.ParentID != "" || task.Status != TaskInput || task.PendingInput == nil || task.PendingInput.Kind != "computer" || task.Checkpoint == nil {
 			return ErrRunConflict
 		}
+		r.pinInputContext(task)
 		if err := reserveSyntheticProbeBudget(task, maxOutput, maxTime); err != nil {
 			return fmt.Errorf("%w: %v", ErrInferenceBudget, err)
 		}
@@ -95,9 +97,18 @@ func reserveModelBudget(task *Task) error {
 		task.Config.MaxTokens = DefaultAgentConfig().MaxTokens
 	}
 	cp := task.Checkpoint
+	if err := ensureToolBudget(task); err != nil {
+		return err
+	}
+	if err := ensureProcessBudget(task); err != nil {
+		return err
+	}
 	perCall := int64(task.Config.MaxTokens)
 	perCallNS := int64(task.Config.TimeoutPerStep)
 	slots := task.Config.MaxIterations - cp.ReservedChildIterations
+	if reviewingWorkerQuestion(task) {
+		slots -= max(2, (task.Config.MaxIterations+9)/10)
+	}
 	if slots < 1 || int64(slots) > math.MaxInt64/perCall || int64(slots) > math.MaxInt64/perCallNS {
 		return fmt.Errorf("Task's aggregate inference budget is exhausted; no generation was dispatched")
 	}
@@ -116,6 +127,9 @@ func reserveModelBudget(task *Task) error {
 		cp.ChargedCompletionTokens > int64(slots)*perCall-perCall ||
 		cp.ChargedInferenceNS > int64(slots)*perCallNS-perCallNS {
 		return fmt.Errorf("Task's aggregate inference budget is exhausted; no generation was dispatched")
+	}
+	if err := reserveInputBudget(task, false); err != nil {
+		return err
 	}
 	cp.BudgetedModelCalls++
 	cp.ChargedCompletionTokens += perCall
@@ -143,6 +157,9 @@ func reserveSyntheticProbeBudget(task *Task, maxOutput int, maxTime time.Duratio
 	timeLimit := int64(slots) * int64(task.Config.TimeoutPerStep)
 	if cp.ChargedCompletionTokens < 0 || cp.ChargedInferenceNS < 0 || cp.ChargedCompletionTokens > tokenLimit-int64(maxOutput) || cp.ChargedInferenceNS > timeLimit-int64(maxTime) {
 		return fmt.Errorf("Task probe budget is exhausted; no model check was dispatched")
+	}
+	if err := reserveInputBudget(task, true); err != nil {
+		return err
 	}
 	cp.ChargedCompletionTokens += int64(maxOutput)
 	cp.ChargedInferenceNS += int64(maxTime)
@@ -182,7 +199,11 @@ func recordDecisionUsage(task *Task, usage api.Usage) error {
 	if task.Config.MaxTokens > 0 && usage.CompletionTokens > task.Config.MaxTokens {
 		return fmt.Errorf("Model exceeded the task's per-decision output token budget; no action was executed")
 	}
+	if err := validateInputUsage(task, usage.PromptTokens); err != nil {
+		return err
+	}
 	if usage.CompletionTokens == 0 {
+		settleInputUsage(task, usage.PromptTokens)
 		task.Checkpoint.UnmeasuredModelCalls++
 		return nil
 	}
@@ -198,6 +219,7 @@ func recordDecisionUsage(task *Task, usage api.Usage) error {
 			return fmt.Errorf("Task's aggregate output token budget is exhausted; no action was executed")
 		}
 	}
+	settleInputUsage(task, usage.PromptTokens)
 	task.Checkpoint.MeasuredCompletionTokens = spent
 	if task.Checkpoint.BudgetedModelCalls > 0 {
 		// This response belongs to the latest pre-dispatch reservation. Missing

@@ -123,3 +123,56 @@ func TestSessionImagesRejectUnsupportedPathsBeforeInference(t *testing.T) {
 		})
 	}
 }
+
+func TestHistoricalImagesDoNotLockTextTurnsToVision(t *testing.T) {
+	for _, mode := range []string{"durable", "stream", "legacy"} {
+		t.Run(mode, func(t *testing.T) {
+			h := newStreamingSessions(t)
+			defer h.closeTurns()
+			item := testSessionImage(t)
+			saved, _ := h.manager.Load("chat")
+			saved.Messages = []sessions.Message{{Role: "user", Content: "Keep my original constraint", Images: []api.SessionImage{item}}, {Role: "assistant", Content: "Previously observed image"}}
+			if err := h.manager.Save(saved); err != nil {
+				t.Fatal(err)
+			}
+			h.imageReady = func(model string) error {
+				if model == "vision" {
+					return nil
+				}
+				return newServiceError(422, "Model is text only", nil)
+			}
+			var calls atomic.Int32
+			inspect := func(messages []api.ChatMessage) {
+				calls.Add(1)
+				has, err := api.ValidateChatMessages(messages)
+				if err != nil || has || !strings.Contains(messages[0].StringContent(), unavailableHistoricalImages) || !strings.Contains(messages[0].StringContent(), "original constraint") {
+					t.Errorf("text projection lost constraints or leaked image bytes: %v %v", has, err)
+				}
+			}
+			h.streamer = func(_ context.Context, req *api.ChatCompletionRequest, _ string, _ func(ChatStreamEvent) error) (ChatStreamResult, error) {
+				inspect(req.Messages)
+				return ChatStreamResult{Answer: "Text reply", FinishReason: "stop"}, nil
+			}
+			h.completer = func(_ context.Context, _ string, messages []api.ChatMessage, _ bool) (string, error) {
+				inspect(messages)
+				return "Text reply", nil
+			}
+			req := sessionGenerateRequest{Content: "An unrelated text question", ModelID: "text", RequestID: "text-after-image", Stream: mode != "legacy", Durable: mode == "durable"}
+			w := postImageTurn(t, h, req)
+			if w.Code != 200 || calls.Load() != 1 {
+				t.Fatal(w.Code, w.Body.String(), calls.Load())
+			}
+			stored, err := h.manager.Load("chat")
+			if err != nil || !reflect.DeepEqual(stored.Messages[0].Images, []api.SessionImage{item}) || stored.Messages[0].Content != "Keep my original constraint" {
+				t.Fatal("projection changed durable image/history", err)
+			}
+			if got := h.sessionHistoryForModel(stored, "vision"); len(got.Messages[0].Images) != 1 {
+				t.Fatal("switching back to vision lost the saved image")
+			}
+			agent := sessionGenerateRequest{Content: "Use tools for another task", Agent: &sessions.AgentSelection{ID: "agent", Revision: 1}}
+			if err := h.validateSessionImageRequest(httptest.NewRequest("POST", "/", nil), "chat", &agent); err != nil {
+				t.Fatal("historical image blocked text agent turn", err)
+			}
+		})
+	}
+}

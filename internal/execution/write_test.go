@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -24,9 +25,21 @@ func TestExclusiveCreateAndPreconditionedReplace(t *testing.T) {
 	if _, err = s.Write(ctx, b, "copy.txt", []byte("new"), strings.Repeat("0", 64)); !errors.Is(err, ErrRevision) {
 		t.Fatal(err)
 	}
-	result, err = s.Write(ctx, b, "copy.txt", []byte("new"), result.Revision)
-	if err != nil || result.Created || !result.Verified {
-		t.Fatal(result, err)
+	journal, err := OpenJournal(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer journal.Close()
+	if _, fresh, err := journal.Claim(ctx, "replace", []byte("fixture")); err != nil || !fresh {
+		t.Fatal(fresh, err)
+	}
+	result, err = s.write(ctx, b, "copy.txt", []byte("new"), result.Revision, journal, "replace")
+	if runtime.GOOS == "windows" || runtime.GOOS == "linux" {
+		if err != nil || result.Created || !result.Verified || !result.OriginalRetained {
+			t.Fatal(result, err)
+		}
+	} else if !errors.Is(err, ErrUnsupported) || result.Verified {
+		t.Fatal("unsupported replacement was dispatched", result, err)
 	}
 	other, err := os.ReadFile(filepath.Join(root, "unrelated.txt"))
 	if err != nil || string(other) != "preserve" {

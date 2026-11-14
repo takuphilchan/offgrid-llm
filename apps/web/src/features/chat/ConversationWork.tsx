@@ -23,6 +23,7 @@ import { AgentProgress, AgentPreview } from '../agents/AgentProgress';
 import { ExecutionActivity,ExecutionLocation } from '../agents/ExecutionActivity';
 import { WorkRecovery } from '../agents/WorkRecovery';
 import { SpecialistActivity } from '../agents/SpecialistActivity';
+import {WorkChanges} from '../agents/WorkChanges';
 
 export const workSettled = (status: string) => ['completed', 'failed', 'cancelled'].includes(status);
 
@@ -87,6 +88,7 @@ export function ConversationWork({ run, refresh, connection, readError, outputSa
     {!workSettled(run.status) && <div className="button-row"><TaskLifecycle run={run} busy={busy} act={action => void act(action)} />{run.resumable && !run.computer_session_expired && ['pending', 'interrupted'].includes(run.status) && <button type="button" className="secondary-button" disabled={busy} onClick={() => void act('resume')}>{messages.models.resume}</button>}</div>}</header>
     <DocumentProgress run={run} />
     <SpecialistActivity run={run} />
+    {run.work_id && <WorkChanges id={run.work_id} revision={run.event_cursor} />}
     <TaskResult run={run} compact hideOutput={outputSaved} explainOutcome={inspector} />
     {inspector && run.output && <p className="workspace-secondary">{presentation.generated}</p>}
     {connection !== 'live' && !workSettled(run.status) && <p role="status">{messages.agentLive.reconnectHint}</p>}

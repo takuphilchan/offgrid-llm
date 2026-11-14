@@ -90,6 +90,12 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 	identity.Capabilities = append(identity.Capabilities, "work-search-v1")
 	if s.agentManager != nil {
 		identity.Capabilities = append(identity.Capabilities, "work-summary-v1")
+		if s.agentRunner != nil && s.agentManager.ActivityReplaySupported() {
+			identity.Capabilities = append(identity.Capabilities, "conversation-inputs-v1")
+			if s.config != nil && s.config.EnableConversationPreview {
+				identity.Capabilities = append(identity.Capabilities, "conversation-input-admission-v1")
+			}
+		}
 	}
 	if s.executionEnrollment != nil && s.config != nil && s.config.EnableExecutionPreview {
 		identity.Capabilities = append(identity.Capabilities, "native-execution-preview-v1", "execution-access-request-v1")

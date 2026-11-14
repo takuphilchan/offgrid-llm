@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"database/sql"
 	"encoding/json"
 	"time"
 
@@ -12,6 +13,12 @@ import (
 // ResolveExecutionInput attaches validated local authority at the paused root.
 // It does not dispatch the interrupted request or replace any other job state.
 func (r *Runner) ResolveExecutionInput(id, actor, inputID string, resource execution.Resource) (*Task, error) {
+	return r.ResolveExecutionInputWithProject(id, actor, inputID, resource, nil)
+}
+
+// Project discovery is optional for legacy hosts. When supplied, its binding
+// and the accepted access input share one durable transaction.
+func (r *Runner) ResolveExecutionInputWithProject(id, actor, inputID string, resource execution.Resource, project *ExecutionProjectContext) (*Task, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closing || inputID == "" || resource.Reference.Validate() != nil {
@@ -20,7 +27,7 @@ func (r *Runner) ResolveExecutionInput(id, actor, inputID string, resource execu
 	if _, active := r.active[id]; active {
 		return nil, ErrRunConflict
 	}
-	task, err := r.manager.updateTask(id, func(task *Task) error {
+	change := func(task *Task) error {
 		if task.Actor != actor {
 			return ErrTaskNotFound
 		}
@@ -29,6 +36,9 @@ func (r *Runner) ResolveExecutionInput(id, actor, inputID string, resource execu
 		}
 		if task.ResolvedInputID == inputID && task.Config.Execution != nil && *task.Config.Execution == resource.Reference {
 			return nil
+		}
+		if hasConversationHold(task) {
+			return ErrRunConflict
 		}
 		cp, input := task.Checkpoint, task.PendingInput
 		if task.Status != TaskInput || input == nil || input.ID != inputID || input.Kind != "workspace" || cp == nil || cp.ExecutingCall != "" || cp.ExecutionIntent != nil || len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID || cp.Calls[0].Function.Name != execution.AccessRequestTool {
@@ -57,10 +67,14 @@ func (r *Runner) ResolveExecutionInput(id, actor, inputID string, resource execu
 		for _, tool := range execution.Tools() {
 			if execution.Permitted(tool.Function.Name, resource.Permissions) {
 				d, _ := execution.Descriptor(tool.Function.Name)
-				config.AllowedCapabilities[d.Name] = d
+				if executionInputCapabilityAllowed(config, d) {
+					config.AllowedCapabilities[d.Name] = d
+				}
 			}
 		}
-		config.AllowedCapabilities[execution.AccessRequestTool] = execution.AccessRequestDescriptor()
+		if d := execution.AccessRequestDescriptor(); executionInputCapabilityAllowed(config, d) {
+			config.AllowedCapabilities[d.Name] = d
+		}
 		if err := config.validateExecution(); err != nil {
 			return err
 		}
@@ -73,9 +87,37 @@ func (r *Runner) ResolveExecutionInput(id, actor, inputID string, resource execu
 		task.Config, task.PendingInput, task.ResolvedInputID = config, nil, inputID
 		task.Status, task.Error, task.ErrorCode = TaskPending, "", ""
 		return nil
-	})
+	}
+	var task *Task
+	var err error
+	if project == nil {
+		task, err = r.manager.updateTask(id, change)
+	} else {
+		task, err = r.manager.updateTaskControl(id, func(task *Task, tx *sql.Tx) error {
+			duplicate := task.Actor == actor && task.ResolvedInputID == inputID && task.Config.Execution != nil && *task.Config.Execution == resource.Reference
+			if err := change(task); err != nil {
+				return err
+			}
+			if duplicate {
+				return nil
+			}
+			return bindExecutionProject(tx, task, resource, project)
+		})
+	}
 	if err == nil {
 		r.observe(task)
 	}
 	return task, err
+}
+
+func executionInputCapabilityAllowed(config AgentConfig, d capabilities.Descriptor) bool {
+	if config.ConversationConfiguration == nil || config.ConversationConfiguration.Restrictions.Tools == nil {
+		return true
+	}
+	for _, ref := range *config.ConversationConfiguration.Restrictions.Tools {
+		if ref.Provider == d.Source && ref.Tool == d.Name && ref.SchemaRevision == d.Revision && ref.Location == d.Location {
+			return true
+		}
+	}
+	return false
 }

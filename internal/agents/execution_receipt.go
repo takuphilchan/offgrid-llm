@@ -61,6 +61,9 @@ func (m *Manager) RecordExecutionIntent(id, actor, tool string, modelArgs json.R
 			}
 			return nil
 		}
+		if err := reserveProcessBudget(t, request); err != nil {
+			return err
+		}
 		t.Checkpoint.ExecutionIntent = intent
 		return nil
 	})
@@ -93,6 +96,11 @@ func (m *Manager) RecordExecutionReceipt(id, actor string, request execution.Req
 			}
 			if old.Receipt.State != "dispatched" || receipt.State != "complete" {
 				return ErrRunConflict
+			}
+		}
+		if request.Operation == "process_start" {
+			if err := recordProcessReceipt(t, request, receipt); err != nil {
+				return err
 			}
 		}
 		cp.ExecutionReceipt = &ExecutionReceipt{Receipt: receipt, At: time.Now().UTC()}
@@ -163,5 +171,5 @@ func recoverExecutionReceipt(t *Task) bool {
 }
 
 func recoverProviderReceipts(t *Task) bool {
-	return recoverExecutionReceipt(t) || recoverComputerReceipt(t)
+	return recoverExecutionReceipt(t) || recoverWorkerIntegrationReceipt(t) || recoverComputerReceipt(t)
 }

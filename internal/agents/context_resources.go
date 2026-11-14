@@ -18,6 +18,7 @@ var (
 
 type AgentSkill struct {
 	agentcontext.SkillReference
+	ResourcePaths    []string                       `json:"resource_paths,omitempty"`
 	ResponseContract *agentcontext.ResponseContract `json:"response_contract,omitempty"`
 	Name             string                         `json:"name"`
 	Description      string                         `json:"description"`
@@ -160,6 +161,9 @@ func scanSkill(row skillScanner) (*AgentSkill, *agentcontext.SkillBundle, error)
 		return nil, nil, fmt.Errorf("stored skill digest or metadata mismatch")
 	}
 	item.Name, item.Description = bundle.Name, bundle.Description
+	for _, file := range bundle.Files {
+		item.ResourcePaths = append(item.ResourcePaths, file.Path)
+	}
 	item.ResponseContract = bundle.ResponseContract
 	item.CreatedAt, err = time.Parse(time.RFC3339Nano, created)
 	if err != nil {

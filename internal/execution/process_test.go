@@ -82,6 +82,13 @@ func TestProcessDeadlineIsReportedTruthfully(t *testing.T) {
 	if err != nil || result.State != "timed_out" {
 		t.Fatal(result, err)
 	}
+	if result.Runtime == nil || result.Runtime.Version != 1 || !result.Runtime.Settled || result.Runtime.ElapsedNS < int64(time.Second) {
+		t.Fatal("timeout lost supervised lifetime", result.Runtime)
+	}
+	again, err := m.Inspect(ctx, b, p.Handle)
+	if err != nil || again.Runtime == nil || *again.Runtime != *result.Runtime {
+		t.Fatal("terminal duration changed", again.Runtime, err)
+	}
 }
 
 func TestProcessExitOutputAndJobOwnership(t *testing.T) {

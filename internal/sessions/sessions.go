@@ -39,6 +39,9 @@ type Message struct {
 
 // Session represents a conversation session
 type Session struct {
+	CanonicalID     string `json:"canonical_id,omitempty"`
+	ControlRevision int64  `json:"control_revision,omitempty"`
+
 	Jobs         []ConversationJobLink `json:"jobs,omitempty"`
 	Name         string                `json:"name"`
 	OwnerID      string                `json:"owner_id,omitempty"`
@@ -62,6 +65,8 @@ type SessionMeta struct {
 
 // SessionManager handles session persistence with metadata caching
 type SessionManager struct {
+	canonicalGuard func(*Session) error
+
 	// Optional deterministic storage fault hook for isolated persistence tests.
 	// Production uses writeSessionFileAtomic; this is never a client setting.
 	writeSessionFile func(string, []byte) error
@@ -92,6 +97,9 @@ func (sm *SessionManager) Save(session *Session) error {
 func (sm *SessionManager) save(session *Session) error {
 	if session == nil {
 		return fmt.Errorf("%w: session is nil", ErrInvalidSessionName)
+	}
+	if err := sm.checkCanonical(session); err != nil {
+		return err
 	}
 	filePath, err := sm.sessionFilePath(session.Name)
 	if err != nil {
@@ -332,6 +340,11 @@ func (sm *SessionManager) Delete(name string) error {
 }
 
 func (sm *SessionManager) delete(name string) error {
+	if current, err := sm.Load(name); err != nil {
+		return err
+	} else if err = sm.checkCanonical(current); err != nil {
+		return err
+	}
 	filePath, err := sm.sessionFilePath(name)
 	if err != nil {
 		return err

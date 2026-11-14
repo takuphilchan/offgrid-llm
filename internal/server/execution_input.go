@@ -80,6 +80,10 @@ func (s *Server) handleExecutionInput(w http.ResponseWriter, r *http.Request, ta
 		return
 	}
 	if !duplicate {
+		project, ready := s.prepareExecutionProject(w, r, task, resource)
+		if !ready {
+			return
+		}
 		// The input event is durable before the worker finishes teardown. A fast
 		// local approval must not fail merely because that last unwind is pending.
 		deadline := time.NewTimer(2 * time.Second)
@@ -97,7 +101,7 @@ func (s *Server) handleExecutionInput(w http.ResponseWriter, r *http.Request, ta
 			case <-tick.C:
 			}
 		}
-		task, err = s.agentRunner.ResolveExecutionInput(task.ID, task.Actor, inputID, resource)
+		task, err = s.agentRunner.ResolveExecutionInputWithProject(task.ID, task.Actor, inputID, resource, project)
 		if err != nil {
 			writeJobCommandError(w, err)
 			return

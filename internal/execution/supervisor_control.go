@@ -30,6 +30,40 @@ func (e *LocalEndpoint) supervisor(ctx context.Context, r Request) Response {
 		result.ID = r.ID
 		return result
 	}
+	if r.Operation == artifactOperation {
+		result, err := dispatchWorkerArtifact(ctx, e, &r)
+		if err != nil {
+			response.Error = errorCode(err)
+			return response
+		}
+		return result
+	}
+	if strings.HasPrefix(r.Operation, "supervisor_worker_") {
+		var request WorkingCopyRequest
+		if err := decodeStrict(r.Arguments, &request); err != nil || request.Parent != r.Binding {
+			response.Error = ErrProtocol.Error()
+			return response
+		}
+		var status WorkerPreparationStatus
+		var err error
+		switch r.Operation {
+		case "supervisor_worker_begin":
+			status, err = e.BeginWorkerPreparation(ctx, request)
+		case "supervisor_worker_inspect":
+			status, err = e.InspectWorkerPreparation(ctx, request)
+		case "supervisor_worker_cancel":
+			status, err = e.CancelWorkerPreparation(ctx, request)
+		default:
+			err = ErrUnsupported
+		}
+		if err != nil {
+			response.Error = errorCode(err)
+			return response
+		}
+		data, _ := json.Marshal(status)
+		response.Receipt = &Receipt{State: "complete", Result: data}
+		return response
+	}
 	if err := decodeStrict(r.Arguments, &struct{}{}); err != nil {
 		response.Error = errorCode(err)
 		return response
@@ -45,6 +79,8 @@ func (e *LocalEndpoint) supervisor(ctx context.Context, r Request) Response {
 		err = e.Cancel(bounded, r.Binding)
 	case "supervisor_info":
 		value, err = e.Check(ctx, r.Binding)
+	case "supervisor_project_context":
+		value, err = e.ProjectContext(ctx, r.Binding)
 	default:
 		err = ErrUnsupported
 	}

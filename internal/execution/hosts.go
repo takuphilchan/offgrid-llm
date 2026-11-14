@@ -40,17 +40,22 @@ type HostEndpoint interface {
 }
 
 type Resource struct {
-	Reference   Reference   `json:"reference"`
-	Backend     string      `json:"backend"`
-	Root        string      `json:"root"`
-	Directory   string      `json:"directory"`
-	Permissions Permissions `json:"permissions"`
+	ProjectContext  bool        `json:"project_context,omitempty"`
+	PreparedWorkers bool        `json:"prepared_workers,omitempty"`
+	Reference       Reference   `json:"reference"`
+	Backend         string      `json:"backend"`
+	Root            string      `json:"root"`
+	Directory       string      `json:"directory"`
+	Permissions     Permissions `json:"permissions"`
 }
 
 type hostRegistration struct {
-	config   Context
-	endpoint HostEndpoint
-	jobs     map[string]bool
+	config    Context
+	endpoint  HostEndpoint
+	jobs      map[string]bool
+	cancelled map[string]bool
+	parent    *hostRegistration
+	parentJob string
 }
 
 // Hosts only indexes already authenticated connections. RegisterApproved must
@@ -74,7 +79,13 @@ func (h *Hosts) RegisterApproved(ctx context.Context, config Context, endpoint H
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if len(h.entries) >= 32 || h.entries[config.Binding.Session] != nil {
+	roots := 0
+	for _, e := range h.entries {
+		if e.parent == nil {
+			roots++
+		}
+	}
+	if roots >= 32 || h.entries[config.Binding.Session] != nil {
 		return ErrConflict
 	}
 	h.entries[config.Binding.Session] = &hostRegistration{config: config, endpoint: endpoint, jobs: map[string]bool{}}
@@ -91,6 +102,9 @@ func (h *Hosts) lookup(actor, workspace string, ref Reference) (*hostRegistratio
 	if e == nil || e.config.Binding.Actor != actor || e.config.Binding.Workspace != workspace || reference(e.config.Binding) != ref {
 		return nil, ErrHostUnavailable
 	}
+	if e.parent != nil && (h.entries[e.parent.config.Binding.Session] != e.parent || e.parent.cancelled[e.parentJob]) {
+		return nil, ErrHostUnavailable
+	}
 	return e, nil
 }
 
@@ -100,17 +114,17 @@ func (h *Hosts) Resolve(ctx context.Context, actor, workspace string, ref Refere
 		return Resource{}, err
 	}
 	config, err := e.endpoint.Check(ctx, e.config.Binding)
-	if err != nil || reference(config.Binding) != ref || config.Binding.Actor != actor || config.Binding.Workspace != workspace || config.Permissions != e.config.Permissions || config.Root != e.config.Root || config.Backend != e.config.Backend || config.Isolation != e.config.Isolation {
+	if err != nil || reference(config.Binding) != ref || config.Binding.Actor != actor || config.Binding.Workspace != workspace || config.ProjectHostID != e.config.ProjectHostID || config.Permissions != e.config.Permissions || config.Root != e.config.Root || config.Backend != e.config.Backend || config.Isolation != e.config.Isolation || config.WorkerCopies != e.config.WorkerCopies {
 		return Resource{}, ErrHostUnavailable
 	}
-	return Resource{ref, config.Backend, config.Root, config.Directory, config.Permissions}, nil
+	return resourceForContext(config), nil
 }
 
 func (h *Hosts) List(ctx context.Context, actor, workspace string) []Resource {
 	h.mu.RLock()
 	refs := []Reference{}
 	for _, e := range h.entries {
-		if e.config.Binding.Actor == actor && e.config.Binding.Workspace == workspace {
+		if e.parent == nil && e.config.Binding.Actor == actor && e.config.Binding.Workspace == workspace {
 			refs = append(refs, reference(e.config.Binding))
 		}
 	}
@@ -133,6 +147,12 @@ func (h *Hosts) Admit(ctx context.Context, actor, workspace, job string, ref Ref
 	if err != nil {
 		return err
 	}
+	h.mu.RLock()
+	denied := e.cancelled[job] || e.parent != nil && e.config.Binding.Job != job
+	h.mu.RUnlock()
+	if denied {
+		return ErrAuthority
+	}
 	if _, err = h.Resolve(ctx, actor, workspace, ref); err != nil {
 		return err
 	}
@@ -143,7 +163,7 @@ func (h *Hosts) Admit(ctx context.Context, actor, workspace, job string, ref Ref
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.entries[ref.Session] != e {
+	if h.entries[ref.Session] != e || e.cancelled[job] {
 		return ErrHostUnavailable
 	}
 	e.jobs[job] = true
@@ -165,7 +185,7 @@ func (h *Hosts) CallApproved(ctx context.Context, actor, workspace, job, call st
 		return Response{}, err
 	}
 	h.mu.RLock()
-	admitted := e.jobs[job]
+	admitted := e.jobs[job] && !e.cancelled[job]
 	h.mu.RUnlock()
 	if !admitted || !validIdentity(call) {
 		return Response{}, ErrAuthority
@@ -212,9 +232,15 @@ func (h *Hosts) Cancel(ctx context.Context, actor, workspace, job string, ref Re
 	if err != nil {
 		return err
 	}
-	h.mu.RLock()
+	h.mu.Lock()
 	admitted := e.jobs[job]
-	h.mu.RUnlock()
+	if admitted {
+		if e.cancelled == nil {
+			e.cancelled = map[string]bool{}
+		}
+		e.cancelled[job] = true
+	}
+	h.mu.Unlock()
 	if !admitted {
 		return ErrAuthority
 	}
@@ -226,19 +252,28 @@ func (h *Hosts) Cancel(ctx context.Context, actor, workspace, job string, ref Re
 // CancelIfAdmitted is idempotent supervisory cleanup for a task which may not
 // have dispatched any tool. It never creates admission to perform cancellation.
 func (h *Hosts) CancelIfAdmitted(ctx context.Context, actor, workspace, job string, ref Reference) error {
+	if !validIdentity(job) {
+		return ErrAuthority
+	}
 	e, err := h.lookup(actor, workspace, ref)
 	if err != nil {
 		return err
 	}
-	h.mu.RLock()
+	h.mu.Lock()
 	admitted := e.jobs[job]
-	h.mu.RUnlock()
+	if e.parent != nil && e.config.Binding.Job != job {
+		h.mu.Unlock()
+		return ErrAuthority
+	}
+	if e.cancelled == nil {
+		e.cancelled = map[string]bool{}
+	}
+	e.cancelled[job] = true
+	h.mu.Unlock()
 	if !admitted {
 		return nil
 	}
-	b := e.config.Binding
-	b.Job = job
-	return e.endpoint.Cancel(ctx, b)
+	return h.Cancel(ctx, actor, workspace, job, ref)
 }
 
 func (h *Hosts) Revoke(actor, workspace string, ref Reference) error {
@@ -249,6 +284,11 @@ func (h *Hosts) Revoke(actor, workspace string, ref Reference) error {
 	h.mu.Lock()
 	if h.entries[ref.Session] == e {
 		delete(h.entries, ref.Session)
+		for id, child := range h.entries {
+			if child.parent == e {
+				delete(h.entries, id)
+			}
+		}
 	}
 	h.mu.Unlock()
 	return e.endpoint.Close()
@@ -261,7 +301,9 @@ func (h *Hosts) Close() error {
 	h.mu.Unlock()
 	var err error
 	for _, e := range entries {
-		err = errors.Join(err, e.endpoint.Close())
+		if e.parent == nil {
+			err = errors.Join(err, e.endpoint.Close())
+		}
 	}
 	return err
 }

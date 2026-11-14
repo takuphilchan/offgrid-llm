@@ -129,9 +129,8 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 	if task.Config.ComputerSession != "" {
 		if nativeComputerDriver(task.Config.ComputerDriver) {
 			nativeTools := nativeComputerTools()
-			// Host negotiation alone must not steer a model into the document
-			// protocol for browser/search/control work. Route it only when the
-			// requested outcome actually mentions document/tab editing or reading.
+			// Offer negotiated discovery without classifying the user's language.
+			// Typed observations, not prompt keywords, select document/control APIs.
 			documentsAvailable := b.documentToolsAvailable(task) && nativeDocumentTaskIntent(task)
 			recoveryPending := nativeDocumentObservationRecoveryPending(task)
 			if documentsAvailable {
@@ -150,9 +149,6 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 				filtered := nativeTools[:0]
 				for _, tool := range nativeTools {
 					legacyReady := state.step == 0 && controlObserved
-					if task.Config.ComputerScope == "desktop" {
-						legacyReady = legacyReady && nativeDocumentControlFallback(task)
-					}
 					if legacyReady || tool.Function.Name == "computer_observe" {
 						filtered = append(filtered, tool)
 					}
@@ -205,7 +201,7 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 			tools = append(tools, taskArtifactTool())
 		}
 	}
-	if task.Config.Profile != nil {
+	if task.Config.Profile != nil || task.Config.ScopedCapabilities {
 		permitted := tools[:0]
 		for _, tool := range tools {
 			d, ok := b.Capability(tool.Function.Name)

@@ -20,7 +20,7 @@ func (h *SessionHandlers) generateDurable(w http.ResponseWriter, r *http.Request
 		return
 	}
 	scoped := h.scoped(r)
-	session, err := scoped.Load(name)
+	session, err := scoped.LoadForExecution(name)
 	if err != nil {
 		writeSessionError(w, err)
 		return
@@ -86,10 +86,17 @@ func (h *SessionHandlers) executeTurn(ctx context.Context, scoped *sessions.Scop
 	unlock, err := h.lockSessionContext(ctx, name)
 	if err == nil {
 		defer unlock()
-		session, loadErr := scoped.Load(name)
+		session, loadErr := scoped.LoadForExecution(name)
 		err = loadErr
 		if err == nil {
-			messages, sources, messageErr := collectAttachmentMessages(scoped, name, session, turn)
+			messages, sources, messageErr := collectAttachmentMessages(scoped, name, h.sessionHistoryForModel(session, turn.Model), turn)
+			if messageErr == nil && len(turn.Images) > 0 {
+				if h.imageReady == nil {
+					messageErr = newServiceError(503, "Image input is unavailable on this service", nil)
+				} else {
+					messageErr = h.imageReady(turn.Model)
+				}
+			}
 			lastSave := time.Time{}
 			emit := func(event ChatStreamEvent) error {
 				if ctx.Err() != nil {
@@ -172,7 +179,7 @@ func (h *SessionHandlers) executeTurn(ctx context.Context, scoped *sessions.Scop
 
 func (h *SessionHandlers) currentTurn(r *http.Request, name string) (*sessions.Session, error) {
 	h.turnMu.Lock()
-	session, err := h.scoped(r).Load(name)
+	session, err := h.projectedSession(r, name)
 	if err != nil {
 		h.turnMu.Unlock()
 		return nil, err
@@ -196,12 +203,16 @@ func (h *SessionHandlers) handleTurn(w http.ResponseWriter, r *http.Request, nam
 	var session *sessions.Session
 	var err error
 	if action == "turn/cancel" && r.Method == "POST" {
-		session, err = h.scoped(r).ControlState(name)
+		session, err = h.projectedControlState(r, name)
 	} else {
 		session, err = h.currentTurn(r, name)
 	}
 	if err != nil {
 		writeSessionError(w, err)
+		return
+	}
+	if session.CanonicalID != "" && r.Method != http.MethodGet {
+		writeSessionError(w, sessions.ErrCanonicalConversation)
 		return
 	}
 	if session.Turn != nil && session.Turn.JobAdmission != "" && h.agentServer != nil {

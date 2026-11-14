@@ -30,6 +30,10 @@ func (s *Server) handleJobCommand(w http.ResponseWriter, r *http.Request, id, ac
 		return
 	}
 	if action == "delete" && r.Method == http.MethodDelete {
+		if task.WorkID != "" || task.ConversationTurn != nil {
+			writeJobError(w, 409, "canonical_work_required", "This run belongs to a canonical conversation. Legacy run deletion cannot remove its conversation history or work records.", false)
+			return
+		}
 		if err := s.agentRunner.Delete(id, s.agentActor(r)); err != nil {
 			writeJobCommandError(w, err)
 			return

@@ -12,23 +12,26 @@ import (
 )
 
 type LocalHostOptions struct {
-	Folder         string
-	PackDirectory  string
-	StateDirectory string
-	Version        string
-	Permissions    Permissions
-	Isolation      IsolationPolicy
+	ProjectIdentityDirectory string
+	Folder                   string
+	PackDirectory            string
+	StateDirectory           string
+	Version                  string
+	Permissions              Permissions
+	Isolation                IsolationPolicy
+	WorkerCopies             WorkingCopyPolicy
 }
 
 type LocalApproval struct {
-	Actor       string
-	Service     string
-	Root        string
-	Host        string
-	Workspace   string
-	Backend     string
-	Permissions Permissions
-	Isolation   IsolationPolicy
+	Actor        string
+	Service      string
+	Root         string
+	Host         string
+	Workspace    string
+	Backend      string
+	Permissions  Permissions
+	Isolation    IsolationPolicy
+	WorkerCopies WorkingCopyPolicy
 }
 
 type OwnedHost struct {
@@ -39,7 +42,7 @@ type OwnedHost struct {
 
 func (h *OwnedHost) Close() error { return h.Connection.Close() }
 func (h *OwnedHost) Resource() Resource {
-	return Resource{reference(h.Context.Binding), h.Context.Backend, h.Context.Root, h.Context.Directory, h.Context.Permissions}
+	return resourceForContext(h.Context)
 }
 func (h *OwnedHost) Done() <-chan struct{} { return h.Connection.Done() }
 func (h *OwnedHost) Err() error            { return h.Connection.Err() }
@@ -136,7 +139,7 @@ func startLocalHost(ctx context.Context, client *serviceclient.Client, options L
 			}
 		}
 	}
-	if !approve(LocalApproval{Actor: actor, Service: client.Origin(), Root: root, Host: host, Workspace: identity.WorkspaceID, Backend: backend, Permissions: options.Permissions, Isolation: options.Isolation}) {
+	if !approve(LocalApproval{Actor: actor, Service: client.Origin(), Root: root, Host: host, Workspace: identity.WorkspaceID, Backend: backend, Permissions: options.Permissions, Isolation: options.Isolation, WorkerCopies: options.WorkerCopies}) {
 		return nil, ErrAuthority
 	}
 	if err = ctx.Err(); err != nil {
@@ -163,7 +166,13 @@ func startLocalHost(ctx context.Context, client *serviceclient.Client, options L
 	if err != nil {
 		return nil, err
 	}
-	config := Context{Version: ProtocolVersion, Binding: Binding{Actor: pair.Actor, Workspace: pair.Workspace, Host: host, Session: "executor-" + nonce[:32], Grant: "grant-" + nonce[32:], Revision: 1, Job: BootstrapJob}, Backend: backend, Root: root, Directory: ".", Permissions: options.Permissions, Isolation: options.Isolation}
+	config := Context{Version: ProtocolVersion, Binding: Binding{Actor: pair.Actor, Workspace: pair.Workspace, Host: host, Session: "executor-" + nonce[:32], Grant: "grant-" + nonce[32:], Revision: 1, Job: BootstrapJob}, Backend: backend, Root: root, Directory: ".", Permissions: options.Permissions, Isolation: options.Isolation, WorkerCopies: options.WorkerCopies}
+	if options.ProjectIdentityDirectory != "" && backend == "local" {
+		config.ProjectHostID, err = loadProjectHostIdentity(options.ProjectIdentityDirectory, root)
+		if err != nil {
+			return nil, err
+		}
+	}
 	directory := filepath.Join(options.StateDirectory, config.Binding.Session)
 	if err = os.MkdirAll(options.StateDirectory, 0700); err != nil {
 		return nil, err

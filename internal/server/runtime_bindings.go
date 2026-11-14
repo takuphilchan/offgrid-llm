@@ -28,6 +28,9 @@ func (s *Server) AgentHooks() AgentRuntimeHooks {
 	if s.schedules == nil {
 		s.schedules = newScheduleController(s, time.Now)
 	}
+	if s.conversationDelivery == nil {
+		s.conversationDelivery = &conversationDeliveryController{server: s}
+	}
 	if s.executionHosts == nil {
 		s.executionHosts = execution.NewHosts()
 	}
@@ -40,7 +43,7 @@ func (s *Server) AgentHooks() AgentRuntimeHooks {
 		Stream:        s.streamAgentModel,
 		ContextWindow: s.taskContextWindow,
 		CountContext:  s.countAgentContext,
-		Coordinate:    s.schedules.coordinate,
+		Coordinate:    s.coordinateServiceWork,
 		Observe: func(task *agents.Task) {
 			s.projectConversationTask(task)
 			if task.Status == agents.TaskCompleted || task.Status == agents.TaskFailed || task.Status == agents.TaskCancelled {
@@ -69,10 +72,11 @@ func (s *Server) BindApplicationRuntime(runner *agents.Runner) error {
 		return err
 	}
 	s.agentRunner = runner
-	runner.SourceAccess = func(task *agents.Task) bool { return s.taskKnowledgeAllowed(task.Actor, task) }
+	runner.SourceAccess = s.taskSourceAllowed
 	s.sessionHandlers.requireAuth = s.config.RequireAuth
 	s.sessionHandlers.agentServer = s
 	s.sessionHandlers.knowledgeAccess = s.savedKnowledgeAllowed
+	s.bindCanonicalConversationGuard()
 	if err := s.loadDownloads(); err != nil {
 		return err
 	}

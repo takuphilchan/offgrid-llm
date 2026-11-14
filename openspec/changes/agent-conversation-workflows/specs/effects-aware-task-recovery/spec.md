@@ -6,6 +6,13 @@ Recover agent work according to evidence about execution effects, keeping avoida
 
 ## ADDED Requirements
 
+### Requirement: Recoverable change-set integration
+Worker changes SHALL retain baseline digests, instruction versions, validation evidence and per-file receipts. Integration SHALL preserve displaced contents and expose conflict, partial and uncertain outcomes. Unsupported replacement guarantees MUST yield reviewable changes rather than unsafe automatic replacement.
+
+#### Scenario: External editor races replacement
+- **WHEN** the actual displaced file differs from the expected baseline
+- **THEN** integration stops, both versions remain recoverable and no blind rollback overwrites newer work
+
 ### Requirement: Trusted effects classification
 The system SHALL distinguish rejection before effects, completed effects, partial effects and unknown effects using trusted execution evidence. Provider annotations and model claims MUST NOT establish absence of effects. A known pre-effect rejection SHALL receive bounded corrective feedback rather than an unknown-outcome form.
 

@@ -79,6 +79,16 @@ func (m *Manager) loadTasks() {
 	loaded := make(map[string]*Task, len(tasks))
 	for _, task := range tasks {
 		changed := restoredBudgets[task.ID]
+		if task.ControlPending {
+			task.ControlPending = false
+			changed = true
+		}
+		if task.ProcessStopPending {
+			task.ProcessStopPending = false
+			task.Status, task.ErrorCode, task.Error = TaskUncertain, "execution_stop_unconfirmed", "Service stopped before process termination was confirmed. Inspect host receipts before continuing."
+			task.CompletedAt = nil
+			changed = true
+		}
 		if task.Config.ComputerSession != "" && !task.ComputerSessionExpired && task.Status != TaskCompleted && task.Status != TaskCancelled && task.Status != TaskFailed {
 			task.ComputerSessionExpired = true
 			changed = true
@@ -93,7 +103,11 @@ func (m *Manager) loadTasks() {
 			}
 			changed = true
 		}
-		if task.Status == TaskRunning || task.Status == TaskPending || task.Status == TaskChildren {
+		if hasConversationHold(task) && !task.ConversationHold.RecoveryRequired {
+			task.ConversationHold.RecoveryRequired = true
+			changed = true
+		}
+		if task.Status == TaskRunning || task.Status == TaskPending || task.Status == TaskChildren || task.Status == TaskConversationInput {
 			task.Status = TaskInterrupted
 			task.Error = "Service stopped before this run finished. Review and resume explicitly."
 			if uncertainEffect(task.Checkpoint) {
@@ -109,6 +123,12 @@ func (m *Manager) loadTasks() {
 			changed = true
 		}
 		if recoverProviderReceipts(task) {
+			changed = true
+		}
+		// Recovery never carries a pre-restart dispatch admission forward.
+		// Explicit continuation or dependency admission can set readiness again.
+		if task.SchedulerReady {
+			task.SchedulerReady = false
 			changed = true
 		}
 		if changed {

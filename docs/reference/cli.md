@@ -278,6 +278,115 @@ offgrid session export "Conversation name" conversation.md
 offgrid export-session "Conversation name" --format json --output conversation.json
 ```
 
+With `OFFGRID_ENABLE_CONVERSATION_PREVIEW` enabled on the service, `offgrid
+session chat` starts a default text conversation without creating or selecting
+an agent. `session chat NAME` continues it. Eligible existing text conversations
+are imported transactionally; original session files remain retained. Document
+and image conversations keep their existing admission path during this preview.
+
+The canonical chat composer remains usable while inference or work is pending.
+`/new MESSAGE` requests separate work, `/pause`, `/stop`, and `/continue` control
+focused work, and `/stop-input ID` or `/continue-input ID` control a foreground
+input. `/configuration` inspects effective preferences; `/model MODEL`,
+`/profile ID [REVISION]` (or `/profile none`), and `/project ID` persist choices.
+`/exit` detaches observation; eligible service-owned work continues.
+
+`/workers` lists the focused work's retained worker sessions. `/worker ID`
+inspects one session and its mailbox. `/message-worker ID MESSAGE` queues a
+follow-up for an active worker; `/continue-worker ID MESSAGE` continues a settled
+assignment under the same session and remaining work allowance. `/stop-worker ID`
+stops that worker independently, and `/close-worker ID` closes a settled session.
+After an unknown response, `/retry-worker` reuses the exact command identity.
+These controls are optional; the assistant can coordinate workers itself.
+
+`/changes` lists the focused work's saved proposals and candidates. Use
+`/changes ID files`, `/changes ID validation`, or `/changes ID integration` for
+file operations, validation evidence, or per-file integration receipts. These
+reads never integrate or resume work. Scripts use the same reads with
+`offgrid session changes NAME [ID [VIEW [SHA256 [ARTIFACT_ID]]]] --json`. Listing returns a JSON
+array; detail views stream one JSON object per page (JSON Lines). The `content`
+view requires a file digest from `files`, retrieves all base64 byte pages, and
+verifies their complete SHA-256. A nonzero exit means the stream is incomplete
+or invalid; do not treat partial output as a verified file. Current source access
+is required for details. Saved status remains visible after source access ends.
+
+Use `/changes ID recovery` to inspect files retained during integration.
+`/changes ID preserved SHA256 ARTIFACT_ID` retrieves a listed file, verifies all
+bytes, and emits JSON Lines. The same views work with `offgrid session changes`.
+An `unconfirmed` entry is observed evidence, not proof of successful replacement.
+These commands do not restore a file or resolve an uncertain operation.
+
+Scripts can use `offgrid agent worker show ID --json` and `offgrid agent worker
+messages ID [AFTER] --json`. `offgrid agent worker command --json` reads one
+bounded JSON command from standard input and returns its service receipt. Supply
+the same complete envelope on retries, including the original expected revision:
+
+```json
+{"request_id":"review-followup-1","target_id":"WORKER_ID","expected_revision":3,"kind":"continue","payload":{"content":"Expand the unresolved questions"}}
+```
+
+After the parent completes, explicit worker continuation opens a new attempt
+under the same work item and worker session. Earlier outcomes remain available,
+and spent/reserved budget carries forward. Exhausted budget, stopped work,
+unresolved effects or stale instructions prevent continuation. Reading a worker
+never starts another attempt.
+
+`session send NAME --request-id ID MESSAGE --json` returns the accepted canonical
+input without waiting for inference. A retry with the same ID and payload observes
+the prior input; changed reuse is rejected. Interactive `/retry` retains that
+identity after a transport failure. Use `session show NAME` to inspect results.
+This preview does not yet admit new documents/images into canonical conversations;
+unsupported selections are reported explicitly and are not silently discarded.
+
+Use `session folder NAME SESSION` or interactive `/folder SESSION` to select an
+already approved host folder and reuse its project. No profile is required. The
+matching host must advertise project-context support. Its optional
+`.offgrid/project.toml` supplies version 1 preferences and resource references;
+it cannot grant access or install/run anything. Selection persists in the service
+for UI and CLI, while live execution access is checked again for each run.
+`/folder none` or `session folder NAME none` clears the saved execution reference
+without deleting the project. `/configuration` includes current folder
+availability. Selection does not alter the configuration or budget of existing
+work. File preferences refresh on an explicit folder-selection command; explicit
+service project edits survive those refreshes.
+
+If an interactive folder command loses its response, `/retry-folder` (or the
+same `/folder` command) resends its original request, revision and reference.
+It does not require the host to stay connected after acceptance. A different
+folder choice waits until that unknown outcome is resolved. Explicit revision
+conflicts allow a fresh choice. Pending folder commands currently survive within
+the interactive process; cross-process folder-command recovery remains open.
+
+When focused work asks a clarification, `session chat` displays the question and
+the next ordinary reply answers it without selecting a worker. `/new MESSAGE`
+starts separate work. `/retry` retains the answered question identity after an
+unknown response. Scripted callers can use
+`session send NAME --answer QUESTION_ID --request-id REQUEST_ID ANSWER --json`;
+the saved question must still belong to the focused work. Answer acceptance
+requires no available model and does not replenish the work allowance.
+
+Use `/message MESSAGE` to discuss focused work while leaving its pending
+clarification unanswered, or `/new MESSAGE` to request separate work. Ordinary
+text replies to the displayed clarification. These choices use the same
+conversation inbox as the web composer’s **Send as** control.
+
+For scripts, use `session send NAME --intent message|new_work|correction
+--request-id REQUEST_ID MESSAGE --json`. Input intent cannot be combined with
+`--answer`; it requires canonical conversation support and is never silently
+sent through a legacy executor.
+
+`/result RESULT_REFERENCE` retrieves the complete saved output, including its
+final citations. For scripts, `offgrid session result RESULT_REFERENCE --json`
+emits bounded JSON Lines with instruction versions and completion status.
+Reading a result never resumes work and rechecks source access on each page.
+
+For an inspected worker question, `/answer-worker WORKER_ID QUESTION_ID ANSWER`
+uses the worker command contract. `/retry-worker` retains the exact answer
+envelope after an unknown response. Noninteractive clients can send the same
+envelope to `agent worker command` on stdin. This is an inspection/recovery
+control. Conversation preview pins automatic clarification routing for generic
+tool runtimes; native adapters retain their separate qualification gate.
+
 Exports default to stdout when no output path is given. An output file must not
 already exist. To delete a conversation, use `offgrid session delete "Conversation
 name"`; this removes saved history, not external files created during work.
@@ -384,6 +493,14 @@ An unconfirmed stop remains uncertain. Earlier file/network changes are not
 undone, and reconnecting never repeats an uncertain command. Matching preview
 builds include desktop folder setup and isolated execution; real-platform/model
 qualification remains a separate gate. This preview does not imply release readiness.
+
+Existing-file writes require a private journal on a backend/filesystem that can
+retain the displaced file. The host preserves the proposal and displaced bytes,
+reports conflicts without rolling back newer edits, and keeps uncertain receipts
+across restart. Cross-volume or unsupported replacement is rejected before
+changing the target. Recovery artifact export for direct writes is still under
+development; the opaque replacement ID in a receipt is evidence, not permission
+to retry or a file path.
 
 ### Control and recover a saved task
 

@@ -14,6 +14,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/agentcontext"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
 	"github.com/takuphilchan/offgrid-llm/internal/execution"
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 var (
@@ -24,12 +25,7 @@ var (
 
 // References identify resources in the workspace. Credentials and executable
 // commands are deliberately absent. The service resolves current authority.
-type ProfileToolReference struct {
-	Provider       string `json:"provider"`
-	Tool           string `json:"tool"`
-	SchemaRevision string `json:"schema_revision"`
-	Location       string `json:"location"`
-}
+type ProfileToolReference = api.ProfileToolReference
 
 type ProfileSettings struct {
 	Name          string                        `json:"name"`
@@ -125,11 +121,11 @@ func validProfileOwner(workspace, actor string) bool {
 // ProfileAllowsCapability is an additional restriction, never a grant. Current
 // actor policy and host consent are independently checked before execution.
 func ProfileAllowsCapability(config AgentConfig, name string, descriptor capabilities.Descriptor) bool {
-	if config.Profile == nil {
+	if config.Profile == nil && !config.ScopedCapabilities {
 		return true
 	}
 	if companionCapability(descriptor) || (name == "request_computer_access" && descriptor.Namespace == "computer" && descriptor.Source == "workspace") {
-		return config.Profile.Settings.Computer && !config.RestrictComputer
+		return (config.Profile == nil || config.Profile.Settings.Computer) && !config.RestrictComputer
 	}
 	if name == "task_save_artifact" && descriptor.Source == "workspace" && descriptor.Namespace == "workspace" {
 		return true

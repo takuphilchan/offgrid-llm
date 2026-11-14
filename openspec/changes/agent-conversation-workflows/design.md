@@ -1,5 +1,41 @@
 # Design
 
+## Approved replacement architecture (2026-11-12)
+
+This section supersedes conflicting profile-first assumptions in the historical design below. Reuse the existing runner, broker, scheduler, storage owner and host journals; never add a client-local executor.
+
+### Canonical state and configuration
+
+Introduce actor/workspace-scoped stable project, conversation, work, run, worker-session, result and change-set IDs. A private default project requires no wizard. Projects contain context and preferences, never authority. Work can link to several authorized conversations without copying grants.
+
+Extend agent SQLite with state, command deduplication, inboxes, events and outbox entries committed in one transaction before dispatch. Commands contain request_id, target_id, expected_revision, kind and typed payload; identical actor/request/digest retries return the original result and changed reuse conflicts. Cursor gaps return a snapshot. Reads and reconnect never dispatch. Versioned imports retain source manifests and explicitly switch canonical ownership; session JSON then becomes a compatibility projection. Large content stays in existing stores. Preserve legacy active runs and reject unsupported downgrades.
+
+Preference precedence: explicit request, conversation, pinned optional profile, project, user, service. Authority intersects service/actor/resource policy, restrictions and live grants. Profile edits cannot reset conversation restrictions. An optional versioned .offgrid/project.toml contains non-secret preferences/references, no hooks, credentials or grants. Explain effective-setting provenance.
+
+### Context, controls and collaboration
+
+Persist requests, corrections, failures, partial outcomes and evidence references. Context assembly prioritizes trusted protocol/current request, user constraints, outstanding work/effects, recent exchanges and retrieved history against actual model accounting. Summaries retain source dependencies; revoked sources invalidate derived context. Keep conversation history, work evidence and opt-in memory separate. Share document/image admission with ordinary Chat and enforce model vision capability. Discovery authorizes before ranking, loads progressively and pins resource revisions.
+
+Serialize the conversation inbox independently of scheduled work. Focused input fences affected mutations until incorporated; the ordinary model turn can answer, steer or create work without a classifier call. Side questions never replenish execution budget. Each work item has instruction_version and control_epoch; actions/change sets pin them. Corrections invalidate obsolete proposals; late results remain evidence, not automatic integration. Pause prevents dispatch and cancels generation while calls settle. Stop revokes dispatch and cancels owned processes without inference. Record late receipts without reviving stopped work. Restart repairs bookkeeping, never live grants or uncertain execution.
+
+Worker sessions support create/message/inspect/wait/continue/close, durable deduplicated checkpoint application and follow-up runs under the same work budget. User-stopped workers require explicit user continuation. Assignments pin goals, outputs, resources, dependencies, instruction versions and budgets. Dependencies bind exact result revisions. Store full results once with scoped paging and bounded previews. Independent branch failures yield useful partial synthesis, or deterministic summaries when synthesis cannot run. No name/English-keyword forcing, unrestricted peer chatter, recursive workers or independent desktop control.
+
+### Resource and execution contracts
+
+Retain durable output/time reservations; add input/context costs, graph settlement, load/unload, tool/process/storage accounting. Refund only observed unused settled capacity. Reserve max(2, ceil(10% of model-call allowance)) for parent verification/response. Defaults are 30 model calls, four worker sessions, two active workers and one level, recorded as policy rather than schema limits. Fair actor/work queues admit three foreground then one eligible background request under contention. Controls bypass inference; waiting owns no inference slot. Acquire queue admission before runtime resources. Use the current qualified model unless an explicitly enabled installed-model pool and measurements justify a change. Preserve family/memory admission and scoped cache identities.
+
+Trusted supervisors create narrowed per-worker sessions/cwd/process ownership/journals and bounded private copies. Preserve required dirty/untracked inputs and record exclusions; no writable hard links, implicit dependencies or credential exposure. Reuse versioned authorized environment templates. Preparation failure cannot silently fall back to shared-root workers. Working copies are not OS sandboxes.
+
+Change sets follow draft/sealed/validating/ready/applying/integrated, with conflict/validation_failed/partial/uncertain/abandoned alternatives. Validate combined candidate changes, assignment epochs, authority and preimages; journal each integration operation and quarantine deletes. A hash check followed by rename is insufficient: qualified backends must retain actual displaced contents and detect mismatches, preserving both versions without blind rollback. Unsupported replacement yields a reviewable change set. Multi-file integration is not atomic and retains per-file receipts.
+
+Service-owned work can outlive a client only with live authorized background supervision. Existing client-owned grants retain their original lifetime. Feature flags stop new admission, not observation/recovery.
+
+### Delivery and qualification
+
+Tasks 8-14 implement the approved seven increments. Freeze regressions and model/hardware/usability cases before tuning. Require no mandatory agent setup, no classification call on simple answers, all deterministic continuity/control/authorization cases passing, and investigate unexplained single-agent overhead above 10% on matching qualified hardware. Model/native evidence remains separate from fixture success. No deployment, downloads, installed-app replacement, commits or publication are implied.
+
+## Historical delivery design
+
 ## Context
 
 See [proposal.md](proposal.md) for motivation and acceptance outcomes. The current React Chat uses persisted session turns; agent work uses a separate durable runner and SQLite store. `internal/server/agent_jobs.go` supplies task-first instructions, and `configureDesktopTask` in `desktop_computer_tools.go` replaces those instructions with a one-tool-per-response computer protocol. Workflow completion in `internal/agents/workflow_completion.go` is enabled by computer-session configuration, not evidence that the user requested an external outcome. The inference response format already permits messages as well as tool calls.

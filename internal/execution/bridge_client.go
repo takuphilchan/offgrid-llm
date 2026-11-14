@@ -122,7 +122,7 @@ func (c *HostConnection) heartbeat() error {
 		case <-ticker.C:
 			ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
 			current, err := c.endpoint.Check(ctx, c.approved.Binding)
-			if err == nil && (current.Root != c.approved.Root || current.Permissions != c.approved.Permissions || current.Binding != c.approved.Binding || current.Backend != c.approved.Backend || current.Isolation != c.approved.Isolation) {
+			if err == nil && (current.ProjectHostID != c.approved.ProjectHostID || current.Root != c.approved.Root || current.Permissions != c.approved.Permissions || current.Binding != c.approved.Binding || current.Backend != c.approved.Backend || current.Isolation != c.approved.Isolation || current.WorkerCopies != c.approved.WorkerCopies) {
 				err = ErrAuthority
 			}
 			var result struct {

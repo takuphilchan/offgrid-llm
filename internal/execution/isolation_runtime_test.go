@@ -152,6 +152,14 @@ func TestIsolationDurableLifecycleAndUnknownStartNeverReplay(t *testing.T) {
 					t.Fatal(result, err)
 				}
 				w.finishing.Wait()
+				if result.Runtime == nil || !result.Runtime.Settled || result.Runtime.ElapsedNS <= 0 {
+					t.Fatal("isolated supervisor lost runtime evidence", result.Runtime)
+				}
+				recorded, err := w.Journal.Inspect(ctx, r)
+				var replayed ProcessResult
+				if err != nil || json.Unmarshal(recorded.Result, &replayed) != nil || replayed.Runtime == nil || *replayed.Runtime != *result.Runtime {
+					t.Fatal("journal lost terminal runtime", recorded, err)
+				}
 			}
 			before := *starts
 			second := w.Handle(context.Background(), r)

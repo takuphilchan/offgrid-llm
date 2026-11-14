@@ -28,6 +28,7 @@ type Policy = ComputerSession["approval_mode"];
 // Access is an interruption of an existing job, not another task builder. Host
 // IDs come only from the trusted picker; model-proposed labels are never IDs.
 export function TaskAccess(props:{run:AgentRun;workspace:string;onResolved:()=>void;cancelSignal?:AbortSignal;initialConsentPending?:boolean}) {
+  if(props.run.pending_input?.kind==='worker_question'||props.run.pending_input?.kind==='worker_clarification')return <p role="status">{props.run.pending_input.target}</p>;
   if(props.run.pending_input?.kind==='workspace')return <TaskWorkspaceAccess {...props}/>;
   if(props.run.pending_input?.mode==='desktop'||(props.run.pending_input?.mode==='app'&&props.run.requested_computer_approval_mode&&props.run.requested_computer_scope!=='selected_window'&&window.electron?.desktopComputerProtocol===3))return <TaskDesktopAccess {...props}/>;
   return <WindowTaskAccess {...props}/>;

@@ -38,6 +38,24 @@ func TestLiveCorrectionRechecksStateAndNeverApproves(t *testing.T) {
 	}
 }
 
+func TestLiveCorrectionWhileWaitingForChildren(t *testing.T) {
+	writes := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			if r.URL.Path != "/api/v2/jobs/run-test/steer" {
+				t.Error("unexpected control", r.URL.Path)
+			}
+			writes++
+		}
+		w.Write([]byte(`{"run_id":"run-test","status":"waiting_for_children","can_steer":true}`))
+	}))
+	defer server.Close()
+	client, _ := serviceclient.New(server.URL, "", server.Client())
+	if _, ok := liveAgentControl(context.Background(), client, "run-test")("Use the revised source"); !ok || writes != 1 {
+		t.Fatal("delegation correction not sent once", writes)
+	}
+}
+
 func TestLiveCorrectionUnconfirmedIsNotReplayed(t *testing.T) {
 	writes := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

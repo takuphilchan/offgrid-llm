@@ -22,10 +22,10 @@ type Instruction struct {
 // CanSteerTask describes saved-state eligibility, not a grant. Corrections to
 // running parent work are queued; they never cancel input already dispatched.
 func CanSteerTask(t *Task) bool {
-	if t == nil || t.AdmissionHeld || t.ArchivedAt != nil || t.DeletedAt != nil || t.ParentID != "" || len(t.Instructions)+len(t.PendingInstructions) >= 32 || t.Checkpoint == nil || t.Delegation != nil {
+	if t == nil || t.AdmissionHeld || t.ArchivedAt != nil || t.DeletedAt != nil || t.ParentID != "" || len(t.Instructions)+len(t.PendingInstructions) >= 32 || t.Checkpoint == nil || (t.Delegation != nil && len(t.Delegation.Children) == 0) {
 		return false
 	}
-	return t.Status == TaskRunning || (t.Status == TaskInterrupted && t.Checkpoint.ExecutingCall == "")
+	return t.Status == TaskRunning || t.Status == TaskChildren || (t.Status == TaskInterrupted && t.Checkpoint.ExecutingCall == "")
 }
 
 // Pause cancels further scheduling, not the truth about an in-flight effect.
@@ -45,6 +45,7 @@ func (r *Runner) Pause(id, actor string, takeover bool) (*Task, error) {
 			return ErrRunConflict
 		}
 		t.PendingApproval = nil
+		t.ControlEpoch++
 		if t.Status != TaskInput {
 			t.Status = TaskInterrupted
 		}
@@ -116,6 +117,9 @@ func (r *Runner) Steer(id, actor, requestID, instruction string) (*Task, error) 
 	}
 	sum := sha256.Sum256([]byte(instruction))
 	digest := hex.EncodeToString(sum[:])
+	if task, exists := r.manager.GetTask(id); exists && task.Delegation != nil && len(task.Delegation.Children) > 0 {
+		return r.steerDelegationLocked(task, actor, requestID, digest, instruction)
+	}
 	return r.manager.updateTask(id, func(t *Task) error {
 		if t.Actor != actor {
 			return ErrTaskNotFound
@@ -140,6 +144,7 @@ func (r *Runner) Steer(id, actor, requestID, instruction string) (*Task, error) 
 			return ErrRunConflict
 		}
 		entry := Instruction{requestID, digest, instruction, time.Now().UTC()}
+		t.ControlEpoch++
 		if t.Status == TaskRunning {
 			t.PendingInstructions = append(t.PendingInstructions, entry)
 			return nil
@@ -165,6 +170,7 @@ func applyInstruction(t *Task, entry Instruction) error {
 	if err := reviseWorkflow(t, entry.RequestID, entry.Digest); err != nil {
 		return err
 	}
+	endPartialSynthesis(t)
 	abandonProposals(t, "Not executed: the user changed the task before this proposal was dispatched.")
 	if t.Checkpoint.PreEffectRepair || t.Checkpoint.ProposalUnresolved || t.Checkpoint.ProposalRepairs > 0 {
 		t.Checkpoint.PreEffectRepair, t.Checkpoint.PreEffectRepairTool, t.Checkpoint.PreEffectRepairs = false, "", 0
@@ -177,6 +183,11 @@ func applyInstruction(t *Task, entry Instruction) error {
 	}
 	t.Checkpoint.Messages = append(t.Checkpoint.Messages, api.ChatMessage{Role: "user", Content: entry.Text})
 	t.Instructions = append(t.Instructions, entry)
+	if t.Worker != nil && t.WorkerMessageRequests[entry.RequestID] {
+		t.AssignmentVersion++
+	} else {
+		t.InstructionVersion++
+	}
 	return nil
 }
 
@@ -195,6 +206,11 @@ func (r *Runner) applyPendingInstructions(task *Task) (bool, error) {
 	if !pending || task.Delegation != nil {
 		return false, nil
 	}
+	if task.Worker != nil {
+		if err := r.manager.deliverWorkerMessages(task.ID); err != nil {
+			return false, err
+		}
+	}
 	updated, err := r.manager.updateTask(task.ID, func(saved *Task) error {
 		if saved.Status != TaskRunning {
 			return context.Canceled
@@ -206,6 +222,9 @@ func (r *Runner) applyPendingInstructions(task *Task) (bool, error) {
 		if err != nil {
 			return err
 		}
+		next.ControlEpoch = max(next.ControlEpoch, saved.ControlEpoch)
+		next.WorkerMessageRequests = saved.WorkerMessageRequests
+		next.ConversationHold = saved.ConversationHold
 		for _, entry := range saved.PendingInstructions {
 			if err := applyInstruction(next, entry); err != nil {
 				return err

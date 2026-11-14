@@ -71,6 +71,9 @@ func (s *ProviderScheduler) prepareLegacyModel(ctx context.Context, gate *Lifecy
 			// A service-specific model-load deadline may be shorter. This outer
 			// bound prevents abandoned preparation even for standalone adapters.
 			prepareCtx, cancel := context.WithTimeout(s.closeCtx, 5*time.Minute)
+			// Keep the initiating request's scheduling identity without tying the
+			// shared load lifetime to that client's cancellation.
+			prepareCtx = WithSchedulingScope(prepareCtx, schedulingScope(ctx))
 			pending = &legacyPreparation{done: make(chan struct{}), cancel: cancel}
 			key := legacyPreparationKey{gate: gate, model: model, context: window}
 			s.legacyPreparing[key] = pending

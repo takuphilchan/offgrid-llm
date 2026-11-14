@@ -17,6 +17,20 @@ func (b *browserRunTools) StopOwnedExecution(ctx context.Context, task *agents.T
 	if b.server.executionHosts == nil {
 		return execution.ErrHostUnavailable
 	}
+	if task.Config.Execution == nil {
+		root, found := b.server.agentManager.GetTask(task.ParentID)
+		if !found || root.Actor != task.Actor || root.Config.Execution == nil {
+			return execution.ErrAuthority
+		}
+		if root.Checkpoint != nil && root.Checkpoint.StorageBudget != nil {
+			for _, reservation := range root.Checkpoint.StorageBudget.Reservations {
+				if reservation.Request.WorkerRunID == task.ID {
+					return b.server.executionHosts.StopPreparedWorker(ctx, root.Actor, b.server.workspaceID, *root.Config.Execution, reservation.Request)
+				}
+			}
+		}
+		return nil // No reservation could have dispatched a native preparation.
+	}
 	return b.server.executionHosts.CancelIfAdmitted(ctx, task.Actor, b.server.workspaceID, task.ID, *task.Config.Execution)
 }
 
@@ -106,6 +120,9 @@ func pendingEditAccess(task *agents.Task) int {
 
 func verifiedWorkspaceWrite(task *agents.Task, after int) bool {
 	for _, step := range task.Steps[after+1:] {
+		if step.Type == "action" && step.ToolName == execution.IntegrateTool && verifiedWorkspaceIntegration(task, step) {
+			return true
+		}
 		if step.Type != "action" || (step.ToolName != "workspace_write" && step.ToolName != execution.InputWriteTool) {
 			continue
 		}

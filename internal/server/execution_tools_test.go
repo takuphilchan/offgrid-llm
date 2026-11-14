@@ -20,10 +20,17 @@ func approvedExecutionFixture(t *testing.T, s *Server) (execution.Reference, str
 }
 
 func approvedExecutionPermissionsFixture(t *testing.T, s *Server, permissions execution.Permissions) (execution.Reference, string) {
+	return approvedExecutionCopiesFixture(t, s, permissions, execution.WorkingCopyPolicy{})
+}
+
+func approvedExecutionCopiesFixture(t *testing.T, s *Server, permissions execution.Permissions, policy execution.WorkingCopyPolicy, projectHostID ...string) (execution.Reference, string) {
 	t.Helper()
 	root := t.TempDir()
 	b := execution.Binding{Actor: "local-admin", Workspace: s.workspaceID, Host: "fixture-host", Session: "fixture-session", Grant: "fixture-local-grant", Revision: 1, Job: "supervisor"}
-	config := execution.Context{Version: 1, Binding: b, Backend: "local", Root: root, Directory: ".", Permissions: permissions}
+	config := execution.Context{Version: 1, Binding: b, Backend: "local", Root: root, Directory: ".", Permissions: permissions, WorkerCopies: policy}
+	if len(projectHostID) > 0 {
+		config.ProjectHostID = projectHostID[0]
+	}
 	session, err := execution.OpenSession(config)
 	if err != nil {
 		t.Fatal(err)
@@ -33,6 +40,17 @@ func approvedExecutionPermissionsFixture(t *testing.T, s *Server, permissions ex
 		t.Fatal(err)
 	}
 	worker := &execution.Worker{Session: session, Journal: journal, Processes: execution.NewProcessManager(session), Token: strings.Repeat("a", 64)}
+	if permissions.Processes {
+		worker.AuthorizeProcess = execution.TrustedProcessPolicy
+	}
+	if policy.Version != 0 {
+		store, openErr := execution.OpenWorkingCopies(filepath.Join(t.TempDir(), "copies"), policy)
+		if openErr != nil {
+			t.Fatal(openErr)
+		}
+		worker.WorkingCopies = store
+		t.Cleanup(func() { store.Close() })
+	}
 	endpoint := execution.NewLocalEndpoint(worker)
 	s.executionHosts = execution.NewHosts()
 	if err = s.executionHosts.RegisterApproved(context.Background(), config, endpoint); err != nil {

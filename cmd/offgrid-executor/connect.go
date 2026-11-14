@@ -20,5 +20,9 @@ func connectNativeHost(state string) error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	return execution.ServeNativeHost(ctx, os.Stdin, os.Stdout, filepath.Dir(resolved), state, Version)
+	identityDirectory, err := execution.ProjectIdentityDirectory()
+	if err != nil {
+		return err
+	}
+	return execution.ServeNativeHostWithProjectIdentity(ctx, os.Stdin, os.Stdout, filepath.Dir(resolved), state, Version, identityDirectory)
 }

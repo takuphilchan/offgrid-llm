@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"unicode/utf8"
+
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 const ProtocolVersion = 1
@@ -37,20 +39,18 @@ type Binding struct {
 	Job       string `json:"job"`
 }
 
-type Permissions struct {
-	Read      bool `json:"read"`
-	Write     bool `json:"write"`
-	Processes bool `json:"processes"`
-}
+type Permissions = api.ExecutionPermissions
 
 type Context struct {
-	Version     int             `json:"version"`
-	Binding     Binding         `json:"binding"`
-	Backend     string          `json:"backend"`
-	Root        string          `json:"root"`
-	Directory   string          `json:"directory"`
-	Permissions Permissions     `json:"permissions"`
-	Isolation   IsolationPolicy `json:"isolation,omitzero"`
+	ProjectHostID string            `json:"project_host_id,omitempty"`
+	Version       int               `json:"version"`
+	Binding       Binding           `json:"binding"`
+	Backend       string            `json:"backend"`
+	Root          string            `json:"root"`
+	Directory     string            `json:"directory"`
+	Permissions   Permissions       `json:"permissions"`
+	Isolation     IsolationPolicy   `json:"isolation,omitzero"`
+	WorkerCopies  WorkingCopyPolicy `json:"worker_copies,omitzero"`
 }
 
 type Session struct {
@@ -69,6 +69,9 @@ func validIdentity(value string) bool {
 // OpenSession is a host-side authority constructor. Call it only after local
 // approval; a service/renderer must not turn arbitrary submitted JSON into it.
 func OpenSession(config Context) (*Session, error) {
+	if config.ProjectHostID != "" && (config.Backend != "local" || !validCredential(config.ProjectHostID)) {
+		return nil, ErrAuthority
+	}
 	b := config.Binding
 	for _, value := range []string{b.Actor, b.Workspace, b.Host, b.Session, b.Grant, b.Job} {
 		if !validIdentity(value) {

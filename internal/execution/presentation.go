@@ -11,6 +11,13 @@ import (
 // journal evidence. More output is retrieved by handle, never by restarting.
 func PresentReceipt(ref Reference, operation string, original Receipt) (string, error) {
 	receipt := original
+	if operation == "workspace_info" || operation == "directory_change" {
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(receipt.Result, &fields) == nil && fields != nil {
+			delete(fields, "project_host_id")
+			receipt.Result, _ = json.Marshal(fields)
+		}
+	}
 	var text *string
 	if operation == "file_write" && receipt.State == "complete" {
 		var written WriteResult

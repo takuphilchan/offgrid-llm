@@ -87,4 +87,7 @@ func TestPinnedStdioEndpointRunsRealExecutor(t *testing.T) {
 	t.Run("shutdown settles owned command", func(t *testing.T) {
 		testEndpointCommandShutdown(t, binary, digest)
 	})
+	t.Run("independent worker preparation and restart", func(t *testing.T) {
+		testEndpointWorkerPreparation(t, binary, digest)
+	})
 }

@@ -73,6 +73,17 @@
   .message-actions > .message-job-link { margin: 0; }
 }
 .execution-step { padding-block: 12px; border-block-end: 1px solid var(--separator); min-width: 0; }
+.canonical-input-controls { width: 100%; max-width: 800px; min-width: 0; margin: 0 auto; flex-shrink: 0; }
+.composer-mode-override { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; font-size: var(--type-caption); color: var(--muted); }
+.composer-input-mode { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; padding-block: .375rem; color: var(--muted); font-size: var(--type-caption); }
+.composer-input-mode select { width: auto; max-width: 100%; min-width: 0; min-height: 36px; padding-block: .375rem; font: inherit; }
+.canonical-input-controls > .conversation-work { max-height: min(30vh, 240px); overflow: auto; margin-block-end: .5rem; border-block-start: 1px solid var(--line); }
+.canonical-input-controls > .conversation-work > div { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.canonical-input-controls > .conversation-work p { flex-basis: 100%; margin: 0; }
+.conversation-settings { min-width: 0; max-width: 100%; font-size: var(--type-caption); }
+.conversation-settings pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: .75rem/1.6 var(--mono); padding: .75rem; background: var(--surface-0); border: 1px solid var(--line); border-radius: .5rem; }
+.conversation-project-name { overflow-wrap: anywhere; }
+.conversation-settings summary { cursor: pointer; color: var(--muted); }
 .execution-step p, .execution-location { overflow-wrap: anywhere; }
 .chat-execution-workspace fieldset { min-width: 0; border: 0; padding: 0; display: grid; gap: 12px; }
 .chat-execution-workspace select { min-width: 0; max-width: 100%; width: 100%; }

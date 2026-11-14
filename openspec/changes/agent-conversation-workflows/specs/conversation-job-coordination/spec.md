@@ -6,6 +6,27 @@ Keep conversations and durable agent work linked reliably across failures, navig
 
 ## ADDED Requirements
 
+### Requirement: Canonical conversation control
+Projects, conversations, work, runs and workers SHALL have stable scoped identities. Accepted commands SHALL atomically persist state, revision, event and outbox before dispatch. Legacy conversation files SHALL become projections only after an explicit versioned migration. Identical retries SHALL return the original outcome and conflicting payloads SHALL be rejected.
+
+#### Scenario: Projection unavailable after acceptance
+- **WHEN** a command commits but its legacy conversation projection fails
+- **THEN** reconnect observes canonical state and projection repair cannot repeat execution
+
+### Requirement: Persistent usable history
+Applied corrections, failures, cancellations and partial outcomes SHALL remain available to later turns. Context selection SHALL preserve essential constraints within the actual model budget and expose authorized retrieval references for omitted content. Source revocation SHALL invalidate dependent projections.
+
+#### Scenario: Long answer and failed follow-up
+- **WHEN** a long answer is followed by a failed task and the user asks to fix it
+- **THEN** the next turn retains applicable corrections and failure evidence rather than discarding the entire earlier conversation
+
+### Requirement: Ordered controls and responsive input
+Work SHALL record instruction versions and control epochs. Corrections SHALL fence obsolete mutations; Stop SHALL prevent dispatch without inference. Late results SHALL retain receipts without reviving stopped work. Foreground input SHALL remain available while background work waits.
+
+#### Scenario: Late child after correction
+- **WHEN** a child finishes using an instruction version superseded by a correction
+- **THEN** its result is retained as stale evidence and cannot be automatically integrated without revalidation
+
 ### Requirement: Canonical work per turn
 A tool-enabled conversation turn SHALL use the existing durable execution service, including turns answered without tools. Each submission MUST persist an actor-scoped request identity and payload digest, link exactly one canonical job and hold that job from execution until its conversation association is durable.
 

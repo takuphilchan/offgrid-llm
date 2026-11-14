@@ -15,16 +15,20 @@ import (
 )
 
 const SessionHelp = `Saved conversations on the connected OffGrid service:
+  offgrid session chat                       Start a default conversation (preview)
   offgrid session list
   offgrid session show NAME
+  offgrid session folder NAME SESSION|none
+  offgrid session changes NAME [CHANGE_ID [files|validation|integration|recovery|content|preserved [SHA256 [ARTIFACT_ID]]]]
   offgrid session create NAME --model MODEL
   offgrid session attach NAME FILE
   offgrid session attachments NAME
   offgrid session remove-attachment NAME ID
   offgrid session send NAME [--file FILE] [--attachment ID] [--image PATH] [--model MODEL] MESSAGE
+  offgrid session send NAME --answer QUESTION_ID --request-id ID ANSWER
   offgrid session send NAME --profile ID --profile-revision N [--request-id ID] [--wait] MESSAGE
   offgrid session chat NAME --profile ID --profile-revision N
-  offgrid session chat NAME                  Ordinary chat with /attach PATH
+  offgrid session chat NAME                  Continue saved conversation
   offgrid session turn NAME
   offgrid session recover NAME REQUEST_ID
   offgrid session delete NAME [--work retain|stop]
@@ -33,6 +37,8 @@ const SessionHelp = `Saved conversations on the connected OffGrid service:
 
 Set OFFGRID_SERVER_URL and OFFGRID_API_KEY for a remote or protected service.
 There is no direct-file fallback. Export defaults to stdout; FILE must not exist.
+When conversation preview is enabled, eligible text conversations use the shared
+inbox. Input acceptance does not wait for inference; /exit detaches from work.
 `
 
 func LoadServiceSession(ctx context.Context, client *serviceclient.Client, name string) (*sessions.Session, error) {
@@ -64,6 +70,15 @@ func RunSessionServiceWithFiles(ctx context.Context, client *serviceclient.Clien
 		return Usage("session command required")
 	}
 	switch args[0] {
+	case "result":
+		if len(args) != 2 {
+			return Usage("session result RESULT_REFERENCE")
+		}
+		return inspectSavedResult(ctx, client, args[1], stdout, jsonMode)
+	case "folder":
+		return runSessionFolder(ctx, client, args, stdout, jsonMode)
+	case "changes":
+		return runSessionChanges(ctx, client, args, stdout, jsonMode)
 	case "attach", "attachments", "remove-attachment":
 		return RunSessionFiles(ctx, client, args, stdout, jsonMode)
 	case "send", "turn", "recover":

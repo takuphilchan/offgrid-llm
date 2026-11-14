@@ -157,7 +157,7 @@ async function fixture(page: Page, startStatus?: string, computer = false) {
         return route.fulfill({status:202,json:{turn:turn(),job:run()}});
       }
       if (path.endsWith('/turn/recover')) { commands.push({action:'recover'}); commit(); data={turn:turn(),job:run()}; }
-      else if (path.endsWith('/turn')) data = {turn:conversation?.jobs.length ? turn() : null};
+      else if (path.endsWith('/turn')) data = {turn:conversation?.jobs.length ? turn() : null,job:conversation?.jobs.length ? run() : undefined};
       else if (req.method() === 'DELETE') { deletes.push(url.searchParams.get('work') ?? ''); if (!url.searchParams.has('work') && !['completed','failed','cancelled'].includes(status)) return route.fulfill({status:409,json:{error:'Active work requires an explicit choice'}}); conversation=null; data={success:true}; }
       else data = conversation;
     } else if (path.startsWith(`/api/v2/jobs/${jobID}`)) {
@@ -259,6 +259,42 @@ test('Chat exposes specialist handoffs without expanding technical payloads', as
   expect(await activity.evaluate((work,answer)=>!!(work.compareDocumentPosition(document.querySelector(answer)!) & Node.DOCUMENT_POSITION_FOLLOWING),'.message.assistant')).toBe(true);
   await activity.locator('.conversation-work-details > summary').click();
   await expect(activity.locator('.conversation-work-delegates')).toHaveCount(1);
+});
+
+test('Chat steers delegated work and reload never resubmits the correction', async ({page}) => {
+  const f=await fixture(page,'waiting_for_children');
+  f.setStatus('waiting_for_children',{can_steer:true,children:[
+    {id:`run-${'c'.repeat(32)}`,spec:{key:'research',goal:'Research sources',depends_on:[],tools:[]}},
+  ]});
+  await page.goto('/ui/#/chat');
+  await page.locator('.composer textarea').fill('Use the revised source count.');
+  await page.getByRole('button',{name:'Send instruction',exact:true}).click();
+  await expect.poll(()=>f.commands.length).toBe(1);
+  expect(f.commands[0]).toMatchObject({action:'steer',instruction:'Use the revised source count.'});
+  await page.reload();
+  await expect(page.getByRole('region',{name:'Agent activity'})).toBeVisible();
+  expect(f.commands).toHaveLength(1);
+  expect(f.submissions).toHaveLength(0);
+});
+
+test('Chat restores accepted restrictions and specialization from service state after reload',async({page})=>{
+  const f=await fixture(page,'completed',true);
+  const pinned={...profile,settings:{...profile.settings,computer:true,tools:[{provider:'builtin',tool:'calculator',schema_revision:'v1',location:'service'}]}};
+  f.setStatus('completed',{conversation_configuration:{version:1,profile:pinned,model,restrictions:{tools:[],computer:false}}});
+  for(let visit=0;visit<2;visit++) {
+    if(visit===0) await page.goto('/ui/#/chat'); else await page.reload();
+    await page.locator('.composer-context-menu > button').click();
+    await page.getByRole('button',{name:'Agent settings',exact:true}).click();
+    await expect(page.getByRole('checkbox',{name:/calculator/})).not.toBeChecked();
+    await expect(page.getByRole('checkbox',{name:new RegExp(agentProfilesText.en.computer)})).not.toBeChecked();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+  }
+  expect(f.commands).toEqual([]);expect(f.submissions).toEqual([]);
+  await page.locator('.composer textarea').fill('Continue with the same restrictions.');
+  await page.locator('.composer-actions').getByRole('button',{name:'Send',exact:true}).click();
+  await expect.poll(()=>f.submissions.length).toBe(1);
+  expect(f.submissions[0]).toMatchObject({agent:{id:pinned.id,revision:pinned.revision},restrictions:{tools:[],computer:false}});
 });
 
 async function desktopFixture(page: Page, deferred = false) {

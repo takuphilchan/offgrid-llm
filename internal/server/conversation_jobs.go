@@ -12,7 +12,6 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
-	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 func conversationRequestID(workspace, id string) string {
@@ -58,7 +57,7 @@ func (s *Server) submitConversationJob(w http.ResponseWriter, r *http.Request, n
 	}
 	defer unlock()
 	scope := h.scoped(r)
-	conversation, err := scope.Load(name)
+	conversation, err := scope.LoadForExecution(name)
 	if err != nil {
 		writeSessionError(w, err)
 		return
@@ -88,12 +87,36 @@ func (s *Server) submitConversationJob(w http.ResponseWriter, r *http.Request, n
 			writeSessionError(w, sessions.ErrTurnConflict)
 			return
 		}
+		// Accepted job configuration is already durable in the agent database.
+		// Reuse its explicit restrictions until the canonical conversation store
+		// takes ownership; never reconstruct lost browser-only preferences.
+		for index := len(conversation.Jobs) - 1; index >= 0; index-- {
+			previous, exists := s.agentManager.GetTask(conversation.Jobs[index].JobID)
+			if !exists || previous.Actor != actor || previous.DeletedAt != nil {
+				continue
+			}
+			if previous.Config.ConversationConfiguration == nil {
+				break
+			}
+			selected, err := s.agentManager.GetProfile(s.workspaceID, actor, req.Agent.ID, req.Agent.Revision)
+			if err != nil {
+				writeProfileError(w, err)
+				return
+			}
+			req.Restrictions = inheritConversationRestrictions(previous.Config.ConversationConfiguration.Restrictions, req.Restrictions, selected)
+			break
+		}
 		job := jobSubmitRequest{ExecutionRequestVersion: req.ExecutionRequestVersion, Prompt: req.Content, Model: req.ModelID, RequestID: requestID, ProfileID: req.Agent.ID, ProfileRevision: req.Agent.Revision, Restrictions: req.Restrictions, ComputerScope: req.ComputerScope, ComputerApprovalMode: req.ComputerApprovalMode}
 		job.Execution = req.Execution
 		config, valid := s.resolveJobConfig(w, r, &job)
 		if !valid {
 			return
 		}
+		preferences := agents.ResourceRestrictions{}
+		if req.Restrictions != nil {
+			preferences = *req.Restrictions
+		}
+		config.ConversationConfiguration = &agents.ConversationConfiguration{Version: 1, Profile: config.Profile, Model: job.Model, Restrictions: preferences}
 		config.ContextWindow = s.chatContextWindowForModel(req.Profile, job.Model)
 		if !config.TextOnlyInference && s.agentToolPolicy != nil {
 			pin, err := s.agentToolPolicy.Select(r.Context(), job.Model, config.ContextWindow)
@@ -117,32 +140,11 @@ func (s *Server) submitConversationJob(w http.ResponseWriter, r *http.Request, n
 			writeJobError(w, 422, "profile_knowledge_empty", "Select authorized Knowledge documents in this agent profile.", false)
 			return
 		}
-		// Bound older context independently of the current request; record
-		// omissions explicitly and let actual runtime token accounting enforce
-		// the final model window, including tools and the private envelope.
-		bytes := 0
-		start := len(conversation.Messages)
-		for start > 0 && len(conversation.Messages)-start < 32 {
-			message := conversation.Messages[start-1]
-			if bytes+len(message.Content) > 24000 {
-				break
-			}
-			bytes += len(message.Content)
-			start--
-		}
-		config.ConversationOmitted = start
-		// Later messages may summarize earlier sources, even when those earlier
-		// messages are outside the bounded prompt. Retain all source dependencies.
-		for _, message := range conversation.Messages {
-			config.KnowledgeDependencies = append(config.KnowledgeDependencies, message.KnowledgeDocuments...)
-			for _, source := range message.KnowledgeSources {
-				config.KnowledgeDependencies = append(config.KnowledgeDependencies, source.DocumentID)
-			}
-		}
-		for _, message := range conversation.Messages[start:] {
-			if message.Role == "user" || message.Role == "assistant" {
-				config.ConversationContext = append(config.ConversationContext, api.ChatMessage{Role: message.Role, Content: message.Content})
-			}
+		// Let the model context accountant archive complete evidence groups.
+		// A byte cutoff must not erase earlier constraints after one long answer.
+		if err := s.assembleConversationContext(conversation, actor, &config); err != nil {
+			writeJobError(w, 403, "conversation_context_unavailable", err.Error(), false)
+			return
 		}
 		intent, _, err = s.agentManager.SaveConversationIntent(agents.ConversationIntent{Workspace: s.workspaceID, Actor: actor, RequestID: requestID, Digest: digest, Origin: agents.ConversationOrigin{Workspace: s.workspaceID, Conversation: name, TurnID: req.RequestID}, Prompt: req.Content, Model: job.Model, Config: config})
 		if err != nil {
@@ -279,7 +281,7 @@ func (s *Server) conversationScope(actor string) *sessions.ScopedManager {
 }
 
 func (s *Server) projectConversationTask(snapshot *agents.Task) {
-	if snapshot == nil || snapshot.Origin == nil || s.sessionHandlers == nil {
+	if snapshot == nil || snapshot.Origin == nil || snapshot.WorkID != "" || snapshot.ConversationTurn != nil || s.sessionHandlers == nil {
 		return
 	}
 	// Observer callbacks can overlap; project the latest canonical snapshot.

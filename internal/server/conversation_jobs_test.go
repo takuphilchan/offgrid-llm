@@ -464,26 +464,26 @@ func TestConversationHistoryBudgetsAndPlainChatCompatibility(t *testing.T) {
 			f.s.config.ChatContextSize = 8192
 			scope := f.s.sessionHandlers.manager.WithAccess(sessions.Access{All: true})
 			for i := 0; i < 20; i++ {
-				if _, err := scope.AppendExchange("chat", "model", strings.Repeat("u", 1000), strings.Repeat("a", 1000)); err != nil {
+				if _, err := scope.AppendExchange("chat", "model", strings.Repeat("u", 100), strings.Repeat("a", 1000)); err != nil {
 					t.Fatal(err)
 				}
 			}
 			f.s.agentRunner = agents.NewRunner(f.s.agentManager, f.s.toolRegistry, func(_ context.Context, task *agents.Task, messages []api.ChatMessage, _ []api.Tool) (*api.ChatCompletionResponse, error) {
 				f.calls.Add(1)
-				if len(task.Config.ConversationContext) != 24 || task.Config.ConversationOmitted != 16 || task.Model != "model" || task.Config.MaxTokens != 256 || task.Config.ContextWindow != f.s.chatContextWindow(preset) {
-					t.Error("lost pinned context/budgets", task.Config)
+				if len(task.Config.ConversationContext) != 40 || task.Config.ConversationOmitted != 0 || task.Model != "model" || task.Config.MaxTokens != 256 || task.Config.ContextWindow != f.s.chatContextWindow(preset) {
+					t.Error("lost pinned context/budgets")
 				}
 				if messages[len(messages)-1].StringContent() != "hello" {
 					t.Error("current request lost")
 				}
-				found := false
+				constraints := 0
 				for _, m := range messages {
-					if strings.Contains(m.StringContent(), "Older conversation messages are omitted") {
-						found = true
+					if m.Role == "user" && m.StringContent() == strings.Repeat("u", 100) {
+						constraints++
 					}
 				}
-				if !found {
-					t.Error("history truncation concealed")
+				if constraints != 20 {
+					t.Error("essential prior instructions dropped")
 				}
 				return &api.ChatCompletionResponse{Choices: []api.ChatCompletionChoice{{FinishReason: "stop", Message: api.ChatMessage{Role: "assistant", Content: "Agent answer"}}}}, nil
 			})

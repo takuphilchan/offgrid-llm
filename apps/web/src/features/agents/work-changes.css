@@ -1,0 +1,7 @@
+.work-changes { margin-block: .75rem; min-inline-size: 0; }
+.work-changes summary { cursor: pointer; padding-block: .5rem; overflow-wrap: anywhere; }
+.work-changes-body, .work-change-body { padding-inline-start: .75rem; min-inline-size: 0; }
+.work-change { margin-block: .5rem; }
+.work-change li { margin-block: .5rem; overflow-wrap: anywhere; }
+.work-change .button-row { flex-wrap: wrap; }
+.work-change bdi { unicode-bidi: isolate; }

@@ -122,13 +122,40 @@ connections and service filesystem tools do not become available to ordinary
 Chat users. Without administrative grants, pure calculator/time tools remain
 available. Profile instructions cannot override these restrictions.
 
+Accepted agent turns save their pinned specialization and explicit restrictions
+with the durable job. Reload restores that saved configuration. Omitted settings
+on a later agent turn inherit its restrictions; switching a profile narrows
+inherited selections to the new profile's ceiling. Explicit tool selections can
+change those restrictions within the authorized profile. Unsaved configuration
+drafts and historical browser-only settings are not reconstructed as saved choices.
+
 Chat shows concise activity, access requests and results inline. **Inspect work**
 opens the same job, not a copy. While supported work runs, **Send instruction**
 queues a correction for its next safe boundary; actions already sent are not
-cancelled. Reloading observes saved state and never submits again. If attaching
+undone. During delegation, acceptance fences new child dispatch and cancels active
+generation. The correction applies after operations settle; an unresolved effect
+still requires reconciliation. Earlier worker results remain inspectable evidence
+and cannot count as completion of the revised request. Correcting paused work
+does not resume it. Reloading observes saved state and never submits again. If attaching
 the answer failed, **Attach saved result** repairs bookkeeping without rerunning
 inference or tools. An uncertain action is not replayed; a manual report remains
 a human observation rather than independent proof.
+
+Later agent turns retain applied corrections and failed or cancelled attempts as
+context. Model context accounting can archive long answers while retaining user
+constraints; exact archived evidence remains available through `task_history`.
+Child handoffs include bounded previews and references for retrieving complete
+results, including final citations. Retrieval checks the task graph and current
+source access. A partial delegation reports useful completed outputs with its
+limitations; worker completion alone is not independent verification.
+
+In the conversation preview, useful independent results can receive a final
+synthesis even when another branch fails. This uses the existing work allowance
+and saved-evidence retrieval only. Failed branches remain explicitly recorded;
+the synthesized answer cannot mark the whole work complete. If synthesis is
+unavailable, the saved branch summary and full-result references remain usable.
+Following up with a retained worker also preserves access to its earlier full
+results, with their original revision and current source-access checks.
 
 Before asking you to report an uncertain computer outcome, the service checks
 its saved, authenticated action receipt. If that result survived, it is recovered
@@ -214,6 +241,40 @@ available.
 For work across applications, OffGrid verifies each current target under the
 desktop task grant. The grant does not turn off action restrictions, and a
 separate host file or service grant is still needed when applicable.
+
+In the conversation preview, a compatible host explicitly configured for private
+worker copies can also support editing and test assignments. A dependent worker
+receives the sealed prerequisite changes in its own copy. Continuing the same
+worker retains its captured files and context, creates a fresh execution session,
+and uses the work's remaining allowance. A stopped worker requires explicit user
+continuation. Reusing the selected source requires its host authorization to
+remain live; a saved conversation cannot restore revoked access. Test results
+retain the executed commands and their outcomes. Successful validation can produce
+a separate candidate containing the combined edits, excluding generated test logs.
+This does not establish semantic completion. Within the conversation preview,
+the primary assistant can integrate a current candidate that tests all completed
+editing branches together. The service reserves storage and checks current work
+instructions and folder authority before dispatch. Conflicts preserve the
+displaced content; partial and uncertain operations retain receipts and are never
+silently repeated. Stop waits for dispatched operations to settle. Recovery reads
+saved receipts and requires explicit continuation before further work.
+After recorded integration, a retained worker starts from the current folder,
+including newer user edits. Completed effects are not overlaid again. New tests
+can depend on that editor's completed assignment without recreating the editor.
+Unintegrated changes retain their baseline checks; partial or uncertain
+integration cannot be treated as fully applied. Expand **Changes** in Chat or the
+work inspector to inspect proposed files, validation, conflicts and per-file
+integration receipts. Proposed-file downloads verify the complete sealed digest.
+**Preserved files** shows originals and other files retained during an integration
+attempt. Download a retained copy to review it before restoring anything.
+Unconfirmed copies can include staged changes; downloading them does not settle
+the operation or overwrite the current folder. Downloads verify all byte pages
+against the observed digest and stop if source access is revoked.
+The panel and the CLI's `/changes` command only inspect saved work; opening them
+never integrates or resumes it. Revoked source access removes file-detail access
+while retaining saved status. Interactive conflict resolution remains under
+development. This preview does not establish model or backend qualification; see the
+[implementation evidence](../quality/evidence/conversation-control-foundation-2026-11-13.md).
 
 Legacy arbitrary workflow registration remains unavailable (`501
 durable_coordination_unavailable`). Do not confuse bounded read-only delegation

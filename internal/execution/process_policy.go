@@ -4,8 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
+
+func ProcessTimeout(spec ProcessSpec) time.Duration {
+	if spec.TimeoutSeconds == 0 {
+		return DefaultProcessTimeout
+	}
+	return time.Duration(spec.TimeoutSeconds) * time.Second
+}
 
 func ParseProcessSpec(arguments json.RawMessage) (ProcessSpec, error) {
 	var spec ProcessSpec
@@ -74,7 +82,7 @@ func RepeatsRoutineProgram(spec ProcessSpec) bool {
 }
 
 func ValidateProcessSpec(spec ProcessSpec) error {
-	if spec.Program == "" || !utf8.ValidString(spec.Program) || strings.ContainsRune(spec.Program, 0) || len(spec.Program) > 4096 || len(spec.Arguments) > 128 || spec.TimeoutSeconds < 0 || spec.TimeoutSeconds > 3600 {
+	if spec.Program == "" || !utf8.ValidString(spec.Program) || strings.ContainsRune(spec.Program, 0) || len(spec.Program) > 4096 || len(spec.Arguments) > 128 || spec.TimeoutSeconds < 0 || spec.TimeoutSeconds > int(MaxProcessTimeout/time.Second) {
 		return ErrLimit
 	}
 	size := len(spec.Program)

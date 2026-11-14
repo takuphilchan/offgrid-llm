@@ -120,6 +120,9 @@ func writeAttachmentRecord(root *os.Root, dir string, record attachmentRecord) e
 func (s *ScopedManager) CreateAttachment(name, filename, mediaType string, data []byte) (Attachment, error) {
 	s.manager.mutationMu.Lock()
 	defer s.manager.mutationMu.Unlock()
+	if err := s.checkCanonicalName(name); err != nil {
+		return Attachment{}, err
+	}
 	if filename == "" || len(filename) > 255 || strings.ContainsAny(filename, `/\`) || strings.IndexFunc(filename, unicode.IsControl) >= 0 || len(mediaType) > 128 || strings.IndexFunc(mediaType, unicode.IsControl) >= 0 || len(data) == 0 || int64(len(data)) > MaxAttachmentBytes {
 		return Attachment{}, ErrAttachmentLimit
 	}
@@ -189,6 +192,9 @@ func (s *ScopedManager) PrepareAttachmentTextOnly(name, id, text, parser string)
 func (s *ScopedManager) prepareAttachment(name, id, text, parser, errorCode, coverage string) (Attachment, error) {
 	s.manager.mutationMu.Lock()
 	defer s.manager.mutationMu.Unlock()
+	if err := s.checkCanonicalName(name); err != nil {
+		return Attachment{}, err
+	}
 	root, dir, err := s.attachmentRoot(name, false)
 	if err != nil {
 		return Attachment{}, err

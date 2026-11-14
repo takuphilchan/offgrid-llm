@@ -74,6 +74,7 @@ func legacyAgentHelpAll(env Environment) {
 		{"Inspect, pause and stop", []string{"agent status RUN_ID", "agent pause RUN_ID", "agent cancel RUN_ID", "agent resume RUN_ID", "agent steer RUN_ID REQUEST_ID TEXT"}},
 		{"Approval and recovery", []string{"agent approve RUN_ID APPROVAL_ID", "agent deny RUN_ID APPROVAL_ID", "agent takeover RUN_ID", "agent reconnect RUN_ID", "agent recover-execution RUN_ID", "agent reconcile RUN_ID CALL_ID RESULT"}},
 		{"Evidence and artifacts", []string{"agent export RUN_ID", "agent artifact RUN_ID SHA256 --output NEW_FILE"}},
+		{"Worker sessions", []string{"agent worker show ID", "agent worker messages ID [AFTER]", "agent worker command < envelope.json"}},
 		{"Profiles, tools and automation", []string{"agent profiles help", "agent skills help", "agent memory help", "agent schedules help", "agent tools", "agent mcp", "agent templates"}},
 		{"Local workspace", []string{"agent workspace list", "agent workspace start FOLDER --access MODE", "agent workspace stop SESSION", "agent workspace trust list", "agent workspace trust revoke ID", "agent workspace help"}},
 	}

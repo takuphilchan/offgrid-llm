@@ -3,12 +3,10 @@ package execution
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 )
 
 // MutationError preserves uncertainty after dispatch; callers must not turn it
@@ -25,15 +23,24 @@ func (e *MutationError) Unwrap() error { return e.Cause }
 
 type WriteResult struct {
 	Location
-	Revision string `json:"revision"`
-	Bytes    int    `json:"bytes"`
-	Created  bool   `json:"created"`
-	Verified bool   `json:"verified"`
+	Revision         string `json:"revision"`
+	Bytes            int    `json:"bytes"`
+	Created          bool   `json:"created"`
+	Verified         bool   `json:"verified"`
+	ReplacementID    string `json:"replacement_id,omitempty"`
+	OriginalRetained bool   `json:"original_retained,omitempty"`
 }
 
-// Write creates exclusively if expected is empty; replacing requires a complete
-// preimage digest. The caller supplies bytes, never line-numbered renderings.
+// Write creates exclusively if expected is empty. The supervised worker uses
+// the journaled path for replacements; this helper cannot bypass preservation.
+// The caller supplies bytes, never line-numbered renderings.
 func (s *Session) Write(ctx context.Context, binding Binding, path string, data []byte, expected string) (WriteResult, error) {
+	return s.write(ctx, binding, path, data, expected, nil, "")
+}
+
+// Existing-file replacement requires the supervisor's private journal. The
+// public host-side helper can still create exclusively without such a store.
+func (s *Session) write(ctx context.Context, binding Binding, path string, data []byte, expected string, journal *Journal, operation string) (WriteResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.authorize(ctx, binding); err != nil {
@@ -79,32 +86,10 @@ func (s *Session) Write(ctx context.Context, binding Binding, path string, data 
 		if digest(before) != expected {
 			return WriteResult{}, ErrRevision
 		}
-		var nonce [16]byte
-		if _, err = rand.Read(nonce[:]); err != nil {
-			return WriteResult{}, err
+		if journal == nil || operation == "" {
+			return WriteResult{}, ErrUnsupported
 		}
-		staged := filepath.Join(filepath.Dir(name), ".offgrid-edit-"+hex.EncodeToString(nonce[:]))
-		f, err := s.root.OpenFile(staged, os.O_CREATE|os.O_EXCL|os.O_WRONLY, info.Mode().Perm())
-		if err != nil {
-			return WriteResult{}, err
-		}
-		defer s.root.Remove(staged)
-		if err = writeAndSync(f, data); err != nil {
-			return WriteResult{}, &MutationError{Cause: err, Effects: "partial"}
-		}
-		current, err := s.read(ctx, name)
-		if err != nil {
-			return WriteResult{}, err
-		}
-		if digest(current) != expected {
-			return WriteResult{}, ErrRevision
-		}
-		if err = s.authorize(ctx, binding); err != nil {
-			return WriteResult{}, err
-		}
-		if err = s.root.Rename(staged, name); err != nil {
-			return WriteResult{}, err
-		}
+		return journal.replaceFile(ctx, s, binding, operation, name, data, expected, info.Mode().Perm(), replacePinned)
 	}
 	// The write already happened. Cancellation/revocation must not be reported
 	// as proof of no effects or cause another attempt through a different route.

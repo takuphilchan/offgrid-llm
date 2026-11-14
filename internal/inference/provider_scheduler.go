@@ -35,7 +35,7 @@ type ProviderScheduler struct {
 	nativeRun        bool
 	nativeWait       int
 	loadLimit        chan struct{}
-	limit            chan struct{}
+	admission        *generationAdmission
 	retireLegacy     func(context.Context) (bool, error)
 	legacyShutdown   func() error
 	legacyResident   func() int
@@ -75,25 +75,23 @@ func (s *ProviderScheduler) withLegacyProcessLease(ctx context.Context, action f
 // lifecycle lease and must release this admission when generation ends.
 func (s *ProviderScheduler) acquireSlot(ctx context.Context) (func(), time.Duration, error) {
 	queued := time.Now()
-	select {
-	case s.limit <- struct{}{}:
-		if err := ctx.Err(); err != nil {
-			<-s.limit
-			return nil, time.Since(queued), err
-		}
-		select {
-		case <-s.closeCtx.Done():
-			<-s.limit
-			return nil, time.Since(queued), errors.New("provider scheduler is closed")
-		default:
-		}
-		var once sync.Once
-		return func() { once.Do(func() { <-s.limit }) }, time.Since(queued), nil
-	case <-ctx.Done():
-		return nil, time.Since(queued), ctx.Err()
-	case <-s.closeCtx.Done():
-		return nil, time.Since(queued), errors.New("provider scheduler is closed")
+	release, err := s.admission.acquire(ctx, s.closeCtx)
+	return release, time.Since(queued), err
+}
+
+func (s *ProviderScheduler) acquireResources(ctx context.Context, native bool) (func(), time.Duration, error) {
+	releaseSlot, queued, err := s.acquireSlot(ctx)
+	if err != nil {
+		return nil, queued, err
 	}
+	releaseFamily, familyQueue, err := s.acquireFamily(ctx, native)
+	queued += familyQueue
+	if err != nil {
+		releaseSlot()
+		return nil, queued, err
+	}
+	var once sync.Once
+	return func() { once.Do(func() { releaseFamily(); releaseSlot() }) }, queued, nil
 }
 
 // Native inference is exclusive until mixed-engine memory and throughput are
@@ -186,15 +184,9 @@ func (s *ProviderScheduler) AcquireGeneration(ctx context.Context) (func(), time
 
 func (s *ProviderScheduler) AcquireGenerationTimed(ctx context.Context) (func(), ProviderTiming, error) {
 	var timing ProviderTiming
-	releaseFamily, familyQueue, err := s.acquireFamily(ctx, false)
-	timing.Queue += familyQueue
+	releaseResources, queued, err := s.acquireResources(ctx, false)
+	timing.Queue += queued
 	if err != nil {
-		return nil, timing, err
-	}
-	releaseSlot, slotQueue, err := s.acquireSlot(ctx)
-	timing.Queue += slotQueue
-	if err != nil {
-		releaseFamily()
 		return nil, timing, err
 	}
 	// The legacy llama loader lives outside this scheduler. Before handing it
@@ -205,24 +197,21 @@ func (s *ProviderScheduler) AcquireGenerationTimed(ctx context.Context) (func(),
 	timing.Queue += retireQueue
 	timing.Unload += unload
 	if err != nil {
-		releaseSlot()
-		releaseFamily()
+		releaseResources()
 		return nil, timing, err
 	}
 	if err := ctx.Err(); err != nil {
-		releaseSlot()
-		releaseFamily()
+		releaseResources()
 		return nil, timing, err
 	}
 	select {
 	case <-s.closeCtx.Done():
-		releaseSlot()
-		releaseFamily()
+		releaseResources()
 		return nil, timing, errors.New("provider scheduler is closed")
 	default:
 	}
 	var once sync.Once
-	return func() { once.Do(func() { releaseSlot(); releaseFamily() }) }, timing, nil
+	return func() { once.Do(releaseResources) }, timing, nil
 }
 
 // AcquireLegacyMaintenance exclusively admits a llama process mutation such
@@ -231,15 +220,9 @@ func (s *ProviderScheduler) AcquireGenerationTimed(ctx context.Context) (func(),
 // generation even while another numeric slot is free.
 func (s *ProviderScheduler) AcquireLegacyMaintenance(ctx context.Context) (func(), ProviderTiming, error) {
 	var timing ProviderTiming
-	releaseFamily, familyQueue, err := s.acquireFamily(ctx, true)
-	timing.Queue += familyQueue
+	releaseResources, queued, err := s.acquireResources(ctx, true)
+	timing.Queue += queued
 	if err != nil {
-		return nil, timing, err
-	}
-	releaseSlot, slotQueue, err := s.acquireSlot(ctx)
-	timing.Queue += slotQueue
-	if err != nil {
-		releaseFamily()
 		return nil, timing, err
 	}
 	retireQueue, unload, err := s.retireNativeResidents(ctx)
@@ -249,12 +232,11 @@ func (s *ProviderScheduler) AcquireLegacyMaintenance(ctx context.Context) (func(
 		err = ctx.Err()
 	}
 	if err != nil {
-		releaseSlot()
-		releaseFamily()
+		releaseResources()
 		return nil, timing, err
 	}
 	var once sync.Once
-	return func() { once.Do(func() { releaseSlot(); releaseFamily() }) }, timing, nil
+	return func() { once.Do(releaseResources) }, timing, nil
 }
 
 // AcquireLegacyModel binds the established llama lifecycle gate to provider
@@ -360,7 +342,7 @@ func NewProviderScheduler(registry *ProviderRegistry, concurrentGenerations int)
 		concurrentGenerations = 1
 	}
 	closeCtx, closeRun := context.WithCancel(context.Background())
-	return &ProviderScheduler{registry: registry, resident: make(map[string]ProviderRuntime), residentMemory: make(map[string]ProviderResources), active: make(map[string]int), loading: make(map[string]*providerLoad), requests: make(map[string]*scheduledRequest), pendingCancel: make(map[string]int), cancelCh: make(chan struct{}), requestIDs: make(map[string]struct{}), idleCh: make(chan struct{}), familyCh: make(chan struct{}), loadLimit: make(chan struct{}, 1), limit: make(chan struct{}, concurrentGenerations), closeCtx: closeCtx, closeRun: closeRun, closeDone: make(chan struct{})}, nil
+	return &ProviderScheduler{registry: registry, resident: make(map[string]ProviderRuntime), residentMemory: make(map[string]ProviderResources), active: make(map[string]int), loading: make(map[string]*providerLoad), requests: make(map[string]*scheduledRequest), pendingCancel: make(map[string]int), cancelCh: make(chan struct{}), requestIDs: make(map[string]struct{}), idleCh: make(chan struct{}), familyCh: make(chan struct{}), loadLimit: make(chan struct{}, 1), admission: &generationAdmission{capacity: concurrentGenerations, maxWait: 32}, closeCtx: closeCtx, closeRun: closeRun, closeDone: make(chan struct{})}, nil
 }
 
 // ConfigureLegacyRetirement connects the existing llama process owner to the
@@ -408,16 +390,11 @@ func (s *ProviderScheduler) Runtime(ctx context.Context, descriptor ProviderDesc
 		}
 		defer release()
 	} else {
-		releaseFamily, _, err := s.acquireFamily(ctx, true)
+		release, _, err := s.acquireResources(ctx, true)
 		if err != nil {
 			return nil, err
 		}
-		defer releaseFamily()
-		releaseSlot, _, err := s.acquireSlot(ctx)
-		if err != nil {
-			return nil, err
-		}
-		defer releaseSlot()
+		defer release()
 		if _, err := s.retireLegacyBeforeNative(ctx); err != nil {
 			return nil, err
 		}
@@ -695,21 +672,15 @@ func (s *ProviderScheduler) GenerateTimed(ctx context.Context, descriptor Provid
 		s.mu.Unlock()
 		cancel()
 	}()
-	// Family admission precedes the numeric slot. An unqualified native worker
-	// cannot overlap legacy inference even if llama has parallel slots enabled.
+	// Shared queue admission precedes family/runtime resources. Family exclusion
+	// still prevents unqualified native and legacy inference from overlapping.
 	if descriptor.Provider != ProviderLlamaCPP {
-		releaseFamily, familyQueue, familyErr := s.acquireFamily(runCtx, true)
-		timing.Queue += familyQueue
-		if familyErr != nil {
-			return timing, familyErr
+		release, queued, admissionErr := s.acquireResources(runCtx, true)
+		timing.Queue += queued
+		if admissionErr != nil {
+			return timing, admissionErr
 		}
-		defer releaseFamily()
-		releaseSlot, slotQueue, slotErr := s.acquireSlot(runCtx)
-		timing.Queue += slotQueue
-		if slotErr != nil {
-			return timing, slotErr
-		}
-		defer releaseSlot()
+		defer release()
 		// The established llama binary manager is a separate process owner. A
 		// native worker cannot load while one of its model processes remains
 		// resident on hardware without mixed-engine memory qualification.

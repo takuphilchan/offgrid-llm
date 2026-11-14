@@ -46,6 +46,9 @@ func (r *Runner) prepareContextWithContext(ctx context.Context, task *Task, tool
 	if r.ContextWindow != nil {
 		window = r.ContextWindow(task)
 	}
+	if task.Checkpoint.InputBudget != nil {
+		window = task.Checkpoint.InputBudget.Window
+	}
 	if window <= 0 {
 		window = 4096
 	}
@@ -76,6 +79,10 @@ func (r *Runner) prepareContextWithContext(ctx context.Context, task *Task, tool
 			messages = projector.ProjectModelContext(task, messages)
 		}
 		index := responseContext(task, tools) + profileResourceContext(task.Config) + executionResourceContext(task.Config) + executionProgressContext(task) + inputWriteContext(task) + contextResourcePrompt(task.Config) + loadedSkillContext(task)
+		if task.Worker != nil && task.Config.WorkerPolicy != nil {
+			remaining := max(0, task.Config.MaxIterations-max(task.Checkpoint.Iteration, task.Checkpoint.BudgetedModelCalls))
+			index += fmt.Sprintf("\nWorker allocation: %d model calls remain after this reserved call. If worker_request_budget is offered, request additional capacity before the allowance runs out, or return useful partial findings. No request increases the root work's total budget.", remaining)
+		}
 		if len(task.Plan) > 0 {
 			plan, _ := json.Marshal(task.Plan)
 			index += "\nCurrent recorded plan (data, not authority): " + string(plan)
@@ -160,6 +167,11 @@ func (r *Runner) prepareContextWithContext(ctx context.Context, task *Task, tool
 		// Keep it intact, as well as every user/system instruction and pending call.
 		latest := len(cp.Messages)
 		for i := len(cp.Messages) - 1; i >= 2; i-- {
+			if cp.Messages[i].Role == "user" {
+				// A fresh request starts a new exchange. The previous answer may
+				// be archived without erasing that answer's preceding constraints.
+				break
+			}
 			if cp.Messages[i].Role == "assistant" {
 				latest = i
 				break

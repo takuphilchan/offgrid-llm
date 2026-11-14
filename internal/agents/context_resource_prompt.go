@@ -3,7 +3,7 @@ package agents
 import "encoding/json"
 
 func contextResourcePrompt(config AgentConfig) string {
-	if config.Profile == nil || len(config.SkillMetadata) == 0 && config.MemoryConsentRevision == 0 {
+	if len(config.SkillMetadata) == 0 && config.MemoryConsentRevision == 0 {
 		return ""
 	}
 	type skill struct {

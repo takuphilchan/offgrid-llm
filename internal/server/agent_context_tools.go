@@ -34,8 +34,31 @@ func (b *browserRunTools) contextAccess(ctx context.Context, task *agents.Task, 
 		return ctx.Err()
 	}
 	d, ok := agentcontext.Descriptor(name)
-	if !ok || task.Status != agents.TaskRunning || task.ParentID != "" || !task.Config.TaskFirst || task.Config.TextOnlyInference || task.Config.Profile == nil || task.Config.Profile.Workspace != b.server.workspaceID || task.Config.Profile.Actor != task.Actor || task.Actor != e.Actor || task.ID != e.RunID || e.ExpectedCapability == nil || *e.ExpectedCapability != d || !b.server.profileActorCapabilityAllowed(task.Actor, d) || !agents.ProfileAllowsCapability(task.Config, name, d) {
+	if !ok || task.Status != agents.TaskRunning || (task.ParentID != "" && name != "skill_load") || !task.Config.TaskFirst || task.Config.TextOnlyInference || task.Actor != e.Actor || task.ID != e.RunID || e.ExpectedCapability == nil || *e.ExpectedCapability != d || !b.server.profileActorCapabilityAllowed(task.Actor, d) || !agents.ProfileAllowsCapability(task.Config, name, d) {
 		return capabilities.ErrDenied
+	}
+	if task.Config.Profile == nil {
+		return b.scopedSkillAccess(task, name)
+	}
+	if task.Config.Profile.Workspace != b.server.workspaceID || task.Config.Profile.Actor != task.Actor {
+		return capabilities.ErrDenied
+	}
+	if task.ParentID != "" {
+		parent, exists := b.server.agentManager.GetTask(task.ParentID)
+		if !exists || parent.Actor != task.Actor || parent.DeletedAt != nil || parent.Status != agents.TaskChildren || len(parent.PendingInstructions) != 0 {
+			return capabilities.ErrDenied
+		}
+		linked := false
+		for _, link := range parent.ChildHistory {
+			if link.ID == task.ID {
+				selected, ok := parent.Config.DelegateProfiles[link.Spec.ProfileID]
+				linked = ok && selected.Profile != nil && selected.Profile.Digest == task.Config.Profile.Digest
+				break
+			}
+		}
+		if !linked {
+			return capabilities.ErrDenied
+		}
 	}
 	profile, err := b.server.agentManager.GetProfile(b.server.workspaceID, task.Actor, task.Config.Profile.ID, task.Config.Profile.Revision)
 	if err != nil || profile.Archived || profile.Digest != task.Config.Profile.Digest {
@@ -51,13 +74,13 @@ func (b *browserRunTools) contextAccess(ctx context.Context, task *agents.Task, 
 }
 
 func (b *browserRunTools) contextTools(ctx context.Context, task *agents.Task) []api.Tool {
-	if task.Config.Profile == nil || !task.Config.TaskFirst || task.Config.TextOnlyInference || task.ParentID != "" {
+	if !task.Config.TaskFirst || task.Config.TextOnlyInference {
 		return nil
 	}
 	result := []api.Tool{}
 	for _, tool := range agentcontext.Tools() {
 		name := tool.Function.Name
-		if name == "skill_load" && len(task.Config.Profile.Settings.Skills) == 0 {
+		if name == "skill_load" && len(taskSkillReferences(task)) == 0 {
 			continue
 		}
 		d, _ := agentcontext.Descriptor(name)
@@ -85,15 +108,27 @@ func (b *browserRunTools) contextTools(ctx context.Context, task *agents.Task) [
 // not yet loaded, keeping supporting resources available without invented paths.
 func (b *browserRunTools) unloadedSkillTool(task *agents.Task, tool api.Tool) (api.Tool, bool) {
 	branches := []any{}
-	for _, ref := range task.Config.Profile.Settings.Skills {
-		item, bundle, err := b.server.agentManager.GetSkill(b.server.workspaceID, task.Actor, ref)
-		if err != nil || item.Draft {
-			continue
+	for _, ref := range taskSkillReferences(task) {
+		files := []string{}
+		for _, item := range task.Config.SkillMetadata {
+			if item.SkillReference == ref && !item.Draft {
+				files = item.ResourcePaths
+				break
+			}
+		}
+		if len(files) == 0 {
+			item, bundle, err := b.server.agentManager.GetSkill(b.server.workspaceID, task.Actor, ref)
+			if err != nil || item.Draft {
+				continue
+			}
+			for _, file := range bundle.Files {
+				files = append(files, file.Path)
+			}
 		}
 		paths := []string{}
-		for _, file := range bundle.Files {
-			if !agents.SkillFileInContext(task, ref.ID, file.Path) {
-				paths = append(paths, file.Path)
+		for _, path := range files {
+			if !agents.SkillFileInContext(task, ref.ID, path) {
+				paths = append(paths, path)
 			}
 		}
 		if len(paths) > 0 {
@@ -126,7 +161,7 @@ func (b *browserRunTools) executeContext(ctx context.Context, task *agents.Task,
 			return "", agentcontext.ErrSkill
 		}
 		var selected *agentcontext.SkillReference
-		for _, ref := range profile.Settings.Skills {
+		for _, ref := range taskSkillReferences(task) {
 			if ref.ID == a.ID {
 				r := ref
 				selected = &r

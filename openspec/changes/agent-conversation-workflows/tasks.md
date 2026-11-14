@@ -1,5 +1,68 @@
 # Tasks
 
+UI coordination (2026-11-14): workspace-outcome-experience section 41 owns the
+explicit document-chat handoff for canonical text conversations and stale-client
+upload conflicts. Canonical attachment execution remains outside that recovery
+fix; legacy-write guards remain enforced. Evidence:
+`docs/quality/evidence/canonical-document-handoff-2026-11-14.md`.
+
+The 2026-11-12 implementation request approves the replacement architecture in design.md. Sections 1-7 retain historical scope/evidence; replacement acceptance is tracked below and is not satisfied by historical checkmarks.
+
+## 8. Reproduced regression repairs
+
+- [x] 8.1 Remove profile-name forced delegation and English keyword capability gates; test negative and multilingual intent without dispatching native input.
+- [x] 8.2 Apply conversation restrictions before resource readiness; retain restrictions across profile edits and restore selected configuration on reload. Verify unavailable disabled tools cannot block conversation and restrictions cannot widen authority.
+- [x] 8.3 Preserve applied corrections and failed/cancelled outcomes in subsequent context; replace all-or-nothing history cutoff and provide scoped historical retrieval. Verify large outputs and revoked sources.
+- [x] 8.4 Pin and expose authorized child skills; retrieve full child results with owner/graph checks and preserve useful partial outcomes.
+- [x] 8.5 Support safe-boundary steering during delegation with instruction versions, stale-result fencing and no uncertain replay.
+
+Repair evidence and remaining architectural limitations: [2026-11-12 verification record](../../../docs/quality/evidence/conversation-first-repairs-2026-11-12.md). Configuration restoration covers versioned accepted turns; it does not claim recovery of unsubmitted browser-only choices or completion of the canonical control store.
+
+## 9. Canonical control model
+
+In-progress foundation and verified boundaries are recorded in the
+[2026-11-13 checkpoint](../../../docs/quality/evidence/conversation-control-foundation-2026-11-13.md).
+These tasks remain unchecked until their complete contracts pass; the preview
+API and internal migration do not complete the client/worker/resource phases.
+
+- [x] 9.1 Add scoped projects, conversation configuration, work/run/worker/result/change-set identities and transactional command/event/outbox storage in the existing agent database.
+- [x] 9.2 Add versioned session imports, source manifests, explicit canonical ownership, compatibility projections and paginated events; fault-test retries, concurrent commands, projection failure and upgrades.
+- [x] 9.3 Implement preference provenance, authority intersections and optional non-secret project configuration without grants or hooks.
+
+Current worker/control acceptance evidence and unverified boundaries:
+[2026-11-14 checks](../../../docs/quality/evidence/conversation-worker-policy-2026-11-14.md).
+
+## 10. Conversation-first clients
+
+- [ ] 10.1 Add default assistant admission and scoped progressive discovery without profile setup; preserve explicit legacy request semantics and share attachment/model capability checks.
+- [ ] 10.2 Add responsive conversation input, work focus, background observation and shared configuration to CLI/UI; align Go/TypeScript/Python contracts and legacy adapters.
+- [ ] 10.3 Verify reload, cross-client controls, corrections, accessibility/locales, voice and configuration inspection in isolated service/browser tests.
+
+## 11. Resumable research workers
+
+- [x] 11.1 Add durable worker sessions/mailboxes, follow-up runs, explicit user-stopped continuation and accepted/delivered/applied input states.
+- [x] 11.2 Implement scoped temporary assignments, versioned dependencies, complete result paging, worker questions and partial synthesis within shared budgets.
+- [x] 11.3 Verify correction/pause/Stop/completion races, revocation, duplicate delivery and restart without implicit dispatch.
+
+## 12. Local resource scheduling
+
+- [x] 12.1 Extend budget accounting with graph-wide allocations/settlement, input/context/tool/process/storage costs and retained parent verification capacity.
+- [ ] 12.2 Add foreground/background fairness, cancellation-safe queue admission and measured installed-model selection without weakening residency/memory safety.
+- [ ] 12.3 Verify no budget reopening/starvation, unmeasured memory handling and matching-hardware single-agent performance.
+
+## 13. Execution workers and integration
+
+- [ ] 13.1 Add independently admitted worker sessions, bounded private working copies, input/environment manifests and process ownership without transferring grants.
+- [x] 13.2 Implement sealed change sets, combined validation, dependency candidates, conflict handling and per-file integration/quarantine receipts.
+- [ ] 13.3 Add qualified displaced-content-preserving replacements with race/crash tests and unsupported-backend review fallback; never blind rollback.
+- [ ] 13.4 Implement authorized background supervision while retaining client-owned grant lifetime; verify disconnect, expiry and Stop.
+
+## 14. Qualification and rollout
+
+- [ ] 14.1 Run full applicable Go/race, API/web/build/browser, desktop/executor, Python, docs and OpenSpec checks; record actual results and unrelated failures.
+- [ ] 14.2 Run frozen model/backend/hardware and representative-user cases; qualify automatic behavior only where evidence supports it, with unrun cases explicitly unverified.
+- [ ] 14.3 Reconcile public docs/evidence and admission feature flags; verify existing work remains observable/recoverable when disabled.
+
 All tasks start unchecked. Planning validation is not implementation or test evidence. Use isolated test stores and services; never direct browser suites at the user's normal port 11611. This change does not complete the remaining `native-document-workflows` tasks. Native OS tests, training, model downloads, deployment, commits and publication are separate from the code checklist below.
 
 ## 1. Intent, completion and relevant capabilities

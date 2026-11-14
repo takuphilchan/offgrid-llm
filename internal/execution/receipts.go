@@ -44,6 +44,18 @@ func (j *Journal) Inspect(ctx context.Context, original Request) (Receipt, error
 	if receipt.State == "claimed" {
 		receipt.State = "uncertain"
 	}
+	if receipt.State == "uncertain" && len(receipt.Result) == 0 && original.Operation == "file_write" {
+		evidence, err := j.replacementRecovery(ctx, original.OperationID)
+		if err != nil {
+			return Receipt{}, err
+		}
+		if evidence != nil {
+			receipt.Result, err = json.Marshal(map[string]any{"replacement": evidence})
+			if err != nil {
+				return Receipt{}, err
+			}
+		}
+	}
 	return receipt, nil
 }
 
@@ -52,6 +64,12 @@ type ReceiptEndpoint interface {
 }
 
 func (e *LocalEndpoint) InspectReceipt(ctx context.Context, original Request) (Response, error) {
+	if child, err := e.childEndpoint(original.Binding); child != nil || err != nil {
+		if err != nil {
+			return Response{}, err
+		}
+		return child.InspectReceipt(ctx, original)
+	}
 	e.mu.Lock()
 	closed := e.closed
 	e.mu.Unlock()

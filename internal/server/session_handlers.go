@@ -128,6 +128,8 @@ func writeSessionError(w http.ResponseWriter, err error) {
 		return
 	}
 	switch {
+	case errors.Is(err, sessions.ErrCanonicalConversation):
+		writeErrorWithCode(w, "This conversation now uses the v2 conversation API. Refresh it in a matching client; legacy writes cannot start another executor.", http.StatusConflict, "canonical_conversation_required")
 	case errors.Is(err, sessions.ErrKnowledgeUnavailable):
 		writeErrorWithCode(w, "A source used by this conversation is no longer available. Restore access or start a new conversation.", http.StatusForbidden, "knowledge_unavailable")
 	case errors.Is(err, sessions.ErrInvalidSessionName):
@@ -175,6 +177,18 @@ func (h *SessionHandlers) HandleSessionsList(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		writeSessionError(w, err)
 		return
+	}
+	if h.agentServer != nil && h.agentServer.agentManager != nil {
+		for i := range sessionsList {
+			projected, canonical, err := h.agentServer.canonicalSessionProjection(r, sessionsList[i].Name)
+			if err != nil {
+				writeSessionError(w, err)
+				return
+			}
+			if canonical {
+				sessionsList[i] = *projected
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -230,7 +244,7 @@ func (h *SessionHandlers) HandleSessionGet(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	session, err := h.scoped(r).Load(name)
+	session, err := h.projectedSession(r, name)
 	if err != nil {
 		writeSessionError(w, err)
 		return
@@ -244,6 +258,9 @@ func (h *SessionHandlers) HandleSessionGet(w http.ResponseWriter, r *http.Reques
 func (h *SessionHandlers) HandleSessionDelete(w http.ResponseWriter, r *http.Request, name string) {
 	if r.Method != http.MethodDelete {
 		writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.rejectCanonicalLegacyDelete(w, r, name) {
 		return
 	}
 	if h.agentServer != nil && h.agentServer.deleteAgentConversation(w, r, name) {
@@ -413,7 +430,7 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 	unlock := h.lockSession(name)
 	defer unlock()
 
-	session, err := h.scoped(r).Load(name)
+	session, err := h.scoped(r).LoadForExecution(name)
 	if err != nil {
 		writeSessionError(w, err)
 		return
@@ -431,7 +448,7 @@ func (h *SessionHandlers) HandleSessionGenerate(w http.ResponseWriter, r *http.R
 		return
 	}
 	messages := make([]api.ChatMessage, 0, len(session.Messages)+1)
-	for _, message := range session.Messages {
+	for _, message := range h.sessionHistoryForModel(session, modelID).Messages {
 		messages = append(messages, api.ChatMessage{Role: message.Role, Content: api.SessionContent(message.Content, message.Images)})
 	}
 	messages = append(messages, api.ChatMessage{Role: "user", Content: req.Content})

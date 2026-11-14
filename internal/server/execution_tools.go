@@ -51,11 +51,14 @@ func authorizeExecutionInvocation(name string, args json.RawMessage, e agents.To
 }
 
 func (b *browserRunTools) executionAccess(ctx context.Context, task *agents.Task, name string, e agents.ToolExecution) error {
+	if name == execution.IntegrateTool && (task.ParentID != "" || task.WorkID == "" || !b.server.config.EnableConversationPreview) {
+		return capabilities.ErrDenied
+	}
 	if name == execution.InputWriteTool && task.Config.InputWriteVersion != execution.InputWriteVersion {
 		return capabilities.ErrDenied
 	}
 	d, ok := executionDescriptor(name)
-	if !ok || e.ExpectedCapability == nil || *e.ExpectedCapability != d || task.Actor != e.Actor || task.ID != e.RunID || task.Status != agents.TaskRunning || task.ParentID != "" || !task.Config.TaskFirst || task.Config.Execution == nil || b.server.executionHosts == nil {
+	if !ok || e.ExpectedCapability == nil || *e.ExpectedCapability != d || task.Actor != e.Actor || task.ID != e.RunID || task.Status != agents.TaskRunning || task.ParentID != "" && !agents.HasWorkerEnvironment(task) || !task.Config.TaskFirst || task.Config.Execution == nil || b.server.executionHosts == nil {
 		return capabilities.ErrDenied
 	}
 	if !b.server.profileActorCapabilityAllowed(task.Actor, d) || !agents.ProfileAllowsCapability(task.Config, name, d) {
@@ -72,6 +75,9 @@ func (b *browserRunTools) executionAccess(ctx context.Context, task *agents.Task
 }
 
 func (b *browserRunTools) executeWorkspace(ctx context.Context, task *agents.Task, name string, args json.RawMessage, e agents.ToolExecution) (string, error) {
+	if name == execution.IntegrateTool {
+		return b.integrateWorkerChanges(ctx, task, args, e)
+	}
 	if name == "workspace_write" && task.Checkpoint != nil && task.Checkpoint.PreEffectRepair && task.Checkpoint.PreEffectRepairTool == execution.InputWriteTool {
 		return "", &agents.ToolFailure{Code: "execution_input_repair_pending", Message: "The pending exact-input write must be repaired with workspace_write_from_input; no plain write was dispatched."}
 	}
@@ -124,6 +130,11 @@ func (b *browserRunTools) executeWorkspace(ctx context.Context, task *agents.Tas
 			return "", err
 		}
 	}
+	if (intent.Operation == "process_inspect" || intent.Operation == "process_wait" || intent.Operation == "process_stop") && response.Error == "" && response.Receipt != nil {
+		if err = b.server.agentManager.RecordProcessObservation(task.ID, task.Actor, intent, response); err != nil {
+			return "", err
+		}
+	}
 	if response.Receipt == nil {
 		return "", &agents.ToolFailure{Code: "execution_rejected", Message: "The execution host rejected this operation before dispatch."}
 	}
@@ -154,7 +165,7 @@ func (b *browserRunTools) executeWorkspace(ctx context.Context, task *agents.Tas
 }
 
 func (b *browserRunTools) workspaceTools(ctx context.Context, task *agents.Task) []api.Tool {
-	if task.Config.Execution == nil || b.server.executionHosts == nil || task.ParentID != "" || !task.Config.TaskFirst {
+	if task.Config.Execution == nil || b.server.executionHosts == nil || task.ParentID != "" && !agents.HasWorkerEnvironment(task) || !task.Config.TaskFirst {
 		return nil
 	}
 	resource, err := b.server.executionHosts.Resolve(ctx, task.Actor, b.server.workspaceID, *task.Config.Execution)
@@ -163,6 +174,9 @@ func (b *browserRunTools) workspaceTools(ctx context.Context, task *agents.Task)
 	}
 	result := []api.Tool{}
 	for _, tool := range executionTools() {
+		if tool.Function.Name == execution.IntegrateTool && (task.ParentID != "" || task.WorkID == "" || !b.server.config.EnableConversationPreview || !hasIntegrationCandidate(task)) {
+			continue
+		}
 		if tool.Function.Name == execution.InputWriteTool {
 			ids := agents.InputWriteSources(task)
 			if len(ids) == 0 {

@@ -15,15 +15,18 @@ import (
 // Process authorization is deliberately fail-closed until that supervisor has
 // reviewed the invocation; remote metadata and model prose are not policy.
 type Worker struct {
-	Version             string
-	Session             *Session
-	Journal             *Journal
-	Processes           *ProcessManager
-	Token               string
-	AuthorizeProcess    func(context.Context, Binding, ProcessSpec, bool) error
-	finishing           sync.WaitGroup
-	initializing        sync.Once
-	initializationError error
+	Version              string
+	Session              *Session
+	Journal              *Journal
+	Processes            *ProcessManager
+	Token                string
+	WorkingCopies        *WorkingCopies
+	AuthorizeProcess     func(context.Context, Binding, ProcessSpec, bool) error
+	validateProcessInput func(context.Context) error
+	inputManifestDigest  string
+	finishing            sync.WaitGroup
+	initializing         sync.Once
+	initializationError  error
 }
 
 type fileArguments struct {
@@ -90,7 +93,9 @@ func (w *Worker) prepare(ctx context.Context, r Request) (operation, bool, error
 		if err := decodeStrict(r.Arguments, &a); err != nil {
 			return nil, false, err
 		}
-		return func() (any, error) { return w.Session.Write(ctx, r.Binding, a.Path, a.Data, a.Revision) }, true, nil
+		return func() (any, error) {
+			return w.Session.write(ctx, r.Binding, a.Path, a.Data, a.Revision, w.Journal, r.OperationID)
+		}, true, nil
 	case "process_start":
 		var a ProcessSpec
 		if err := decodeStrict(r.Arguments, &a); err != nil {
@@ -102,7 +107,17 @@ func (w *Worker) prepare(ctx context.Context, r Request) (operation, bool, error
 		if err := w.AuthorizeProcess(ctx, r.Binding, a, r.Approved); err != nil {
 			return nil, false, err
 		}
-		return func() (any, error) { return w.Processes.start(ctx, r.Binding, a, &r) }, true, nil
+		return func() (any, error) {
+			if w.validateProcessInput != nil {
+				if err := w.validateProcessInput(ctx); err != nil {
+					return nil, err
+				}
+				if err := w.Journal.recordValidationProcess(ctx, r, w.inputManifestDigest); err != nil {
+					return nil, err
+				}
+			}
+			return w.Processes.start(ctx, r.Binding, a, &r)
+		}, true, nil
 	case "process_inspect":
 		var a struct {
 			Handle string `json:"handle"`
@@ -206,6 +221,9 @@ func (w *Worker) Handle(ctx context.Context, r Request) Response {
 	if operationErr != nil {
 		code := errorCode(operationErr)
 		receipt.Result, _ = json.Marshal(map[string]string{"error": code})
+		if write, ok := value.(WriteResult); ok && write.ReplacementID != "" {
+			receipt.Result, _ = json.Marshal(map[string]any{"error": code, "write": write})
+		}
 		receipt.State = "rejected"
 		var mutation *MutationError
 		if errors.As(operationErr, &mutation) {
@@ -244,7 +262,7 @@ func (w *Worker) Handle(ctx context.Context, r Request) Response {
 			w.finishing.Add(1)
 			go func() {
 				defer w.finishing.Done()
-				result, err := w.Processes.Wait(context.Background(), r.Binding, p.Handle)
+				result, err := w.Processes.waitOwned(r.Binding, p.Handle)
 				if err == nil {
 					encoded, _ := json.Marshal(result)
 					state := "complete"

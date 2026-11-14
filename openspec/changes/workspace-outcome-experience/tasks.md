@@ -359,3 +359,40 @@ rendered context and pending review records. Native confirmation copy was checke
 through catalogs, not desktop control. Human review remains open under 32.3;
 `i18n:ready` intentionally fails. Go CLI/process output and OS-owned copy remain
 outside the catalog inventory and are not claimed as fully localized.
+
+## 39. Canonical conversation presentation follow-up
+
+- [x] 39.1 Capture shared-renderer desktop/narrow states and canonical conversation controls; distinguish fixture evidence from installed/native evidence.
+- [x] 39.2 Remove routing selection from the ordinary composer, consolidate configuration inspection in existing options, and bound pending-input activity while preserving controls.
+- [x] 39.3 Verify explicit overrides, clarification, retry, narrow queued inputs, production build and source-size checks; retain the broader usability and qualification gates.
+
+Evidence: `docs/quality/evidence/conversation-ui-audit-2026-11-14.md`.
+
+## 40. Shared interface and Knowledge reader visual follow-up
+
+- [x] 40.1 Capture loaded desktop/narrow renderer routes with isolated fixtures in light/dark, English, German and Arabic; inspect actual screenshots.
+- [x] 40.2 Refine settings spacing, model selection, Activity filters, Knowledge row actions and shared preview/review hierarchy without changing source permissions or revision semantics.
+- [x] 40.3 Verify Knowledge source/citation/correction paths, responsive reader screenshots, renderer build and relevant quality checks; document remaining qualification limits.
+
+User-directed design revision: make Chat/document a coherent split workspace,
+support focusing on the document without unmounting Chat, consolidate reading
+controls into one toolbar with optional search, make the attachment name open its
+preview, and spread pending preparation across the preview canvas. Preserve
+warnings, keyboard access, source identity and OS/application reduced motion.
+
+Coordinates with document-ingestion-reliability: presentation changes reuse its
+existing source, coverage, correction and immutable-revision contracts. This
+follow-up does not declare the document upgrade or full language review complete.
+
+Evidence: `docs/quality/evidence/knowledge-reader-ui-audit-2026-11-14.md`.
+
+## 41. Document attachment recovery in canonical conversations
+
+- [x] 41.1 Replace the legacy-write conflict with an explicit, localized New chat handoff that preserves the selected files and unsent draft without submitting a message or altering the original history.
+- [x] 41.2 Cover known canonical state, a stale-client conflict, cancellation and ordinary document-chat uploads with isolated renderer tests; run renderer and translation checks.
+
+Coordinates with agent-conversation-workflows: canonical inputs remain text-only;
+the legacy mutation guard remains enforced. This recovery does not introduce
+canonical attachment execution or silently duplicate an executor.
+
+Evidence: `docs/quality/evidence/canonical-document-handoff-2026-11-14.md`.

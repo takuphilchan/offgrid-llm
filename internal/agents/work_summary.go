@@ -5,6 +5,8 @@ import "time"
 // WorkSummary is detached metadata, not an executable task or an authority grant.
 // It deliberately excludes results, instructions, tool arguments and transcripts.
 type WorkSummary struct {
+	ConversationWork bool `json:"-"`
+
 	ID                string              `json:"id"`
 	Title             string              `json:"title"`
 	Status            TaskStatus          `json:"status"`
@@ -43,6 +45,7 @@ func (m *Manager) ListWorkSummaries() []WorkSummary {
 		}
 		row := WorkSummary{ID: task.ID, Title: string(title), Status: task.Status, CreatedAt: task.CreatedAt, Model: task.Model,
 			Actor: task.Actor, ProfilePresent: task.Config.Profile != nil, Outcome: TaskOutcome(task)}
+		row.ConversationWork = task.WorkID != "" && task.Origin != nil
 		if task.Origin != nil {
 			origin := *task.Origin
 			row.Origin = &origin
@@ -59,6 +62,8 @@ func (m *Manager) ListWorkSummaries() []WorkSummary {
 		row.ArchivedAt, row.Archivable = task.ArchivedAt, CanArchiveTask(task)
 		if !row.Deletable {
 			switch {
+			case task.WorkID != "":
+				row.Protection = "canonical_work"
 			case task.Status == TaskUncertain:
 				row.Protection = "unknown_effects"
 			case task.PendingApproval != nil:

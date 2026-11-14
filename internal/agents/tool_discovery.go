@@ -63,11 +63,11 @@ func (r *Runner) authorizedTools(ctx context.Context, task *Task) []api.Tool {
 		}
 		if task.ParentID != "" {
 			pinned, granted := task.Config.AllowedCapabilities[name]
-			if !exists || !granted || pinned != d || !containsTool(task.Config.AllowedTools, name) || !delegatedCapability(name, d) {
+			if !exists || !granted || pinned != d || !containsTool(task.Config.AllowedTools, name) || !workerCapabilityAllowed(task, name, d) {
 				continue
 			}
 		}
-		if task.Config.Profile != nil && (!exists || !ProfileAllowsCapability(task.Config, name, d)) {
+		if (task.Config.Profile != nil || task.Config.ScopedCapabilities) && (!exists || !ProfileAllowsCapability(task.Config, name, d)) {
 			continue
 		}
 		filtered = append(filtered, tool)

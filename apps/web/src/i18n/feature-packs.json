@@ -1625,6 +1625,47 @@
       "permissions.0": "Ler arquivos",
       "permissions.1": "Editar arquivos",
       "permissions.2": "Comandos de projeto"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "Esta conversa aceita texto por enquanto. Documentos, imagens e fontes adicionais ainda não estão disponíveis aqui. Seu rascunho foi mantido."
+    },
+    "i18n/work-changes:labels": {
+      "0": "Alterações",
+      "1": "Proposta do agente executor",
+      "2": "Versão candidata testada",
+      "3": "Arquivos",
+      "4": "Validação",
+      "5": "Registros de integração",
+      "6": "Carregar mais",
+      "7": "Atualizar",
+      "8": "Nenhuma alteração salva",
+      "9": "O acesso à fonte está indisponível. O status salvo continua visível.",
+      "10": "Instruções anteriores",
+      "11": "Testes e gravações de arquivos não comprovam a conclusão da tarefa.",
+      "12": "Original preservado",
+      "13": "Baixar arquivo proposto",
+      "14": "Inspecionar agente executor",
+      "15": "Criado",
+      "16": "Atualizado",
+      "17": "Excluído",
+      "18": "Integrado",
+      "19": "Parcial",
+      "20": "Conflito",
+      "21": "Incerto",
+      "22": "Aprovado",
+      "23": "Falhou",
+      "24": "Não verificado"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "Arquivos preservados",
+      "1": "Baixar arquivo preservado",
+      "2": "Revise estas cópias antes de restaurar um arquivo. Cópias não confirmadas podem conter alterações preparadas."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "Enviar como",
+      "answer": "Responder à pergunta",
+      "message": "Mensagem sobre este trabalho",
+      "newWork": "Nova tarefa"
     }
   },
   "pt-PT": {
@@ -3253,6 +3294,47 @@
       "permissions.0": "Ler ficheiros",
       "permissions.1": "Editar ficheiros",
       "permissions.2": "Comandos de projeto"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "Esta conversa aceita texto por enquanto. Documentos, imagens e fontes adicionais ainda não estão disponíveis aqui. O seu rascunho foi guardado."
+    },
+    "i18n/work-changes:labels": {
+      "0": "Alterações",
+      "1": "Proposta do agente executor",
+      "2": "Versão candidata testada",
+      "3": "Ficheiros",
+      "4": "Validação",
+      "5": "Registos de integração",
+      "6": "Carregar mais",
+      "7": "Atualizar",
+      "8": "Nenhuma alteração guardada",
+      "9": "O acesso à fonte está indisponível. O estado guardado continua visível.",
+      "10": "Instruções anteriores",
+      "11": "Os testes e a escrita de ficheiros não comprovam a conclusão da tarefa.",
+      "12": "Original preservado",
+      "13": "Transferir ficheiro proposto",
+      "14": "Inspecionar agente executor",
+      "15": "Criado",
+      "16": "Atualizado",
+      "17": "Eliminado",
+      "18": "Integrado",
+      "19": "Parcial",
+      "20": "Conflito",
+      "21": "Incerto",
+      "22": "Aprovado",
+      "23": "Falhou",
+      "24": "Não verificado"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "Ficheiros preservados",
+      "1": "Transferir ficheiro preservado",
+      "2": "Reveja estas cópias antes de restaurar um ficheiro. As cópias não confirmadas podem conter alterações preparadas."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "Enviar como",
+      "answer": "Responder à pergunta",
+      "message": "Mensagem sobre este trabalho",
+      "newWork": "Nova tarefa"
     }
   },
   "it": {
@@ -4881,6 +4963,47 @@
       "permissions.0": "Leggere file",
       "permissions.1": "Modificare file",
       "permissions.2": "Comandi di progetto"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "Questa conversazione accetta testo per ora. Documenti, immagini e fonti aggiuntive non sono ancora disponibili qui. La bozza è conservata."
+    },
+    "i18n/work-changes:labels": {
+      "0": "Modifiche",
+      "1": "Proposta dell’agente esecutore",
+      "2": "Versione candidata testata",
+      "3": "File",
+      "4": "Validazione",
+      "5": "Registrazioni di integrazione",
+      "6": "Carica altro",
+      "7": "Aggiorna",
+      "8": "Nessuna modifica salvata",
+      "9": "L’accesso alla fonte non è disponibile. Lo stato salvato rimane visibile.",
+      "10": "Istruzioni precedenti",
+      "11": "I test e la scrittura dei file non dimostrano il completamento dell’attività.",
+      "12": "Originale conservato",
+      "13": "Scarica il file proposto",
+      "14": "Esamina l’agente esecutore",
+      "15": "Creato",
+      "16": "Aggiornato",
+      "17": "Eliminato",
+      "18": "Integrato",
+      "19": "Parziale",
+      "20": "Conflitto",
+      "21": "Incerto",
+      "22": "Superato",
+      "23": "Non superato",
+      "24": "Non verificato"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "File conservati",
+      "1": "Scarica il file conservato",
+      "2": "Controlla queste copie prima di ripristinare un file. Le copie non confermate possono contenere modifiche preparate."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "Invia come",
+      "answer": "Rispondi alla domanda",
+      "message": "Messaggio su questo lavoro",
+      "newWork": "Nuova attività"
     }
   },
   "ru": {
@@ -6509,6 +6632,47 @@
       "permissions.0": "Чтение файлов",
       "permissions.1": "Редактирование файлов",
       "permissions.2": "Команды проекта"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "Этот разговор пока поддерживает только текст. Документы, изображения и дополнительные источники здесь ещё недоступны. Ваш черновик сохранён."
+    },
+    "i18n/work-changes:labels": {
+      "0": "Изменения",
+      "1": "Предложение агента-исполнителя",
+      "2": "Протестированная версия",
+      "3": "Файлы",
+      "4": "Проверка",
+      "5": "Записи интеграции",
+      "6": "Загрузить ещё",
+      "7": "Обновить",
+      "8": "Нет сохранённых изменений",
+      "9": "Доступ к источнику недоступен. Сохранённый статус остаётся видимым.",
+      "10": "Предыдущие инструкции",
+      "11": "Тесты и запись файлов не подтверждают завершение задачи.",
+      "12": "Оригинал сохранён",
+      "13": "Скачать предложенный файл",
+      "14": "Проверить агента-исполнителя",
+      "15": "Создано",
+      "16": "Обновлено",
+      "17": "Удалено",
+      "18": "Интегрировано",
+      "19": "Частично",
+      "20": "Конфликт",
+      "21": "Неопределённо",
+      "22": "Пройдено",
+      "23": "Не пройдено",
+      "24": "Не проверено"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "Сохранённые файлы",
+      "1": "Скачать сохранённый файл",
+      "2": "Проверьте эти копии перед восстановлением файла. Неподтверждённые копии могут содержать подготовленные изменения."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "Отправить как",
+      "answer": "Ответ на вопрос",
+      "message": "Сообщение об этой работе",
+      "newWork": "Новая задача"
     }
   },
   "uk": {
@@ -8137,6 +8301,47 @@
       "permissions.0": "Читати файли",
       "permissions.1": "Редагувати файли",
       "permissions.2": "Команди проєкту"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "Ця розмова поки підтримує текст. Документи, зображення та додаткові джерела тут ще недоступні. Вашу чернетку збережено."
+    },
+    "i18n/work-changes:labels": {
+      "0": "Зміни",
+      "1": "Пропозиція агента-виконавця",
+      "2": "Протестована версія",
+      "3": "Файли",
+      "4": "Перевірка",
+      "5": "Записи інтеграції",
+      "6": "Завантажити ще",
+      "7": "Оновити",
+      "8": "Немає збережених змін",
+      "9": "Доступ до джерела недоступний. Збережений стан залишається видимим.",
+      "10": "Попередні інструкції",
+      "11": "Тести та запис файлів не підтверджують завершення завдання.",
+      "12": "Оригінал збережено",
+      "13": "Завантажити запропонований файл",
+      "14": "Перевірити агента-виконавця",
+      "15": "Створено",
+      "16": "Оновлено",
+      "17": "Видалено",
+      "18": "Інтегровано",
+      "19": "Частково",
+      "20": "Конфлікт",
+      "21": "Невизначено",
+      "22": "Пройдено",
+      "23": "Не пройдено",
+      "24": "Не перевірено"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "Збережені файли",
+      "1": "Завантажити збережений файл",
+      "2": "Перевірте ці копії перед відновленням файлу. Непідтверджені копії можуть містити підготовлені зміни."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "Надіслати як",
+      "answer": "Відповідь на запитання",
+      "message": "Повідомлення про цю роботу",
+      "newWork": "Нове завдання"
     }
   },
   "tr": {
@@ -9765,6 +9970,47 @@
       "permissions.0": "Dosyaları oku",
       "permissions.1": "Dosyaları düzenle",
       "permissions.2": "Proje komutları"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "Bu konuşma şu anda metin kabul ediyor. Belgeler, görseller ve ek bilgi kaynakları burada henüz etkin değil. Taslağınız korundu."
+    },
+    "i18n/work-changes:labels": {
+      "0": "Değişiklikler",
+      "1": "Çalışan ajan önerisi",
+      "2": "Test edilmiş aday sürüm",
+      "3": "Dosyalar",
+      "4": "Doğrulama",
+      "5": "Entegrasyon kayıtları",
+      "6": "Daha fazla yükle",
+      "7": "Yenile",
+      "8": "Kaydedilmiş değişiklik yok",
+      "9": "Kaynağa erişilemiyor. Kaydedilen durum görünür kalır.",
+      "10": "Önceki talimatlar",
+      "11": "Testler ve dosya yazma işlemleri görevin tamamlandığını kanıtlamaz.",
+      "12": "Orijinal korundu",
+      "13": "Önerilen dosyayı indir",
+      "14": "Çalışan ajanı incele",
+      "15": "Oluşturuldu",
+      "16": "Güncellendi",
+      "17": "Silindi",
+      "18": "Entegre edildi",
+      "19": "Kısmi",
+      "20": "Çakışma",
+      "21": "Belirsiz",
+      "22": "Başarılı",
+      "23": "Başarısız",
+      "24": "Doğrulanmadı"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "Korunan dosyalar",
+      "1": "Korunan dosyayı indir",
+      "2": "Bir dosyayı geri yüklemeden önce bu kopyaları inceleyin. Onaylanmamış kopyalar hazırlanmış değişiklikler içerebilir."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "Gönderim türü",
+      "answer": "Soruyu yanıtla",
+      "message": "Bu çalışma hakkında mesaj",
+      "newWork": "Yeni görev"
     }
   },
   "zh-Hans": {
@@ -11393,6 +11639,47 @@
       "permissions.0": "读取文件",
       "permissions.1": "编辑文件",
       "permissions.2": "项目命令"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "此对话目前接受文本。文档、图片和额外知识来源选择尚未启用。你的草稿已保留。"
+    },
+    "i18n/work-changes:labels": {
+      "0": "更改",
+      "1": "执行代理的提案",
+      "2": "已测试的候选版本",
+      "3": "文件",
+      "4": "验证",
+      "5": "集成记录",
+      "6": "加载更多",
+      "7": "刷新",
+      "8": "没有已保存的更改",
+      "9": "无法访问源内容。已保存的状态仍可查看。",
+      "10": "先前的指令",
+      "11": "测试通过和文件写入并不能证明任务已完成。",
+      "12": "原件已保留",
+      "13": "下载提议的文件",
+      "14": "查看执行代理",
+      "15": "已创建",
+      "16": "已更新",
+      "17": "已删除",
+      "18": "已集成",
+      "19": "部分完成",
+      "20": "冲突",
+      "21": "结果不确定",
+      "22": "通过",
+      "23": "失败",
+      "24": "未经验证"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "保留的文件",
+      "1": "下载保留的文件",
+      "2": "恢复文件前，请先检查这些副本。未经确认的副本可能包含暂存的更改。"
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "发送方式",
+      "answer": "回答问题",
+      "message": "讨论当前工作",
+      "newWork": "新任务"
     }
   },
   "zh-Hant": {
@@ -13021,6 +13308,47 @@
       "permissions.0": "讀取檔案",
       "permissions.1": "編輯檔案",
       "permissions.2": "專案指令"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "此對話目前接受文字。文件、圖片和額外知識來源選擇尚未啟用。你的草稿已保留。"
+    },
+    "i18n/work-changes:labels": {
+      "0": "變更",
+      "1": "執行代理的提案",
+      "2": "已測試的候選版本",
+      "3": "檔案",
+      "4": "驗證",
+      "5": "整合紀錄",
+      "6": "載入更多",
+      "7": "重新整理",
+      "8": "沒有已儲存的變更",
+      "9": "無法存取來源內容。仍可查看已儲存的狀態。",
+      "10": "先前的指示",
+      "11": "測試通過與檔案寫入並不能證明任務已完成。",
+      "12": "原件已保留",
+      "13": "下載提議的檔案",
+      "14": "查看執行代理",
+      "15": "已建立",
+      "16": "已更新",
+      "17": "已刪除",
+      "18": "已整合",
+      "19": "部分完成",
+      "20": "衝突",
+      "21": "結果不確定",
+      "22": "通過",
+      "23": "失敗",
+      "24": "未經驗證"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "保留的檔案",
+      "1": "下載保留的檔案",
+      "2": "還原檔案前，請先檢查這些副本。未經確認的副本可能包含暫存的變更。"
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "傳送方式",
+      "answer": "回答問題",
+      "message": "討論目前工作",
+      "newWork": "新任務"
     }
   },
   "ja": {
@@ -14649,6 +14977,47 @@
       "permissions.0": "ファイルの読み取り",
       "permissions.1": "ファイルの編集",
       "permissions.2": "プロジェクトコマンド"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "この会話では現在テキストを受け付けています。文書、画像、追加の情報源はまだ利用できません。下書きは保持されています。"
+    },
+    "i18n/work-changes:labels": {
+      "0": "変更",
+      "1": "実行エージェントの提案",
+      "2": "テスト済み候補",
+      "3": "ファイル",
+      "4": "検証",
+      "5": "統合の記録",
+      "6": "さらに読み込む",
+      "7": "更新",
+      "8": "保存された変更はありません",
+      "9": "ソースにアクセスできません。保存済みの状態は引き続き確認できます。",
+      "10": "以前の指示",
+      "11": "テストやファイルの書き込みだけでは、タスクの完了を確認できません。",
+      "12": "原本を保持",
+      "13": "提案されたファイルをダウンロード",
+      "14": "実行エージェントを確認",
+      "15": "作成済み",
+      "16": "更新済み",
+      "17": "削除済み",
+      "18": "統合済み",
+      "19": "一部完了",
+      "20": "競合",
+      "21": "不確定",
+      "22": "合格",
+      "23": "不合格",
+      "24": "未検証"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "保持されたファイル",
+      "1": "保持されたファイルをダウンロード",
+      "2": "ファイルを復元する前に、これらのコピーを確認してください。未確認のコピーには、準備中の変更が含まれている場合があります。"
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "送信の種類",
+      "answer": "質問に回答",
+      "message": "この作業についてのメッセージ",
+      "newWork": "新しいタスク"
     }
   },
   "ko": {
@@ -16277,6 +16646,47 @@
       "permissions.0": "파일 읽기",
       "permissions.1": "파일 편집",
       "permissions.2": "프로젝트 명령어"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "이 대화는 현재 텍스트를 지원합니다. 문서, 이미지 및 추가 지식 소스 선택은 아직 지원하지 않습니다. 초안은 보존되었습니다."
+    },
+    "i18n/work-changes:labels": {
+      "0": "변경 사항",
+      "1": "실행 에이전트 제안",
+      "2": "테스트된 후보 버전",
+      "3": "파일",
+      "4": "검증",
+      "5": "통합 기록",
+      "6": "더 불러오기",
+      "7": "새로 고침",
+      "8": "저장된 변경 사항 없음",
+      "9": "원본에 접근할 수 없습니다. 저장된 상태는 계속 볼 수 있습니다.",
+      "10": "이전 지침",
+      "11": "테스트와 파일 쓰기만으로 작업 완료가 입증되지는 않습니다.",
+      "12": "원본 보존됨",
+      "13": "제안된 파일 다운로드",
+      "14": "실행 에이전트 확인",
+      "15": "생성됨",
+      "16": "업데이트됨",
+      "17": "삭제됨",
+      "18": "통합됨",
+      "19": "일부 완료",
+      "20": "충돌",
+      "21": "불확실",
+      "22": "통과",
+      "23": "실패",
+      "24": "검증되지 않음"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "보존된 파일",
+      "1": "보존된 파일 다운로드",
+      "2": "파일을 복원하기 전에 이 사본들을 검토하세요. 확인되지 않은 사본에는 준비된 변경 사항이 포함될 수 있습니다."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "전송 유형",
+      "answer": "질문에 답변",
+      "message": "이 작업에 관한 메시지",
+      "newWork": "새 작업"
     }
   },
   "hi": {
@@ -17905,6 +18315,47 @@
       "permissions.0": "फ़ाइलें पढ़ें",
       "permissions.1": "फ़ाइलें संपादित करें",
       "permissions.2": "परियोजना कमांड"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "यह बातचीत अभी पाठ स्वीकार करती है। दस्तावेज़, चित्र और अतिरिक्त ज्ञान स्रोत अभी यहाँ उपलब्ध नहीं हैं। आपका मसौदा सुरक्षित है।"
+    },
+    "i18n/work-changes:labels": {
+      "0": "बदलाव",
+      "1": "कार्यकारी एजेंट का प्रस्ताव",
+      "2": "परीक्षण किया गया संभावित संस्करण",
+      "3": "फ़ाइलें",
+      "4": "सत्यापन",
+      "5": "एकीकरण रिकॉर्ड",
+      "6": "और लोड करें",
+      "7": "ताज़ा करें",
+      "8": "कोई सहेजे गए बदलाव नहीं",
+      "9": "स्रोत तक पहुँच उपलब्ध नहीं है। सहेजी गई स्थिति दिखाई देती रहेगी।",
+      "10": "पहले के निर्देश",
+      "11": "परीक्षण और फ़ाइलें लिखना कार्य पूरा होने का प्रमाण नहीं हैं।",
+      "12": "मूल सुरक्षित है",
+      "13": "प्रस्तावित फ़ाइल डाउनलोड करें",
+      "14": "कार्यकारी एजेंट की जाँच करें",
+      "15": "बनाया गया",
+      "16": "अपडेट किया गया",
+      "17": "हटाया गया",
+      "18": "एकीकृत",
+      "19": "आंशिक",
+      "20": "टकराव",
+      "21": "अनिश्चित",
+      "22": "सफल",
+      "23": "विफल",
+      "24": "सत्यापित नहीं"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "सुरक्षित रखी गई फ़ाइलें",
+      "1": "सुरक्षित रखी गई फ़ाइल डाउनलोड करें",
+      "2": "फ़ाइल बहाल करने से पहले इन प्रतियों की जाँच करें। अपुष्ट प्रतियों में तैयार किए गए बदलाव हो सकते हैं।"
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "भेजने का प्रकार",
+      "answer": "प्रश्न का उत्तर",
+      "message": "इस काम के बारे में संदेश",
+      "newWork": "नया काम"
     }
   },
   "bn": {
@@ -19533,6 +19984,47 @@
       "6": "নিয়ন্ত্রণ বন্ধ হচ্ছে। অ্যাপ্লিকেশন খোলা থাকে; ইতিমধ্যে প্রেরিত কোনো পদক্ষেপ পর্যালোচনা করুন।",
       "7": "আরেকটি কম্পিউটার সেশন এখনও সক্রিয় আছে। এটি বন্ধ করুন, তারপর অ্যাপ্লিকেশনটি আবার নির্বাচন করুন।",
       "8": "অ্যাপ্লিকেশন নিয়ন্ত্রণ সংযোগ করতে পারেনি। পূর্ববর্তী যেকোনো সেশন বন্ধ করুন এবং উইন্ডোটি আবার নির্বাচন করুন। যদি এটি পুনরাবৃত্তি হয়, তবে OffGrid ডেস্কটপ পুনরায় খুলুন।"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "এই কথোপকথনে আপাতত লেখা গ্রহণ করা হয়। নথি, ছবি এবং অতিরিক্ত তথ্যের উৎস এখানে এখনও চালু হয়নি। আপনার খসড়া সংরক্ষিত আছে।"
+    },
+    "i18n/work-changes:labels": {
+      "0": "পরিবর্তন",
+      "1": "কার্যনির্বাহী এজেন্টের প্রস্তাব",
+      "2": "পরীক্ষিত প্রার্থী সংস্করণ",
+      "3": "ফাইল",
+      "4": "যাচাই",
+      "5": "একত্রীকরণের রেকর্ড",
+      "6": "আরও লোড করুন",
+      "7": "রিফ্রেশ করুন",
+      "8": "কোনো সংরক্ষিত পরিবর্তন নেই",
+      "9": "উৎসে প্রবেশাধিকার নেই। সংরক্ষিত অবস্থা দেখা যাবে।",
+      "10": "আগের নির্দেশনা",
+      "11": "পরীক্ষা ও ফাইল লেখা কাজ সম্পন্ন হওয়ার প্রমাণ নয়।",
+      "12": "মূল কপি সংরক্ষিত",
+      "13": "প্রস্তাবিত ফাইল ডাউনলোড করুন",
+      "14": "কার্যনির্বাহী এজেন্ট পরীক্ষা করুন",
+      "15": "তৈরি হয়েছে",
+      "16": "আপডেট হয়েছে",
+      "17": "মুছে ফেলা হয়েছে",
+      "18": "একত্রিত",
+      "19": "আংশিক",
+      "20": "দ্বন্দ্ব",
+      "21": "অনিশ্চিত",
+      "22": "উত্তীর্ণ",
+      "23": "ব্যর্থ",
+      "24": "যাচাই করা হয়নি"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "সংরক্ষিত ফাইল",
+      "1": "সংরক্ষিত ফাইল ডাউনলোড করুন",
+      "2": "ফাইল পুনরুদ্ধার করার আগে এই কপিগুলো পরীক্ষা করুন। নিশ্চিত করা হয়নি এমন কপিতে প্রস্তুত করা পরিবর্তন থাকতে পারে।"
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "পাঠানোর ধরন",
+      "answer": "প্রশ্নের উত্তর",
+      "message": "এই কাজ সম্পর্কে বার্তা",
+      "newWork": "নতুন কাজ"
     }
   },
   "ta": {
@@ -21161,6 +21653,47 @@
       "permissions.0": "கோப்புகளைப் படிக்கவும்",
       "permissions.1": "கோப்புகளைத் திருத்தவும்",
       "permissions.2": "திட்ட கட்டளைகள்"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "இந்த உரையாடல் தற்போது உரையை ஏற்கிறது. ஆவணங்கள், படங்கள் மற்றும் கூடுதல் அறிவு ஆதாரங்கள் இங்கு இன்னும் செயல்படுத்தப்படவில்லை. உங்கள் வரைவு பாதுகாக்கப்பட்டுள்ளது."
+    },
+    "i18n/work-changes:labels": {
+      "0": "மாற்றங்கள்",
+      "1": "செயல்படுத்தும் முகவரின் முன்மொழிவு",
+      "2": "சோதிக்கப்பட்ட முன்வடிவு",
+      "3": "கோப்புகள்",
+      "4": "சரிபார்ப்பு",
+      "5": "ஒருங்கிணைப்புப் பதிவுகள்",
+      "6": "மேலும் ஏற்று",
+      "7": "புதுப்பி",
+      "8": "சேமித்த மாற்றங்கள் இல்லை",
+      "9": "மூலத்தை அணுக முடியவில்லை. சேமித்த நிலையைத் தொடர்ந்து பார்க்கலாம்.",
+      "10": "முந்தைய வழிமுறைகள்",
+      "11": "சோதனைகளும் கோப்புகளை எழுதுவதும் பணி முடிந்ததற்கான சான்றுகள் அல்ல.",
+      "12": "மூலம் பாதுகாக்கப்பட்டது",
+      "13": "முன்மொழிந்த கோப்பைப் பதிவிறக்கு",
+      "14": "செயல்படுத்தும் முகவரை ஆய்வு செய்",
+      "15": "உருவாக்கப்பட்டது",
+      "16": "புதுப்பிக்கப்பட்டது",
+      "17": "நீக்கப்பட்டது",
+      "18": "ஒருங்கிணைக்கப்பட்டது",
+      "19": "பகுதி",
+      "20": "முரண்பாடு",
+      "21": "உறுதியற்றது",
+      "22": "தேர்ச்சி",
+      "23": "தோல்வி",
+      "24": "சரிபார்க்கப்படவில்லை"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "பாதுகாக்கப்பட்ட கோப்புகள்",
+      "1": "பாதுகாக்கப்பட்ட கோப்பைப் பதிவிறக்கு",
+      "2": "கோப்பை மீட்டமைப்பதற்கு முன் இந்த நகல்களை ஆய்வு செய்யவும். உறுதிப்படுத்தப்படாத நகல்களில் தயார்நிலையில் உள்ள மாற்றங்கள் இருக்கலாம்."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "அனுப்பும் வகை",
+      "answer": "கேள்விக்குப் பதில்",
+      "message": "இந்தப் பணி பற்றிய செய்தி",
+      "newWork": "புதிய பணி"
     }
   },
   "ur": {
@@ -22789,6 +23322,47 @@
     },
     "i18n/model-library:noMatches": {
       "": "کوئی ماڈل اس فلٹر سے میل نہیں کھاتا۔"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "یہ گفتگو فی الحال متن قبول کرتی ہے۔ دستاویزات، تصاویر اور اضافی معلوماتی ذرائع یہاں ابھی دستیاب نہیں ہیں۔ آپ کا مسودہ محفوظ ہے۔"
+    },
+    "i18n/work-changes:labels": {
+      "0": "تبدیلیاں",
+      "1": "عمل کرنے والے ایجنٹ کی تجویز",
+      "2": "آزمودہ مجوزہ نسخہ",
+      "3": "فائلیں",
+      "4": "تصدیق",
+      "5": "انضمام کے ریکارڈ",
+      "6": "مزید لوڈ کریں",
+      "7": "تازہ کریں",
+      "8": "کوئی محفوظ تبدیلیاں نہیں",
+      "9": "ماخذ تک رسائی دستیاب نہیں۔ محفوظ شدہ حالت نظر آتی رہے گی۔",
+      "10": "پچھلی ہدایات",
+      "11": "ٹیسٹ اور فائلیں لکھنا کام کی تکمیل کا ثبوت نہیں ہیں۔",
+      "12": "اصل محفوظ ہے",
+      "13": "مجوزہ فائل ڈاؤن لوڈ کریں",
+      "14": "عمل کرنے والے ایجنٹ کا معائنہ کریں",
+      "15": "تخلیق شدہ",
+      "16": "اپ ڈیٹ شدہ",
+      "17": "حذف شدہ",
+      "18": "ضم شدہ",
+      "19": "جزوی",
+      "20": "تعارض",
+      "21": "غیر یقینی",
+      "22": "کامیاب",
+      "23": "ناکام",
+      "24": "تصدیق نہیں ہوئی"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "محفوظ رکھی گئی فائلیں",
+      "1": "محفوظ رکھی گئی فائل ڈاؤن لوڈ کریں",
+      "2": "فائل بحال کرنے سے پہلے ان نقول کا جائزہ لیں۔ غیر مصدقہ نقول میں تیار کردہ تبدیلیاں ہو سکتی ہیں۔"
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "بھیجنے کی نوعیت",
+      "answer": "سوال کا جواب",
+      "message": "اس کام کے بارے میں پیغام",
+      "newWork": "نیا کام"
     }
   },
   "fa": {
@@ -24417,6 +24991,47 @@
     },
     "i18n/workspace-management:searchDocuments": {
       "": "جستجوی اسناد"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "این گفتگو در حال حاضر متن می‌پذیرد. اسناد، تصاویر و منابع دانش اضافی هنوز در اینجا فعال نیستند. پیش‌نویس شما حفظ شده است."
+    },
+    "i18n/work-changes:labels": {
+      "0": "تغییرات",
+      "1": "پیشنهاد عامل اجرایی",
+      "2": "نسخهٔ پیشنهادی آزمایش‌شده",
+      "3": "فایل‌ها",
+      "4": "اعتبارسنجی",
+      "5": "سوابق ادغام",
+      "6": "بارگذاری بیشتر",
+      "7": "تازه‌سازی",
+      "8": "تغییر ذخیره‌شده‌ای وجود ندارد",
+      "9": "دسترسی به منبع ممکن نیست. وضعیت ذخیره‌شده همچنان قابل مشاهده است.",
+      "10": "دستورهای پیشین",
+      "11": "آزمایش‌ها و نوشتن فایل‌ها به‌تنهایی تکمیل کار را ثابت نمی‌کنند.",
+      "12": "نسخهٔ اصلی حفظ شده",
+      "13": "بارگیری فایل پیشنهادی",
+      "14": "بررسی عامل اجرایی",
+      "15": "ایجاد شده",
+      "16": "به‌روز شده",
+      "17": "حذف شده",
+      "18": "ادغام شده",
+      "19": "جزئی",
+      "20": "تعارض",
+      "21": "نامشخص",
+      "22": "موفق",
+      "23": "ناموفق",
+      "24": "تأیید نشده"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "فایل‌های حفظ‌شده",
+      "1": "بارگیری فایل حفظ‌شده",
+      "2": "پیش از بازیابی فایل، این نسخه‌ها را بررسی کنید. نسخه‌های تأییدنشده ممکن است شامل تغییرات آماده‌شده باشند."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "نوع ارسال",
+      "answer": "پاسخ به پرسش",
+      "message": "پیام دربارهٔ این کار",
+      "newWork": "کار جدید"
     }
   },
   "he": {
@@ -26045,6 +26660,47 @@
     },
     "i18n/workspace-management:searchDocuments": {
       "": "חפש מסמכים"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "השיחה הזו מקבלת כרגע טקסט. מסמכים, תמונות ומקורות ידע נוספים עדיין אינם זמינים כאן. הטיוטה שלך נשמרה."
+    },
+    "i18n/work-changes:labels": {
+      "0": "שינויים",
+      "1": "הצעת סוכן הביצוע",
+      "2": "גרסה מועמדת שנבדקה",
+      "3": "קבצים",
+      "4": "אימות",
+      "5": "רישומי שילוב",
+      "6": "טעינת נוספים",
+      "7": "רענון",
+      "8": "אין שינויים שמורים",
+      "9": "אין גישה למקור. הסטטוס השמור עדיין מוצג.",
+      "10": "הוראות קודמות",
+      "11": "בדיקות וכתיבת קבצים אינן מוכיחות שהמשימה הושלמה.",
+      "12": "המקור נשמר",
+      "13": "הורדת הקובץ המוצע",
+      "14": "בדיקת סוכן הביצוע",
+      "15": "נוצר",
+      "16": "עודכן",
+      "17": "נמחק",
+      "18": "שולב",
+      "19": "חלקי",
+      "20": "התנגשות",
+      "21": "לא ודאי",
+      "22": "עבר",
+      "23": "נכשל",
+      "24": "לא אומת"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "קבצים שנשמרו",
+      "1": "הורדת הקובץ שנשמר",
+      "2": "יש לבדוק את העותקים האלה לפני שחזור קובץ. עותקים שלא אושרו עשויים להכיל שינויים שהוכנו מראש."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "סוג ההודעה",
+      "answer": "תשובה לשאלה",
+      "message": "הודעה על העבודה הזו",
+      "newWork": "משימה חדשה"
     }
   },
   "id": {
@@ -27673,6 +28329,47 @@
       "permissions.0": "Baca berkas",
       "permissions.1": "Edit berkas",
       "permissions.2": "Perintah proyek"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "Percakapan ini saat ini menerima teks. Dokumen, gambar, dan sumber pengetahuan tambahan belum diaktifkan di sini. Draf Anda disimpan."
+    },
+    "i18n/work-changes:labels": {
+      "0": "Perubahan",
+      "1": "Usulan agen pelaksana",
+      "2": "Versi kandidat yang diuji",
+      "3": "Berkas",
+      "4": "Validasi",
+      "5": "Catatan integrasi",
+      "6": "Muat lebih banyak",
+      "7": "Muat ulang",
+      "8": "Tidak ada perubahan tersimpan",
+      "9": "Akses ke sumber tidak tersedia. Status tersimpan tetap terlihat.",
+      "10": "Instruksi sebelumnya",
+      "11": "Pengujian dan penulisan berkas tidak membuktikan bahwa tugas telah selesai.",
+      "12": "Berkas asli dipertahankan",
+      "13": "Unduh berkas yang diusulkan",
+      "14": "Periksa agen pelaksana",
+      "15": "Dibuat",
+      "16": "Diperbarui",
+      "17": "Dihapus",
+      "18": "Diintegrasikan",
+      "19": "Sebagian",
+      "20": "Konflik",
+      "21": "Tidak pasti",
+      "22": "Lulus",
+      "23": "Gagal",
+      "24": "Belum diverifikasi"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "Berkas yang dipertahankan",
+      "1": "Unduh berkas yang dipertahankan",
+      "2": "Periksa salinan ini sebelum memulihkan berkas. Salinan yang belum dikonfirmasi mungkin berisi perubahan yang telah disiapkan."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "Kirim sebagai",
+      "answer": "Jawab pertanyaan",
+      "message": "Pesan tentang pekerjaan ini",
+      "newWork": "Tugas baru"
     }
   },
   "vi": {
@@ -29301,6 +29998,47 @@
       "permissions.0": "Đọc tệp",
       "permissions.1": "Chỉnh sửa tệp",
       "permissions.2": "Lệnh dự án"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "Cuộc trò chuyện này hiện nhận văn bản. Tài liệu, hình ảnh và nguồn kiến thức bổ sung chưa được bật ở đây. Bản nháp của bạn được giữ lại."
+    },
+    "i18n/work-changes:labels": {
+      "0": "Thay đổi",
+      "1": "Đề xuất của tác tử thực thi",
+      "2": "Bản ứng viên đã kiểm thử",
+      "3": "Tệp",
+      "4": "Xác thực",
+      "5": "Bản ghi tích hợp",
+      "6": "Tải thêm",
+      "7": "Làm mới",
+      "8": "Không có thay đổi đã lưu",
+      "9": "Không thể truy cập nguồn. Trạng thái đã lưu vẫn hiển thị.",
+      "10": "Chỉ dẫn trước đó",
+      "11": "Việc kiểm thử và ghi tệp không chứng minh rằng tác vụ đã hoàn tất.",
+      "12": "Đã giữ bản gốc",
+      "13": "Tải tệp được đề xuất",
+      "14": "Kiểm tra tác tử thực thi",
+      "15": "Đã tạo",
+      "16": "Đã cập nhật",
+      "17": "Đã xóa",
+      "18": "Đã tích hợp",
+      "19": "Một phần",
+      "20": "Xung đột",
+      "21": "Chưa chắc chắn",
+      "22": "Đạt",
+      "23": "Không đạt",
+      "24": "Chưa xác minh"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "Tệp được giữ lại",
+      "1": "Tải tệp được giữ lại",
+      "2": "Kiểm tra các bản sao này trước khi khôi phục tệp. Các bản sao chưa được xác nhận có thể chứa những thay đổi đã chuẩn bị."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "Gửi dưới dạng",
+      "answer": "Trả lời câu hỏi",
+      "message": "Tin nhắn về công việc này",
+      "newWork": "Nhiệm vụ mới"
     }
   },
   "th": {
@@ -30929,6 +31667,47 @@
       "permissions.0": "อ่านไฟล์",
       "permissions.1": "แก้ไขไฟล์",
       "permissions.2": "คำสั่งโปรเจกต์"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "การสนทนานี้รองรับข้อความในขณะนี้ ยังไม่ได้เปิดใช้เอกสาร รูปภาพ และแหล่งความรู้เพิ่มเติมที่นี่ ระบบเก็บฉบับร่างของคุณไว้แล้ว"
+    },
+    "i18n/work-changes:labels": {
+      "0": "การเปลี่ยนแปลง",
+      "1": "ข้อเสนอจากเอเจนต์ผู้ปฏิบัติงาน",
+      "2": "เวอร์ชันที่เสนอซึ่งผ่านการทดสอบแล้ว",
+      "3": "ไฟล์",
+      "4": "การตรวจสอบ",
+      "5": "บันทึกการผสาน",
+      "6": "โหลดเพิ่มเติม",
+      "7": "รีเฟรช",
+      "8": "ไม่มีการเปลี่ยนแปลงที่บันทึกไว้",
+      "9": "ไม่สามารถเข้าถึงแหล่งข้อมูลได้ สถานะที่บันทึกไว้ยังคงแสดงอยู่",
+      "10": "คำสั่งก่อนหน้า",
+      "11": "การทดสอบและการเขียนไฟล์ไม่ได้ยืนยันว่างานเสร็จสมบูรณ์",
+      "12": "เก็บต้นฉบับไว้แล้ว",
+      "13": "ดาวน์โหลดไฟล์ที่เสนอ",
+      "14": "ตรวจสอบเอเจนต์ผู้ปฏิบัติงาน",
+      "15": "สร้างแล้ว",
+      "16": "อัปเดตแล้ว",
+      "17": "ลบแล้ว",
+      "18": "ผสานแล้ว",
+      "19": "บางส่วน",
+      "20": "ขัดแย้ง",
+      "21": "ไม่แน่นอน",
+      "22": "ผ่าน",
+      "23": "ไม่ผ่าน",
+      "24": "ยังไม่ได้ตรวจสอบ"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "ไฟล์ที่เก็บรักษาไว้",
+      "1": "ดาวน์โหลดไฟล์ที่เก็บไว้",
+      "2": "ตรวจสอบสำเนาเหล่านี้ก่อนกู้คืนไฟล์ สำเนาที่ยังไม่ได้ยืนยันอาจมีการเปลี่ยนแปลงที่เตรียมไว้"
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "ประเภทข้อความ",
+      "answer": "ตอบคำถาม",
+      "message": "ข้อความเกี่ยวกับงานนี้",
+      "newWork": "งานใหม่"
     }
   },
   "fil": {
@@ -32557,6 +33336,47 @@
     },
     "i18n/document-retention:save": {
       "": "I-save ang patakaran"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "Tumatanggap muna ng teksto ang pag-uusap na ito. Hindi pa available dito ang mga dokumento, larawan at karagdagang sanggunian. Napanatili ang iyong draft."
+    },
+    "i18n/work-changes:labels": {
+      "0": "Mga pagbabago",
+      "1": "Panukala ng ahenteng tagapagpatupad",
+      "2": "Nasubok na kandidatong bersiyon",
+      "3": "Mga file",
+      "4": "Pagpapatunay",
+      "5": "Mga tala ng pagsasama",
+      "6": "Mag-load pa",
+      "7": "I-refresh",
+      "8": "Walang naka-save na pagbabago",
+      "9": "Hindi ma-access ang pinagmulan. Makikita pa rin ang naka-save na katayuan.",
+      "10": "Mga naunang tagubilin",
+      "11": "Hindi patunay ng pagkumpleto ng gawain ang mga pagsubok at pagsusulat ng mga file.",
+      "12": "Napanatili ang orihinal",
+      "13": "I-download ang iminungkahing file",
+      "14": "Suriin ang ahenteng tagapagpatupad",
+      "15": "Nagawa",
+      "16": "Na-update",
+      "17": "Natanggal",
+      "18": "Naisama",
+      "19": "Bahagya",
+      "20": "Salungatan",
+      "21": "Hindi tiyak",
+      "22": "Pumasa",
+      "23": "Nabigo",
+      "24": "Hindi pa napatunayan"
+    },
+    "i18n/work-change-recovery:labels": {
+      "0": "Mga file na napanatili",
+      "1": "I-download ang napanatiling file",
+      "2": "Suriin ang mga kopyang ito bago magbalik ng file. Maaaring may mga inihandang pagbabago ang mga hindi pa kumpirmadong kopya."
+    },
+    "i18n/conversation-input-mode:conversationInputModeText": {
+      "label": "Ipadala bilang",
+      "answer": "Sagot sa tanong",
+      "message": "Mensahe tungkol sa gawaing ito",
+      "newWork": "Bagong gawain"
     }
   },
   "fr": {
@@ -32798,5 +33618,7 @@
       "bge-m3": "Imodeli yokubeka amagama yesiNganekwane, imibandela 1024, inikeza ukusekelwa komiqondo emide",
       "speechPackage": "Isakhiwo esiphelele somodeli wezwi. Ukugijima kwezwi nokwalelwa akufakwe."
     }
-  }
+  },
+  "en": {},
+  "pl": {}
 }

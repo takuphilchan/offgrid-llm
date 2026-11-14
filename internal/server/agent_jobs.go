@@ -20,6 +20,8 @@ import (
 
 // Omitted additive fields must not alter the original idempotency payload.
 type jobSubmitRequest struct {
+	ConversationModelOverride bool `json:"-"`
+
 	ResponseProfile         string                      `json:"response_profile,omitempty"`
 	ExecutionRequestVersion int                         `json:"execution_request_version,omitempty"`
 	DeferKnowledge          bool                        `json:"-"` // Internal calendar review; never accepted from clients.

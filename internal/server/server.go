@@ -109,6 +109,7 @@ type Server struct {
 	executionHosts       *execution.Hosts
 	executionEnrollment  *execution.Enrollment
 	schedules            *scheduleController
+	conversationDelivery *conversationDeliveryController
 	computerVisionChecks sync.Map               // exact runtime/model/projector smoke passes; never persisted
 	computerModelChecks  computerCheckFlights   // synthetic in-flight work only; no completed-result cache
 	integrationRegistry  *integrations.Registry // External agent adapters (Hermes, OpenClaw, ...)

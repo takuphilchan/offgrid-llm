@@ -1,6 +1,11 @@
 package serviceclient
 
 var modelErrorMessages = map[string]string{
+	"document_extraction_conflict":      "The extraction changed. Reload the current revision before correcting it.",
+	"document_extraction_unavailable":   "A retained structured extraction is unavailable for this revision.",
+	"document_correction_invalid":       "Provide a complete current leaf block, its exact text hash and the expected extraction revision.",
+	"document_index_unavailable":        "Load the index's configured embedding model before correcting the extraction.",
+	"document_review_unavailable":       "Document review is temporarily unavailable. Inspect the active revision before retrying a correction.",
 	"document_import_conflict":          "Import state changed. Refresh its status before continuing.",
 	"document_import_not_found":         "This import is unavailable in your workspace.",
 	"document_storage_limit":            "Knowledge original storage is full. Remove unneeded documents before importing more.",

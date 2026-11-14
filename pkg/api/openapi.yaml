@@ -9,6 +9,466 @@ security:
   - sessionCookie: []
   - bearerAuth: []
 paths:
+  /api/v2/user-preferences:
+    get:
+      operationId: getUserPreferences
+      responses:
+        '200':
+          description: Current actor/workspace defaults. Revision zero means no saved defaults; this read creates no state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserPreferences' }
+  /api/v2/user-preferences/commands:
+    post:
+      operationId: configureUserPreferences
+      description: Replaces preferences only. Empty payload inherits service defaults. Does not change accepted runs, restrictions, host grants or memory consent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserPreferencesCommand' }
+      responses:
+        '202':
+          description: Committed preference command, or the identical recorded receipt on retry.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '400': { description: Invalid envelope or unsupported preference. }
+        '409': { description: Revision or request identity conflict. }
+  /api/v2/conversations:
+    get:
+      operationId: listCanonicalConversations
+      parameters:
+        - { in: query, name: after, schema: { type: string } }
+      responses:
+        '200':
+          description: Actor/workspace scoped page; observing does not create a default project or dispatch work.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CanonicalConversationPage' }
+    post:
+      operationId: createCanonicalConversation
+      description: Preview admission must be enabled. Creates a conversation or explicitly imports an owned inactive legacy session. Creates a private default project when none is selected. No profile or model call is required. Imports retain source bytes and atomically switch write authority.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConversationCommand' }
+      responses:
+        '202':
+          description: Command committed with revision, event and outbox.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '200':
+          description: Identical recorded retry; no execution is resumed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '409': { description: Request identity conflicts with previously accepted content. }
+        '503': { description: New admission disabled; existing resources remain readable and controllable. }
+  /api/v2/conversations/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: getCanonicalConversation
+      responses:
+        '200':
+          description: Current authoritative conversation snapshot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CanonicalConversation' }
+        '404': { description: Conversation unavailable in this actor/workspace. }
+  /api/v2/conversations/{id}/commands:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    post:
+      operationId: commandCanonicalConversation
+      description: Target must match the path. Identical retries return the original receipt before checking mutable resource readiness. New work is committed with its run before the existing coordinator can dispatch it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConversationCommand' }
+      responses:
+        '202':
+          description: Accepted command.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '200':
+          description: Previously accepted command.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '409': { description: Revision or request identity conflict. }
+        '422': { description: Required model or scoped resource unavailable. }
+        '503': { description: New admission disabled. }
+  /api/v2/conversations/{id}/events:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: query, name: after, schema: { type: integer, format: int64, minimum: 0 } }
+      - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+    get:
+      operationId: getCanonicalConversationEvents
+      responses:
+        '200':
+          description: Ordered page. Expired cursors include history_gap and a current snapshot. GET never approves, continues or dispatches work.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ControlEventPage' }
+  /api/v2/conversations/{id}/inputs:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: query, name: after, schema: { type: integer, format: int64, minimum: 0 } }
+      - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+    get:
+      operationId: getConversationInputs
+      responses:
+        '200':
+          description: Ordered durable inbox state. Observation never prepares, resumes or dispatches execution. Result retrieval retains its own source-access checks.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationInboxPage' }
+        '400': { description: Invalid cursor or limit. }
+        '404': { description: Conversation unavailable in this actor/workspace. }
+    post:
+      operationId: submitConversationInput
+      description: Accepts text independently of model readiness. Preview admission must be enabled for new input; identical retries return their original receipt. Pending-question answers and approvals use existing work controls.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConversationInputCommand' }
+      responses:
+        '202':
+          description: Input, conversation event and affected work fences committed. Execution is service-owned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '200':
+          description: Recorded identical receipt; no new dispatch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '400': { description: Invalid input or envelope. }
+        '403': { description: Focused work sources unavailable. }
+        '404': { description: Conversation or focused work unavailable. }
+        '409': { description: Revision or request identity conflict. }
+        '422': { description: Pending-question answers require their existing work control. }
+        '503': { description: New input admission disabled or service storage unavailable. }
+  /api/v2/conversations/{id}/inputs/{input_id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: input_id, required: true, schema: { type: string } }
+    get:
+      operationId: getConversationInput
+      responses:
+        '200':
+          description: Accepted input and its delivery/incorporation state, including any preparation limitation. No execution is resumed by this read.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationInboxEntry' }
+        '404': { description: Input unavailable in this conversation and actor/workspace. }
+  /api/v2/conversations/{id}/inputs/{input_id}/commands:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: input_id, required: true, schema: { type: string } }
+    post:
+      operationId: controlConversationInput
+      description: Stop withdraws unapplied input, separately from stopping work. Continue resumes the pinned interrupted foreground attempt and its remaining budget. Revalidate explicitly approves applying the saved exact correction against the specified current work instruction version. No command grants host access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConversationInputControlCommand' }
+      responses:
+        '202':
+          description: Control committed. Stop remains stopping until active operations and hold release settle. Already applied input returns its recorded outcome.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '200':
+          description: Recorded identical control receipt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '400': { description: Invalid envelope or control. }
+        '403': { description: Current actor or source access does not permit continuation or revalidation. Stop remains available to the authorized owner. }
+        '404': { description: Input unavailable. }
+        '409': { description: State, revision or request identity conflict. }
+  /api/v2/conversations/{id}/configuration:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: getCanonicalConversationConfiguration
+      responses:
+        '200':
+          description: Resolved preferences and provenance. This response is not a host grant or proof of live resource authority.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EffectiveConversationPreferences' }
+  /api/v2/projects:
+    post:
+      operationId: createConversationProject
+      description: Creates private preferences and resource references. Does not grant resource access or enroll execution hosts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectCommand' }
+      responses:
+        '202':
+          description: Committed project command or its recorded identical receipt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '409': { description: Request identity conflict. }
+    get:
+      operationId: listConversationProjects
+      parameters:
+        - { in: query, name: after, schema: { type: string } }
+      responses:
+        '200':
+          description: Private scoped project metadata. Membership grants no access.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, has_more]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/ConversationProject' } }
+                  next_cursor: { type: string }
+                  has_more: { type: boolean }
+  /api/v2/projects/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: getConversationProject
+      parameters:
+        - { in: query, name: revision, schema: { type: integer, minimum: 1 }, description: Omit for the current project; supply to inspect an immutable admitted revision. }
+      responses:
+        '200':
+          description: Project preferences.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationProject' }
+  /api/v2/projects/{id}/commands:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    post:
+      operationId: commandConversationProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectCommand' }
+      responses:
+        '202':
+          description: Committed revision or previously recorded identical command.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '409': { description: Revision or request identity conflict. }
+  /api/v2/results/{id}:
+    get:
+      operationId: getConversationResult
+      description: Retrieve immutable output with settlement provenance. Requires current owner and source access. Reads never resume execution. Byte offsets must start at a UTF-8 boundary; a tiny limit returns at least one complete character.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 65536, default: 4096 } }
+      responses:
+        '200':
+          description: Bounded saved output
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationResultPage' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /api/v2/work-items:
+    get:
+      operationId: listConversationWorkItems
+      parameters:
+        - { in: query, name: after, schema: { type: string } }
+      responses:
+        '200':
+          description: Scoped work identities and current state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, has_more]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/ConversationWorkItem' } }
+                  next_cursor: { type: string }
+                  has_more: { type: boolean }
+  /api/v2/work-items/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: getConversationWorkItem
+      responses:
+        '200':
+          description: Work identity and current run. Host grant material remains private.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [work, run]
+                properties:
+                  work: { $ref: '#/components/schemas/ConversationWorkItem' }
+                  run: { $ref: '#/components/schemas/AgentRunResponse' }
+  /api/v2/work-items/{id}/changes:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: query, name: after, schema: { type: string } }
+      - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 64, default: 32 } }
+    get:
+      operationId: listWorkChanges
+      description: Lists retained proposals and tested candidates, including unavailable-source status. Reading never grants access, dispatches or integrates work.
+      responses:
+        '200':
+          description: Owned work changes without host grants or private paths.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkChangeList' }
+  /api/v2/work-items/{id}/changes/{change_id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: change_id, required: true, schema: { type: string } }
+      - { in: query, name: view, schema: { type: string, enum: [files, validation, integration, recovery, content, preserved], default: files } }
+      - { in: query, name: offset, schema: { type: integer, format: int64, minimum: 0 } }
+      - { in: query, name: limit, description: Maximum 64 entries or 65536 content bytes., schema: { type: integer, minimum: 1, maximum: 65536 } }
+      - { in: query, name: hash, description: Required result or observed retained-file SHA-256 for byte pages., schema: { type: string } }
+      - { in: query, name: artifact, description: Required recovery artifact identity for preserved byte pages., schema: { type: string } }
+    get:
+      operationId: inspectWorkChange
+      description: Reads exact captured evidence through current source access. No dispatch, recovery command, integration or new grant occurs. Content is base64 encoded; next_offset is an entry offset or byte offset according to view.
+      responses:
+        '200':
+          description: Bounded authorized evidence. Validation and file integration are not semantic task-completion claims.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkChangeDetail' }
+        '403': { description: Source authority is unavailable or revoked. }
+        '404': { description: Owned work or change reference was not found. }
+        '409': { description: Native evidence is unavailable or does not match the captured reference. }
+  /api/v2/work-items/{id}/events:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: query, name: after, schema: { type: integer, format: int64, minimum: 0 } }
+      - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+    get:
+      operationId: getConversationWorkEvents
+      responses:
+        '200':
+          description: Work events committed alongside run state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ControlEventPage' }
+  /api/v2/work-items/{id}/commands:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    post:
+      operationId: commandConversationWork
+      description: Commits graph fences and command receipt before cancellation. Controls require no model slot. Stop and Pause remain available after source revocation with content redacted. Continuation preserves consumed budgets and requires settled, recoverable state.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkControlCommand' }
+      responses:
+        '202':
+          description: Accepted control. Stopping and pausing remain pending until active operations settle.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '200':
+          description: Identical recorded retry; no control is re-applied.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '409': { description: Changed revision, conflicting request identity, or unresolved execution state. }
+  /api/v2/workers:
+    get:
+      operationId: listWorkerSessions
+      parameters:
+        - { in: query, name: after, schema: { type: string } }
+      responses:
+        '200':
+          description: Scoped worker metadata, excluding revoked-source content.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, has_more]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/WorkerSession' } }
+                  next_cursor: { type: string }
+                  has_more: { type: boolean }
+  /api/v2/workers/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: getWorkerSession
+      responses:
+        '200':
+          description: Worker assignment, stable identity and run history. Completion is separate from verification.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkerSession' }
+  /api/v2/workers/{id}/commands:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    post:
+      operationId: commandWorkerSession
+      description: Messages fence outdated proposals and are applied once at a checkpoint. Continue creates another run under the same worker and root allowance; stopped workers require an explicit user continuation. Source access is rechecked; no grant is inherited from membership.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkerCommand' }
+      responses:
+        '202':
+          description: Committed worker command.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '200':
+          description: Previously committed identical command; not applied twice.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationCommandReceipt' }
+        '409': { description: Revision conflict, unsettled operation, closed session, or work no longer eligible for this command. }
+  /api/v2/workers/{id}/messages:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: query, name: after, schema: { type: integer, format: int64, minimum: 0 } }
+      - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200 } }
+    get:
+      operationId: getWorkerMessages
+      responses:
+        '200':
+          description: Ordered durable mailbox with accepted, delivered, applied and abandoned states.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkerMessagePage' }
+  /api/v2/workers/{id}/events:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: query, name: after, schema: { type: integer, format: int64, minimum: 0 } }
+      - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200 } }
+    get:
+      operationId: getWorkerEvents
+      responses:
+        '200':
+          description: Ordered worker control events; reading never delivers or applies messages.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ControlEventPage' }
   /api/v2/models/import/gguf:
     post:
       operationId: importOfflineGGUF
@@ -2358,6 +2818,646 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
   schemas:
+    InferenceAdmissionStatus:
+      type: object
+      required: [policy, admitted, capacity, foreground_queued, background_queued, queue_capacity]
+      properties:
+        policy: { type: string }
+        admitted: { type: integer, minimum: 0, description: Requests admitted before acquiring provider-family and runtime resources; not a count of active generations. }
+        capacity: { type: integer, minimum: 1 }
+        foreground_queued: { type: integer, minimum: 0 }
+        background_queued: { type: integer, minimum: 0 }
+        queue_capacity: { type: integer, minimum: 1 }
+    WorkControlCommand:
+      type: object
+      additionalProperties: false
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string }
+        expected_revision: { type: integer, format: int64, minimum: 1 }
+        kind: { type: string, enum: [stop, pause, correct, continue] }
+        payload:
+          type: object
+          additionalProperties: false
+          properties:
+            instruction: { type: string, minLength: 1, maxLength: 16000, description: Required only for correct. No budget is replenished. }
+    ConversationPreferences:
+      type: object
+      additionalProperties: false
+      properties:
+        model: { type: string, maxLength: 256 }
+        profile_id: { type: string }
+        profile_revision: { type: integer, minimum: 1 }
+        restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
+        delegation: { type: boolean }
+    CanonicalConversation:
+      type: object
+      required: [id, revision, project_id, title, preferences, created_at, configuration_known]
+      properties:
+        pending_question: { $ref: '#/components/schemas/ConversationQuestion' }
+        context_revision: { type: integer, format: int64, minimum: 0, description: Version of explicit project/folder selection. Ordinary messages do not advance it; late access approval preserves a newer selection. }
+        configuration_known: { type: boolean, description: False when migrated browser-only configuration has no persisted evidence. }
+        id: { type: string }
+        revision: { type: integer, format: int64, minimum: 1 }
+        project_id: { type: string }
+        title: { type: string }
+        preferences: { $ref: '#/components/schemas/ConversationPreferences' }
+        focused_work_id: { type: string }
+        created_at: { type: string, format: date-time }
+    ConversationQuestion:
+      type: object
+      description: Read-only projection of the focused work's pending primary clarification. Observation never answers or resumes work.
+      required: [id, work_id, run_id, content]
+      properties:
+        id: { type: string }
+        work_id: { type: string }
+        run_id: { type: string }
+        content: { type: string }
+    CanonicalConversationPage:
+      type: object
+      required: [items, has_more]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/CanonicalConversation' } }
+        next_cursor: { type: string }
+        has_more: { type: boolean }
+    ConversationProject:
+      type: object
+      required: [id, revision, name, default, preferences]
+      properties:
+        id: { type: string }
+        revision: { type: integer, format: int64, minimum: 1 }
+        name: { type: string }
+        default: { type: boolean }
+        preferences: { $ref: '#/components/schemas/ConversationPreferences' }
+        resources: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/ProjectResourceReference' } }
+        configuration_digest: { type: string, description: SHA-256 of the accepted project TOML bytes. Absent after an explicit service preference edit. }
+        folder_identity: { type: string, description: Opaque host/folder identity. Project membership grants no access. }
+        configuration_source: { type: string, enum: [file, service], description: Explicit service edits survive later folder refreshes. }
+    ProjectResourceReference:
+      type: object
+      additionalProperties: false
+      required: [kind, id]
+      properties:
+        kind: { type: string, enum: [skill, knowledge, connection, instructions] }
+        id: { type: string, maxLength: 512 }
+        revision: { type: string, maxLength: 128, description: Skill revision number, Knowledge content hash, or connection tool schema revision. Omit to resolve and pin at admission. }
+        required: { type: boolean }
+    ResourceResolution:
+      type: object
+      required: [kind, id, selected, reason]
+      properties:
+        kind: { type: string }
+        id: { type: string }
+        revision: { type: string }
+        required: { type: boolean }
+        selected: { type: boolean }
+        reason: { type: string }
+    ProjectCommand:
+      type: object
+      additionalProperties: false
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string, description: Empty only for create_project. }
+        expected_revision: { type: integer, minimum: 0, format: int64 }
+        kind: { type: string, enum: [create_project, configure_project] }
+        payload:
+          type: object
+          additionalProperties: false
+          required: [name]
+          properties:
+            name: { type: string, minLength: 1, maxLength: 256 }
+            configuration_toml: { type: string, description: Version 1 UTF-8 project configuration, at most 64 KiB. Cannot be mixed with explicit preferences or resources. Unknown keys, authority, credentials and executable hooks are rejected. }
+            preferences: { $ref: '#/components/schemas/ProjectPreferences' }
+            resources: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/ProjectResourceReference' } }
+    UserDefaultValues:
+      type: object
+      additionalProperties: false
+      properties:
+        model: { type: string, maxLength: 256 }
+        delegation: { type: boolean }
+    UserPreferences:
+      type: object
+      required: [id, revision, preferences]
+      properties:
+        id: { type: string, const: user-defaults }
+        revision: { type: integer, format: int64, minimum: 0 }
+        preferences: { $ref: '#/components/schemas/UserDefaultValues' }
+    UserPreferencesCommand:
+      type: object
+      additionalProperties: false
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string, const: user-defaults }
+        expected_revision: { type: integer, format: int64, minimum: 0 }
+        kind: { type: string, const: configure_user_preferences }
+        payload: { $ref: '#/components/schemas/UserDefaultValues' }
+    ProjectPreferences:
+      type: object
+      additionalProperties: false
+      properties:
+        model: { type: string, maxLength: 256 }
+        delegation: { type: boolean }
+        restrictions: { type: object, additionalProperties: false, description: Empty compatibility field only. Project preferences cannot grant or widen authority. }
+    ConversationWorkItem:
+      type: object
+      required: [id, revision, project_id, project_revision, objective, acceptance, run_id, status, instruction_version, control_epoch, independently_verified]
+      properties:
+        id: { type: string }
+        revision: { type: integer, format: int64, minimum: 1 }
+        project_id: { type: string }
+        project_revision: { type: integer, format: int64 }
+        objective: { type: string }
+        acceptance: { type: array, items: { type: string } }
+        run_id: { type: string }
+        run_ids: { type: array, items: { type: string }, description: Ordered retained execution attempts. run_id identifies the current attempt; prior outcomes are not rewritten. }
+        status: { type: string }
+        instruction_version: { type: integer, minimum: 1 }
+        control_epoch: { type: integer, minimum: 0 }
+        result_reference: { type: string }
+        independently_verified: { type: boolean, description: Completion does not imply independent verification. }
+        worker_policy: { $ref: '#/components/schemas/WorkerPolicy' }
+    WorkerPolicy:
+      type: object
+      description: Service-owned resource policy pinned at work admission; never an authority grant. Absent on older work, which retains version 1 defaults.
+      required: [version, max_sessions, max_active, max_depth, initial_model_calls]
+      properties:
+        version: { type: integer, enum: [1] }
+        max_sessions: { type: integer, minimum: 1, maximum: 32 }
+        max_active: { type: integer, minimum: 1, maximum: 8 }
+        max_depth: { type: integer, enum: [1] }
+        initial_model_calls: { type: integer, minimum: 1, maximum: 50 }
+    ConversationCommand:
+      type: object
+      additionalProperties: false
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string, description: Empty only when creating or importing a conversation. }
+        expected_revision: { type: integer, format: int64, minimum: 0 }
+        kind: { type: string, enum: [create_conversation, import_conversation, configure_conversation, rename_conversation, select_project, use_project_folder, clear_project_folder, link_work, focus_work, create_work] }
+        payload:
+          type: object
+          additionalProperties: false
+          properties:
+            title: { type: string, maxLength: 256 }
+            legacy_name: { type: string, maxLength: 256, description: Required only for import_conversation with empty target and revision zero. Imports an owned inactive legacy session transactionally and retains its original files. }
+            work_id: { type: string, maxLength: 128, description: link_work attaches owned accessible work and focuses it. focus_work requires an existing link; omit work_id to clear focus. Neither command dispatches or copies grants. }
+            project_id: { type: string }
+            folder: { $ref: '#/components/schemas/ExecutionReference', description: Required only for use_project_folder. Resolves a live approved host and imports safe fixed-path project metadata. Does not create authority or rewrite existing work. }
+            preferences: { $ref: '#/components/schemas/ConversationPreferences' }
+            input:
+              type: object
+              additionalProperties: false
+              required: [content]
+              properties:
+                content: { type: string, minLength: 1, maxLength: 32000 }
+                model: { type: string, maxLength: 256 }
+                acceptance: { type: array, maxItems: 32, items: { type: string, minLength: 1, maxLength: 4096 } }
+    ConversationCommandReceipt:
+      type: object
+      required: [request_id, target_id, revision, event_cursor]
+      properties:
+        input: { $ref: '#/components/schemas/ConversationInboxEntry' }
+        user_preferences: { $ref: '#/components/schemas/UserPreferences' }
+        request_id: { type: string }
+        target_id: { type: string }
+        revision: { type: integer, format: int64 }
+        event_cursor: { type: integer, format: int64 }
+        conversation: { $ref: '#/components/schemas/CanonicalConversation' }
+        work: { $ref: '#/components/schemas/ConversationWorkItem' }
+        project: { $ref: '#/components/schemas/ConversationProject' }
+        worker: { $ref: '#/components/schemas/WorkerSession' }
+        message: { $ref: '#/components/schemas/WorkerMessage' }
+        import: { $ref: '#/components/schemas/ConversationImportManifest' }
+    ConversationInboxInput:
+      type: object
+      additionalProperties: false
+      required: [content]
+      properties:
+        question_id: { type: string, description: Required for answer intent. Exact saved primary clarification identity; never authorizes host access. Omit for other intents. }
+        content: { type: string, minLength: 1, maxLength: 32000 }
+        model: { type: string, maxLength: 256 }
+        intent: { type: string, enum: [message, correction, new_work, answer] }
+        focused_work_id: { type: string, description: Omitted uses current focus. Empty string selects unbound conversation input. }
+        origin: { type: string, enum: [typed, dictation, steering] }
+    ConversationInputCommand:
+      type: object
+      additionalProperties: false
+      description: Preview text-input envelope. Acceptance is independent of inference readiness. Answer intent binds an exact primary clarification and records its mailbox/history/continuation transaction without another model turn. Host approvals retain their existing access controls.
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string }
+        expected_revision: { type: integer, format: int64, minimum: 1 }
+        kind: { type: string, const: submit_input }
+        payload: { $ref: '#/components/schemas/ConversationInboxInput' }
+    ConversationInputControlCommand:
+      type: object
+      additionalProperties: false
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string, description: Input identity. }
+        expected_revision: { type: integer, format: int64, minimum: 1, description: Current containing-conversation revision. }
+        kind: { type: string, enum: [stop, continue, revalidate] }
+        payload:
+          type: object
+          additionalProperties: false
+          properties:
+            instruction_version: { type: integer, minimum: 0, description: Required and positive for revalidate; must match the current focused work instruction version. Otherwise omit or use zero. }
+    ConversationInboxEntry:
+      type: object
+      required: [id, sequence, conversation_id, conversation_revision, request_id, input, state, accepted_at]
+      properties:
+        question: { $ref: '#/components/schemas/ConversationQuestion' }
+        context_unavailable: { type: boolean, description: Derived decision and result references withheld because actor or source access changed. Original user input and control state remain inspectable. }
+        stopped_at: { type: string, format: date-time }
+        hold_released_at: { type: string, format: date-time }
+        revalidated_at: { type: string, format: date-time }
+        revalidated_instruction_version: { type: integer, minimum: 1 }
+        decision:
+          $ref: '#/components/schemas/ConversationDecision'
+        decision_issue:
+          $ref: '#/components/schemas/ConversationDecisionIssue'
+        delivery_issue:
+          type: object
+          required: [code, message, retry_at]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            retry_at: { type: string, format: date-time }
+        id: { type: string }
+        sequence: { type: integer, format: int64 }
+        conversation_id: { type: string }
+        conversation_revision: { type: integer, format: int64 }
+        request_id: { type: string }
+        work_id: { type: string }
+        instruction_version: { type: integer, minimum: 0 }
+        input: { $ref: '#/components/schemas/ConversationInboxInput' }
+        created_work_id: { type: string, description: Work admitted from this input. The original work_id still identifies the input's previous focus. }
+        state: { type: string }
+        run_id: { type: string }
+        accepted_at: { type: string, format: date-time }
+        delivered_at: { type: string, format: date-time }
+        settled_at: { type: string, format: date-time }
+        run_status: { type: string }
+        result_reference: { type: string }
+        incorporation: { type: string, enum: [answered, correction, new_work, worker_answer] }
+        applied_at: { type: string, format: date-time }
+        applied_instruction_version: { type: integer, minimum: 0 }
+    ConversationDecision:
+      type: object
+      additionalProperties: false
+      description: Durable foreground proposal. Only applied_at and applied_instruction_version confirm incorporation; a reply or recorded proposal alone does not.
+      required: [kind, instruction_version]
+      properties:
+        kind: { type: string, enum: [answered, correction, new_work] }
+        instruction_version: { type: integer, minimum: 0, description: Current work instruction version for a correction; otherwise zero. }
+        expected_result: { type: string, maxLength: 4096, description: Required only for new_work. A proposed acceptance condition; the objective remains the exact accepted user input. }
+    ConversationDecisionIssue:
+      type: object
+      required: [code, message, retry_at]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        retry_at: { type: string, format: date-time }
+    ConversationInboxPage:
+      type: object
+      required: [items, next_cursor, has_more]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ConversationInboxEntry' } }
+        next_cursor: { type: integer, format: int64 }
+        has_more: { type: boolean }
+    ConversationImportManifest:
+      type: object
+      required: [version, legacy_name, conversation_id, source_sha256, authority, configuration_known, legacy_run_ids, imported_at]
+      properties:
+        version: { type: integer, const: 1 }
+        legacy_name: { type: string }
+        conversation_id: { type: string }
+        source_sha256: { type: string }
+        authority: { type: string, const: agent_control_store }
+        configuration_known: { type: boolean }
+        legacy_run_ids: { type: [array, 'null'], items: { type: string } }
+        imported_at: { type: string, format: date-time }
+    WorkerSession:
+      type: object
+      required: [id, revision, work_id, root_run_id, current_run_id, run_ids, assignment, assignment_version, status, stopped, closed]
+      properties:
+        question: { $ref: '#/components/schemas/WorkerQuestion' }
+        id: { type: string }
+        revision: { type: integer, format: int64 }
+        work_id: { type: string }
+        root_run_id: { type: string }
+        current_run_id: { type: string }
+        run_ids: { type: array, items: { type: string } }
+        assignment_version: { type: integer, minimum: 1 }
+        assignment:
+          type: object
+          required: [goal, expected_result, tools, depends_on, instruction_version, model_calls]
+          properties:
+            goal: { type: string }
+            expected_result: { type: string }
+            mode: { type: string, enum: [research, edit, test], description: Assignment execution mode. Older stored assignments may omit it. }
+            reason: { type: string, maxLength: 2048, description: Recorded delegation rationale when supplied; absent for legacy assignments. }
+            tools: { type: [array, 'null'], items: { type: string } }
+            depends_on: { type: [array, 'null'], items: { type: string } }
+            instruction_version: { type: integer }
+            model_calls: { type: integer }
+            profile_id: { type: string }
+        status: { type: string }
+        stopped: { type: boolean }
+        closed: { type: boolean }
+        result_reference: { type: string }
+    WorkerCommand:
+      type: object
+      additionalProperties: false
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string }
+        expected_revision: { type: integer, format: int64, minimum: 1 }
+        kind: { type: string, enum: [message, stop, close, continue, answer] }
+        payload:
+          type: object
+          additionalProperties: false
+          properties:
+            content: { type: string, minLength: 1, maxLength: 16000, description: Required for message, continue and answer. }
+            question_id: { type: string, description: Required only for answer; identifies the exact pending question. }
+    WorkerQuestion:
+      type: object
+      required: [id, worker_id, run_id, content, instruction_version, assignment_version, state, requested_at]
+      properties:
+        id: { type: string }
+        worker_id: { type: string }
+        run_id: { type: string }
+        content: { type: string }
+        instruction_version: { type: integer, minimum: 1 }
+        assignment_version: { type: integer, minimum: 1 }
+        state: { type: string, enum: [pending, answered] }
+        requested_at: { type: string, format: date-time }
+        answer_message_id: { type: string, description: Accepted answer's mailbox identity; consult its state for delivery and application. }
+    WorkerMessage:
+      type: object
+      required: [id, worker_id, run_id, content, state, instruction_version, accepted_at]
+      properties:
+        question_id: { type: string }
+        id: { type: string }
+        worker_id: { type: string }
+        run_id: { type: string }
+        content: { type: string }
+        state: { type: string, enum: [accepted, delivered, applied, abandoned] }
+        instruction_version: { type: integer }
+        accepted_at: { type: string, format: date-time }
+        delivered_at: { type: string, format: date-time }
+        applied_at: { type: string, format: date-time }
+        abandoned_at: { type: string, format: date-time }
+        resolution_reason: { type: string }
+    WorkerMessagePage:
+      type: object
+      required: [items, next_cursor, has_more]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/WorkerMessage' } }
+        next_cursor: { type: integer, format: int64 }
+        has_more: { type: boolean }
+    WorkChange:
+      type: object
+      required: [id, work_id, run_id, worker_run_id, kind, state, instruction_version, control_epoch, current, operation_count, validation_state, validation_count, integrated_count, available]
+      properties:
+        id: { type: string }
+        work_id: { type: string }
+        run_id: { type: string }
+        worker_run_id: { type: string }
+        kind: { type: string, enum: [proposal, candidate] }
+        state: { type: string }
+        instruction_version: { type: integer, format: int64 }
+        control_epoch: { type: integer, format: int64 }
+        current: { type: boolean }
+        operation_count: { type: integer }
+        validation_state: { type: string }
+        validation_count: { type: integer }
+        integration_id: { type: string }
+        integrated_count: { type: integer }
+        available: { type: boolean }
+        limitation: { type: string }
+    ConversationResultPage:
+      type: object
+      required: [id, run_id, instruction_version, control_epoch, status, independently_verified, evidence_steps, content, offset, next_offset, total_bytes, complete]
+      properties:
+        id: { type: string }
+        run_id: { type: string }
+        work_id: { type: string }
+        worker_id: { type: string }
+        conversation_id: { type: string }
+        instruction_version: { type: integer, minimum: 0 }
+        control_epoch: { type: integer, minimum: 0 }
+        status: { type: string }
+        independently_verified: { type: boolean }
+        evidence_steps: { type: array, items: { type: integer } }
+        content: { type: string }
+        offset: { type: integer, minimum: 0 }
+        next_offset: { type: integer, minimum: 0 }
+        total_bytes: { type: integer, minimum: 0 }
+        complete: { type: boolean }
+    WorkChangeList:
+      type: object
+      required: [items, next_cursor, has_more]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/WorkChange' } }
+        next_cursor: { type: string }
+        has_more: { type: boolean }
+    WorkFileVersion:
+      type: object
+      required: [kind, bytes, mode]
+      properties:
+        kind: { type: string }
+        bytes: { type: integer, format: int64 }
+        mode: { type: integer }
+        sha256: { type: string }
+    WorkFileChange:
+      type: object
+      required: [path, kind]
+      properties:
+        path: { type: string }
+        kind: { type: string }
+        base: { $ref: '#/components/schemas/WorkFileVersion' }
+        result: { $ref: '#/components/schemas/WorkFileVersion' }
+    WorkValidationCheck:
+      type: object
+      required: [id, state, request_digest, receipt_digest]
+      properties:
+        id: { type: string }
+        state: { type: string }
+        exit_code: { type: integer }
+        request_digest: { type: string }
+        receipt_digest: { type: string }
+    WorkFileReceipt:
+      type: object
+      required: [ordinal, path, operation, state, dispatched, original_retained]
+      properties:
+        ordinal: { type: integer }
+        path: { type: string }
+        operation: { type: string }
+        state: { type: string }
+        dispatched: { type: boolean }
+        original_retained: { type: boolean }
+        displaced_digest: { type: string }
+        result_digest: { type: string }
+        error: { type: string }
+    WorkChangeContent:
+      type: object
+      required: [sha256, bytes, offset, data]
+      properties:
+        sha256: { type: string }
+        bytes: { type: integer, format: int64 }
+        offset: { type: integer, format: int64 }
+        data: { type: string, format: byte }
+    WorkRecoveryFile:
+      type: object
+      required: [id, path, role, bytes]
+      description: Observed retained content. Unconfirmed files do not prove a replacement occurred. Reads never restore files or settle uncertain work.
+      properties:
+        id: { type: string }
+        path: { type: string }
+        role: { type: string, enum: [displaced, unconfirmed] }
+        bytes: { type: integer, format: int64 }
+        sha256: { type: string }
+        limitation: { type: string }
+    WorkChangeDetail:
+      type: object
+      required: [change, view]
+      properties:
+        change: { $ref: '#/components/schemas/WorkChange' }
+        view: { type: string, enum: [files, validation, integration, recovery, content, preserved] }
+        files: { type: array, items: { $ref: '#/components/schemas/WorkFileChange' } }
+        checks: { type: array, items: { $ref: '#/components/schemas/WorkValidationCheck' } }
+        receipts: { type: array, items: { $ref: '#/components/schemas/WorkFileReceipt' } }
+        recovery: { type: array, items: { $ref: '#/components/schemas/WorkRecoveryFile' } }
+        content: { $ref: '#/components/schemas/WorkChangeContent' }
+        next_offset: { type: integer, format: int64 }
+        conflict_path: { type: string }
+        error: { type: string }
+    EffectiveConversationPreferences:
+      type: object
+      required: [model, delegation, restrictions, provenance, configuration_known, project_id, project_revision, resources]
+      properties:
+        folder:
+          type: object
+          required: [session, available, reason]
+          description: Observed availability of the saved folder reference. No grant is restored by inspection.
+          properties:
+            session: { type: string }
+            available: { type: boolean }
+            reason: { type: string }
+        user_preferences_revision: { type: integer, format: int64, minimum: 0 }
+        project_id: { type: string }
+        project_revision: { type: integer, format: int64 }
+        resources: { type: array, items: { $ref: '#/components/schemas/ResourceResolution' } }
+        configuration_known: { type: boolean }
+        model: { type: string }
+        delegation: { type: boolean }
+        profile_id: { type: string }
+        profile_revision: { type: integer }
+        restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
+        provenance: { type: object, additionalProperties: { type: string } }
+    ControlEventPage:
+      type: object
+      required: [events, next_cursor, has_more, history_gap]
+      properties:
+        events:
+          type: array
+          items:
+            type: object
+            required: [cursor, target_id, revision, kind, recorded_at, payload]
+            properties:
+              cursor: { type: integer, format: int64 }
+              target_id: { type: string }
+              revision: { type: integer, format: int64 }
+              kind: { type: string }
+              recorded_at: { type: string, format: date-time }
+              payload: { type: object, additionalProperties: true }
+        next_cursor: { type: integer, format: int64 }
+        has_more: { type: boolean }
+        history_gap: { type: boolean }
+        snapshot:
+          oneOf:
+            - { $ref: '#/components/schemas/CanonicalConversation' }
+            - { $ref: '#/components/schemas/ConversationWorkItem' }
+            - { $ref: '#/components/schemas/WorkerSession' }
+    AgentConversationConfiguration:
+      type: object
+      required: [version, profile, model, restrictions]
+      properties:
+        version: { type: integer, enum: [1] }
+        profile:
+          oneOf:
+            - { $ref: '#/components/schemas/AgentProfile' }
+            - { type: 'null' }
+        model: { type: string }
+        restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
+    TaskResourceUsage:
+      type: object
+      description: Run accounting. Root attempts inherit prior root charges; do not sum attempts. Child allocations include pending reservations and retained spent slots. Context preparation is part of the inference allowance, not an additional time charge.
+      required: [model_call_limit, model_calls, child_call_allocations, charged_output_tokens, measured_output_tokens, charged_inference_ns, measured_inference_ns, context_preparations, measured_context_preparation_ns]
+      properties:
+        model_call_limit: { type: integer }
+        model_calls: { type: integer }
+        child_call_allocations: { type: integer }
+        tools:
+          type: object
+          description: Service-observed invocation accounting; does not measure a process after its start invocation returns. Legacy reservations are conservative, not measured historical tool calls.
+          required: [version, calls_per_decision, per_call_ns, reserved_calls, legacy_reserved_calls, charged_ns, measured_ns, unsettled_calls]
+          properties:
+            version: { type: integer }
+            calls_per_decision: { type: integer }
+            per_call_ns: { type: integer, format: int64 }
+            reserved_calls: { type: integer }
+            legacy_reserved_calls: { type: integer }
+            charged_ns: { type: integer, format: int64 }
+            measured_ns: { type: integer, format: int64 }
+            unsettled_calls: { type: integer }
+        processes:
+          type: object
+          description: Owned-process supervised elapsed time, not CPU time. Start reservations remain charged until authenticated terminal timing is received. Missing legacy timing does not mean zero usage. Invocation and process timings overlap and must not be summed as elapsed latency.
+          required: [version, per_decision_ns, starts_per_decision, reserved_starts, legacy_reserved_starts, charged_ns, measured_ns, unsettled_starts]
+          properties:
+            version: { type: integer }
+            per_decision_ns: { type: integer, format: int64 }
+            starts_per_decision: { type: integer }
+            reserved_starts: { type: integer }
+            legacy_reserved_starts: { type: integer }
+            charged_ns: { type: integer, format: int64 }
+            measured_ns: { type: integer, format: int64 }
+            unsettled_starts: { type: integer }
+        storage:
+          type: object
+          description: Root work reservation for private worker copies in logical file bytes, not physical disk allocation or an OS quota. Unknown preparation retains its full reservation; only confirmed artifact release refunds it. Measurements are last observed retained content, not a live disk scan.
+          required: [version, limit_bytes, charged_bytes, retained_copies, measured_bytes, unmeasured_copies]
+          properties:
+            version: { type: integer }
+            limit_bytes: { type: integer, format: int64 }
+            charged_bytes: { type: integer, format: int64 }
+            retained_copies: { type: integer }
+            measured_bytes: { type: integer, format: int64 }
+            unmeasured_copies: { type: integer }
+        input:
+          type: object
+          description: Absent for historical runs without input accounting; absence does not mean zero usage.
+          required: [window, charged_tokens, measured_tokens, unmeasured_calls]
+          properties:
+            window: { type: integer }
+            charged_tokens: { type: integer, format: int64 }
+            measured_tokens: { type: integer, format: int64 }
+            unmeasured_calls: { type: integer }
+        charged_output_tokens: { type: integer, format: int64 }
+        measured_output_tokens: { type: integer, format: int64 }
+        charged_inference_ns: { type: integer, format: int64 }
+        measured_inference_ns: { type: integer, format: int64 }
+        context_preparations: { type: integer }
+        measured_context_preparation_ns: { type: integer, format: int64 }
     InferenceRuntimeReadiness:
       type: object
       description: Native engine preparation only. Ready verifies runtime startup flags, not model inference or workflow quality. Progress is service-local and is not durable across restart.
@@ -2531,6 +3631,7 @@ components:
         uptime_seconds: { type: integer, format: int64 }
         models: { type: object, additionalProperties: true }
         inference: { type: object, additionalProperties: true }
+        scheduling: { $ref: '#/components/schemas/InferenceAdmissionStatus' }
         system: { type: object, additionalProperties: true }
     PublicUser:
       type: object
@@ -3229,6 +4330,8 @@ components:
       type: object
       required: [name, model_id, messages, created_at, updated_at]
       properties:
+        canonical_id: { type: string, description: Stable conversation identity after the canonical ownership switch. }
+        control_revision: { type: integer, format: int64, minimum: 1 }
         turn: { $ref: '#/components/schemas/SessionTurn' }
         jobs:
           type: array
@@ -3778,8 +4881,8 @@ components:
       properties:
         id: { type: string }
         call_id: { type: string }
-        kind: { type: string, enum: [computer, workspace] }
-        mode: { type: string, enum: [app, browser, desktop, read, edit, trusted] }
+        kind: { type: string, enum: [computer, workspace, worker_question, worker_clarification] }
+        mode: { type: string, enum: [app, browser, desktop, read, edit, trusted, clarification] }
         target: { type: string, description: Model-proposed label only; never a host identity or consent grant. }
         url: { type: string, description: Proposed HTTPS address for local review. }
         previous_session: { type: string, description: Revoked session identity; never reusable authority. }
@@ -3796,6 +4899,8 @@ components:
       required: [id, spec]
       properties:
         id: { type: string }
+        worker_id: { type: string, description: Stable resumable worker session; absent for legacy child runs. }
+        invalidated: { type: boolean, description: The assignment or prerequisite result was superseded; retained output is evidence only. }
         status: { type: string, description: Last persisted child status, enum: [pending, running, waiting_for_approval, waiting_for_input, waiting_for_children, interrupted, uncertain, completed, failed, cancelled] }
         phase: { type: string, description: Last persisted public progress phase }
         spec:
@@ -3918,6 +5023,8 @@ components:
       type: object
       required: [reference, backend, root, directory, permissions]
       properties:
+        project_context: { type: boolean, description: Approved host supports stable folder identity and bounded project configuration retrieval. }
+        prepared_workers: { type: boolean, description: Admission-time host support for independently prepared workers. This metadata is not authority; live host policy is rechecked before preparation. }
         reference: { $ref: '#/components/schemas/ExecutionReference' }
         backend: { type: string }
         root: { type: string, description: Provider-local approved root, not a portable service path. }
@@ -3933,6 +5040,7 @@ components:
       type: object
       required: [output, task_id, run_id, steps, status, pending_approval, resumable]
       properties:
+        work_id: { type: string, description: Stable work identity, independent of this execution attempt. }
         schedule: { $ref: '#/components/schemas/AgentScheduleOrigin' }
         origin:
           type: object
@@ -3977,7 +5085,11 @@ components:
               check: { type: string, enum: [stored_bytes_sha256_and_format] }
         parent_id: { type: string }
         children: { type: [array, 'null'], items: { $ref: '#/components/schemas/TaskChild' } }
-        can_steer: { type: boolean, description: Running parent work queues corrections for the next safe boundary; settled interrupted work applies them without resuming. Children, active delegation and uncertain outcomes cannot accept new instructions. Rechecked at admission. }
+        can_steer: { type: boolean, description: Running parent work queues corrections for the next safe boundary; delegated work fences child dispatch and waits for operations to settle. Paused work stays paused. Children and unresolved parent effects cannot accept new instructions. Rechecked at admission. }
+        instruction_version: { type: integer, minimum: 0, description: Applied instruction version; retained results from earlier versions are evidence rather than current completion. }
+        control_epoch: { type: integer, minimum: 0, description: Persisted control generation advanced by accepted corrections and lifecycle commands. }
+        conversation_configuration: { $ref: '#/components/schemas/AgentConversationConfiguration' }
+        resource_usage: { $ref: '#/components/schemas/TaskResourceUsage' }
         plan: { type: [array, 'null'], items: { $ref: '#/components/schemas/TaskPlanItem' } }
         context:
           anyOf:

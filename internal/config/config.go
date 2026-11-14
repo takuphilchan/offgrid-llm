@@ -12,6 +12,8 @@ import (
 
 // Config holds application configuration
 type Config struct {
+	EnableConversationPreview bool `yaml:"enable_conversation_preview" json:"enable_conversation_preview"`
+
 	// Server settings
 	ServerPort             int    `yaml:"server_port" json:"server_port"`
 	ServerHost             string `yaml:"server_host" json:"server_host"`
@@ -493,6 +495,9 @@ func (c *Config) applyEnvOverrides() {
 	}
 	if preview := os.Getenv("OFFGRID_ENABLE_EXECUTION_PREVIEW"); preview != "" {
 		c.EnableExecutionPreview = getEnvBool("OFFGRID_ENABLE_EXECUTION_PREVIEW", false)
+	}
+	if preview := os.Getenv("OFFGRID_ENABLE_CONVERSATION_PREVIEW"); preview != "" {
+		c.EnableConversationPreview = getEnvBool("OFFGRID_ENABLE_CONVERSATION_PREVIEW", false)
 	}
 	if guest := os.Getenv("OFFGRID_GUEST_ACCESS"); guest != "" {
 		c.GuestAccess = getEnvBool("OFFGRID_GUEST_ACCESS", true)

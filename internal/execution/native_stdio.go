@@ -39,6 +39,10 @@ func (r NativeHostRequest) Validate() error {
 // ServeNativeHost owns only the approved host lease. EOF/any extra input closes
 // it; there is no command channel and no saved-grant restoration on restart.
 func ServeNativeHost(ctx context.Context, input io.ReadCloser, output io.Writer, packDirectory, stateDirectory, version string) error {
+	return ServeNativeHostWithProjectIdentity(ctx, input, output, packDirectory, stateDirectory, version, "")
+}
+
+func ServeNativeHostWithProjectIdentity(ctx context.Context, input io.ReadCloser, output io.Writer, packDirectory, stateDirectory, version, identityDirectory string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stopInput := context.AfterFunc(ctx, func() { input.Close() })
@@ -67,7 +71,7 @@ func ServeNativeHost(ctx context.Context, input io.ReadCloser, output io.Writer,
 	if err != nil {
 		return err
 	}
-	host, err := StartPairedHost(ctx, client, LocalHostOptions{Folder: request.Folder, Permissions: request.Permissions, PackDirectory: packDirectory, StateDirectory: stateDirectory, Version: version}, request.Pairing)
+	host, err := StartPairedHost(ctx, client, LocalHostOptions{Folder: request.Folder, Permissions: request.Permissions, PackDirectory: packDirectory, StateDirectory: stateDirectory, Version: version, ProjectIdentityDirectory: identityDirectory}, request.Pairing)
 	if err != nil {
 		return err
 	}

@@ -40,11 +40,7 @@ func (s *Server) streamAgentModel(ctx context.Context, task *agents.Task, messag
 	}
 	temperature := float32(task.Config.Temperature)
 	maxTokens := task.Config.MaxTokens
-	toolChoice := interface{}("auto")
-	if agents.DelegationRequired(task) {
-		toolChoice = map[string]any{"type": "function", "function": map[string]any{"name": "delegate_tasks"}}
-	}
-	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: toolChoice, Temperature: &temperature, MaxTokens: &maxTokens, Stream: true}
+	request := &api.ChatCompletionRequest{Model: task.Model, Messages: messages, Tools: tools, ToolChoice: "auto", Temperature: &temperature, MaxTokens: &maxTokens, Stream: true}
 	request.StreamOptions = &api.StreamOptions{IncludeUsage: true}
 	if err := s.configureAgentRequest(ctx, request, task); err != nil {
 		return nil, err

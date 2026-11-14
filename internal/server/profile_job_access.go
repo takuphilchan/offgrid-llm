@@ -58,7 +58,7 @@ func (s *Server) profileJobAccess(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		task, ok := s.agentManager.GetTask(id)
-		if !ok || task.Actor != s.agentActor(r) || task.Config.Profile == nil {
+		if !ok || task.Actor != s.agentActor(r) || task.Config.Profile == nil && !s.isCanonicalConversationRun(task) {
 			writeJobReadError(w, agents.ErrTaskNotFound)
 			return
 		}
@@ -69,4 +69,26 @@ func (s *Server) profileJobAccess(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+func (s *Server) isCanonicalConversationRun(task *agents.Task) bool {
+	if task.ParentID != "" {
+		parent, ok := s.agentManager.GetTask(task.ParentID)
+		if !ok || parent.Actor != task.Actor {
+			return false
+		}
+		task = parent
+	}
+	if task.Origin == nil || task.Origin.Workspace != s.workspaceID {
+		return false
+	}
+	if task.ConversationTurn != nil {
+		input, err := s.agentManager.ConversationInput(agents.ControlScope{Workspace: s.workspaceID, Actor: task.Actor}, task.Origin.Conversation, task.ConversationTurn.InputID)
+		return err == nil && input.RunID == task.ID
+	}
+	if task.WorkID == "" {
+		return false
+	}
+	work, err := s.agentManager.WorkItem(agents.ControlScope{Workspace: s.workspaceID, Actor: task.Actor}, task.WorkID)
+	return err == nil && work.RunID == task.ID
 }

@@ -6,6 +6,20 @@ Provide one clear conversation surface for agent work and a reusable configurati
 
 ## ADDED Requirements
 
+### Requirement: Conversation-first default and shared settings
+CLI and UI SHALL start ordinary assistant conversation without mandatory profile setup and restore the same service-owned context/settings on resume. Specialization SHALL remain optional. Effective configuration and its provenance SHALL be inspectable without exposing credentials.
+
+#### Scenario: Resume across clients
+- **WHEN** a CLI user resumes work created in the UI after a reload
+- **THEN** context, restrictions and controls refer to the same canonical work without selecting an agent again
+
+### Requirement: Eligible background work survives observation
+Closing a client SHALL leave service-owned work running only while its authorized supervision remains available. Client-owned grants MUST NOT silently gain background lifetime. Reconnect SHALL observe existing work without recreating it.
+
+#### Scenario: Closing an invocation-owned executor
+- **WHEN** a CLI closes the host lease owned by that invocation
+- **THEN** dependent work cannot continue dispatching through the expired grant and unrelated eligible service work remains observable
+
 ### Requirement: Profiles in Agents and work in Chat
 Agents SHALL provide profile management and Chat SHALL provide profile selection, conversation and work. Job details SHALL remain a secondary inspector for the same canonical work. Existing job links MUST remain inspectable without restoring the retired agent page or resubmitting their prompts.
 

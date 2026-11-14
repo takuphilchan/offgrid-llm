@@ -6,6 +6,24 @@ Let users configure reusable agents whose instructions and authorized resources 
 
 ## ADDED Requirements
 
+### Requirement: Optional profiles and stable restrictions
+The assistant SHALL work without creating or selecting a profile. Preferences SHALL resolve from request, conversation, pinned profile, project, user and service in that order. Authority SHALL remain an intersection; configuration changes MUST NOT reset conversation restrictions. Readiness SHALL apply to the restricted selection, not disabled optional resources.
+
+#### Scenario: Disabled missing tool
+- **WHEN** a saved profile references an unavailable tool excluded by conversation restrictions
+- **THEN** ordinary conversation remains available and the missing tool receives no authority
+
+#### Scenario: Instructions-only profile edit
+- **WHEN** a user edits profile instructions and applies the new revision
+- **THEN** existing conversation restrictions remain in force and the previous run keeps its pinned revision
+
+### Requirement: Temporary resumable workers
+The primary assistant SHALL create bounded workers without saved profiles, retain their scoped context for follow-ups and expose durable input delivery state. A user-stopped worker MUST NOT resume automatically. Complete results SHALL remain retrievable within owner and graph scope.
+
+#### Scenario: Follow-up to completed worker
+- **WHEN** the user requests further work from a completed worker
+- **THEN** a new run retains authorized context and consumes the same work item's remaining budget without replaying previous effects
+
 ### Requirement: Actor-owned versioned profiles
 The system SHALL let an authorized actor create, inspect, edit and archive their profiles. A profile SHALL contain instructions, an installed model preference, authorized Knowledge and tool references, and bounded execution settings. Each accepted edit MUST create an immutable revision; concurrent edits MUST detect conflicts.
 

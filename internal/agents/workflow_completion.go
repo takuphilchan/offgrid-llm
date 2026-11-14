@@ -9,6 +9,16 @@ import (
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
+func (r *Runner) finishTaskAnswer(task *Task, answer string) (*Task, error) {
+	settled, err := r.stopOwnedExecution(task)
+	if err != nil || settled.Status == TaskUncertain {
+		return settled, err
+	}
+	task.Result = answer
+	finishTask(task, TaskCompleted, "")
+	return task, nil
+}
+
 func (r *Runner) assessWorkflow(t *Task) {
 	if t.Workflow == nil || !WorkflowVersionSupported(t) {
 		return
@@ -55,6 +65,10 @@ func (r *Runner) assessWorkflow(t *Task) {
 // Returns true only when completion must be repaired. No tool is dispatched
 // here; the next model proposal still passes all ordinary authorization gates.
 func (r *Runner) repairWorkflowCompletion(t *Task) (bool, error) {
+	if reviewingWorkerQuestion(t) {
+		_, err := r.fail(t, "Worker clarification needs an explicit answer or user question; the proposed text did not complete this work.")
+		return true, err
+	}
 	if !usesWorkflow(t) {
 		return false, nil
 	}

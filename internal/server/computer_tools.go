@@ -13,11 +13,6 @@ import (
 	"time"
 )
 
-type browserRunTools struct {
-	agents.RunTools
-	server *Server
-}
-
 const computerSequentialProtocol = "Browser planning instructions v1: when a tool is needed, use exactly ONE browser tool call per response. Before the first browser interaction call browser_observe with {}. End that response and wait for its actual result. A final answer or clarification has no tool call. Do not call browser_verify or an interaction tool in the same response as browser_observe. Never invent observations or tool results."
 
 func configureComputerTask(config *agents.AgentConfig) {
@@ -311,7 +306,7 @@ func (b *browserRunTools) Authorize(ctx context.Context, name string, args json.
 	if (task.Config.Execution != nil || task.Config.ExecutionRequestVersion != 0) && serviceFileTool(name) {
 		return capabilities.ErrDenied
 	}
-	if task.Config.Profile != nil {
+	if task.Config.Profile != nil || task.Config.ScopedCapabilities {
 		d, exists := b.Capability(name)
 		if !exists || !b.server.profileActorCapabilityAllowed(task.Actor, d) {
 			return capabilities.ErrDenied

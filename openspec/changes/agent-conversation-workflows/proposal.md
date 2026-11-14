@@ -6,6 +6,16 @@ Current task-wide access couples permission to computer-work intent: even a gree
 
 ## What Changes
 
+### Approved replacement (2026-11-12)
+
+The approved implementation replaces mandatory profile selection with a default assistant, scoped progressive discovery and optional reusable profiles. It separates projects, conversations, work items, runs, resumable worker sessions, immutable results and change sets. The existing agent database becomes canonical for new control state, events and durable inboxes; migrated session JSON is a compatibility projection. Legacy interfaces keep their semantics through adapters.
+
+The replacement includes versioned correction/Stop ordering, responsive foreground conversation, complete worker handoffs and useful partial outcomes, graph-wide budget settlement, fair local scheduling, narrowed execution sessions, private worker copies and validated change-set integration with displaced-content preservation. Existing client-owned grants never become background grants implicitly. Eligible work can outlive client observation while authorized supervision remains available.
+
+This supersedes profile-required, manually attached-only and read-only-only assumptions in the earlier delivery below. Desktop control remains parent-owned. Execution, skills/memory and model qualification retain their existing dependent change ownership. Tasks 8-14 track the approved replacement; prior checked tasks and design scores are not qualification evidence.
+
+### Earlier delivery retained for compatibility
+
 - Make Chat the primary conversation/work surface. Make Agents the management home for reusable, versioned agent profiles; retain detailed canonical-job inspection as a secondary work view. The user confirmed this product direction on 2026-10-13.
 - Support ordinary answers, clarification and tool proposals in the same conversation. Enabled tools and remembered Full access are available authority, never a requirement to act. Do not use English keyword routing or application-specific task scripts.
 - Route tool-enabled conversation turns through the existing durable runner, including turns that use no tools. Link each turn to one canonical job with crash-safe admission and final-response bookkeeping; preserve ordinary text-only Chat's existing path.

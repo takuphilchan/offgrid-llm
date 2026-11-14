@@ -1,4 +1,6 @@
 import type { AgentRun } from '../../api/client';
+import {useState} from 'react';
+import {WorkerControls} from './WorkerControls';
 import { useI18n } from '../../i18n';
 import { taskControls } from '../../i18n/task-controls';
 import { taskPresentation } from '../../i18n/task-presentation';
@@ -9,13 +11,14 @@ import { useTaskStatus } from './useTaskStatus';
 import { TaskResult } from './TaskResult';
 
 type Child = NonNullable<AgentRun['children']>[number];
-function Specialist({ parent, child, children, observe }: { parent: string; child: Child; children: Child[]; observe: boolean }) {
+function Specialist({ parent, parentStatus, child, children, observe }: { parent: string; parentStatus: string; child: Child; children: Child[]; observe: boolean }) {
+  const [expanded, setExpanded] = useState(false);
   const { locale, messages } = useI18n(), status = useTaskStatus();
   const copy = specialistActivityText(locale), presentation = taskPresentation(locale);
   // Reuse the canonical read-only follower, with at most four automatic
   // subscriptions. Inspecting an older, larger plan remains an explicit choice.
-  const { run, connection, error } = useTaskRun(observe ? child.id : '');
-  const owned = run?.parent_id === parent ? run : null;
+  const { run, connection, error, refresh } = useTaskRun(observe ? child.id : '');
+  const owned = run?.parent_id === parent && run.run_id === child.id ? run : null;
   const currentStatus = owned?.status ?? child.status ?? 'pending';
   const phase = owned?.progress?.phase ?? child.phase;
   const active = currentStatus === 'running';
@@ -25,12 +28,13 @@ function Specialist({ parent, child, children, observe }: { parent: string; chil
     : phase === 'tool' || phase === 'preparing_tool' ? messages.agentLive.tool
     : phase === 'processing' ? messages.chatStreaming.processing : '';
   return <li className={`specialist-row${active ? ' specialist-row-active' : ''}`}>
-    <details>
+    <details onToggle={event => setExpanded(event.currentTarget.open)}>
       <summary title={child.spec.goal}><span className="specialist-title"><span className="specialist-state" aria-hidden="true" /><span className="specialist-name">{owned?.profile?.name ?? child.spec.goal}</span></span><small>{owned || child.status ? status(currentStatus, owned?.outcome) : observe && connection === 'connecting' ? messages.common.loading : presentation.unavailable}{active && phaseLabel ? ` · ${phaseLabel}` : ''}</small></summary>
       <div className="specialist-detail">
         {owned?.profile && <p>{child.spec.goal}</p>}
         {!!child.spec.depends_on?.length && <p>{copy.depends}: {child.spec.depends_on.map(key => children.find(item => item.spec.key === key)?.spec.goal ?? key).join(' · ')}</p>}
         {owned && <TaskResult run={owned} compact />}
+        {expanded && child.worker_id && <WorkerControls key={child.worker_id} id={child.worker_id} parent={parent} runID={child.id} parentStatus={parentStatus} refresh={refresh} />}
         {owned?.error && <p>{owned.error}</p>}
         {error && <p role="status">{error}</p>}
         {!owned && <p>{copy.inspect}</p>}
@@ -44,8 +48,11 @@ function Specialist({ parent, child, children, observe }: { parent: string; chil
 export function SpecialistActivity({ run }: { run: AgentRun }) {
   const { locale } = useI18n();
   if (!run.children?.length) return null;
+  const workers = new Map<string, Child>();
+  for (const child of run.children) workers.set(child.worker_id || child.id, child);
+  const children = [...workers.values()];
   return <section className="conversation-work-delegates" aria-label={taskControls(locale).children}>
     <strong>{taskControls(locale).children}</strong>
-    <ul>{run.children.map((child, index) => <Specialist key={`${run.run_id}:${child.id}`} parent={run.run_id} child={child} children={run.children!} observe={index < 4} />)}</ul>
+    <ul>{children.map((child, index) => <Specialist key={`${run.run_id}:${child.worker_id || child.id}`} parent={run.run_id} parentStatus={run.status} child={child} children={children} observe={index < 4} />)}</ul>
   </section>;
 }

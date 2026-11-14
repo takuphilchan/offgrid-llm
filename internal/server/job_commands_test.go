@@ -18,9 +18,15 @@ func TestJobSnapshotReportsSteeringFromActiveStateNotChildHistory(t *testing.T) 
 	}
 	task.Delegation = &agents.Delegation{CallID: "active"}
 	if taskResponse(task)["can_steer"] != false {
-		t.Fatal("active delegation permits steering")
+		t.Fatal("incomplete delegation permits steering")
+	}
+	task.Delegation.Children = []agents.ChildLink{{ID: "active-child"}}
+	task.Status = agents.TaskChildren
+	if taskResponse(task)["can_steer"] != true {
+		t.Fatal("delegated work hid correction input")
 	}
 	task.Delegation = nil
+	task.Status = agents.TaskInterrupted
 	task.Checkpoint.ExecutingCall = "uncertain"
 	if taskResponse(task)["can_steer"] != false {
 		t.Fatal("uncertain action permits steering")

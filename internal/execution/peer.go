@@ -53,6 +53,7 @@ type Peer struct {
 	done          chan struct{}
 	gate          chan struct{}
 	now           func() time.Time
+	children      map[string]Context
 }
 
 func opaqueToken() (string, error) {
@@ -100,8 +101,15 @@ func (p *Peer) Check(ctx context.Context, b Binding) (Context, error) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.closed || !p.ready || p.now().Sub(p.seen) > HostHeartbeatTimeout || b != p.config.Binding {
+	if p.closed || !p.ready || p.now().Sub(p.seen) > HostHeartbeatTimeout {
 		return Context{}, ErrHostUnavailable
+	}
+	if b != p.config.Binding {
+		child, ok := p.children[b.Session]
+		if !ok || child.Binding != b {
+			return Context{}, ErrAuthority
+		}
+		return child, nil
 	}
 	return p.config, nil
 }
@@ -164,12 +172,17 @@ func (p *Peer) Reply(token string, reply BridgeReply) (bool, error) {
 		if reply.Snapshot != nil || reply.Error != "" && reply.Response != nil {
 			return false, ErrProtocol
 		}
-		isResult := pending.message.Kind == "call" || pending.message.Kind == "receipt"
+		isResult := pending.message.Kind == "call" || pending.message.Kind == "receipt" || pending.message.Kind == "worker" || pending.message.Kind == "artifact" || pending.message.Kind == "project"
 		if isResult && reply.Error == "" && (reply.Response == nil || pending.message.Request == nil || reply.Response.ID != pending.message.Request.ID || reply.Response.Version != ProtocolVersion) {
 			return false, ErrProtocol
 		}
 		if !isResult && reply.Response != nil {
 			return false, ErrProtocol
+		}
+		if pending.message.Kind == "worker" && reply.Error == "" {
+			if err := p.recordPreparedChild(pending.message, reply.Response); err != nil {
+				return false, err
+			}
 		}
 		if isResult && reply.Error == "" && p.RecordReceipt != nil && pending.message.Request != nil && MutatingOperation(pending.message.Request.Operation) && reply.Response != nil && reply.Response.Error == "" && reply.Response.Receipt != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -181,10 +194,20 @@ func (p *Peer) Reply(token string, reply BridgeReply) (bool, error) {
 		}
 		if reply.Response != nil && reply.Response.Receipt != nil && reply.Response.Receipt.State == "complete" && (pending.message.Request.Operation == "directory_change" || pending.message.Request.Operation == "workspace_info") {
 			var current Context
-			if decodeStrict(reply.Response.Receipt.Result, &current) != nil || current.Binding != pending.message.Binding || current.Root != p.config.Root || current.Backend != p.config.Backend || current.Permissions != p.config.Permissions || current.Isolation != p.config.Isolation {
+			expected := p.config
+			child := pending.message.Binding.Session != expected.Binding.Session
+			if child {
+				expected = p.children[pending.message.Binding.Session]
+			}
+			if decodeStrict(reply.Response.Receipt.Result, &current) != nil || current.ProjectHostID != expected.ProjectHostID || current.Binding != pending.message.Binding || current.Root != expected.Root || current.Backend != expected.Backend || current.Permissions != expected.Permissions || current.Isolation != expected.Isolation || current.WorkerCopies != expected.WorkerCopies {
 				return false, ErrProtocol
 			}
-			p.config.Directory = current.Directory
+			if child {
+				expected.Directory = current.Directory
+				p.children[current.Binding.Session] = expected
+			} else {
+				p.config.Directory = current.Directory
+			}
 		}
 		pending.result <- reply
 	}
@@ -213,6 +236,9 @@ func (p *Peer) exchange(ctx context.Context, kind string, b Binding, request *Re
 	p.mu.Lock()
 	expected := p.config.Binding
 	expected.Job = b.Job
+	if child, ok := p.children[b.Session]; ok {
+		expected = child.Binding
+	}
 	if p.closed || !p.ready || p.pending != nil || p.now().Sub(p.seen) > HostHeartbeatTimeout || b != expected || !validIdentity(b.Job) {
 		p.mu.Unlock()
 		return BridgeReply{}, ErrHostUnavailable
@@ -224,7 +250,7 @@ func (p *Peer) exchange(ctx context.Context, kind string, b Binding, request *Re
 	select {
 	case reply := <-pending.result:
 		if reply.Error != "" {
-			return BridgeReply{}, ErrAuthority
+			return BridgeReply{}, executionTransportError(reply.Error)
 		}
 		return reply, nil
 	case <-ctx.Done():

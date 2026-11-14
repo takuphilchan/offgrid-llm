@@ -56,6 +56,9 @@ func (s *ScopedManager) BeginTurn(name string, turn *Turn) (*Turn, bool, error) 
 	if err != nil {
 		return nil, false, err
 	}
+	if err = s.manager.checkCanonical(session); err != nil {
+		return nil, false, err
+	}
 	if current := session.Turn; current != nil {
 		if current.ID == turn.ID {
 			if current.RequestHash != turn.RequestHash {

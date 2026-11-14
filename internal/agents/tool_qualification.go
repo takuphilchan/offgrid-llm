@@ -89,6 +89,30 @@ func ValidateAgentToolScope(pin *inference.AgentToolPin) error {
 }
 
 func qualifiedTool(task *Task, name string, actual capabilities.Descriptor, known bool) bool {
+	if task.Checkpoint != nil && task.Checkpoint.PartialSynthesis {
+		return name == "task_history" && task.Config.ToolAdapter == nil
+	}
+	if reviewingWorkerQuestion(task) {
+		return name == "worker_answer" && task.Config.ToolAdapter == nil
+	}
+	if name == "worker_answer" {
+		return false
+	}
+	if name == "worker_request_budget" && (task.Worker == nil || task.Config.WorkerPolicy == nil || task.Config.ToolAdapter != nil) {
+		return false
+	}
+	// Existing native pins qualify their prior catalog, including historical
+	// full-suite pins without a scope digest. A new coordination tool must not
+	// inherit that evidence just because it has no host effects.
+	if name == "worker_question" && (task.Worker == nil || task.Config.WorkerQuestionsVersion != 1 || task.Config.ToolAdapter != nil) {
+		return false
+	}
+	if name == "conversation_decide" && (task.ConversationTurn == nil || task.Config.ToolAdapter != nil) {
+		return false
+	}
+	if task.ConversationTurn != nil && name != "task_plan" && name != "task_history" && name != "task_find_tools" && name != "conversation_decide" {
+		return false
+	}
 	pin := task.Config.ToolAdapter
 	if ValidateAgentToolScope(pin) != nil {
 		return false

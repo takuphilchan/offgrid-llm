@@ -365,5 +365,6 @@ func (i *LinuxIsolation) supervise(ctx context.Context, revoked <-chan struct{},
 	}
 	p.mu.Lock()
 	p.state, p.exit = state, exit
+	p.elapsed = time.Since(p.started)
 	p.mu.Unlock()
 }

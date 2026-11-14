@@ -21,7 +21,7 @@ func (e *delegationAdmissionError) Error() string { return e.reason }
 func rejectDelegation(reason string) error { return &delegationAdmissionError{reason: reason} }
 
 func sameChildSpec(a, b ChildSpec) bool {
-	return a.ProfileID == b.ProfileID && a.Key == b.Key && a.Goal == b.Goal &&
+	return a.Mode == b.Mode && a.ProfileID == b.ProfileID && a.Key == b.Key && a.Goal == b.Goal && a.ExpectedResult == b.ExpectedResult && a.Reason == b.Reason &&
 		slices.Equal(a.DependsOn, b.DependsOn) && slices.Equal(a.Tools, b.Tools)
 }
 
@@ -36,6 +36,10 @@ func (r *Runner) reuseCompletedDelegation(task *Task, call api.ToolCall, specs [
 	prior := task.ChildHistory[len(task.ChildHistory)-len(specs):]
 	for i, spec := range specs {
 		if prior[i].Status != TaskCompleted || !sameChildSpec(prior[i].Spec, spec) {
+			return false, nil
+		}
+		child, exists := r.manager.GetTask(prior[i].ID)
+		if !exists || child.InstructionVersion != task.InstructionVersion {
 			return false, nil
 		}
 	}
@@ -127,7 +131,8 @@ func delegationTool() api.Tool {
 		"type": "object", "additionalProperties": false,
 		"required": []string{"key", "goal", "depends_on", "tools"},
 		"properties": map[string]interface{}{
-			"key": map[string]string{"type": "string"}, "goal": map[string]string{"type": "string"},
+			"mode": map[string]interface{}{"type": "string", "enum": []string{"research"}},
+			"key":  map[string]string{"type": "string"}, "goal": map[string]string{"type": "string"},
 			"depends_on": map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}},
 			"tools":      map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string", "enum": []string{"calculator", "current_time", "read_file", "list_files", "http_get"}}},
 		},
@@ -142,7 +147,10 @@ func validateChildSpecs(specs []ChildSpec) error {
 	}
 	byKey := map[string]ChildSpec{}
 	for _, s := range specs {
-		if !validTaskID(s.Key) || len(s.Key) > 64 || strings.TrimSpace(s.Goal) == "" || len(s.Goal) > 8000 || len(s.Tools) > 5 || len(s.DependsOn) > 3 {
+		if !validWorkerAssignmentText(s) {
+			return fmt.Errorf("Invalid worker expected result or delegation reason")
+		}
+		if !validTaskID(s.Key) || len(s.Key) > 64 || strings.TrimSpace(s.Goal) == "" || len(s.Goal) > 8000 || len(s.Tools) > 16 || len(s.DependsOn) > 3 || s.Mode != "" && s.Mode != "research" && !executionWorkerMode(s.Mode) {
 			return fmt.Errorf("Invalid delegated task")
 		}
 		if _, ok := byKey[s.Key]; ok {
@@ -150,7 +158,7 @@ func validateChildSpecs(specs []ChildSpec) error {
 		}
 		byKey[s.Key] = s
 		for _, name := range s.Tools {
-			if !containsTool([]string{"calculator", "current_time", "read_file", "list_files", "http_get"}, name) {
+			if !containsTool([]string{"calculator", "current_time", "read_file", "list_files", "http_get"}, name) && !executionAssignmentToolName(s.Mode, name) {
 				return fmt.Errorf("Delegated tasks are limited to governed read-only tools")
 			}
 		}

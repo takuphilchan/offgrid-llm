@@ -6,6 +6,20 @@ Let agents converse, clarify and act according to the request while presenting r
 
 ## ADDED Requirements
 
+### Requirement: No lexical forcing of actions
+Profile names and English keywords MUST NOT force delegation or gate otherwise authorized discovery. Optional capability availability SHALL NOT require action. Decisions SHALL use the ordinary response/tool contract without a mandatory classifier call.
+
+#### Scenario: Explicitly declined specialists
+- **WHEN** the request names two specialists while explicitly declining their use
+- **THEN** the runtime does not force a delegation call because their names occur in the text
+
+### Requirement: Shared bounded local resources
+Workers SHALL share durable work budgets with settlement-based refunds and reserved parent verification capacity. Foreground/background admission SHALL be fair and waiting work MUST NOT hold inference slots. Automatic model alternatives SHALL be explicitly enabled, installed and qualified; unknown capacity MUST NOT be treated as free.
+
+#### Scenario: Settled worker leaves capacity
+- **WHEN** a worker conclusively settles below its allocation
+- **THEN** observed unused capacity becomes available to the same work item without resetting consumed or uncertain charges
+
 ### Requirement: Conversation does not require action
 An agent SHALL be able to answer, clarify or propose a tool call in the same turn contract. Available tools and remembered desktop access MUST NOT require tool use, application discovery or outcome declarations. Completion checks SHALL apply to requested external outcomes and dispatched work rather than the mere availability of computer access.
 

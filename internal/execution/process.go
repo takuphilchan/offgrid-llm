@@ -14,6 +14,9 @@ import (
 
 const MaxProcessOutput = 256 * 1024
 
+const DefaultProcessTimeout = 180 * time.Second
+const MaxProcessTimeout = time.Hour
+
 type ProcessSpec struct {
 	Program        string   `json:"program"`
 	Arguments      []string `json:"arguments"`
@@ -21,12 +24,21 @@ type ProcessSpec struct {
 }
 
 type ProcessResult struct {
-	Handle          string `json:"handle"`
-	Directory       string `json:"directory"`
-	State           string `json:"state"`
-	ExitCode        *int   `json:"exit_code,omitempty"`
-	Output          []byte `json:"output"`
-	OutputTruncated bool   `json:"output_truncated"`
+	Handle          string          `json:"handle"`
+	Directory       string          `json:"directory"`
+	State           string          `json:"state"`
+	ExitCode        *int            `json:"exit_code,omitempty"`
+	Output          []byte          `json:"output"`
+	OutputTruncated bool            `json:"output_truncated"`
+	Runtime         *ProcessRuntime `json:"runtime,omitempty"`
+}
+
+// Runtime is supervised elapsed time, including launch and termination handling,
+// not CPU time. Missing timing from an older host is not a zero measurement.
+type ProcessRuntime struct {
+	Version   int   `json:"version"`
+	ElapsedNS int64 `json:"elapsed_ns"`
+	Settled   bool  `json:"settled"`
 }
 
 type processOutput struct {
@@ -63,6 +75,8 @@ type ownedProcess struct {
 	output    processOutput
 	cancel    context.CancelFunc
 	done      chan struct{}
+	started   time.Time
+	elapsed   time.Duration
 }
 
 type ProcessManager struct {
@@ -145,11 +159,7 @@ room:
 		return ProcessResult{}, err
 	}
 	handle := hex.EncodeToString(nonce[:])
-	seconds := spec.TimeoutSeconds
-	if seconds == 0 {
-		seconds = 180
-	}
-	processCtx, cancel := context.WithTimeout(ctx, time.Duration(seconds)*time.Second)
+	processCtx, cancel := context.WithTimeout(ctx, ProcessTimeout(spec))
 	if s.config.Backend == "isolated_linux" {
 		if m.isolation == nil || m.journal == nil || intent == nil || intent.Binding != binding {
 			cancel()
@@ -159,6 +169,7 @@ room:
 		if s.config.Directory != "." {
 			p.directory += "/" + filepath.ToSlash(s.config.Directory)
 		}
+		p.started = time.Now()
 		if err := m.isolation.start(processCtx, s.revokedSignal, m.journal, *intent, spec, s.config.Directory, p); err != nil {
 			cancel()
 			return ProcessResult{}, err
@@ -174,6 +185,7 @@ room:
 	p := &ownedProcess{binding: binding, handle: handle, directory: directory, state: "running", cancel: cancel, done: make(chan struct{})}
 	command.Stdout = &p.output
 	command.Stderr = &p.output
+	p.started = time.Now()
 	stop, wait, release, err := startOwned(command)
 	if err != nil {
 		cancel()
@@ -208,6 +220,7 @@ room:
 		code := command.ProcessState.ExitCode()
 		p.exit = &code
 		p.state = state
+		p.elapsed = time.Since(p.started)
 		if waitErr != nil && state == "exited" {
 			p.state = "failed"
 		}
@@ -224,7 +237,15 @@ func (p *ownedProcess) snapshot() ProcessResult {
 		copy := *p.exit
 		exit = &copy
 	}
-	return ProcessResult{Handle: p.handle, Directory: p.directory, State: p.state, ExitCode: exit, Output: output, OutputTruncated: truncated}
+	var timing *ProcessRuntime
+	if !p.started.IsZero() {
+		elapsed := p.elapsed
+		if p.state == "running" {
+			elapsed = time.Since(p.started)
+		}
+		timing = &ProcessRuntime{Version: 1, ElapsedNS: max(int64(elapsed), 0), Settled: exit != nil && p.state != "running" && p.state != "uncertain"}
+	}
+	return ProcessResult{Handle: p.handle, Directory: p.directory, State: p.state, ExitCode: exit, Output: output, OutputTruncated: truncated, Runtime: timing}
 }
 
 func (m *ProcessManager) get(ctx context.Context, b Binding, handle string) (*ownedProcess, error) {
@@ -264,6 +285,19 @@ func (m *ProcessManager) Wait(ctx context.Context, b Binding, handle string) (Pr
 	case <-ctx.Done():
 		return p.snapshot(), ctx.Err()
 	}
+}
+
+// Receipt settlement follows an already owned dispatch even after revocation.
+// It cannot launch/adopt a process or expose a public authority bypass.
+func (m *ProcessManager) waitOwned(b Binding, handle string) (ProcessResult, error) {
+	m.mu.Lock()
+	p := m.processes[handle]
+	m.mu.Unlock()
+	if p == nil || p.binding != b {
+		return ProcessResult{}, ErrAuthority
+	}
+	<-p.done
+	return p.snapshot(), nil
 }
 func (m *ProcessManager) Stop(ctx context.Context, b Binding, handle string) (ProcessResult, error) {
 	p, err := m.get(ctx, b, handle)

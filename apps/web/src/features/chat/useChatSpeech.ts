@@ -3,6 +3,7 @@ import { api } from '../../api/client';
 import { voiceText } from '../../i18n/voice';
 import { ResponseSpeech, stopSpeechEvent, type SpeechState } from '../../lib/response-speech';
 import { selectSpeech, type VoicePreferences } from '../../lib/voice-preferences';
+import type {useTalkMode} from './useTalkMode';
 
 export function useChatSpeech(preferences: VoicePreferences, locale: Parameters<typeof voiceText>[0]) {
   const [speakResponses, setSpeakResponses] = useState(false);
@@ -12,6 +13,19 @@ export function useChatSpeech(preferences: VoicePreferences, locale: Parameters<
   const speechCheck = useRef<AbortController | null>(null);
   const speech = useRef<ResponseSpeech | null>(null);
   const stopSpeech = () => { speech.current?.stop(); speech.current = null; };
+  const beginSpeech = (fromTalk: boolean, talk: ReturnType<typeof useTalkMode>, mounted: {current: boolean}) => {
+    const revision = talk.revision.current;
+    const current = () => fromTalk && talk.active.current && talk.revision.current === revision;
+    speech.current = new ResponseSpeech(state => {
+      setSpeechState(state);
+      if (current() && (state === 'preparing' || state === 'playing')) talk.setState('speaking');
+    }, message => {
+      setSpeechError(message);
+      if (current()) {talk.active.current = false; talk.setState('needs_attention');}
+    }, preferences, locale, fromTalk ? () => {
+      window.setTimeout(() => {if (current() && mounted.current) {talk.setState('listening'); talk.nextCycle();}}, 0);
+    } : undefined);
+  };
 
   useEffect(() => {
     window.addEventListener(stopSpeechEvent, stopSpeech);
@@ -32,5 +46,5 @@ export function useChatSpeech(preferences: VoicePreferences, locale: Parameters<
     } catch (reason) { if (!check.signal.aborted) setSpeechError(reason instanceof Error ? reason.message : voiceText(locale).speechUnavailable); }
     finally { if (!check.signal.aborted) setCheckingSpeech(false); }
   };
-  return { speakResponses, speechState, setSpeechState, speechError, setSpeechError, checkingSpeech, speech, stopSpeech, toggleSpeech };
+  return { speakResponses, speechState, setSpeechState, speechError, setSpeechError, checkingSpeech, speech, stopSpeech, toggleSpeech, beginSpeech };
 }

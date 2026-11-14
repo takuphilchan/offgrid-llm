@@ -26,7 +26,7 @@ func (s *Server) handleAgentTasks(w http.ResponseWriter, r *http.Request) {
 		if !s.taskKnowledgeAllowed(s.agentActor(r), task) {
 			continue
 		}
-		if !s.profileAdmin(r) && (task.Config.Profile == nil || task.Actor != s.agentActor(r)) {
+		if !s.profileAdmin(r) && (task.Config.Profile == nil && !s.isCanonicalConversationRun(task) || task.Actor != s.agentActor(r)) {
 			continue
 		}
 		if task.Actor != "" && task.Actor != s.agentActor(r) {

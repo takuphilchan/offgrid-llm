@@ -31,6 +31,8 @@ func RunPlainConversationTurn(ctx context.Context, client *serviceclient.Client,
 	name := args[1]
 	request := serviceclient.ConversationRequest{RequestID: rand.Text()}
 	var paths, ids, words []string
+	questionID := ""
+	intent := ""
 	for i := 2; i < len(args); i++ {
 		arg := args[i]
 		if arg == "--" {
@@ -38,13 +40,20 @@ func RunPlainConversationTurn(ctx context.Context, client *serviceclient.Client,
 			break
 		}
 		switch arg {
-		case "--file", "--attachment", "--model", "--request-id", "--image":
+		case "--file", "--attachment", "--model", "--request-id", "--image", "--answer", "--intent":
 			if i+1 == len(args) {
 				return Usage("%s needs a value", arg)
 			}
 			i++
 			value := args[i]
 			switch arg {
+			case "--intent":
+				if value != "message" && value != "new_work" && value != "correction" {
+					return Usage("--intent must be message, new_work or correction; use --answer QUESTION_ID for answers")
+				}
+				intent = value
+			case "--answer":
+				questionID = value
 			case "--file":
 				paths = append(paths, value)
 			case "--image":
@@ -68,14 +77,45 @@ func RunPlainConversationTurn(ctx context.Context, client *serviceclient.Client,
 		}
 	}
 	request.Content = strings.Join(words, " ")
+	if questionID != "" && intent != "" {
+		return Usage("--answer and --intent cannot be combined")
+	}
 	if request.Content == "" && len(paths)+len(ids)+len(request.Images) == 0 {
 		return Usage("message or file is required")
 	}
 	if len(paths)+len(ids) > 8 {
 		return Usage("at most eight files may be attached")
 	}
-	if _, err := LoadServiceSession(ctx, client, name); err != nil {
+	saved, err := LoadServiceSession(ctx, client, name)
+	if err != nil {
 		return err
+	}
+	if saved.CanonicalID != "" {
+		if len(paths)+len(ids)+len(request.Images) > 0 || request.Knowledge {
+			return Usage("this conversation currently accepts text input; document and image admission is not enabled")
+		}
+		if questionID != "" {
+			return sendCanonicalInput(ctx, client, saved.CanonicalID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: "answer", QuestionID: questionID}, out, jsonMode)
+		}
+		if intent != "" {
+			return sendCanonicalInput(ctx, client, saved.CanonicalID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: intent}, out, jsonMode)
+		}
+		return sendCanonicalConversation(ctx, client, saved.CanonicalID, request, out, jsonMode)
+	}
+	if questionID != "" {
+		return Usage("--answer requires a saved canonical conversation question")
+	}
+	if len(paths)+len(ids)+len(request.Images) == 0 && !request.Knowledge && serviceclient.PlainSessionCanMigrate(saved) {
+		if identity, e := client.Identity(ctx); e == nil && identity.Supports("conversation-input-admission-v1") {
+			conversation, e := client.ImportSessionConversation(ctx, name, request.RequestID)
+			if e != nil {
+				return e
+			}
+			return sendCanonicalInput(ctx, client, conversation.ID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: intent}, out, jsonMode)
+		}
+	}
+	if intent != "" {
+		return Usage("explicit input intent requires a canonical conversation and conversation input support on the service")
 	}
 	if len(paths)+len(ids) > 0 {
 		if err := client.RequireCapability(ctx, "session-files-v1"); err != nil {

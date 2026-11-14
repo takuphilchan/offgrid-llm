@@ -18,16 +18,8 @@ from .lora import LoRA
 from .audio import Audio
 from .loading import LoadingProgress
 from .p2p import P2P
-
-
-class OffGridError(Exception):
-    """Base exception for OffGrid errors."""
-    
-    def __init__(self, message: str, code: str = None, details: str = None):
-        self.message = message
-        self.code = code
-        self.details = details
-        super().__init__(message)
+from .conversations import Conversations
+from .errors import OffGridError
 
 
 class Sessions:
@@ -277,6 +269,7 @@ class Client:
         self.models = ModelManager(self)
         self.kb = KnowledgeBase(self)
         self.sessions = Sessions(self)
+        self.conversations = Conversations(self)
         self.agent = Agent(self)
         self.lora = LoRA(self)
         self.audio = Audio(self)

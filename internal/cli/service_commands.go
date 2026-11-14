@@ -53,6 +53,9 @@ func sessionServiceCommand(ctx context.Context, args []string, env Environment) 
 		return err
 	}
 	if args[0] == "chat" {
+		if len(args) == 1 {
+			return startCanonicalConversationChat(ctx, client, env.Stdin, env.Stdout, env.Options.JSON)
+		}
 		if len(args) >= 2 && plainConversationArgs(args[2:]) {
 			return RunPlainConversationChat(ctx, client, args, env.Stdin, env.Stdout, env.Options.JSON)
 		}
@@ -133,6 +136,9 @@ func RunKnowledgeCommand(ctx context.Context, args []string, env Environment) er
 }
 
 func agentServiceCommand(ctx context.Context, args []string, env Environment) error {
+	if len(args) > 0 && args[0] == "worker" {
+		return agentWorkerService(ctx, args[1:], env)
+	}
 	if len(args) > 0 && args[0] == "schedules" {
 		return agentScheduleCommand(ctx, args[1:], env)
 	}

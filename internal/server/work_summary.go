@@ -94,7 +94,8 @@ func (s *Server) handleWorkSummary(w http.ResponseWriter, r *http.Request) {
 	page := workPage{Items: []agents.WorkSummary{}, Counts: map[string]int{"attention": 0, "running": 0, "history": 0, "all": 0, "archived": 0}, Scope: "actor_jobs"}
 	rows := []agents.WorkSummary{}
 	for _, row := range s.agentManager.ListWorkSummaries() {
-		if row.Actor != "" && row.Actor != actor || !admin && (!row.ProfilePresent || row.Actor != actor) || row.UnscopedKnowledge || !s.savedKnowledgeAllowed(actor, row.SourceIDs) {
+		canonical := row.ConversationWork && row.Origin != nil && row.Origin.Workspace == s.workspaceID
+		if row.Actor != "" && row.Actor != actor || !admin && (!row.ProfilePresent && !canonical || row.Actor != actor) || row.UnscopedKnowledge || !s.savedKnowledgeAllowed(actor, row.SourceIDs) {
 			continue
 		}
 		if row.Actor != actor && !(row.Actor == "" && actor == "local-admin") {

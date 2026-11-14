@@ -136,7 +136,7 @@ func TestCoordinatorCandidatesExcludeHistoryWithoutCopyingPayloads(t *testing.T)
 	}
 }
 
-func TestSteeringEligibilityUsesActiveDelegationNotHistory(t *testing.T) {
+func TestSteeringEligibilityDistinguishesHistoryAndIncompleteGraph(t *testing.T) {
 	m := NewManager(nil, nil, nil)
 	r := NewRunner(m, NewToolRegistry(), nil)
 	task, _ := r.Create("Parent", "model", "alice", taskConfig())
@@ -153,10 +153,10 @@ func TestSteeringEligibilityUsesActiveDelegationNotHistory(t *testing.T) {
 	}
 	task, _ = m.updateTask(task.ID, func(t *Task) error { t.Delegation = &Delegation{CallID: "active"}; return nil })
 	if CanSteerTask(task) {
-		t.Fatal("active delegation is steerable")
+		t.Fatal("incomplete delegation is steerable")
 	}
 	if _, err := r.Steer(task.ID, "alice", "follow-up-2", "Discard active work"); err == nil {
-		t.Fatal("active graph discarded")
+		t.Fatal("incomplete graph discarded")
 	}
 	task.Delegation = nil
 	task.Checkpoint.ExecutingCall = "uncertain"

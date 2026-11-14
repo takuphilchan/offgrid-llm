@@ -39,7 +39,7 @@ for(const theme of ['light','dark']) for(const locale of ['en','ar']) for(const 
       await capture(route);
       if(route==='agents') {
         await page.locator('.profile-library-header > button').click(); await expect(page.locator('.profile-editor')).toBeVisible(); await capture('agent-editor');
-        await page.goto('/ui/#/agents/tools'); await expect(page.locator('.agent-management-page')).toBeVisible(); await capture('tools');
+        await page.goto('/ui/#/agents/tools'); await expect(page.locator('.agent-management-page')).toBeVisible(); await expect(page.locator('.agent-management-page')).not.toContainText('undefined'); await capture('tools');
         await page.goto('/ui/#/agents/connections'); await expect(page.locator('.connector-panel')).toBeVisible(); await capture('connections');
       }
       if(route==='models') { await page.locator('#model-view-discover').click(); await expect(page.locator('.catalog-card')).toHaveCount(1); await capture('models-discover'); }

@@ -52,7 +52,7 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
       view === 'external' ? api.integrations(model) : Promise.resolve(null),
     ]);
     if (request !== runtimeRequest.current) return;
-    if (toolResult.status === 'fulfilled' && toolResult.value) { setTools(toolResult.value.tools); setEnabledTools(toolResult.value.enabled_count); }
+    if (toolResult.status === 'fulfilled' && toolResult.value) { setTools(toolResult.value.tools); setEnabledTools(toolResult.value.enabled_count ?? toolResult.value.tools.filter(tool => tool.enabled).length); }
     if (serverResult.status === 'fulfilled' && serverResult.value) setServers(serverResult.value);
     if (integrationResult.status === 'fulfilled' && integrationResult.value) setIntegrations(integrationResult.value.integrations);
     if (toolResult.status === 'rejected') setRuntimeError(toolResult.reason instanceof Error ? toolResult.reason.message : text.common.error);

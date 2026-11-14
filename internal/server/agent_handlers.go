@@ -125,6 +125,9 @@ func taskResponse(task *agents.Task) map[string]any {
 		steps = []agents.Step{}
 	}
 	response := map[string]any{"task_id": task.ID, "run_id": task.ID, "status": task.Status, "output": task.Result, "steps": steps, "pending_approval": task.PendingApproval}
+	if task.WorkID != "" {
+		response["work_id"] = task.WorkID
+	}
 	response["can_recover_execution"] = agents.CanRecoverExecution(task)
 	response["archived_at"] = task.ArchivedAt
 	response["progress"] = task.Progress
@@ -145,10 +148,17 @@ func taskResponse(task *agents.Task) map[string]any {
 	if task.Config.Profile != nil {
 		response["profile"] = map[string]any{"id": task.Config.Profile.ID, "revision": task.Config.Profile.Revision, "digest": task.Config.Profile.Digest, "name": task.Config.Profile.Settings.Name}
 	}
+	if task.Origin != nil && task.Config.ConversationConfiguration != nil {
+		response["conversation_configuration"] = task.Config.ConversationConfiguration
+	}
 	response["instructions"] = task.Instructions
+	response["instruction_version"], response["control_epoch"] = task.InstructionVersion, task.ControlEpoch
 	response["pending_instructions"] = task.PendingInstructions
 	response["last_access"] = task.LastAccess
 	response["plan"], response["context"] = task.Plan, task.Context
+	if usage := taskResourceUsage(task); usage != nil {
+		response["resource_usage"] = usage
+	}
 	response["artifacts"] = taskArtifacts(task)
 	response["parent_id"], response["children"] = task.ParentID, task.ChildHistory
 	response["can_steer"] = agents.CanSteerTask(task)

@@ -55,6 +55,7 @@ export function TaskDetails({run, onError}: {run: AgentRun; onError: (message: s
     {!!run.instructions?.length && <details><summary>{copy.instruction}</summary><ol>{run.instructions.map(item => <li key={item.request_id}>{item.text}</li>)}</ol></details>}
     <details><summary>{copy.context}</summary>
       {run.context && <dl><dt>{copy.tokens}</dt><dd>{run.context.estimated_tokens.toLocaleString(language)} / {run.context.window.toLocaleString(language)}</dd><dt>{copy.archived}</dt><dd>{run.context.archived_messages}</dd></dl>}
+      {run.resource_usage && <pre className="task-resource-usage" tabIndex={0} aria-label={copy.context}><code>{JSON.stringify(run.resource_usage, null, 2)}</code></pre>}
       <button className="secondary-button" onClick={() => void exportEvidence()}>{copy.exportEvidence}</button>
     </details>
   </>;

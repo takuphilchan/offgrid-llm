@@ -4,6 +4,7 @@ import { notifyWorkChanged } from '../lib/work-changes';
 import type { components, operations } from './schema.generated';
 import { readSessionStream, type SessionEvent } from './session-stream';
 import { readAgentStream } from './agent-stream';
+import { conversationAPI } from './conversations';
 import { workflowText } from '../i18n/workflow';
 
 export type Model = components['schemas']['Model'];
@@ -121,6 +122,7 @@ async function request<T>(path: string, init?: RequestInit, timeout = 30_000, de
 }
 
 export const api = {
+  conversations: conversationAPI(request),
   runtimeReadiness: (signal?: AbortSignal) => request<components['schemas']['InferenceRuntimeReadiness']>('/api/v2/runtime', { signal }),
   prepareRuntime: (signal: AbortSignal) => request<components['schemas']['InferenceRuntimeReadiness']>('/api/v2/runtime', { method: 'POST', body: '{}', signal }, 310_000),
   searchWork: (query: string, signal?: AbortSignal) => request<WorkSearchResponse>(`/api/v2/work/search?query=${encodeURIComponent(query)}`, { signal }),

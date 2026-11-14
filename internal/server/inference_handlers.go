@@ -14,6 +14,7 @@ import (
 )
 
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(inference.WithSchedulingScope(r.Context(), inference.SchedulingScope{Actor: s.agentActor(r), Work: "interactive-chat"}))
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -309,6 +310,7 @@ func (s *Server) handleChatCompletionsStream(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(inference.WithSchedulingScope(r.Context(), inference.SchedulingScope{Actor: s.agentActor(r), Work: "interactive-completion"}))
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -370,6 +372,7 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 
 // handleEmbeddings handles POST /v1/embeddings for generating text embeddings
 func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(inference.WithSchedulingScope(r.Context(), inference.SchedulingScope{Actor: s.agentActor(r), Work: "interactive-embedding"}))
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return

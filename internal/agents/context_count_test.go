@@ -29,6 +29,45 @@ func TestContextCounterOverridesEstimateAndPreservesInstructions(t *testing.T) {
 	}
 }
 
+func TestLongConversationAnswerArchivesWithoutLosingConstraints(t *testing.T) {
+	m := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
+	r := NewRunner(m, NewToolRegistry(), nil)
+	defer r.Shutdown(context.Background())
+	cfg := taskConfig()
+	cfg.ContextWindow, cfg.MaxTokens = 8192, 1024
+	answer := strings.Repeat("previous answer ", 2500) + "final citation"
+	cfg.ConversationContext = []api.ChatMessage{{Role: "user", Content: "Do not change files."}, {Role: "assistant", Content: answer}}
+	task, err := r.Create("Explain the result", "model", "alice", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err = m.updateTask(task.ID, func(saved *Task) error { saved.Status = TaskRunning; return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	// This test double proves measured accounting decides compaction, without
+	// asserting tokenizer accuracy for any installed model.
+	r.CountContext = func(_ context.Context, _ *Task, messages []api.ChatMessage, _ []api.Tool) (int, error) {
+		for _, message := range messages {
+			if message.StringContent() == answer {
+				return 12000, nil
+			}
+		}
+		return 2000, nil
+	}
+	messages, err := r.prepareContext(task, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var content strings.Builder
+	for _, message := range messages {
+		content.WriteString(message.StringContent())
+	}
+	if !strings.Contains(content.String(), "Do not change files.") || !strings.Contains(content.String(), "Explain the result") || len(task.ContextArchive) != 1 || task.ContextArchive[0].Messages[0].StringContent() != answer {
+		t.Fatal("lost instructions, current request, or exact archived answer")
+	}
+}
+
 func TestContextCounterFailuresNeverPermitDispatch(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

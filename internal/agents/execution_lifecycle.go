@@ -9,7 +9,7 @@ import (
 // dispatch for the exact job and waits for owned-tree termination evidence.
 // A disconnect/time limit remains visibly uncertain, never acknowledged as stop.
 func (r *Runner) stopOwnedExecution(task *Task) (*Task, error) {
-	if task == nil || task.Config.Execution == nil {
+	if task == nil {
 		return task, nil
 	}
 	if !HasOwnedExecutionProcesses(task) {
@@ -30,8 +30,26 @@ func (r *Runner) stopOwnedExecution(task *Task) (*Task, error) {
 }
 
 func HasOwnedExecutionProcesses(task *Task) bool {
-	if task == nil || task.Config.Execution == nil {
+	if task == nil {
 		return false
+	}
+	if task.ParentID != "" && executionWorkerMode(task.Config.ExecutionWorkerMode) {
+		return true
+	}
+	if task.Config.Execution == nil {
+		return false
+	}
+	if task.Checkpoint != nil && task.Checkpoint.WorkerEnvironment != nil {
+		return true
+	}
+	// The legacy name also covers supervisor-owned worker preparation. Stop
+	// must fence that host job even before its first process/tool dispatch.
+	if task.Checkpoint != nil && task.Checkpoint.StorageBudget != nil {
+		for _, reservation := range task.Checkpoint.StorageBudget.Reservations {
+			if reservation.State != "released" && reservation.Request.Parent.Job == task.ID {
+				return true
+			}
+		}
 	}
 	for _, step := range task.Steps {
 		if step.Type == "action" && step.ToolName == "workspace_process_start" {

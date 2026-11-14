@@ -58,12 +58,19 @@ func (s *Server) profileToolCatalog(r *http.Request) map[string]capabilities.Des
 	return out
 }
 
-func (s *Server) effectiveProfile(r *http.Request, profile *agents.AgentProfile, ancestors map[string]bool, depth int, count *int) *effectiveAgentProfile {
+func (s *Server) effectiveProfile(r *http.Request, profile *agents.AgentProfile, ancestors map[string]bool, depth int, count *int, restrictions *agentResourceRestrictions) *effectiveAgentProfile {
 	effective := &effectiveAgentProfile{Profile: profile, Ready: true, Issues: []profileResourceIssue{}, Capabilities: map[string]capabilities.Descriptor{}}
+	original := profile
 	issue := func(kind, ref, code, message string) {
 		effective.Ready = false
 		effective.Issues = append(effective.Issues, profileResourceIssue{kind, ref, code, message})
 	}
+	view, allowed := restrictedProfileView(profile, restrictions)
+	if !allowed {
+		issue("profile", profile.ID, "profile_resource_denied", "Selected resources must be a subset of the profile.")
+		return effective
+	}
+	profile = view
 	if profile.Archived {
 		issue("profile", profile.ID, "profile_archived", "Archived profiles cannot start new work.")
 	}
@@ -119,7 +126,15 @@ func (s *Server) effectiveProfile(r *http.Request, profile *agents.AgentProfile,
 				issue("delegate", id, "profile_unavailable", "Select an available profile owned by your account.")
 				continue
 			}
-			resolved := s.effectiveProfile(r, child, ancestors, depth+1, count)
+			// Validate the original ceilings independently of request narrowing.
+			// Then exclude disabled child resources before checking readiness.
+			for _, ref := range child.Settings.Tools {
+				if !profileContainsTool(original.Settings.Tools, ref) {
+					issue("delegate", id, "delegate_tools_denied", "Child tools must be a subset of the parent tools.")
+				}
+			}
+			childRestrictions := intersectChildRestrictions(profile, child)
+			resolved := s.effectiveProfile(r, child, ancestors, depth+1, count, childRestrictions)
 			effective.Children[id] = resolved
 			if !resolved.Ready {
 				issue("delegate", id, "delegate_unavailable", "A delegated profile has unavailable resources.")
@@ -129,7 +144,7 @@ func (s *Server) effectiveProfile(r *http.Request, profile *agents.AgentProfile,
 			}
 			for _, document := range child.Settings.Knowledge {
 				found := false
-				for _, parentDocument := range profile.Settings.Knowledge {
+				for _, parentDocument := range original.Settings.Knowledge {
 					if document == parentDocument {
 						found = true
 						break
@@ -152,7 +167,7 @@ func (s *Server) effectiveProfile(r *http.Request, profile *agents.AgentProfile,
 
 func (s *Server) resolveProfile(r *http.Request, profile *agents.AgentProfile) *effectiveAgentProfile {
 	count := 0
-	return s.effectiveProfile(r, profile, map[string]bool{}, 0, &count)
+	return s.effectiveProfile(r, profile, map[string]bool{}, 0, &count, nil)
 }
 
 func (s *Server) applyJobProfile(w http.ResponseWriter, r *http.Request, req *jobSubmitRequest, config *agents.AgentConfig) bool {
@@ -161,12 +176,24 @@ func (s *Server) applyJobProfile(w http.ResponseWriter, r *http.Request, req *jo
 		writeProfileError(w, err)
 		return false
 	}
-	effective := s.resolveProfile(r, profile)
+	_, allowed := restrictedProfileView(profile, req.Restrictions)
+	if !allowed {
+		writeJobError(w, 403, "profile_resource_denied", "Selected resources must be a subset of this agent profile.", false)
+		return false
+	}
+	count := 0
+	readinessProfile := profile
+	if req.ConversationModelOverride && req.Model != "" {
+		view := *profile
+		view.Settings.Model = req.Model
+		readinessProfile = &view
+	}
+	effective := s.effectiveProfile(r, readinessProfile, map[string]bool{}, 0, &count, req.Restrictions)
 	if !effective.Ready {
 		writeJSON(w, 422, effective)
 		return false
 	}
-	if req.Model != "" && req.Model != profile.Settings.Model {
+	if !req.ConversationModelOverride && req.Model != "" && req.Model != profile.Settings.Model {
 		writeJobError(w, 409, "profile_model_mismatch", "Use this profile's installed model or save a new profile revision.", false)
 		return false
 	}
@@ -178,7 +205,9 @@ func (s *Server) applyJobProfile(w http.ResponseWriter, r *http.Request, req *jo
 		writeJobError(w, 422, "profile_budget_exceeded", "Task budget cannot exceed the selected profile's budget.", false)
 		return false
 	}
-	req.Model = profile.Settings.Model
+	if req.Model == "" {
+		req.Model = profile.Settings.Model
+	}
 	config.Profile, config.Instructions = profile, profile.Settings.Instructions
 	config.AllowedCapabilities = effective.Capabilities
 	if !restrictProfileConfig(w, req.Restrictions, config) {
@@ -219,6 +248,16 @@ func (s *Server) applyJobProfile(w http.ResponseWriter, r *http.Request, req *jo
 			}
 		}
 		childConfig.KnowledgeSelection = &selected
+		if err := s.pinProfileContext(&childConfig); err != nil {
+			writeJobError(w, 422, "skill_unavailable", "A selected child's skill context is unavailable.", false)
+			return false
+		}
+		// Child skill reads use the selected immutable profile. Memory and draft
+		// writes remain root-owned and cannot inherit independent consent.
+		childConfig.MemoryConsentRevision = 0
+		delete(childConfig.AllowedCapabilities, "memory_read")
+		delete(childConfig.AllowedCapabilities, "memory_write")
+		delete(childConfig.AllowedCapabilities, "skill_draft")
 		if !s.attachJobKnowledge(w, r, req, &childConfig) {
 			return false
 		}

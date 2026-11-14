@@ -18,7 +18,7 @@ import (
 )
 
 const taskDatabaseName = "agent-state.sqlite"
-const taskSchemaVersion = 4
+const taskSchemaVersion = 25
 
 // The service owns the workspace lock. Connections are operation-scoped so
 // stopped-workspace backup/restore never races an idle connection or leaked WAL.
@@ -60,7 +60,7 @@ func validateTaskIdentityStatus(task *Task) error {
 		return fmt.Errorf("invalid task identity")
 	}
 	switch task.Status {
-	case TaskPending, TaskRunning, TaskWaiting, TaskInput, TaskChildren, TaskCompleted, TaskFailed, TaskCancelled, TaskInterrupted, TaskUncertain:
+	case TaskPending, TaskRunning, TaskWaiting, TaskInput, TaskConversationInput, TaskChildren, TaskCompleted, TaskFailed, TaskCancelled, TaskInterrupted, TaskUncertain:
 	default:
 		return fmt.Errorf("invalid task status for %s", task.ID)
 	}
@@ -68,6 +68,29 @@ func validateTaskIdentityStatus(task *Task) error {
 }
 
 func validateStoredTask(task *Task) error {
+	if !validWorkerPolicy(task.Config.WorkerPolicy) || task.Config.ResultIdentityVersion < 0 || task.Config.ResultIdentityVersion > 1 {
+		return fmt.Errorf("unsupported or invalid worker policy")
+	}
+	if err := validatePartialSynthesis(task); err != nil {
+		return err
+	}
+	if err := validateWorkerQuestionReview(task); err != nil {
+		return err
+	}
+	if err := validateWorkerQuestion(task); err != nil {
+		return err
+	}
+	if err := validateConversationTurn(task); err != nil {
+		return err
+	}
+	if err := validateConversationHold(task); err != nil {
+		return fmt.Errorf("invalid conversation inbox fence: %w", err)
+	}
+	if config := task.Config.ConversationConfiguration; config != nil {
+		if config.Version != 1 || task.Origin == nil || (task.Config.Profile == nil) != (config.Profile == nil) || config.Profile != nil && config.Profile.Digest != task.Config.Profile.Digest || config.Model != task.Model {
+			return fmt.Errorf("invalid accepted conversation configuration")
+		}
+	}
 	if !validateAutomationPin(task) {
 		return fmt.Errorf("invalid schedule provenance")
 	}
@@ -77,8 +100,14 @@ func validateStoredTask(task *Task) error {
 	if err := task.Config.validateExecution(); err != nil {
 		return err
 	}
-	if task.Config.Execution != nil && (task.Config.Execution.Validate() != nil || task.ParentID != "" || task.Config.TextOnlyInference) {
+	if task.Config.Execution != nil && (task.Config.Execution.Validate() != nil || task.ParentID != "" && (task.Checkpoint == nil || task.Checkpoint.WorkerEnvironment == nil) || task.Config.TextOnlyInference) {
 		return fmt.Errorf("invalid stored execution reference")
+	}
+	if task.Checkpoint != nil && task.Checkpoint.WorkerEnvironment != nil {
+		env := task.Checkpoint.WorkerEnvironment
+		if task.ParentID == "" || task.Worker == nil || env.ParentRunID != task.ParentID || env.RequestID == "" || len(env.CopyID) != 64 || task.Config.Execution == nil {
+			return fmt.Errorf("invalid stored worker environment")
+		}
 	}
 	if err := validateTaskIdentityStatus(task); err != nil {
 		return err
@@ -117,7 +146,7 @@ func validateStoredTask(task *Task) error {
 		}
 	}
 	if task.Status == TaskChildren {
-		if task.Delegation == nil || task.ParentID != "" || task.Checkpoint == nil || task.Checkpoint.ExecutingCall != "" || len(task.Checkpoint.Calls) != 1 || task.Checkpoint.Calls[0].ID != task.Delegation.CallID {
+		if !validDelegationCheckpoint(task) {
 			return fmt.Errorf("invalid delegated checkpoint")
 		}
 		specs := []ChildSpec{}
@@ -136,7 +165,15 @@ func validateStoredTask(task *Task) error {
 		if input == nil || input.ID == "" || input.Target == "" || cp == nil || cp.ExecutingCall != "" || !task.Config.TaskFirst {
 			return fmt.Errorf("invalid task input checkpoint for %s", task.ID)
 		}
-		if input.Kind == "workspace" {
+		if input.Kind == "worker_clarification" {
+			if !validWorkerClarificationInput(task) {
+				return ErrRunStorage
+			}
+		} else if input.Kind == "worker_question" {
+			if task.WorkerQuestion == nil || task.WorkerQuestion.State != "pending" || input.ID != task.WorkerQuestion.ID || input.CallID == "" || len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID || cp.Calls[0].Function.Name != "worker_question" {
+				return fmt.Errorf("invalid worker question checkpoint for %s", task.ID)
+			}
+		} else if input.Kind == "workspace" {
 			_, ok := execution.AccessPermissions(input.Mode)
 			if !ok || task.ParentID != "" || task.Config.ExecutionRequestVersion != execution.AccessRequestVersion || cp.ExecutionIntent != nil || input.CallID == "" || len(cp.Calls) != 1 || cp.Calls[0].ID != input.CallID || cp.Calls[0].Function.Name != execution.AccessRequestTool {
 				return fmt.Errorf("invalid workspace input checkpoint for %s", task.ID)
@@ -239,14 +276,17 @@ func initializeTaskDatabase(db *sql.DB, directory string) error {
 			}
 			return migrateTaskInputs(db, directory)
 		}
-		if version == 3 {
+		if version >= 3 && version < taskSchemaVersion {
 			if err := tx.Rollback(); err != nil {
 				return err
 			}
-			return migrateTaskVersion(db, directory, 3, taskSchemaVersion)
+			return migrateTaskVersion(db, directory, version, taskSchemaVersion)
 		}
 		if version != taskSchemaVersion {
 			return fmt.Errorf("agent schema %d is incompatible; use a matching OffGrid version", version)
+		}
+		if _, err = tx.Exec(controlSchema); err != nil {
+			return err
 		}
 		return tx.Commit()
 	}
@@ -262,6 +302,9 @@ CREATE TABLE agent_task_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, task
 CREATE INDEX agent_task_event_order ON agent_task_events(task_id,sequence);
 CREATE TABLE agent_migrations(version INTEGER PRIMARY KEY, manifest BLOB NOT NULL)`)
 	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec(controlSchema); err != nil {
 		return err
 	}
 	for _, task := range tasks {
@@ -320,6 +363,21 @@ func putTaskTransaction(tx *sql.Tx, task *Task) error {
 		return err
 	}
 	if _, err = tx.Exec(`INSERT INTO agent_tasks(id,actor,snapshot) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET actor=excluded.actor,snapshot=excluded.snapshot`, task.ID, task.Actor, data); err != nil {
+		return err
+	}
+	if err = syncControlWork(tx, task); err != nil {
+		return err
+	}
+	if err = syncControlWorker(tx, task); err != nil {
+		return err
+	}
+	if err = syncConversationTurn(tx, task); err != nil {
+		return err
+	}
+	if err = syncControlResult(tx, task); err != nil {
+		return err
+	}
+	if err = syncControlChanges(tx, task); err != nil {
 		return err
 	}
 	if !bytes.Equal(previous, data) {

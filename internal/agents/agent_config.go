@@ -13,6 +13,22 @@ import (
 
 // AgentConfig configures agent behavior.
 type AgentConfig struct {
+	ResultIdentityVersion       int                                   `json:"result_identity_version,omitempty"`
+	WorkerPolicy                *api.WorkerPolicy                     `json:"worker_policy,omitempty"`
+	WorkerQuestionsVersion      int                                   `json:"worker_questions_version,omitempty"`
+	ConversationContextRevision uint64                                `json:"conversation_context_revision,omitempty"`
+	ExecutionProject            *ExecutionProjectBinding              `json:"execution_project,omitempty"`
+	EffectivePreferences        *api.EffectiveConversationPreferences `json:"effective_preferences,omitempty"`
+	ProjectID                   string                                `json:"project_id,omitempty"`
+	ProjectRevision             int64                                 `json:"project_revision,omitempty"`
+	ResourceResolutions         []api.ResourceResolution              `json:"resource_resolutions,omitempty"`
+
+	ScopedCapabilities  bool   `json:"scoped_capabilities,omitempty"`
+	DisableDelegation   bool   `json:"disable_delegation,omitempty"`
+	ExecutionWorkerMode string `json:"execution_worker_mode,omitempty"`
+
+	ConversationConfiguration *ConversationConfiguration `json:"conversation_configuration,omitempty"`
+
 	ToolAdapter             *inference.AgentToolPin            `json:"tool_adapter,omitempty"`
 	ExecutionRequestVersion int                                `json:"execution_request_version,omitempty"`
 	InputWriteVersion       int                                `json:"input_write_version,omitempty"`

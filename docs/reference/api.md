@@ -1263,6 +1263,27 @@ dependency edges before the parent can answer. A completed dependent artifact is
 forwarded with its headings, citations and stated length preserved; a parent
 summary that drops those requirements is not a verified completion.
 
+## Conversation input (preview)
+
+With `OFFGRID_ENABLE_CONVERSATION_PREVIEW` enabled, canonical conversations accept
+text without a mandatory profile through
+`POST /api/v2/conversations/{id}/inputs`. The command envelope carries
+`request_id`, `target_id`, `expected_revision`, `kind: submit_input` and
+`payload.content`. Input is persisted independently of model availability;
+the existing service runner handles delivery and ongoing work.
+
+Inspect `/api/v2/conversations/{id}/inputs` or a specific input. Submit `stop`,
+`continue` or `revalidate` to
+`/api/v2/conversations/{id}/inputs/{input_id}/commands`, using the input identity
+and the current conversation revision. Input Stop withdraws an unapplied request;
+work Stop remains a separate work control. Continuation preserves the interrupted
+attempt's identity and budget. Primary clarification answers use `intent: "answer"`
+with the displayed `question_id` and focused work identity; host approvals retain
+their existing access controls. See the [client contracts](../advanced/client-contracts.md)
+and [OpenAPI source](../../pkg/api/openapi.yaml) for exact payloads, redaction,
+retry rules and current limitations. Default CLI/UI flows have not switched to
+these preview resources.
+
 ## Durable jobs and computer access
 
 Desktop application discovery uses `computer_applications` followed by
@@ -1693,7 +1714,118 @@ gain fabricated originals. The legacy multipart ingest endpoint remains
 synchronous and now uses this durable path internally. JSON text and URL imports
 keep their existing contracts.
 
+## Saved worker changes
+
+`GET /api/v2/work-items/{id}/changes` lists the owned work's retained proposals
+and combined candidates. `after` is the last returned change ID; `limit` is
+1–64 (default 32). Responses contain `items`, `next_cursor` and `has_more`.
+
+`GET /api/v2/work-items/{id}/changes/{change_id}` accepts `view=files` (default),
+`validation`, `integration`, `recovery`, `content`, or `preserved`, with a
+nonnegative `offset`. File, check, receipt and recovery pages allow `limit`
+1–64 (default 32). Recovery pagination counts integration steps; a page may have
+no retained files and still include a `next_offset`. Content pages
+require `hash` from a retained file version and allow 1–65,536 bytes (default
+65,536). `next_offset` is absent on the final page. Content includes base64
+`data`, complete `bytes`, `sha256` and the page's `offset`; clients must verify
+the complete digest before treating concatenated pages as a verified file.
+
+`recovery` lists files retained by an integration attempt, including after lost
+receipts. Each entry has an `id`, original relative `path`, observed `sha256`,
+`bytes`, and `role`. `displaced` means the observed contents match a recorded
+displaced-file receipt. `unconfirmed` remains observation only: the file may be
+a staged proposal or an original whose replacement receipt was lost. Unsupported
+file types have a `limitation` and no downloadable digest.
+
+`preserved` retrieves one listed entry using both `artifact=<id>` and its
+observed `hash`. It uses the same bounded byte-page contract as `content`.
+Each page rechecks source access and content integrity. Neither operation
+restores files or settles an uncertain integration. Sealed proposal bytes
+remain readable when a later integration is uncertain; an interrupted seal
+without a recorded integration does not acquire that status.
+
+If the backend rejects replacement before any file dispatch, the integration is
+`abandoned` with `execution_unsupported`. Its sealed proposal remains reviewable
+and downloadable. Retrying the command observes the recorded refusal; it cannot
+start a new write attempt. This differs from `uncertain`, where dispatch or its
+effects cannot be conclusively settled.
+
+These reads use `Cache-Control: no-store` and never dispatch, integrate, approve
+or resume work. Unknown or foreign work returns 404. Missing current source
+authority returns 403 for details; the list retains `available: false` and
+`limitation: source_unavailable`. Unavailable saved evidence returns 409.
+Validation success, file integration and task completion remain separate facts.
+Native grants, private paths and raw process commands are excluded.
+
 ## Changing the contract
+
+`use_project_folder` is a conversation command with `payload.folder` containing
+an existing `ExecutionReference`. A matching approved native host identifies the
+folder and reads only `.offgrid/project.toml` (regular UTF-8 file, at most 64 KiB).
+The service transaction creates or reuses the actor/workspace-owned project,
+imports supported preferences/resource references, and records the conversation's
+private folder reference. It does not create a grant, dispatch work, or rewrite
+already-pinned work. Identical command retries return the recorded receipt even
+after the host disconnects. Unknown files, hooks and credentials are not accepted
+as project configuration.
+
+Explicit service project edits take precedence over later file refreshes;
+`configuration_source` and `configuration_digest` identify that choice.
+`clear_project_folder` takes an empty payload, removes the conversation's saved
+execution reference, and retains its project and work focus. Configuration GET
+exposes `folder.session`, `folder.available` and an explanatory `folder.reason`;
+it never rereads/imports project configuration or restores a grant. New work
+resolves the selected reference against live access and existing restrictions.
+An unavailable optional folder does not block an unrelated foreground reply.
+Project instruction-file retrieval remains unavailable in this increment.
+
+For canonical work, accepting an on-demand workspace input also saves its
+project/folder binding when the approved host supports project metadata.
+The input checkpoint, binding and events commit atomically before continuation.
+This preserves the ongoing work's pinned configuration and budget. The
+conversation's `context_revision` tracks folder/project choices separately
+from ordinary messages: an approval prepared against an older choice cannot
+replace a newer selection or explicit clear. Permission upgrades can refresh
+the saved reference while that choice remains current. Invalid project files
+return 422 without accepting access; stopped or correction-fenced work cannot
+accept a late approval. Legacy hosts retain the existing access-input behavior.
+
+Worker sessions can retain a `question` with its run, instruction and assignment
+versions. `POST /api/v2/workers/{id}/commands` accepts `kind: "answer"` with
+`payload.question_id` and bounded `payload.content`. It requires the current
+worker revision and the exact pending question; Stop, a conversation correction
+fence, or a superseded assignment rejects a new answer. Acceptance persists the
+answer into the existing mailbox and makes the same run eligible for scheduling;
+it neither creates a run nor resets its allowance. Inspect the returned message's
+accepted/delivered/applied state separately from the question's `answered` state.
+Identical retries recover the original receipt without resuming interrupted work.
+
+With the private question-admission version enabled, a pending worker question
+wakes its primary assistant through the existing runner. The review consumes
+the same work allowance, preserves verification capacity, and can only answer
+the question or request a user decision. A user decision appears as
+`pending_input.kind: "worker_clarification"`; answering its exact worker question
+atomically releases the parent and child waits. A worker question or clarification
+is not a computer/workspace access request and cannot grant host access.
+
+`GET /api/v2/conversations/{id}` projects an authorized `pending_question` from
+the focused work. The ordinary composer and interactive CLI bind their reply to
+that displayed identity. `submit_input` with `intent: "answer"` records the answer,
+conversation history, worker mailbox and continuation state in one transaction,
+without a classification call or a new run. The input's `worker_answer`
+incorporation records answer acceptance; worker application remains separate.
+The accepted answer also reaches the primary assistant's subsequent context,
+after its pending tool receipt, including when the worker fails.
+Saved question prose is withheld from history, receipts and context after its
+source authority is revoked. Unidentified or stale answers cannot approve host
+access or answer a replacement question. Existing answers remain available when
+new conversation admission is disabled.
+
+Question creation remains disabled in ordinary admission pending model
+qualification. The protocol and recovery controls support retained questions
+independently of that admission setting.
+Agent schema 23 records review checkpoints and pins answer-command retries;
+older binaries must reject that store rather than execute an unsupported review.
 
 After editing `pkg/api/openapi.yaml`:
 

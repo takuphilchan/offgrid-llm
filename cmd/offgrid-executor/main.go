@@ -99,6 +99,16 @@ func run(args []string) error {
 		}
 	}
 	worker := execution.Worker{Session: session, Journal: journal, Processes: processes, Token: token, Version: Version}
+	if config.WorkerCopies != (execution.WorkingCopyPolicy{}) {
+		if config.Backend != "local" {
+			return execution.ErrUnsupported
+		}
+		worker.WorkingCopies, err = execution.OpenWorkingCopies(filepath.Join(*state, "worker-copies"), config.WorkerCopies)
+		if err != nil {
+			return err
+		}
+		defer worker.WorkingCopies.Close()
+	}
 	if config.Permissions.Processes {
 		worker.AuthorizeProcess = execution.TrustedProcessPolicy
 	}

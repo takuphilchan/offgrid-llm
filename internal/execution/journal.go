@@ -22,11 +22,17 @@ type Receipt struct {
 // crash even when no conclusive result does. Never restore it from an old job
 // checkpoint or delete it as a way to retry an uncertain command.
 type Journal struct {
-	db    *sql.DB
-	owner *storage.Ownership
+	db                 *sql.DB
+	owner              *storage.Ownership
+	directory          string
+	reserveReplacement func(context.Context, int64) error
 }
 
 func OpenJournal(directory string) (*Journal, error) {
+	directory, err := filepath.Abs(directory)
+	if err != nil {
+		return nil, err
+	}
 	owner, err := storage.AcquireOwnership(directory)
 	if err != nil {
 		return nil, err
@@ -52,13 +58,17 @@ func OpenJournal(directory string) (*Journal, error) {
 	}
 	var version int
 	err = db.QueryRow("PRAGMA user_version").Scan(&version)
-	if err == nil && version != 0 && version != 1 {
+	if err == nil && version != 0 && version != 1 && version != 2 && version != 3 {
 		err = ErrUnsupported
 	}
 	if err == nil && version == 0 {
 		_, err = db.Exec(`BEGIN; CREATE TABLE execution_operations(id TEXT PRIMARY KEY, digest TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('claimed','dispatched','complete','partial','uncertain','rejected')), result BLOB); PRAGMA user_version=1; COMMIT;`)
 	}
 	if err != nil {
+		db.Close()
+		return fail(err)
+	}
+	if _, err = db.Exec(`BEGIN; CREATE TABLE IF NOT EXISTS execution_process_requests(id TEXT PRIMARY KEY REFERENCES execution_operations(id),request BLOB NOT NULL,input_manifest TEXT NOT NULL); CREATE TABLE IF NOT EXISTS execution_replacements(operation TEXT PRIMARY KEY REFERENCES execution_operations(id),directory TEXT NOT NULL UNIQUE,target TEXT NOT NULL,expected TEXT NOT NULL,proposed TEXT NOT NULL,reserved_bytes INTEGER NOT NULL,state TEXT NOT NULL,receipt BLOB); PRAGMA user_version=3; COMMIT;`); err != nil {
 		db.Close()
 		return fail(err)
 	}
@@ -80,7 +90,7 @@ func OpenJournal(directory string) (*Journal, error) {
 		db.Close()
 		return fail(err)
 	}
-	return &Journal{db: db, owner: owner}, nil
+	return &Journal{db: db, owner: owner, directory: directory}, nil
 }
 
 // RestoreSession validates the original grant/configuration and restores only

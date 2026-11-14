@@ -40,7 +40,11 @@ func nativeExecutionDependencies() cli.ExecutionDependencies {
 		if err != nil {
 			return nil, err
 		}
-		return execution.StartLocalHost(ctx, client, execution.LocalHostOptions{Folder: root, PackDirectory: pack, StateDirectory: filepath.Join(cache, "offgrid", "execution-hosts"), Version: Version, Permissions: permissions, Isolation: isolation}, approve)
+		identityDirectory, err := execution.ProjectIdentityDirectory()
+		if err != nil {
+			return nil, err
+		}
+		return execution.StartLocalHost(ctx, client, execution.LocalHostOptions{Folder: root, PackDirectory: pack, StateDirectory: filepath.Join(cache, "offgrid", "execution-hosts"), Version: Version, Permissions: permissions, Isolation: isolation, ProjectIdentityDirectory: identityDirectory}, approve)
 	}
 	return cli.ExecutionDependencies{
 		Trust: func() (*execution.FolderTrustStore, error) {

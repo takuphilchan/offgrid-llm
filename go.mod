@@ -13,6 +13,7 @@ require (
 	github.com/go-skynet/go-llama.cpp v0.0.0-20240314183750-6a8041ef6b46
 	github.com/google/jsonschema-go v0.4.2
 	github.com/modelcontextprotocol/go-sdk v1.5.0
+	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/shirou/gopsutil/v3 v3.21.11
 	golang.org/x/crypto v0.36.0
 	golang.org/x/sys v0.42.0

@@ -56,7 +56,7 @@ func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	// Never establish a stream for an inaccessible conversation.
-	session, err := h.scoped(r).Load(name)
+	session, err := h.scoped(r).LoadForExecution(name)
 	if err != nil {
 		writeSessionError(w, err)
 		return
@@ -129,13 +129,13 @@ func (h *SessionHandlers) generateStream(w http.ResponseWriter, r *http.Request,
 			return
 		}
 		// Read history after acquiring the lock so concurrent tabs cannot lose turns.
-		current, err := h.scoped(r).Load(name)
+		current, err := h.scoped(r).LoadForExecution(name)
 		if err != nil {
 			fail(err)
 			return
 		}
 		messages := make([]api.ChatMessage, 0, len(current.Messages)+1)
-		for _, message := range current.Messages {
+		for _, message := range h.sessionHistoryForModel(current, model).Messages {
 			messages = append(messages, api.ChatMessage{Role: message.Role, Content: api.SessionContent(message.Content, message.Images)})
 		}
 		messages = append(messages, api.ChatMessage{Role: "user", Content: content})
