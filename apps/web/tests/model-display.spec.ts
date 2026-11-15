@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { catalogDisplay, legacyDisplay, packageCatalogDisplay, packageDisplay } from '../src/features/models/model-display';
+import { compactModelName, catalogDisplay, legacyDisplay, packageCatalogDisplay, packageDisplay } from '../src/features/models/model-display';
 import type { CatalogModel, InstalledTypedModel, TypedCatalogModel } from '../src/api/client';
 
 test('display adapters distinguish unknown sizes, runtime state and proven source identity', () => {
@@ -17,4 +17,14 @@ test('display adapters distinguish unknown sizes, runtime state and proven sourc
   expect(packageCatalogDisplay(entry)).toMatchObject({ bytes: 10, maximumBytes: 20, sizeMeaning: 'download' });
   entry.variants[1].size_bytes = 0;
   expect(packageCatalogDisplay(entry).bytes).toBeUndefined();
+});
+
+test('compact names keep family and size while the exact ID stays unchanged',()=>{
+ const id='NVIDIA-Nemotron-3.5-Bolt-E4B-UD-Q4_K_XL-47d072be609f';
+ expect(compactModelName(id)).toBe('Nemotron 3.5 Bolt E4B');
+ expect(compactModelName(id,14)).toBe('Nemotron E4B');
+ expect(compactModelName('publisher/Qwen2.5-7B-Instruct-Q4_K_M.gguf')).toBe('Qwen2.5 7B');
+ expect(compactModelName('Meta-Llama-3.1-8B-Instruct-Q4_K_L-f1e3673a9589')).toBe('Llama 3.1 8B');
+ expect(compactModelName('unbreakablemodelidentifierthatisverylong',14)).toBe('');
+ expect(id).toBe('NVIDIA-Nemotron-3.5-Bolt-E4B-UD-Q4_K_XL-47d072be609f');
 });

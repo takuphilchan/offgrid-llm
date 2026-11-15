@@ -14,6 +14,29 @@ export function readableModelName(id: string): string {
     .replace(/[-_](?:I?Q\d(?:_[A-Z0-9]+)*|BF16|F16|F32)$/i, '')
     .replace(/[-_]+/g, ' ').trim() || id;
 }
+/** Only technical repository/file labels are shortened; custom display names stay intact. */
+export function speechModelName(name:string, architecture?:string):string {
+  if (!/[\/\\]|\.(?:onnx|bin|gguf)\b/i.test(name)) return name;
+  const file=(name.split('·').at(-1)?.trim() || name).split(/[\/\\]/).at(-1)!;
+  const family=/whisper/i.test(`${architecture} ${name}`) ? 'Whisper' : /piper/i.test(`${architecture} ${name}`) ? 'Piper' : /kokoro/i.test(`${architecture} ${name}`) ? 'Kokoro' : '';
+  const variant=file.replace(/\.(?:onnx|bin|gguf)$/i,'').replace(/^ggml[-_]/i,'').replace(/[_-]+/g,' ').trim();
+  return [family,variant.toLowerCase()==='model' ? '' : variant].filter(Boolean).join(' · ') || name;
+}
+/** Compact labels are presentation only. Full names and exact IDs stay in the picker. */
+export function compactModelName(id: string, limit = 28): string {
+  const name = readableModelName(id.split(/[\\/]/).at(-1) || id)
+    .replace(/^(?:NVIDIA|Meta)\s+/i, '')
+    .replace(/\b(?:instruct|gguf|UD)\b/gi, '').replace(/\s+/g, ' ').trim();
+  if ([...name].length <= limit) return name;
+  const words = name.split(' '), size = words.find(word => /^(?:E?\d+(?:\.\d+)?[BM])$/i.test(word));
+  const family = words.filter(word => word !== size);
+  const selected: string[] = [];
+  for (const word of family) {
+    if ([...[...selected, word, ...(size ? [size] : [])].join(' ')].length > limit) break;
+    selected.push(word);
+  }
+  return selected.length ? [...selected, ...(size ? [size] : [])].join(' ') : '';
+}
 export function legacyDisplay(model: Model, catalog?: CatalogModel): ModelDisplay {
   return { id: model.id, name: catalog?.name || readableModelName(model.id), category: model.type === 'embedding' ? 'embeddings' : supportsChat(model) ? 'language' : undefined,
     // The legacy inventory has no immutable provenance. A matching filename is
