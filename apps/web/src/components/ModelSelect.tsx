@@ -5,11 +5,11 @@ import { useRef, useState, type KeyboardEvent } from 'react';
 import { UtilityPopover } from './UtilityPopover';
 import { SearchField } from './SearchField';
 import { Icon } from './Icon';
-import { readableModelName } from '../features/models/model-display';
+import { compactModelName, readableModelName } from '../features/models/model-display';
 import { modelLibrary, modelProviderDetails } from '../i18n/model-library';
 import './model-select.css';
 
-export function ModelSelect({ models, value, onChange }: { models: Model[]; value: string; onChange: (value: string) => void }) {
+export function ModelSelect({ models, value, onChange, compact = false }: { models: Model[]; value: string; onChange: (value: string) => void; compact?: boolean }) {
   const { messages: text, locale , language} = useI18n(), copy = modelLibrary(locale), runtime = modelProviderDetails(locale);
   const [query, setQuery] = useState('');
   const root = useRef<HTMLDivElement>(null);
@@ -32,7 +32,7 @@ export function ModelSelect({ models, value, onChange }: { models: Model[]; valu
   };
   return <div ref={root} className="model-select" onKeyDown={navigate}>
     <UtilityPopover label={text.chat.model} triggerClassName="secondary-button model-select-trigger" panelClassName="model-select-panel" panelTabIndex={-1} preferredHeight={360}
-      trigger={<><Icon name="models" size={16} /><span>{value ? readableModelName(value) : text.chat.selectModel}</span></>}
+      trigger={<><span title={value} className={compact ? 'model-trigger-name' : undefined}>{compact && value ? <><span className="model-label-regular">{compactModelName(value) || text.chat.model}</span><span className="model-label-narrow">{compactModelName(value,14) || text.chat.model}</span></> : value ? readableModelName(value) : text.chat.selectModel}</span><Icon name="chevron-down" size={14} /></>}
       onOpenChange={open => { if (open) { setQuery(''); root.current?.querySelector<HTMLInputElement>('input[type="search"]')?.focus(); } }}>
       <SearchField label={copy.filterInstalled} value={query} onChange={setQuery} />
       <div role="listbox" aria-label={text.chat.model} className="model-select-options">

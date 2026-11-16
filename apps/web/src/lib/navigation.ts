@@ -3,8 +3,8 @@ export type Page = typeof pages[number];
 export type ServiceHealth = 'checking' | 'ready' | 'offline';
 
 export const navigationGroups: { label: 'work' | 'library' | 'system'; items: Page[] }[] = [
-  { label: 'work', items: ['chat', 'activity', 'agents'] },
-  { label: 'library', items: ['knowledge', 'models'] },
+  { label: 'work', items: ['chat', 'knowledge', 'activity', 'models'] },
+  { label: 'library', items: ['agents'] },
   { label: 'system', items: ['settings'] },
 ];
 

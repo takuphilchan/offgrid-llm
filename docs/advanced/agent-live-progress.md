@@ -76,3 +76,16 @@ Web and Electron use the same renderer. New labels exist for the nine interface
 languages; speaker review and installed-desktop qualification remain outstanding.
 External Hermes/OpenClaw processes do not automatically gain an OffGrid-hosted
 activity view from this change; their own runtime interfaces remain separate.
+
+## Response display preference
+
+The development renderer offers **Live text** and **Completed response** in
+Models & responses. The preference controls presentation, not execution or
+verification. Canonical Chat observes the accepted job through the existing
+read-only job stream; it does not submit a second generation request. Live text
+is shown only when the server allows a response preview for that run. Source-based,
+Knowledge, computer-action and other restricted work keeps provisional content
+hidden. Completion replaces the preview with the saved answer; revocation,
+unavailable task context, or withdrawing preview eligibility clears the preview.
+The stream remains bound to its run identity across deferred renders and reconnects.
+All 29 interface locales have authored setting labels; native review is pending.

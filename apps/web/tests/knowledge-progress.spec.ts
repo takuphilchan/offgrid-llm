@@ -3,14 +3,15 @@ import { craftFixture } from './helpers/craft-fixture';
 import { documentProgress, documentBusy } from '../src/i18n/document-progress';
 import { knowledgeImport } from '../src/i18n/knowledge-import';
 import type { LocaleCode } from '../src/i18n';
+import {reviewKnowledgeImport,collectionImportReceipt} from './helpers/collection-review';
 
 test('accepted imports show live phases without a second mutation and stop polling after completion', async ({ page }) => {
  await craftFixture(page, 'en', 'light');
  await page.route('**/api/v2/system', r => r.fulfill({ json: { product: 'offgrid', workspace_id: 'craft', capabilities: ['document-imports-v1'] } }));
- const record = { id: 'progress-source', name: 'report.txt', state: 'queued', sha256: 'a'.repeat(64) };
+ const record = {...collectionImportReceipt('progress-source','queued'),name:'report.txt'};
  let release!: () => void, reads = 0; const writes: string[] = [];
  const processing = new Promise<void>(resolve => { release = resolve; });
- await page.route('**/v1/documents/imports*', async route => {
+ await page.route(/\/v1\/(?:documents|collections)\/imports/, async route => {
   const url = new URL(route.request().url());
   if (route.request().method() === 'GET') {
    if (!url.searchParams.has('id')) return route.fulfill({ json: { imports: [] } });
@@ -22,6 +23,7 @@ test('accepted imports show live phases without a second mutation and stop polli
  });
  await page.goto('/ui/#/knowledge');
  await page.locator('[data-knowledge-import]').setInputFiles({ name: record.name, mimeType: 'text/plain', buffer: Buffer.from('source') });
+ await reviewKnowledgeImport(page);
  const results = page.locator('.knowledge-import-results');
  await expect(results).toContainText(documentProgress('en', 'queued')!);
  record.state = 'extracting'; await expect(results).toContainText(documentProgress('en', 'extracting')!);
@@ -47,13 +49,14 @@ test('busy admission stops a batch and preserves pending files without claiming 
  await craftFixture(page, 'en', 'light');
  await page.route('**/api/v2/system', r => r.fulfill({ json: { product: 'offgrid', workspace_id: 'craft', capabilities: ['document-imports-v1'] } }));
  let writes = 0;
- await page.route('**/v1/documents/imports*', r => {
+ await page.route(/\/v1\/(?:documents|collections)\/imports/, r => {
   if (r.request().method() === 'GET') return r.fulfill({ json: { imports: [] } });
   writes++;
-  return writes === 1 ? r.fulfill({ status: 202, json: { id: 'accepted', state: 'accepted' } }) : r.fulfill({ status: 503, json: { error_code: 'document_busy', error: 'Document queue full' } });
+  return writes === 1 ? r.fulfill({status:202,json:collectionImportReceipt('accepted')}) : r.fulfill({ status: 503, json: { error_code: 'document_busy', error: 'Document queue full' } });
  });
  await page.goto('/ui/#/knowledge');
  await page.locator('[data-knowledge-import]').setInputFiles(['first.txt', 'later.txt'].map(name => ({ name, mimeType: 'text/plain', buffer: Buffer.from('source') })));
+ await reviewKnowledgeImport(page);
  const results = page.locator('.knowledge-import-results');
  await expect(results.locator('[data-state="failed"]')).toContainText(documentBusy('en'));
  await expect(results.locator('[data-state="pending"]')).toContainText(knowledgeImport('en').pending);
@@ -71,8 +74,8 @@ test('cancelling a pending import also aborts its progress observation without r
   (window as any).progressRequests = [];
   window.fetch = (input, init) => {
    const url = new URL(String(input), location.href);
-   if (url.pathname !== '/v1/documents/imports') return original(input, init);
-   if (!url.searchParams.has('id')) return Promise.resolve(new Response(JSON.stringify(init?.method === 'POST' ? { id: 'held', state: 'accepted' } : { imports: [] }), { status: init?.method === 'POST' ? 202 : 200, headers: { 'Content-Type': 'application/json' } }));
+   if (!['/v1/documents/imports','/v1/collections/imports'].includes(url.pathname)) return original(input, init);
+   if (!url.searchParams.has('id')) return Promise.resolve(new Response(JSON.stringify(init?.method === 'POST' ? { id: 'held', state: 'accepted',sha256:'a'.repeat(64),collection_id:'workspace',collection_revision:1 } : { imports: [] }), { status: init?.method === 'POST' ? 202 : 200, headers: { 'Content-Type': 'application/json' } }));
    const entry = { method: init?.method ?? 'GET', aborted: false };
    (window as any).progressRequests.push(entry);
    return new Promise<Response>((_, reject) => {
@@ -83,6 +86,7 @@ test('cancelling a pending import also aborts its progress observation without r
  });
  await page.goto('/ui/#/knowledge');
  await page.locator('[data-knowledge-import]').setInputFiles({ name: 'pending.txt', mimeType: 'text/plain', buffer: Buffer.from('Retain this source') });
+ await reviewKnowledgeImport(page);
  await expect.poll(() => page.evaluate(() => (window as any).progressRequests.map((r: any) => r.method))).toEqual(['POST', 'GET']);
  await page.locator('.knowledge-import-actions').getByRole('button', { name: 'Cancel', exact: true }).click();
  await expect.poll(() => page.evaluate(() => (window as any).progressRequests.every((r: any) => r.aborted))).toBe(true);

@@ -4,6 +4,7 @@ import { forgetDraftMemory, hasLegacyDrafts, resolveLegacyDrafts, workspaceDraft
 import { ScopedNotice } from '../components/WorkspacePresentation';
 import { useI18n } from '../i18n';
 import { draftRecoveryText } from '../i18n/draft-recovery';
+import {ReaderMemoryProvider} from './reader-memory';
 
 const Context = createContext('');
 export function useDraftScope() {
@@ -18,7 +19,7 @@ export function WorkspaceDraftProvider({ children }: { children: ReactNode }) {
   const { scope: actor, workspace } = useWorkspace();
   const [scope] = useState(() => workspace ? workspaceDraftScope(actor, workspace) : `@memory:${crypto.randomUUID()}`);
   useEffect(() => () => forgetDraftMemory(scope), [scope]);
-  return <Context.Provider value={scope}>{children}</Context.Provider>;
+  return <Context.Provider value={scope}><ReaderMemoryProvider>{children}</ReaderMemoryProvider></Context.Provider>;
 }
 
 export function DraftRecoveryNotice() {

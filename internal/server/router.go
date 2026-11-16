@@ -47,6 +47,16 @@ func (s *Server) buildRouter() http.Handler {
 	sessionsOnly := func(handler http.HandlerFunc) http.HandlerFunc {
 		return s.requirePermissionWhenAuthEnabled(users.PermissionSessions, handler)
 	}
+	// Read-only OCR readiness for private Chat users. Pack installation still
+	// requires Knowledge management; this endpoint exposes no document content.
+	mux.HandleFunc("/v1/document-ocr-languages", chatOnly(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			writeError(w, "Method not allowed", 405)
+			return
+		}
+		s.handleOCRLanguages(w, r)
+	}))
 	guards := routeGuards{
 		adminOnly:        adminOnly,
 		modelManagerOnly: modelManagerOnly,
@@ -193,6 +203,21 @@ func (s *Server) registerKnowledgeRoutes(mux *http.ServeMux, guards routeGuards)
 	mux.HandleFunc("/v1/rag/enable", ragManagerOnly(s.handleRAGEnable))
 	mux.HandleFunc("/v1/rag/disable", ragManagerOnly(s.handleRAGDisable))
 	mux.HandleFunc("/v1/documents", ragOnly(s.handleDocumentsList))
+	mux.HandleFunc("/v1/collections", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			ragOnly(s.handleCollections)(w, r)
+		} else {
+			ragManagerOnly(s.handleCollections)(w, r)
+		}
+	})
+	mux.HandleFunc("/v1/documents/collection", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			ragOnly(s.handleDocumentCollection)(w, r)
+		} else {
+			ragManagerOnly(s.handleDocumentCollection)(w, r)
+		}
+	})
+	mux.HandleFunc("/v1/collections/imports", ragManagerOnly(s.handleCollectionImport))
 	mux.HandleFunc("/v1/documents/ingest", ragManagerOnly(s.handleDocumentIngest))
 	mux.HandleFunc("/v1/documents/imports", ragManagerOnly(s.handleDocumentImports))
 	mux.HandleFunc("/v1/documents/ocr-languages", func(w http.ResponseWriter, r *http.Request) {
@@ -212,6 +237,25 @@ func (s *Server) registerKnowledgeRoutes(mux *http.ServeMux, guards routeGuards)
 		}
 	})
 	mux.HandleFunc("/v1/documents/source", ragOnly(s.handleDocumentSource))
+	mux.HandleFunc("/v1/documents/structure", ragOnly(s.handleDocumentStructure))
+	mux.HandleFunc("/v1/document-analyses", ragOnly(s.handleDocumentAnalyses))
+	mux.HandleFunc("/v1/document-analyses/results", ragOnly(s.handleDocumentAnalysisResults))
+	mux.HandleFunc("/v1/document-analyses/source", ragOnly(s.handleDocumentAnalysisSource))
+	mux.HandleFunc("/v1/document-analyses/export", ragOnly(s.handleDocumentAnalysisExport))
+	mux.HandleFunc("/v1/document-analyses/synthesis", ragOnly(s.handleDocumentSynthesis))
+	mux.HandleFunc("/v1/document-analyses/synthesis/results", ragOnly(s.handleDocumentSynthesisResults))
+	mux.HandleFunc("/v1/document-analyses/synthesis/retry", ragOnly(s.handleDocumentSynthesisRetry))
+	mux.HandleFunc("/v1/document-analyses/synthesis/export", ragOnly(s.handleDocumentSynthesisExport))
+	mux.HandleFunc("/v1/document-analyses/synthesis/review", ragOnly(s.handleDocumentSynthesisReview))
+	mux.HandleFunc("/v1/document-analyses/synthesis/compositions", ragOnly(s.handleDocumentCompositions))
+	mux.HandleFunc("/v1/document-analyses/synthesis/compositions/report", ragOnly(s.handleDocumentCompositionReport))
+	mux.HandleFunc("/v1/document-analyses/synthesis/compositions/evidence", ragOnly(s.handleDocumentCompositionReport))
+	mux.HandleFunc("/v1/document-analyses/synthesis/compositions/cancel", ragOnly(s.handleDocumentCompositionControl))
+	mux.HandleFunc("/v1/document-analyses/synthesis/compositions/retry", ragOnly(s.handleDocumentCompositionControl))
+	mux.HandleFunc("/v1/document-analyses/synthesis/compositions/export", ragOnly(s.handleDocumentSynthesisExport))
+	mux.HandleFunc("/v1/document-analyses/cancel", ragOnly(s.handleDocumentAnalysisControl))
+	mux.HandleFunc("/v1/document-analyses/retry", ragOnly(s.handleDocumentAnalysisControl))
+	mux.HandleFunc("/v1/documents/corrections", ragManagerOnly(s.handleDocumentCorrections))
 	mux.HandleFunc("/v1/documents/search", ragOnly(s.handleDocumentSearch))
 	mux.HandleFunc("/v1/documents/reindex", ragManagerOnly(s.handleDocumentReindex))
 	mux.HandleFunc("/v1/rag/evaluate", ragManagerOnly(s.handleRAGEvaluate))

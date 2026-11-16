@@ -1,5 +1,196 @@
 # Tasks
 
+## 44. Approved desktop agent experience (2026-11-15)
+
+The owner rejected the installed document-led design. Earlier evidence remains
+valid for its named tests but does not close these replacement acceptance gates.
+Implement under the approved three-entry-point direction; no new goal or executor.
+
+- [x] 44.1 Record the desktop/session/permissions, configuration, model acquisition and navigation audit; reconcile current proposal/design/specs with the approved scope and distinguish implementation gaps from external qualification. See desktop-agent-evidence.md; strict validation passed on 2026-11-15.
+- [x] 44.2 Implement compact desktop presentation, configurable global shortcut, tray fallback and full-window restoration with isolated lifecycle/geometry/IPC tests. Preserve one trusted session, service and execution authority.
+- [x] 44.3 Integrate compact text/voice input with existing saved work, draft persistence and actual progress. Verify dismissal stops capture/playback, reopening does not submit, expansion preserves work, and Stop remains reachable independently of model progress.
+- [x] 44.4 Replace document-led Home and redundant navigation with a restrained request-first workspace and recent work. Preserve deep links, keyboard navigation, narrow layouts and ongoing-work visibility.
+- [x] 44.5 Move advanced response/voice/runtime configuration into Settings; retain compact model/profile choice, source scope and per-task restrictions. Verify scoped preferences round-trip without granting access or altering pinned profiles.
+- [x] 44.6 Simplify shared document reader chrome and dark-mode layering; keep original content dominant, coverage discoverable, and page/source identity intact. Inspect actual rendered light/dark/RTL/zoom views.
+- [ ] 44.7 Unify model inventory, Add models, curated discovery and explicit online search with a persistent transfer surface. Verify category/filter/back navigation, long names, empty results and cancellation/retry.
+- [ ] 44.8 Add reviewed capability-pack plans over existing pinned model/package/runtime installers; include missing bytes, platform/language prerequisites, deduplication, interruption/retry and explicit activation. Do not claim ready until required runtime checks pass.
+- [ ] 44.9 Coordinate default agent/tool admission and cross-client continuation with agent-conversation-workflows. Qualify app launch, scoped browser search, file/project work and a correction/Stop using isolated targets, with real model evidence separately from fixtures.
+- [x] 44.10 Localize new controls/errors in all 29 supported languages and extend translator packs. Run translation completeness, RTL/IME, keyboard/focus, screen-reader announcements, 200% zoom and reduced-motion checks; do not claim native-language approval.
+- [ ] 44.11 Run affected renderer/desktop/API/Go checks and isolated packaged startup/shortcut/recovery tests. Record failures and unrun checks; preserve ordinary user data and old routes. Installation is separate from design and implementation acceptance.
+- [x] 44.12 Repair screenshot-reproduced Quick Access maximization and duplicate caption chrome; preserve one trusted window, full-state restoration and bounded local caption actions.
+- [x] 44.13 Place model choice beside input actions, move unselected folder configuration under Attach, and center the empty-workspace welcome above a bottom-anchored composer per the owner's final reference; preserve pinned models, drafts and permission boundaries. Use compact family/size labels beside composer actions while retaining full names and exact identifiers in the picker.
+- [x] 44.14 Replace muddy voice layers and modal framing with interchangeable text/voice views in compact and full modes, warm separated colors and measured-input/state motion; preserve conversation/draft, keyboard focus, Stop and reduced motion.
+- [x] 44.15 Verify compact/full/voice transitions with isolated renderer and native captures, menu growth, localized captions, RTL, short screens and enlargement; record actual results and unresolved native interaction checks.
+- [x] 44.16 Restore direct Models navigation in a slim destination rail, place New chat above recent work in an adjacent context column, and flatten model inventory, catalog and explicit online-search navigation consistently across text and speech categories without changing transfer authority.
+- [x] 44.17 Reuse the contextual column for Settings search and category navigation, introduce a dedicated Appearance destination with visual mode choices and aligned grouped rows, and match the reference's heading/type/spacing hierarchy; preserve narrow/collapsed fallback, persistent deep links, scoped preferences and voice readiness. Separate desktop Quick window shortcuts and local storage, move account actions to General, and remove the footer refresh menu in favor of refresh on return.
+- [x] 44.18 Style shared dropdowns and popup choices with theme tokens, selected/focus/disabled states and RTL support; verify keyboard selection, narrow layouts and fallback behavior.
+
+- [x] 44.19 Replace isolated Settings destination buttons with shared action cards; group response and voice controls into readable rows with compact model labels and inspectable exact identities. Refine model navigation and terminal launch choices without changing execution or download authority.
+- [x] 44.20 Replace fixed warm voice colors with theme-derived layers and continuous bounded listening motion; verify distinct capture/thinking/speaking states, audio-level response and both reduced-motion mechanisms.
+- [x] 44.21 Run focused preference/selection/voice/navigation/terminal checks; inspect desktop, narrow, RTL, enlarged, light/dark and named-theme captures, document outcomes and build the preview.
+
+- [x] 44.22 Replace routine native message boxes with host-owned themed confirmation windows, including terminal close, failures and access decisions. Retain cancel defaults, explicit scope, checkbox opt-in, trusted sender checks and fail-closed lifecycle behavior; inspect actual isolated Electron rendering.
+- [x] 44.23 Repair the reported terminal caption seam and unequal launch-card hover; retain fractional layout coordinates until the native boundary, preserve caption controls and verify enlarged/reduced-motion behavior.
+- [x] 44.24 Apply the selected palette and a quiet brand/status hierarchy to startup and recovery; preserve local recovery actions, language, reduced motion and failure details.
+- [x] 44.25 Refine model-choice contents with readable labels, selected markers and progressive technical identity; retain exact revision selection, filtering, unavailable explanations and keyboard operation.
+- [x] 44.26 Apply rounded main workspace corners without long sidebar rules, extend action cards to Quick window/setup/Library, and refine collection/analysis controls. Verify actual rendered light/dark/narrow/RTL states and existing workflow/permission tests before packaging.
+- [x] 44.27 Refine shared dropdown popups and input focus/borders; give Settings and Library destinations distinct semantic icons. Verify keyboard selection, disabled controls, RTL, forced colors and enlarged layouts.
+- [x] 44.28 Replace the brief Help popup with searchable in-workspace guidance covering models, documents, voice, access, recovery and desktop tools. Preserve drafts and return focus, use translated content in every supported language, and keep guidance/navigation free of downloads, submissions or permission changes.
+- [x] 44.29 Repair migrated-chat deletion with explicit identity/revision, a durable deletion fence and resumable source cleanup; retain disclosed work records and enforce actor/revision/active-input protections. Verify API, persistence/restart, partial failure and rendered retry/recovery paths.
+- [x] 44.30 Refine attachments into compact file tiles and truthful quiet preparation states; preserve bounded upload admission, retained-source recovery, explicit text-only acknowledgement, draft scope and accessible removal. Verify file/image input, batch failure and retry without invented progress or decorative sweep animations.
+- [x] 44.31 Simplify the shared reader into a file header and slim toolbar with on-demand page thumbnails, alternate views and coverage detail. Preserve revision/digest checks, source highlighting, original download, keyboard navigation and reading/draft position; inspect light/dark/narrow/RTL and reduced-motion fixtures.
+- [x] 44.32 Separate dropdown selection from hover; soften widget borders while retaining keyboard focus, and replace setup modal with inline setup and searchable Help.
+- [x] 44.33 Add persisted response-display preference and live canonical response previews; retain source validation and provider limitations, test live/buffered/reconnect/access transitions, and extend all 29 locale review packs.
+- [x] 44.34 Refine Agents, Tools, External agents and Library layouts and child surfaces with semantic icons and bounded controls.
+- [x] 44.35 Add owner-scoped profile deletion with an explicit associated-work review and protected-run checks; test partial failure, revision conflict and cross-user isolation without deleting installed-user data.
+- [x] 44.36 Finish the resumed Agents pass: put profile save/use actions beside the editor heading, group archive/search with the profile list, distinguish archived profiles and keep archived delegates out of new selections. Refine instructions/examples and resource groups without changing grants or losing drafts.
+- [x] 44.37 Finish Tools/MCP and external-agent presentation: semantic capability icons, compact inspectable identities, coherent connection rows and setup instructions, truthful readiness, and serialized mutations with retained drafts on failures. Verify light/dark, narrow/RTL, keyboard, all-language profile flows and affected integration tests.
+- [x] 44.38 Coordinate Quick Access text/voice and compact/full presentation changes with bounded native resize easing and one interruptible renderer transition. Preserve saved work, draft/focus, capture cancellation, full geometry and reduced-motion preferences; verify reversals, dismissal, missing acknowledgments and recreated windows before release. Desktop suite: 230 passed, one skipped; command/voice renderer suites: 69 passed, two opt-in captures skipped; three added motion gates passed. Source and packaged hidden native checks passed; see `docs/quality/evidence/quick-window-transitions-2026-11-16.md` for scope and limits.
+
+- [x] 44.39 Repair scroll-focus decoration and keep a consistent animated startup surface through service connection, renderer loading, model/history and selected-conversation restoration. Preserve keyboard focus, theme/locales and reduced motion, expose elapsed time and retry on stalled startup, never block on running generation or re-show startup on background refresh. Verify delayed/failed reads, motion preferences and packaged startup, then reinstall with verified rollback. Completed with the caption-height scrollbar regression fixed and the owner's animation preference applied; see `docs/quality/evidence/startup-readiness-2026-11-16.md` for exact checks and installation receipt.
+
+Evidence for 44.36–44.37: `docs/quality/evidence/agents-refinement-2026-11-15.md`.
+
+Evidence for 44.30–44.35: `docs/quality/evidence/reader-library-flow-2026-11-15.md`.
+Renderer fixtures and backend/client checks are recorded separately from the older
+installed preview. These checks do not close native-language, hardware/model or
+latest-build installation gates.
+
+Validation commands: `npm --prefix apps/web run check`, `build`, `i18n:check`,
+`i18n:complete`, `i18n:consistency`; focused `test:e2e` suites followed by affected
+integration suites; `npm --prefix apps/desktop test`; affected `go test`/race
+packages; generated API and Python parity if public service contracts change;
+`openspec validate workspace-outcome-experience --strict --no-interactive`.
+
+Reader thumbnail coordination (2026-11-14): extended the
+existing shared reader with an optional four-page strip, sequential bounded
+thumbnail requests and existing localized page/review labels. Reuse theme tokens,
+keyboard navigation and source identity checks. Do not create a second reader or
+persist rendered document pixels. All 29 language fixtures, bounded loading,
+wrong-source and legacy-service checks pass. Light/dark and narrow RTL screenshots
+were inspected. Evidence: `docs/quality/evidence/document-thumbnails-2026-11-14.md`.
+
+OCR selection coordination (2026-11-14): Chat and Knowledge share the same
+localized language choice and explicit capability state. Selection is independent
+of interface locale and saved with the upload. Knowledge setup uses one pack
+selector with verified installation state; Chat has a compact keyboard-accessible
+dialog for future uploads. Keep the existing dialog, field and theme components.
+All 29 locales have translated controls; native review and OCR qualification are
+separate. Mixed-language/page selection remains with the document change.
+
+Reader coordination (2026-11-14): the shared reader now restores scoped navigation
+positions after closing/reopening and can highlight exact retained image-OCR
+regions. It reuses the current reader and existing translated controls. Source
+hashes, coordinate frames and fresh access checks gate the projection; no separate
+document modal or cached-source authority was introduced. Extraction correction
+drafts also survive navigation, with fresh access, explicit changed-base review
+and retained uncertainty for in-flight writes. All 39 correction cases pass,
+including all 29 languages. Evidence:
+`docs/quality/evidence/document-reader-position-2026-11-14.md`.
+
+Document TIFF coordination (2026-11-14): the existing shared reader now accepts
+TIFF page rasters and retained per-page OCR spans. Existing localized navigation,
+partial coverage and original/text pairing pass in all 29 locales. This uses the
+same reader and theme components; no duplicate library or modal was introduced.
+Evidence: `docs/quality/evidence/document-tiff-2026-11-14.md`. OCR qualification
+and remaining document tasks stay with `document-ingestion-reliability`.
+
+## Document and Knowledge upgrade coordination (2026-11-12)
+
+Summary/requirements coordination (2026-11-13): `DocumentSynthesis` now consumes
+durable candidate jobs through `api.synthesis`, sharing the comparison workspace
+layout, pinned read-only `DocumentReview`, and capability-gated artifact downloads.
+Source quotations sit beside draft text; conditions and exceptions stay distinct.
+History, uncertain-outcome recovery, cancellation and explicit retry are connected.
+All 29 locale fixtures pass; draft CSV/JSON/Markdown exports retain source and
+coverage identity and stay labelled unreviewed. Do not build a competing modal or
+report traversal as semantic approval. D1/D2 remain open for the wider library,
+source-reader scope. Human review is now connected in the same workspace:
+claim decisions and notes, explicit section checks, saved attribution, immutable
+history, conflict/uncertain-save recovery, and in-memory drafts across pagination
+and analysis tabs. The export carries those decisions alongside original evidence.
+Use `SynthesisReviewSection` and the existing reader rather than another review
+modal. See `docs/quality/evidence/document-synthesis-review-2026-11-13.md`.
+
+Comparison workspace coordination (2026-11-13): Knowledge now consumes the durable
+comparison and history contracts through `api.analyses`. Use the dedicated
+`DocumentComparison` workspace, with separate setup/results/history views,
+independent before/after columns and bounded verified excerpts. `ComparisonCoverage`
+reuses `DocumentReview` with `readOnly` and a pinned extraction revision; do not
+duplicate its source navigation or expose edits to a historical analysis. D1/D2
+remain open for the wider approved library and export work. Evidence is tracked
+in `docs/quality/evidence/document-comparison-ui-2026-11-13.md`.
+
+Comparison exports now share that workspace through a compact, capability-gated
+disclosure, with JSON/CSV/Markdown downloads, verified artifact receipts and all
+29 localized action/retention messages. The 75-check comparison suite passes;
+native review and the wider D1/D2 library work remain open. Export evidence:
+`docs/quality/evidence/document-comparison-export-2026-11-13.md`.
+
+Collection API coordination (2026-11-13): `/v1/collections` and
+`/v1/documents/collection` now expose current audiences and revision-checked
+mutations. Use `api.collections` for the planned UI. Explicit private imports
+must use `/v1/collections/imports`, never fall back to legacy shared uploads.
+Chat publication now consumes `CollectionDestination`: explicit selection,
+private creation, reviewed audience and revision, with account/workspace reset.
+All 29 language fixtures and failure/recovery checks pass; native review remains
+pending. Ordinary Knowledge uploads now reuse this component in a pre-transfer
+batch review dialog, with the same policy revision for each file and no shared
+fallback. Collection management, owner-only member editing, reviewed document
+moves, collection filtering and 30-document pagination are now integrated in
+Knowledge. The combined renderer suite passes 182 tests, including all 29
+languages. D2 remains open for the remaining library metadata, versions, exports
+and wider reader presentation; these checks do not qualify native translations.
+
+- [ ] D1 Consume the additive structured-source/coverage contracts from `document-ingestion-reliability`; unify Chat/Knowledge readers and truthful coverage without duplicating backend ownership.
+- [ ] D2 Implement the approved library/collection/review/export presentation and all-29-language, RTL, keyboard, narrow/zoom/theme tests; keep linguistic approval separate from catalog completeness.
+
+Backend coordination: documents now expose an additive `extraction_revision`;
+historical citation reads retain exact evidence under current collection access.
+Structured graphs, attributed corrections and selective embedding reuse exist in
+the engine. Supported structure/correction HTTP contracts now feed a shared
+text-review panel in the Knowledge source dialog and Chat citation reader. It
+pins historical revisions and retains drafts across reader-view switches and
+uncertain saves, with explicit latest-base inspection before another write.
+Private attachments now use the same bounded structured reader, pinned to their
+retained source revision, with read-only controls. Draft files, saved files and
+saved-answer citations can open it; incomplete linked context is shown using the
+same 29-language notice as Knowledge. Native review is pending. D1/D2 remain open
+for full original/structure/side-by-side unification, outlines, coverage maps,
+navigation-wide draft retention, collections, library controls and exports.
+
+2026-11-13 image increment: the shared reader now switches between an upright
+PNG/JPEG source raster and its retained OCR text without rerunning OCR. Existing
+localized controls and coverage notices are reused across all 29 languages.
+Source geometry overlays, side-by-side inspection, TIFF and broader OCR-language
+qualification remain in the coordinated document plan.
+
+Office adapter coordination (2026-11-13): bounded structure projections now
+retain spreadsheet raw/display/cache/visibility metadata and presentation
+table/visual metadata. Oversized merged-range metadata is explicitly omitted
+from reader responses with an incomplete notice; immutable graphs retain it.
+Speaker notes and authored visual descriptions are labeled in source text.
+Format-limit copy is updated across all 29 catalogs. Rich cell/table inspection,
+visual coverage maps and original Office layout are still part of D1/D2.
+
+Reader navigation coordination (2026-11-13): use the shared structured projection's
+navigation cursor and within-unit block offsets. Unit counts come from the full
+retained revision, never the current excerpt. The common reader now serves
+Knowledge records with retained originals and supports original/text comparison;
+legacy text remains readable. Outline and coverage controls protect active drafts.
+Thumbnails, source-region highlighting and navigation-wide state remain open.
+
+DOCX margin coordination (2026-11-13): the shared structure reader receives
+typed header/footer source sections, original package-part identities and review
+units for unresolved page placement. All 29 format-limit messages now reflect
+this extraction; no rendered page positions or linguistic approval are claimed.
+
+Knowledge citations now expose saved structural-link receipts with an all-language
+notice when linked headings, table headers or exceptions were omitted. Chat image
+admission preserves originals, checks ambiguous metadata/animation before decode,
+and gates rotated/mirrored images against older services. Headless preview tests
+cover all eight PNG/JPEG orientations; model vision/OCR qualification is separate.
+
 ## 25. Approved Activity and attention redesign
 
 - [x] 25.1 Reproduce stale/terminal preview items, attention starvation, duplicate identities and stop/delete response races; preserve failing evidence. See `docs/quality/evidence/activity-reconciliation-2026-11-05.md`.
@@ -342,6 +533,13 @@ Evidence: `docs/quality/evidence/localization-followup-2026-11-11.md`. The repor
 screen increment is installed; full feature translation and human review are not
 complete and the readiness command intentionally fails.
 
+Document-workspace coordination (2026-11-13): the document-ingestion change adds
+summary report/section-draft views within the existing analysis dialog, a source
+inspection panel, stale-review notices and authenticated exports. It reuses the
+current source reader, focus recovery, theme tokens and 29-language catalogs.
+This does not reopen or duplicate the completed workspace navigation work, nor
+close native linguistic or representative usability qualification.
+
 ## 38. Rendered text and terminal audit (owner-requested)
 
 - [x] 38.1 Collect visible text nodes, placeholders, titles and accessible names across main routes, expanded Help/setup, all Settings sections, model discovery and Activity states; correlate every element with contextual sources and report unclassified runtime content separately.
@@ -359,6 +557,17 @@ rendered context and pending review records. Native confirmation copy was checke
 through catalogs, not desktop control. Human review remains open under 32.3;
 `i18n:ready` intentionally fails. Go CLI/process output and OS-owned copy remain
 outside the catalog inventory and are not claimed as fully localized.
+
+Document-reader coordination (2026-11-14): document-ingestion-reliability 8.1
+now supplies private correction/history and pinned previews through the shared
+reader. Existing drafts, focus, themes and translation catalogs are reused.
+No parallel reader or library has been introduced. Evidence is recorded in
+`docs/quality/evidence/document-private-corrections-2026-11-14.md`.
+
+Native-evidence reader coordination (2026-11-14): the existing shared reader now
+shows native-form review states and separate, collapsed Word revision alternatives.
+It reuses current themes, source controls and translation packs; no competing
+reader was added. See `docs/quality/evidence/document-native-evidence-2026-11-14.md`.
 
 ## 39. Canonical conversation presentation follow-up
 
@@ -396,3 +605,62 @@ the legacy mutation guard remains enforced. This recovery does not introduce
 canonical attachment execution or silently duplicate an executor.
 
 Evidence: `docs/quality/evidence/canonical-document-handoff-2026-11-14.md`.
+
+## 42. Screenshot-driven reader and recovery repair
+
+- [x] 42.1 Move attachment handoff out of the text-entry row, compact ready-file presentation, and replace the full-height conversation focus line with a bounded keyboard focus indicator.
+- [x] 42.2 Consolidate reader coverage and affected-page links into a labelled disclosure while retaining visible incomplete-coverage status; bound thumbnail chrome and verify desktop/narrow/RTL layouts.
+- [x] 42.3 Give model-load failures a typed recovery path to model selection without changing models or resubmitting work; preserve more-specific capacity/queue/cancellation errors.
+- [x] 42.4 Run focused renderer, backend and visual regressions and record current-page retrieval and canonical attachment limitations honestly.
+
+Evidence: `docs/quality/evidence/reader-recovery-followup-2026-11-14.md`.
+
+## 43. Coherent work-and-results redesign (planned 2026-11-14)
+
+This is the implementation sequence for the opening design/proposal revision.
+Prior checked UI tasks do not close these gates. Implementation began on 2026-11-14 under the owner's explicit instruction
+to implement and install. Complete connected journeys, not isolated cosmetic passes.
+
+### A. Freeze the interaction contract
+
+- [x] 43.1 Map current routes, controllers, source selections, execution states and result stores to the six acceptance journeys in the design; record reuse, obsolete UI and missing contracts. Establish comparable screenshot/latency/request/memory baselines using isolated state.
+- [x] 43.2 Implement and inspect Home, quick conversation, source-focused work, result review and failure recovery at desktop/narrow, light/dark and RTL, using labelled fixture documents. The owner explicitly instructed implementation and installation, superseding a separate prototype-only approval stage; this records implementation/inspection, not owner visual acceptance.
+
+### B. Establish shared presentation and state boundaries
+
+- [x] 43.3 Refactor the shell, route adapters, pane layout and active-work context without duplicating execution state. Keep existing deep links, private draft scoping, reader position and focus restoration; add navigation-during-work and actor/service-switch regressions.
+- [x] 43.4 Consolidate composer, compact response status, task details and recovery. Remove duplicate ordinary-message Running/Stop panels and empty folder scaffolding. Verify queued, accepted, running, stopping, interrupted and unknown states without replay.
+- [x] 43.5 Migrate the shared reader and result frame to the approved hierarchy, toolbar and progressive coverage/thumbnail controls. Consolidate component styles/tokens and remove superseded overrides as each route migrates; verify named themes, focus and reduced motion.
+
+### C. Integrate canonical inputs and explicit source scope
+
+- [x] 43.6 Coordinate and record typed document/image/Knowledge input admission in `agent-conversation-workflows` and revision/page/block selection in `document-ingestion-reliability` before modifying those contracts. Keep one implementation owner for each backend concern; link its tests/evidence here rather than introducing a competing executor or retrieval path.
+- [x] 43.7 Wire the shared composer to advertised canonical input capabilities, preserving selections and drafts on unsupported services. Verify text plus references are admitted once, compatible inputs stay in the same conversation, lost acknowledgments reconcile, and legacy mutation guards remain enforced.
+- [x] 43.8 Add explicit source/page context selection and immutable submission snapshots. Verify server-side access, revision/range validation, page-switch-after-send, revoked sources, coverage receipts and citation opening across Chat and Library. Add generated API, CLI and Python parity for changed public contracts in the owning backend change.
+
+### D. Finish the document-to-result journey
+
+- [x] 43.9 Integrate existing library/collection selection and import states into active work, distinguishing search for documents from search inside content. Preserve explicit private/shared destinations and review permissions.
+- [x] 43.10 Present requirements, summaries and comparisons as persistent work results using existing analysis/composition/review endpoints. Complete source inspection, attributed edits/review, candidate regeneration without overwrite, export and reopening; add missing additive result contracts only where the store audit proves necessary.
+- [x] 43.11 Run the complete six-journey matrix through isolated HTTP and renderer paths, including partial extraction, unsupported figures, model-load failure, cancellation, reconnect, save conflicts and revocation. Inspect screenshots of setup, working, result and recovery states; fix blocking findings before broad rollout.
+
+### E. Apply the same system across the app
+
+- [x] 43.12 Bring Activity, Models, Agents, integrations, Settings, Help, voice and terminal into the same navigation, control and status patterns while preserving their capability/permission boundaries. Audit every supported route and its loading/empty/error/populated states; remove superseded entry points only after compatibility checks.
+- [x] 43.13 Wire all new labels, status, validation, tooltips and accessibility names into all 29 locale catalogs and translator packs. Verify RTL, long text, IME composition, keyboard/focus, screen-reader announcements, narrow layouts, 200% zoom, all themes and forced colors. Keep linguistic approval separate from automated completeness.
+
+### F. Verify and prepare a controlled release
+
+- [x] 43.14 Rehearse additive migrations, restart, old deep links, mixed client/service versions and rollback on disposable data. Verify ownership, hashes, counts, revisions, edits, outputs and active requests; do not migrate installed-user data during tests.
+- [x] 43.15 Run relevant focused checks during each package, then integrated checks: `go test ./...`; affected race packages from `.github/workflows/ci.yml`; `npm --prefix apps/web run api:check`, `check`, `build`, `i18n:check`, `i18n:complete`, `i18n:consistency`, `i18n:rendered`; `npm --prefix apps/web run test:e2e -- --workers=1` against isolated fixtures/services; `npm --prefix apps/desktop test`; and Python SDK checks when contracts change. Record exact commands, environments, failures and skips. `i18n:ready` remains a separate human-review gate, not a test to bypass.
+- [ ] 43.16 Measure the stated UI feedback/navigation/memory gates on fixed fixtures and actual 8 GB/16 GB profiles where available. Run representative document and conversation tasks using installed models and packaged local parsers in isolated offline state; distinguish real answers from fixture UI results and record unavailable hardware/model qualification.
+- [x] 43.17 Verify packaged assets and clean offline startup with disposable profiles; inspect installed-build identity only in an explicitly requested installation stage. Update `docs/guides/interface-tour.md`, affected API/client docs, quality evidence and existing production-readiness records with actual outcomes and unresolved external reviews.
+- [x] 43.18 Reconcile superseded implementation paths and remaining findings, run `openspec validate workspace-outcome-experience --strict --no-interactive` and focused `git diff --check`, and present package-by-package implementation/verification status. Do not declare completion from checkbox totals, prototype acceptance or a successful installer alone.
+
+Implementation evidence: `docs/quality/evidence/work-surface-redesign-2026-11-15.md`. The implementation and automated contract gates have recorded evidence. Task 43.16 remains open for the unavailable physical 8 GB profile and representative model/corpus qualification; the measured 16 GB host and real-model smoke results are recorded without substituting them for those gates. The explicit instruction to implement superseded the prototype-only review stage; no owner visual acceptance is claimed.
+
+Installation stage completed on 2026-11-15: verified local preview and rollback backup recorded in the dated evidence. This closes installation, not the unchecked full-program gates.
+
+Full-plan follow-through (2026-11-15): broad renderer inventory reconciled with focused corrected reruns, real-service storage/navigation, Windows Go, WSL race, Python and desktop results. Library page/block scope and private draft persistence complete; Stop Talk remains available during generation. Disposable upgrade/restart/rollback and production baseline comparisons pass. See the dated evidence for exact failures, remedies, opt-in skips and installation identity.
+
+Final follow-through installation: `0.4.31-preview.20261115044922071.gda2a178e`, 1,191 verified payload files, unchanged workspace/profile, separate verified rollback backup. The app is left closed. Task 43.16 remains an external qualification gate; implementation and local installation do not certify physical 8 GB behavior, native-language review or the full document benchmark.

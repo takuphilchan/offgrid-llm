@@ -131,7 +131,9 @@ func TestWASMOCRAuthoredCorpus(t *testing.T) {
 func TestOCRRejectsRequestsBeforeExecution(t *testing.T) {
 	for _, row := range []struct{ input, code string }{
 		{`{`, "document_invalid"}, {`{"protocol":1,"path":"/private"}`, "document_invalid"},
-		{`{"protocol":1,"language":"fra"}`, "document_ocr_language_unavailable"},
+		{`{"protocol":1,"language":"sn"}`, "document_ocr_language_unavailable"},
+		{`{"protocol":1,"language":"fra"}`, "document_ocr_language_missing"},
+		{`{"protocol":1,"language":"eng+fra","model":"YQ=="}`, "document_ocr_language_invalid"},
 		{`{"protocol":1,"language":"eng"}`, "document_ocr_language_missing"},
 		{`{"protocol":1,"language":"eng","model":"YQ=="}`, "document_ocr_language_invalid"},
 	} {

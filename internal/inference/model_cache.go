@@ -741,7 +741,7 @@ func (mc *ModelCache) doLoadContext(ctx context.Context, modelID, modelPath, pro
 	log.Printf("Starting llama-server with args: %v", args)
 
 	// Get llama-server binary path
-	binaryPath, err := mc.binManager.GetLlamaServer()
+	binaryPath, err := mc.binManager.GetLlamaServerContext(ctx)
 	if err != nil {
 		mc.mu.Unlock()
 		return nil, fmt.Errorf("failed to get llama-server binary: %w", err)

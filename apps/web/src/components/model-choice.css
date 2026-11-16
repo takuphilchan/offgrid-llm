@@ -3,14 +3,32 @@
   .model-choice-label { color: var(--muted); font-size: var(--type-caption); }
   .model-choice-trigger { width: 100%; min-width: 0; justify-content: space-between; text-align: start; gap: 12px; }
   .model-choice-trigger > span:first-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .model-choice-panel { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 8px; }
-  .model-choice-options { display: grid; gap: 4px; max-height: 240px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-  .model-choice-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--text); cursor: pointer; }
-  .model-choice-option:has(:checked), .model-choice-option:not(.unavailable):hover { background: var(--surface-2); border-color: var(--line-strong); }
-  .model-choice-option:focus-within { outline: 2px solid var(--text); outline-offset: -2px; }
-  .model-choice-option input { margin-block-start: 3px; }
+  .model-choice-panel { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 8px; border:1px solid var(--line); border-radius:18px; padding:8px; background:var(--surface-1); box-shadow:0 6px 18px color-mix(in srgb,var(--text) 4%,transparent); }
+  .model-choice-panel .workspace-search-field { border:0; background:var(--surface-2); border-radius:12px; min-height:36px; }
+  .model-choice-options { display: grid; gap: 3px; max-height: 280px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; padding:2px; }
+  .model-choice-option { position:relative; display: grid; grid-template-columns:minmax(0, 1fr) 20px; align-items: center; gap: 12px; padding: 12px; border:0; border-radius:12px; color:var(--text); cursor:pointer; transition:background 140ms ease; }
+  .model-choice-option:has(:checked), .model-choice-option:not(.unavailable):hover { background: var(--surface-2); }
+  .model-choice-option:has(input:focus-visible) { outline: 2px solid var(--muted); outline-offset: -2px; }
+  .model-choice-option input { position:absolute; inset-inline-end:12px; top:50%; transform:translateY(-50%); width:20px; height:20px; opacity:0; margin:0; cursor:inherit; z-index:1; }
   .model-choice-option > span { display: grid; gap: 3px; min-width: 0; }
-  .model-choice-option strong { font-weight: var(--weight-medium); font-size: var(--type-body); }
+  .model-choice-option strong { font-weight:500; font-size:var(--type-ui); overflow-wrap:anywhere; }
+  .model-choice-name { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 12px; }
+  .model-choice-variant { margin-inline-start:auto; }
+  .model-choice-technical { display:grid; gap:4px; margin-block-start:6px; }
+  .model-choice-check { visibility:hidden; }
+  .model-choice-option:has(:checked) .model-choice-check { visibility:visible; }
+  .model-choice-details { justify-self:start; display:flex; align-items:center; gap:6px; min-height:28px; padding:4px 10px; font-size:var(--type-caption); color:var(--muted); font-weight:400; }
+  .model-choice-details[aria-pressed=true] svg { transform:rotate(180deg); }
   .model-choice-option code, .model-choice-option small, .model-choice-missing, .model-choice-summary { font-size: var(--type-caption); line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
-  .model-choice-option.unavailable { cursor: default; }
+  .model-choice-option.unavailable { cursor: default; color:var(--muted); }
+  @media(prefers-reduced-motion:reduce) { .model-choice-option { transition:none; } }
+  :root[data-reduce-motion=true] .model-choice-option { transition:none; }
+  @media(forced-colors:active) { .model-choice-panel { border-color:ButtonText; } .model-choice-option:has(:checked) { outline:1px solid Highlight; } }
+}
+
+@layer controls {
+ .settings-content .voice-model-settings .model-choice { grid-template-columns:minmax(0,1fr) minmax(150px,58%); align-items:center; gap:10px 20px; }
+ .settings-content .voice-model-settings .model-choice-label { font-size:var(--type-ui); color:var(--text); font-weight:500; }
+ .settings-content .voice-model-settings .model-choice-summary,.settings-content .voice-model-settings .model-choice-missing,.settings-content .voice-model-settings .model-choice-panel { grid-column:1/-1; }
+ @media(max-width:700px) { .settings-content .voice-model-settings .model-choice { grid-template-columns:minmax(0,1fr); gap:10px; } }
 }

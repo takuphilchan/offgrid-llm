@@ -1,10 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 import { chatRecovery, chatBusyRecovery } from '../src/i18n/chat-recovery';
 
-async function streamingWorkspace(page: Page, locale = 'en') {
-  await page.addInitScript(locale => {
+async function streamingWorkspace(page: Page, locale = 'en', streamResponses = true) {
+  await page.addInitScript(({locale, streamResponses}) => {
     localStorage.setItem('offgrid.onboarding.complete', 'true');
     localStorage.setItem('offgrid.locale', locale);
+    if(!localStorage.getItem('offgrid.chat.preferences:local'))localStorage.setItem('offgrid.chat.preferences:local',JSON.stringify({profile:'interactive',maxTokens:1024,streamResponses}));
     const original = window.fetch.bind(window);
     window.fetch = async (input, init) => {
       if (!String(input).endsWith('/generate')) return original(input, init);
@@ -34,7 +35,7 @@ async function streamingWorkspace(page: Page, locale = 'en') {
       });
       return new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } });
     };
-  }, locale);
+  }, {locale, streamResponses});
   const sessions: Record<string, any> = {};
   await page.route('**/api/v2/**', route => {
     const path = new URL(route.request().url()).pathname;
@@ -61,7 +62,7 @@ async function streamingWorkspace(page: Page, locale = 'en') {
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('Stream my answer');
   await page.locator('.composer-actions > button').click();
-  await expect(page.locator('.streaming-response')).toContainText('Hello 世界');
+  if(streamResponses) await expect(page.locator('.streaming-response')).toContainText('Hello 世界');
 }
 
 test('chat renders text before completion, decodes split UTF-8, then shows saved result and metrics', async ({ page }, info) => {
@@ -286,4 +287,18 @@ test('stream rendering and local stop feedback meet the 250ms UI fixture budget'
   await expect(page.locator('.composer-actions > button')).toHaveAccessibleName('Send');
   console.log(JSON.stringify({fixture:'stream-ui-feedback',p95,stop}));
   await info.attach('stream-ui-performance.json',{body:JSON.stringify({samples,p95,stop,kind:'Synthetic deltas, not inference latency'}),contentType:'application/json'});
+});
+
+
+test('completed-response preference buffers the live stream and persists in Settings',async({page})=>{
+ await streamingWorkspace(page,'en',false);
+ await page.evaluate(()=>(window as any).emitTimedDelta(' More provisional text'));
+ await expect(page.locator('.streaming-response .message-body')).toHaveCount(0);
+ await expect(page.locator('.generation-status')).toBeVisible();
+ await expect(page.locator('.conversation')).not.toContainText('More provisional text');
+ await page.evaluate(()=>(window as any).finishGeneration());
+ await expect(page.locator('.message.assistant')).toContainText('finished');
+ await page.evaluate(()=>{location.hash='#/settings/models';});
+ const display=page.getByLabel('Response display',{exact:true});await expect(display).toHaveValue('complete');
+ await display.selectOption('live');await page.reload();await expect(display).toHaveValue('live');
 });

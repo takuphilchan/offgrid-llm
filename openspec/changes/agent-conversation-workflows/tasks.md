@@ -117,3 +117,13 @@ All tasks start unchecked. Planning validation is not implementation or test evi
 - [x] 7.5 Persist structured, bounded child outcomes with evidence references and uncertainty; schedule dependency-ready branches within admitted runner capacity, retain independent results after branch failure, and block descendants without replay. Verify dependency cycles, budget exhaustion, restart, cancellation and partial outcomes with `go test ./internal/agents ./internal/server`.
 - [x] 7.6 Show canonical child state and live progress in Chat and CLI, with reduced-motion and noninteractive fallbacks. Verify running, queued, blocked, failed and completed states, reconnect and narrow layout using the isolated web suite and CLI tests; do not claim simultaneous inference without hardware qualification.
 - [x] 7.4 Reconcile implementation evidence and limitations in `docs/advanced/product-reliability-plan.md`, validate with `openspec validate agent-conversation-workflows --strict --no-interactive`, `node --test dev/scripts/check-docs.test.mjs`, `node dev/scripts/check-docs.mjs` and `git diff --check`. Confirm all acceptance scenarios map to recorded checks, unfinished dependent native tasks remain visible, and no deployment or release readiness is inferred solely from checked tasks. The 2026-10-15 remaining-work audit records the six acceptance mappings, passing checks, skipped fixtures and unresolved model/native/usability gates.
+
+## 15. Typed canonical source inputs (2026-11-14 implementation)
+
+Coordinates workspace-outcome-experience 43.6-43.8. The existing inbox and runner own document/image/Knowledge admission; no second executor is introduced. Source references are revision-pinned and revalidated before preparation and delivery. Legacy execution guards remain enforced.
+
+- [x] 15.1 Admit typed attachment/image/Knowledge input, retain evidence receipts, and test access, revision mismatch, retry and restart.
+- [x] 15.2 Verify generated API, CLI and Python parity and record qualification separately from mocked inference.
+- [x] 15.3 Admit explicitly pinned Library page/block scopes through the existing inbox; reject mixed broad/precise scopes, stale or missing revisions, invalid ranges and revoked access. Preserve linked evidence, receipts and request identity across restart without requiring semantic search.
+
+Typed-source evidence: `docs/quality/evidence/work-surface-redesign-2026-11-15.md`. Generated API and CLI checks pass; Python SDK/runtime suite: 184 passed in WSL Ubuntu. Exact source scope HTTP/preparation/restart, historical citation, linked-header/footnote and revocation regressions pass. These are contract results, not corpus-level model quality certification.

@@ -1,22 +1,46 @@
 @layer controls {
-  .workspace-help { margin: auto; width: min(680px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; overflow: auto; color: var(--text); background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--radius-panel); box-shadow: var(--shadow); }
-  .workspace-help::backdrop { background: var(--scrim); }
-  .workspace-help header, .workspace-help footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 24px; }
-  .workspace-help header { position: sticky; top: 0; z-index: 1; background: var(--surface-1); }
-  .workspace-help h2 { margin: 0; font-size: var(--type-title); line-height: var(--leading-ui); }
-  .workspace-help-body { padding: 0 24px; }
-  .workspace-help details { padding-block: 12px; border-block-start: 1px solid var(--separator); }
-  .workspace-help summary { padding-block: 6px; font-size: var(--type-ui); font-weight: var(--weight-medium); cursor: pointer; }
-  .workspace-help details[open] summary { margin-block-end: 8px; }
-  .workspace-help h3 { margin: 0 0 8px; font-size: var(--type-section); line-height: var(--leading-ui); }
-  .workspace-help p { margin: 0 0 8px; font-size: var(--type-body); line-height: var(--leading-prose); }
-  .workspace-help .workspace-help-example { padding: 12px; border-radius: 8px; background: var(--surface-2); font-size: var(--type-ui); }
-  .workspace-help details > a { margin-inline-start: -10px; }
+  .workspace > .page-content[hidden] { display:none; }
+  .workspace.help-page { overflow:auto; }
+  .workspace-help { width:min(1080px,100%); margin-inline:auto; padding:24px clamp(16px,4vw,56px) 64px; color:var(--text); }
+  .help-heading { display:flex; justify-content:space-between; align-items:start; gap:16px; margin-block-end:24px; }
+  .help-heading h2 { margin:0; font-size:clamp(26px,3vw,34px); font-weight:600; letter-spacing:-.025em; }
+  .help-heading p { margin:8px 0 0; color:var(--muted); font-size:var(--type-ui); }
+  .help-search { display:flex; gap:16px; align-items:center; margin-block-end:32px; }
+  .help-search .workspace-search-field { flex:1; max-width:660px; border-radius:999px; background:var(--surface-2); border-color:transparent; }
+  .help-result-count { font-size:var(--type-caption); color:var(--muted); white-space:nowrap; }
+  .help-layout { display:grid; grid-template-columns:220px minmax(0,1fr); gap:clamp(24px,4vw,56px); align-items:start; }
+  .help-topics { display:grid; gap:4px; }
+  .help-topics button { display:flex; align-items:center; gap:12px; width:100%; min-height:42px; padding:10px 12px; border:0; border-radius:12px; background:transparent; text-align:start; color:var(--muted); font-size:var(--type-ui); font-weight:400; }
+  .help-topics button span { flex:1; overflow-wrap:anywhere; }
+  .help-topics button > svg:last-child:not(:first-child) { opacity:0; }
+  .help-topics button:hover, .help-topics button[aria-current] { color:var(--text); background:var(--surface-2); }
+  .help-topics button[aria-current] { font-weight:500; }
+  .help-topics button[aria-current] > svg:last-child { opacity:1; }
+  .help-topics .help-setup { margin-block-start:16px; }
+  .help-article { min-width:0; outline:none; }
+  .help-article-icon { width:48px; height:48px; display:grid; place-items:center; border-radius:16px; background:var(--surface-2); color:var(--muted); }
+  .help-article h3 { font-size:var(--type-title); letter-spacing:-.015em; margin:16px 0 24px; }
+  .help-article h4 { font-size:var(--type-ui); font-weight:600; margin:28px 0 10px; }
+  .help-article p { font-size:var(--type-body); line-height:1.7; margin:0 0 14px; overflow-wrap:anywhere; }
+  .help-destinations { display:flex; flex-wrap:wrap; gap:12px; margin-block-start:28px; }
+  .help-destination { display:inline-flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 16px; border:1px solid var(--line); border-radius:999px; color:var(--text); text-decoration:none; font-size:var(--type-ui); }
+  .help-destination:hover { background:var(--surface-2); }
+  .help-empty { padding:36px 16px; color:var(--muted); text-align:center; }
+  .workspace-help :dir(rtl) > svg:last-child:not(:first-child) { transform:scaleX(-1); }
+  @media(max-width:760px) {
+    .workspace-help { padding-block-start:12px; }
+    .help-layout { grid-template-columns:minmax(0,1fr); gap:28px; }
+    .help-topics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .help-topics .help-setup { margin:0; }
+    .help-topics button { padding:10px; gap:8px; }
+    .help-topics button > svg:last-child:not(:first-child) { display:none; }
+    .help-search { margin-block-end:20px; flex-wrap:wrap; gap:8px; }
+    .help-search .workspace-search-field { flex-basis:100%; }
+  }
   .agent-settings-summary { display: grid; gap: 4px; min-width: 0; }
   .agent-settings-summary strong { font-size: var(--type-ui); line-height: var(--leading-ui); }
   .agent-settings-summary span, .agent-settings-summary code { font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--muted); overflow-wrap: anywhere; }
   .agent-settings-panel fieldset { margin: 0; }
   .agent-settings-panel legend { font-size: var(--type-ui); font-weight: var(--weight-medium); }
   .agent-settings-panel .workspace-secondary, .agent-settings-panel > .utility-popover-content > p { font-size: var(--type-meta); line-height: var(--leading-prose); }
-  @media (max-width: 420px) { .workspace-help header, .workspace-help footer { padding: 12px 16px; } .workspace-help-body { padding-inline: 16px; } .workspace-help footer { flex-wrap: wrap; } }
 }

@@ -1,5 +1,153 @@
 # API reference
 
+## Local document draft analyses
+
+`document-composition-v1` adds `/v1/document-analyses/synthesis/compositions`.
+POST `request_key`, `analysis_id`, installed `model` and `language` to compose a
+finished summary analysis. Requirements remain individual rows. The service pins
+candidate hashes, source revisions and human-review revisions; excluded candidates
+are omitted from model inputs. A bounded merge tree checkpoints each local model
+call. Explicit retry resumes the first uncommitted merge. There are no automatic
+model/runtime downloads or network tools.
+
+GET with `id` reads compact status; GET with `analysis_id` and optional `offset`
+lists up to 20 private records. `/report?id=ID` returns up to four draft sections,
+source-unit count, candidate/extraction/merge gap counts and the number of source
+batches not represented. `/evidence?id=ID&section=N&offset=N` returns at most eight
+original candidates with immutable citations and pinned review metadata. Every
+read requires current source access and private job ownership. Review changes
+stop further generation; old completed reports remain readable with
+`reviews_current: false`. New prose never inherits approval from input reviews.
+
+POST `/cancel` or `/retry` with `id`; cancellation remains available to the owner
+after source revocation. GET `/export?id=ID&format=json|csv|markdown` returns a
+digest-checked artifact, bounded to 8 MiB, with sources, original candidates,
+excluded material and unresolved gaps. Export preparation is audited. Exported
+copies have separate retention. All composition endpoints use `Cache-Control:
+no-store`. Report completion is `awaiting_review`, with
+`semantic_review_required: true`, not a complete-review or accuracy guarantee.
+
+Completed draft sections support human annotations through
+`GET /v1/document-analyses/synthesis/review?id=ID&batch=N`. A missing review is
+revision zero with unreviewed decisions. Add `revision=N` to read an immutable
+historical revision. The `document-synthesis-review-v1` capability advertises this
+contract. Every request requires private job ownership and current access to all
+pinned sources; global administration does not bypass those checks.
+
+`POST` to the same endpoint accepts `id`, `batch`, `batch_id`, `response_sha256`,
+`expected_revision`, `section_checked` and an ordered `decisions` array. Each
+candidate has `decision` (`keep`, `exclude` or `unreviewed`) and `note` (at most
+2,048 UTF-8 bytes). A checked section cannot contain unreviewed candidates. The
+service stamps author/time, retains previous revisions and returns HTTP 409 on a
+stale revision. An uncertain save must be recovered with a read, not an automatic
+write retry. Storage is bounded to 256 revisions per section, 8 MiB per analysis
+and 256 MiB across review records.
+
+Draft exports retain original candidates, human decisions, attribution and a
+human-review summary. They do not silently omit excluded claims or mark them as
+independently verified. Human section checks do not change extraction coverage,
+model receipts or the `awaiting_review` generation state. Source retention and
+holds apply to saved review history; downloaded exports and migration snapshots
+remain separate retention domains.
+
+`document-synthesis-candidates-v1` advertises summary and requirement candidate
+jobs. POST `/v1/document-analyses/synthesis` accepts `request_key`, `workflow`
+(`summary` or `requirements`), one to sixteen `sources` (document ID and immutable
+extraction revision, plus original SHA-256 when retained), an installed local
+`model`, and the output `language`. The service validates current source access
+before preparing the model. It never downloads a missing runtime or sends source
+content to a cloud model. Both Chat and Knowledge permissions are required.
+
+GET the same path with `id` to inspect progress, or `offset` to list owner-private
+history. GET `/v1/document-analyses/synthesis/results?id=...&offset=0` returns up to
+two committed batch receipts and `next_offset`. Progress may advance between the
+status and results requests. POST `/v1/document-analyses/synthesis/retry` with
+`{"id":"..."}` explicitly resumes; the shared `/v1/document-analyses/cancel`
+endpoint stops work. Inspect history after a lost creation acknowledgement rather
+than automatically creating another job.
+
+Traversal finishes in `awaiting_review`, **not an approved answer**. Candidate
+text has `verification: source_identity_only`; exact quotation identity and
+numeric checks do not establish semantic support or prove no obligations were
+missed. Coverage gaps remain separate from prose. Validation revision
+`source-values-v2` also compares supported, unambiguous calendar-date forms as
+whole values; historical receipts without that field retain their original
+literal-number decision. This is not general date interpretation or arithmetic
+verification. Model/runtime changes require a new job rather than mixed results.
+
+`document-synthesis-export-v1` adds GET
+`/v1/document-analyses/synthesis/export?id=...&format=json|csv|markdown`. Exports
+require finished traversal and current access to all sources. The complete
+artifact (maximum 8 MiB) includes model identity, immutable source references,
+unit/batch coverage, draft candidates, human review decisions, conditions,
+exceptions and gaps.
+CSV places each candidate and its quoted evidence in separate columns; exact
+references remain in `metadata_json`. Formula-like display cells are protected.
+Verify the response's identity, format and SHA-256 before saving. No partial
+artifact is delivered on validation failure. Downloaded copies have independent
+retention and cannot be recalled after revocation.
+
+## Durable document comparisons
+
+`document-analysis-export-v1` adds GET
+`/v1/document-analyses/export?id=...&format=json|csv|markdown` for finished
+comparisons. The response contains `analysis_id`, `format`, UTF-8 `content` and
+its `sha256`. Verify identity, format and digest before saving. Exports include
+all source references, units, gaps, unit-pair receipts and changed passages with
+native cell metadata. They retain incomplete coverage; no model interpretation
+is added. The artifact limit is 8 MiB with no partial/truncated export on failure.
+One export is prepared at a time, with a 25-second request budget.
+
+JSON contains ordered `{type,data}` records. CSV offers explicit evidence columns
+and `metadata_json` preserving exact values; risky spreadsheet display cells have
+an apostrophe prefix to prevent formula evaluation. Markdown renders source text
+and metadata inside inert fences. Format field names are stable English contract
+identifiers; source text is never translated. Current access to both pinned
+sources is required. A content-free `analysis_export_prepared_FORMAT` event records
+preparation, not proof of client delivery. Exported copies have independent
+retention and cannot be recalled by source deletion or permission revocation.
+
+`document-comparison-jobs-v1` advertises the deterministic comparison stage of
+`/v1/document-analyses`. POST accepts `workflow: "comparison"`, a `request_key`
+and two ordered sources with `document_id`, immutable extraction `revision` and
+`original_sha256` (omit only for legacy text). A matching key returns the same
+job; changed source identity conflicts. GET with `id` returns status, unit pairs,
+accounted units and extraction gaps. Jobs are private to their authenticated owner
+and require current read access to both collections; global administration is not
+private-content authority.
+
+`document-analysis-history-v1` additionally supports GET without `id`:
+`/v1/document-analyses?offset=0&limit=20`. It returns `analyses` summaries and a
+nullable `next_offset`. Bounds are 0–256 for offset and 1–20 for limit. Summaries
+contain job identity, state, two ordered document IDs and timestamps, never text
+or complete extraction plans. Inaccessible jobs are omitted; a page can therefore
+be empty while still having a next cursor. Refresh after concurrent additions or
+deletions. This read also recovers accepted jobs after an uncertain submission.
+
+GET `/v1/document-analyses/results?id=...&step=0&offset=0&limit=100` reads a committed
+unit-pair checkpoint. GET `/v1/document-analyses/source?id=...&step=0&change=0&side=before`
+opens its exact source reference; `after` opens the other side. Text is bounded to
+256 KiB with explicit truncation. Both routes validate references and current access.
+Result pages now include optional `previews` aligned with their changes. Each side
+contains at most 512 UTF-8 bytes from the start of its verified citation, an exact
+span, SHA-256 and truncation flag. They are built from already validated source
+bytes, not stored model output. Older clients may ignore the additive previews;
+source opening still returns the full bounded citation.
+POST `/cancel` or `/retry` beneath the resource accepts `{ "id": "..." }`.
+Cancellation keeps checkpoints. Retry resumes interrupted work without replaying
+committed unit pairs. Source deletion removes derived jobs/checkpoints; source
+legal holds continue to apply. Backups remain a separate retention domain.
+
+Results distinguish exact line additions/removals from native cell metadata
+changes. Unique sheet names align cell addresses; other units are aligned by
+kind/index and labelled positional. Renamed/ambiguous sheets remain unmatched.
+No formula is executed and no policy significance is inferred. `complete` describes
+retained-source traversal with no recorded gaps, not independent correctness or
+visual understanding. Known extraction gaps produce `incomplete` even after all
+units were visited. Summary/requirements workflows return 501 until implemented.
+Limits: one worker, four active/queued jobs, 256 retained jobs per owner, 4,096
+workspace-wide, 8 MiB per checkpoint, 64 MiB per job and 1 GiB of checkpoints.
+
 ## Compact Activity metadata
 
 Services advertising `work-summary-v1` expose `GET /api/v2/work`. It returns
@@ -122,10 +270,36 @@ are rejected before inference. A compatible installed local projector is require
 Images participate in durable request identity: identical retries retrieve saved
 work; changing image bytes or names under the same ID conflicts. Accepted images
 are stored in pending turns and completed user messages under existing session
-ownership checks. Completion stores one copy in the user message. History feeds
-typed text/image parts to inference; images are never silently converted to text
-or omitted when the model changes. Existing text-only clients remain compatible.
+ownership checks. Completion stores one copy in the user message. A compatible
+vision model receives typed text/image history. A text-only model or text-agent
+turn receives the original text and an explicit unavailable-image notice; saved
+image bytes remain intact and become available again when vision is selected.
+Historical images do not block unrelated text or tool work. New image submissions
+still require vision support. Existing text-only clients remain compatible.
 The generated OpenAPI contract defines the additive `SessionImage` fields.
+
+`chat-image-orientation-v1` identifies still-image fidelity handling. PNG/JPEG
+primary-image Exif orientation (all eight rotations/mirrors) is applied to an
+inference-only lossless PNG projection; saved originals and request identities
+remain byte-for-byte unchanged. The runtime token-count, normal completion,
+streaming and single-step tool paths use the same projection. Images without an
+orientation transform retain their original encoded bytes. Transformed images
+are bounded to 16 MiB each and 32 MiB total image bytes per runtime request; an
+excess fails before dispatch, without silently resizing or dropping images.
+This is image transport fidelity, not OCR or visual-answer qualification.
+
+Animated PNGs, multi-picture JPEGs, duplicate Exif payloads and invalid orientation
+directories are rejected. A still frame in the correct orientation must be
+exported explicitly and attached again; the service does not silently select one
+animation frame. Older services without this capability must not be assumed to
+honour image orientation. Colour-profile/HDR consistency and model vision accuracy
+remain separately unqualified.
+The shared web/desktop composer blocks an oriented draft or saved-image follow-up
+when this capability is missing, retaining the draft and the original image.
+For PNG Exif stored after pixel chunks, thumbnail and full-size browser views move
+the unchanged metadata chunk before the pixels in a display-only copy. This
+avoids Chromium ignoring late orientation metadata; no pixel stream is re-encoded
+and that copy never replaces the saved upload or request identity.
 
 ## Saved-work search
 
@@ -1100,10 +1274,58 @@ Owners may still stop or delete affected work; those control responses omit
 retained content. Revocation does not itself erase the underlying history or
 backups. Collection management and full retention controls remain unfinished.
 
-The knowledge index is currently shared by callers granted RAG access. Session
-ownership does not make uploaded documents private to their uploader; separate
-collection-level access controls are planned. Do not use one instance as an
-isolated multi-tenant document service.
+Legacy Knowledge imports remain in the shared workspace collection. Session
+ownership does not make a legacy Knowledge upload private. Services advertising
+`knowledge-collections-v1` support explicit private collections as described
+below. This remains one managed workspace, not an isolated multi-tenant service.
+
+#### Collections and reviewed audiences
+
+`GET /v1/collections` lists only readable collections. Add `?id=COLLECTION_ID` to
+inspect a policy. `POST /v1/collections` with `{"name":"Department records"}`
+creates a private collection owned by the authenticated actor. Clients cannot
+choose its owner. `PUT /v1/collections?id=COLLECTION_ID` replaces the name,
+`readers` and `editors`, using `expected_revision`; both member arrays must be
+explicit, including empty arrays. Only the owner may change this audience.
+Members are authenticated user IDs, not names or email addresses. Service-level
+Knowledge permissions remain necessary, and global administration does not
+grant private membership. The legacy `workspace` policy cannot be edited.
+
+Document list/read projections add `collection_id` and `collection_revision`.
+Here `collection_revision` is the **document binding revision**, not the audience
+policy revision; these fields are informational and never assign authority.
+Fetch `/v1/documents/collection?id=ID` for the fresh binding and source audience
+before moving. Import receipts use `collection_revision` for the reviewed
+**audience policy revision**. Clients must not interchange these values.
+
+Use `POST /v1/collections/imports?collection_id=ID&collection_revision=REVISION`
+with a multipart `file` or the existing saved-attachment reference payload.
+This accepts the original and returns `202` with its durable import identity,
+`collection_id` and `collection_revision`; it does not start extraction. Process
+it explicitly through `/v1/documents/imports?id=IMPORT_ID&action=retry`.
+Acceptance and publication check the reviewed audience. A subsequent membership
+change prevents publication under stale consent; current authorized owners can
+still inspect, cancel or remove the pending import. Accept a new reviewed import
+to proceed. Clients must never fall back to a legacy upload route when this
+endpoint is unavailable, because older services use shared-workspace defaults.
+
+`GET /v1/documents/collection?id=DOCUMENT_ID` returns the binding revision and
+current policy. `PUT /v1/documents/collection` requires `document_id`,
+`expected_revision`, `expected_source_revision`, `destination_id` and
+`expected_destination_revision`. Review both audiences first. Moving a private
+source requires its collection owner and write access to the destination.
+Moving preserves source identity and revisions; subsequent source delivery uses
+the destination policy. Stale policies return `409 collection_conflict` without
+changing the binding. A delivered or downloaded copy cannot be recalled.
+
+Collection creation, policy updates, moves and import acceptance have atomic,
+content-free audit records. Owners can page their collection's ledger through
+`GET /v1/collections?id=ID&view=audit&after=SEQUENCE` (up to 100 entries per call).
+This is not yet the complete document/export/retention audit suite. Audit rows
+and pre-upgrade database snapshots are separate retention domains. The additive
+policy migration preserves existing owners, audiences and source hashes and
+creates a checked SQLite backup before upgrading an existing database; restoring
+an older application requires its compatible data snapshot.
 
 The supported setup workflow is:
 
@@ -1164,24 +1386,53 @@ the policy and inspect its current revision before another save.
 Knowledge is disabled. Each entry identifies extensions, runtime, extractor
 revision, source-unit kinds, file/text limits, encrypted-file policy, limitations
 and OCR availability/languages. `runtime_state` is `available` for built-in
-extractors, `installed_unchecked` for a discovered PDF worker, or `unavailable`.
+extractors, `installed_unchecked` for a discovered PDF/OCR worker, or `unavailable`.
 Presence is not a smoke test or format qualification; `qualification` currently
 remains `unverified`. No worker is launched, dependency downloaded, or inference
 performed by the status request. CLI `kb status --json` and Python `kb.status()`
 preserve these fields. Older clients may ignore them.
 
+`document-image-ocr-v1` advertises standalone PNG/JPEG document ingestion and
+read-only raster previews; actual OCR readiness remains in `document_formats`.
+The `image_document` entry covers PNG/JPEG. `document-tiff-ocr-v1` adds the `tiff`
+readiness entry and `.tif`/`.tiff` document uploads. Image
+documents are bounded to 24 MiB, 8192 pixels per side and 16 million pixels.
+They share private attachment and Knowledge endpoints, independently of vision
+inference. `page=1` on the source preview returns the verified upright PNG raster;
+the JSON view reuses retained OCR text and does not rerun recognition. OCR geometry
+uses original encoded pixel coordinates, while preview pixels apply EXIF and
+white-background compositing. Other page numbers are rejected for single images.
+
+Image preview units optionally include `image_geometry` with encoded `width`,
+`height` and EXIF `orientation` (1–8), derived from the same original bytes. This
+is a coordinate frame, not an OCR-confidence score. Clients may map retained
+`original_encoded_pixels` OCR block bounds to the upright raster only after
+checking the extraction's original hash, exact text spans and source unit.
+Corrected/model text and ambiguous or missing geometry do not establish a visual
+location. Older clients can ignore this additive field.
+
+TIFF supports the classic main page chain, up to 100 pages and 200 million total
+pixels, with the same per-page/file limits. BigTIFF, subimages, planar samples and
+JPEG compression require conversion. `page=N` returns only that page's upright
+PNG derivative. Retained structured spans preserve per-page OCR text, orientation
+and original-pixel geometry, including partial review records. Missing or uncertain
+pages remain incomplete; opening the reader never reruns OCR. Printed-text accuracy,
+deskew, mixed-language pages and clean-install qualification remain separate.
+
 ### Offline OCR language setup
 
 `GET /v1/documents/ocr-languages` requires Knowledge read permission and returns
-`languages` plus `document_formats`. Language entries contain `language`, `name`,
-`sha256`, `state` (`missing`, `invalid`, `installed_verified`) and `qualification`.
-They never include local paths or model bytes. PDF `ocr_state` distinguishes
+`languages` plus `document_formats`. Chat clients can read the same catalog with
+`GET /v1/document-ocr-languages` under Chat permission; that route cannot install
+packs. Language entries contain `language`, `name`, `interface_locales`, `source_url`,
+`bytes`, `sha256`, `state` (`missing`, `invalid`, `installed_verified`) and `qualification`.
+They never include local paths or model bytes. PDF/image `ocr_state` distinguishes
 `unavailable`, `language_missing`, `language_invalid` and `installed_unchecked`.
 Installed bytes are not proof of qualified OCR accuracy.
 
 `POST /v1/documents/ocr-languages?language=eng` requires Knowledge management
 permission and an `application/octet-stream` body up to 32 MiB. It accepts only
-the reviewed English language digest returned by the status endpoint. Data is
+one of the pinned language digests returned by the status endpoint. Data is
 verified before atomic installation under the service workspace; requests cannot
 name output paths or load executable code. An import takes its own immutable
 language snapshot. Existing imports, model selections and indexes are unchanged;
@@ -1192,10 +1443,40 @@ CLI: `offgrid kb ocr-languages` and
 `offgrid kb import-ocr-language eng /path/to/eng.traineddata`.
 Python: `client.kb.ocr_languages()` and
 `client.kb.import_ocr_language("eng", path)`.
-Web/desktop Knowledge exposes the same operation under **Read scanned documents**
-when a packaged OCR reader is present. English OCR remains experimental pending
-packaging and broader document-quality gates; low confidence or ambiguous layouts
-remain partial and cannot become a ready index.
+Web/desktop Knowledge exposes the same operation under **Read scanned documents**.
+The catalog contains 25 language packs mapped explicitly to 26 interface locales;
+Shona, Ndebele and Zulu have no pack in this pinned catalog. Pack presence does not
+establish linguistic or OCR accuracy qualification. No related language is substituted.
+
+New Chat uploads and reviewed collection imports accept `ocr_language=chi_sim`
+(or another catalog identity). The saved choice is independent of interface language
+and survives retries/restarts; copying an attachment to Knowledge retains it.
+Omitting the parameter preserves the legacy `eng` default. Clients check service
+capability `document-ocr-language-selection-v1` before sending an explicit choice
+and reject mismatched receipts. Retries cannot change the saved language. Selection
+currently accepts one pack per document; simultaneous packs and page-specific hints
+remain open. Existing extracted text and citations are not rewritten by pack setup.
+
+CLI: `offgrid kb import-collection ID REVISION PATH --ocr-language chi_sim`.
+Python: `client.collections.import_file(ID, REVISION, path, ocr_language="chi_sim")`.
+Low-confidence or ambiguous extraction remains partial and requires review.
+
+Capability `document-ocr-page-recovery-v1` advertises durable page receipts for
+private attachments and Knowledge imports. Their optional `ocr_completed_pages`
+field reports saved pages, including uncertain OCR; it is not an extraction or
+accuracy guarantee. Explicit retry reuses receipts after source, raster, worker
+and language checks. Cancellation/restart preserves completed page writes. Removal
+cascades to these derived records and stale import attempts cannot publish them.
+Storage is bounded to 3 MiB per receipt, 32 MiB per source and the enclosing storage
+quota. Knowledge discards temporary receipts in the same transaction as successful
+publication; private sources retain them until source/conversation removal.
+
+Preview records can also advertise `thumbnails_available`. Request a page with
+`thumbnail=true` to obtain its bounded 192 by 256 pixel PNG (at most 256 KiB).
+Both private and library previews return `X-OffGrid-Source-SHA256` and
+`X-OffGrid-Preview: thumbnail-v1`. Access is rechecked before delivery. The
+derivative never runs OCR or changes extraction, and retains `Cache-Control:
+no-store`. Omit this parameter for the existing full-page preview.
 
 ## Agent profiles (development API)
 
@@ -1642,6 +1923,89 @@ is separate. Original storage has a 50 MiB per-file and 2 GiB workspace limit;
 exceeding it returns `document_storage_limit` without publishing a ready document.
 Collection ACLs remain unfinished; published documents retain workspace policy.
 
+## Structured extraction review
+
+New Office extractions retain typed cell metadata in `DocumentBlock.cell`.
+`value` is native source data; `display` may be a deterministic format projection.
+`display_state=unrendered` retains the raw value and format code without claiming
+original display fidelity. Formula/cache states do not imply recalculation.
+Cell visibility, merge attributes and original coordinates remain distinct from
+reviewer-edited text. Unit `metadata_omitted` discloses oversized merged-range
+metadata excluded from the bounded response.
+
+Presentation `figure` metadata identifies original-package parts and authored
+descriptions; `unprocessed_visual` is not model interpretation. `table` styling
+flags are not semantic header declarations. The `notes_for` relationship adds
+speaker notes to selected slide evidence without recursively expanding every
+other paragraph on that slide. Exact source spans and immutable revision/access
+checks still govern delivery.
+
+Services advertising `document-linked-evidence-v1` also expand structural context
+after Knowledge ranking. `top_k` selects ranked anchors; `results` may contain
+additional independently citable linked passages. Each bundle is bounded to 16
+passages and 64 KiB of added text, with 256 KiB total added text per search.
+Repeated linked passages are deduplicated. Document selection and current
+collection access still govern expansion. A failed retained graph or saturated
+reader limit fails retrieval explicitly; it does not silently drop this stage.
+
+Search results and saved `KnowledgePassage` records can contain `evidence_receipt`:
+`extraction_revision`, excerpt `block_ids`, anchor `group_id`, `required_chunks`,
+`links_complete`, optional `limit_reached` and bounded `omitted_blocks`.
+Block IDs describe that particular excerpt, including separately cited headers.
+Known omitted block IDs are capped at 128. `required_chunks` identifies the
+bundle's supplied passages; context truncation rechecks their presence and
+completeness. `links_complete` is independent of extraction coverage and says
+nothing about inferred/unsupported relationships or a full-document review.
+Missing evidence remains explicit in model context and saved UI receipts.
+
+Services advertise `document-structure-review-v1` and `document-navigation-v1` in `/api/v2/system`.
+`GET /v1/documents/structure?id=ID` requires Knowledge read permission and current
+collection access. Optional `revision` pins an immutable extraction; `unit` filters
+by a returned unit ID. `offset`/`limit` page blocks (default 100, maximum 200).
+Follow `next_offset` with the returned revision. Relationships touching that page
+have a separate `relationship_offset`/`next_relationship_offset` cursor, at most
+2,000 per response. Cursors are not durable across a revision change.
+
+Navigation has its own `navigation_offset`/`next_navigation_offset` cursor,
+with at most 100 entries and 256 UTF-8 bytes of retained text per title. Entries
+identify headings, tables, figures and blocks with review warnings. Each has a
+`unit_id` and `block_offset` **within that unit**; use both with the pinned
+revision to open the exact block. The unit filter also filters navigation.
+Unit projections report total `block_count`, `review_blocks` and `figure_blocks`
+independently of loaded excerpts. These are extraction/navigation measurements,
+not accuracy scores or complete-review guarantees. Older services can omit these
+additive fields; clients must display navigation as unavailable rather than infer
+that there are no headings or unresolved source units.
+
+The response contains coverage, exact UTF-8 byte spans, units, blocks, relationships,
+author/time for derived revisions and `can_correct`. Block previews are limited
+to 32 KiB each and 256 KiB total, with separately bounded optional metadata.
+`text_sha256` always hashes the full block; `truncated` or `metadata_omitted` blocks
+are not editable through this projection. A true `editable` flag is advisory:
+write permission and active revision are rechecked during publication.
+
+`POST /v1/documents/corrections` requires Knowledge management permission and
+collection write access. The 2 MiB JSON envelope contains `document_id`,
+`expected_revision` and 1–256 `edits`, each with `block_id`,
+`expected_text_sha256` and replacement `text` (at most 1 MiB per block).
+Unknown fields, forged author fields, overlapping/structural edits and mismatched
+full-block hashes are rejected. The reader does not offer edits for truncated
+previews. This operation never downloads or switches embedding models.
+It publishes a new attributed extraction and its index atomically; unchanged exact
+chunks may reuse vectors only under the same embedding identity. Original files
+and historical citations retain their identities subject to access and retention.
+
+Success returns `success: true` and a `document` with a new `extraction_revision`.
+Clients must validate that receipt and must not automatically replay a failed or
+timed-out request. Read the active structure to inspect an uncertain outcome.
+Errors include `document_not_found` (404), `document_extraction_conflict` (409),
+`document_extraction_unavailable` (409), `document_correction_invalid` (400),
+`document_index_unavailable` (409) and `document_review_unavailable` (503).
+Reads and writes are `no-store`; collection permissions are rechecked for old
+revisions. Missing legacy structure returns unavailable rather than fabricated
+blocks. This API does not imply complete extraction, rich layout, or a complete
+review workflow; correction text does not recalculate typed numeric cells.
+
 ## Durable Knowledge imports
 
 Services advertise `document-imports-v1` in `/api/v2/system` when available.
@@ -1664,7 +2028,7 @@ extraction or publishes a document.
   or after a 30-second queue wait; inspect the saved record before explicitly
   retrying. An unstarted import retains its original identity and bytes.
 - `GET /v1/documents/imports?id=ID&view=extraction` explicitly reads retained
-  partial PDF pages for owner review when `review_available` is true. Page text,
+  partial PDF or image-document pages for owner review when `review_available` is true. Page text,
   source digest, extractor revision and readable/empty/OCR-needed states remain
   separate. This does not index, resume or approve partial content for answers.
   Retry clears obsolete review text; removing the import removes its review.
@@ -1677,8 +2041,9 @@ extraction or publishes a document.
 - `DELETE /v1/documents/imports?id=ID` removes the record/pending bytes. It does
   not delete a published document; document deletion uses the existing endpoint.
 
-Services advertising `document-attachment-imports-v1` also accept a saved Chat
-file using `POST /v1/documents/imports` with `Content-Type: application/json`:
+Services advertising `document-attachment-imports-v1` and `knowledge-collections-v1`
+accept a saved Chat file through the reviewed collection-import endpoint with
+`Content-Type: application/json`:
 
 ```json
 {"attachment":{"session":"my-conversation","id":"file-0123456789abcdef0123456789abcdef","sha256":"<exact 64-character source digest>"}}
@@ -1692,11 +2057,38 @@ the service derives one from the exact source identity, so repeated acceptance
 returns the same actor-owned record without starting extraction. Inspect its
 state before explicitly indexing. Deleting either private attachment or pending
 import does not delete the other copy. Publishing makes the copy subject to the
-workspace's Knowledge access and retention policy; attaching alone never does.
+selected collection's access and retention policy; attaching alone never does.
 
-The matching clients are `offgrid kb import-attachment SESSION FILE_ID SHA256`
-and `client.kb.import_attachment(session, attachment_id, sha256)`. Both accept
+Send this reference to `/v1/collections/imports?collection_id=ID&collection_revision=N`
+after reviewing the current audience. The default idempotency identity includes
+that destination and revision. Membership changes before acceptance or processing
+return a conflict; they do not refresh consent. Legacy attachment requests without
+a destination review return HTTP 426 with `collection_review_required` before
+reading or copying the source. Multipart legacy imports retain their existing behavior.
+
+The matching clients are `offgrid kb import-attachment SESSION FILE_ID SHA256 COLLECTION_ID REVIEWED_REVISION`
+and `client.kb.import_attachment(session, attachment_id, sha256, collection_id=ID, collection_revision=N)`. Both accept
 only; `retry-import` / `retry_import` explicitly starts indexing.
+
+Private structured inspection is available at
+`GET /v1/sessions/{name}/attachments/{id}/structure?revision=SOURCE_REVISION`.
+The required revision is the attachment's `revision`; the response's `revision`
+is its separate immutable `extraction_revision`. Optional `unit`, `offset`,
+`limit` (1–200, default 100) and `relationship_offset` provide bounded pages.
+Responses use `DocumentStructurePage` and `Cache-Control: no-store`, with
+`can_correct: false`. This read verifies ownership, original bytes and the retained
+graph, and never reparses or publishes the source to Knowledge. Sources without
+retained structure return `attachment_unavailable`; their existing text reads
+continue to work. Service capability: `session-attachment-structure-v1`.
+
+Saved `AttachmentSelection` objects optionally include `extraction_revision`
+and `linked_evidence`. The latter records `links_complete`, bounded
+`required_spans`/`omitted_blocks`, and `limit_reached`. Complete links mean only
+that retained explicit dependencies fit; they do not certify extraction,
+exhaustive review or the model's answer. Missing dependencies appear in the web
+and CLI independently of model prose. Interrupted structure files count against
+a separate 256 MiB owner quota (32 MiB per graph); source loads allow at most
+64 MiB of serialized graph data. Originals retain their existing limits.
 
 Records expose ID, filename, digest, byte size, state, attempt number, timestamps
 and bounded error code. States include `accepted`, `queued`, `extracting`,
@@ -1838,3 +2230,87 @@ npm run check
 
 Commit the contract, generated types, handler implementation, and tests
 together. CI rejects generated-client drift.
+
+## Mixed-language OCR selections
+
+Document imports and Chat attachments accept up to three ordered pinned pack IDs
+in `ocr_language`, for example `chi_sim+fra+eng`. Encode the plus signs as `%2B`
+in URL queries. The first language is primary; repeated or unsupported IDs are
+rejected before saving an import. The service advertises
+`document-ocr-mixed-languages-v1`; clients must require it before uploading a mixed
+selection. `/v1/document-ocr-languages` and `/v1/documents/ocr-languages` return
+`selection_mode: ordered_languages` and `max_languages: 3`. Older catalogs may
+still return `single_language`.
+
+Every selected pack must be installed and pass its pinned digest. No language is
+added from the interface locale or downloaded automatically. Import and attachment
+receipts retain the exact ordered selection; retries and explicit attachment
+publication cannot alter it. Page checkpoints bind all pack identities and order.
+Structured source responses now include bounded `parsers` and `language_packs`
+identities, with `provenance_omitted` when their projection exceeds its bounds.
+Pack availability and exercised fixtures do not establish OCR accuracy or native
+translation approval. Page-specific language hints remain unavailable.
+
+### Private attachment corrections and historical reading
+
+The capability `session-document-corrections-v1` advertises immutable private
+attachment corrections and revision-preserving Knowledge publication.
+
+- `GET /v1/sessions/{name}/attachments/{id}/revisions` returns the bounded,
+  newest-first history after current source access and original identity checks.
+- `POST /v1/sessions/{name}/attachments/{id}/corrections` requires the current
+  attachment `expected_revision`, structured `extraction_revision` and leaf
+  `edits` (block identity, expected text hash, replacement text). Only the
+  conversation owner may write; administrative read access is insufficient.
+- The structure query opts into current editability with `corrections=true`.
+  Older clients and historical revisions remain read-only.
+- Preview queries accept `revision` to retain old extracted text. Source pixels
+  always represent the original file, including after a text correction.
+- Explicit attachment imports include `attachment.revision`. Omitting it for
+  a corrected source returns an upgrade-required response. Accepted history
+  is verified and staged with the original, then published atomically with
+  the index. Import receipts retain `extraction_revision` after staging is released.
+
+Python: `client.sessions.attachment_revisions(name, attachment_id)` and
+`client.sessions.correct_attachment(...)` expose the same contracts;
+`client.kb.import_attachment(..., revision=...)` preserves selected evidence.
+No mutation is automatically replayed after a timeout. Revocation/deletion
+continues to govern historical source delivery.
+
+### Deleting migrated conversations
+
+`DELETE /v1/sessions/{name}` accepts `canonical_id` and `revision` together for
+a conversation migrated to the canonical store. Read its current revision from
+`GET /api/v2/conversations/{canonical_id}` after the user confirms deletion.
+Legacy deletion without this explicit identity remains fenced; an identity
+mismatch does not delete a different session with the same name.
+
+Active work requires an explicit `work=retain` or `work=stop` choice. Accepted
+inputs and unsettled holds must finish or be stopped through conversation
+controls before deletion. Revision conflicts require a fresh explicit retry.
+Deletion removes conversation text and its local source files; independent work
+records and backups are retained. It does not claim to erase those domains.
+
+The service commits a durable deletion marker before file cleanup. If cleanup
+fails, reads remain fenced and retrying the same DELETE completes cleanup. A
+404 from the conversation read alone is not proof that source cleanup finished.
+The response is successful only after cleanup succeeds or the source is already
+absent. The marker also prevents reimporting retained legacy files after restart.
+
+### Native document details and lifecycle audit
+
+Structured blocks add optional `form_field` and `revisions` metadata. Form fields
+retain exact native values, labels, checkbox states, choice options and PDF
+user-space bounds. Tracked Word alternatives retain kind, source ID, source
+author/date and alternative text; they are distinct from the block current text.
+These fields describe retained extraction, not verified authenticity or accuracy.
+Bounded projections may omit metadata and set `metadata_omitted`.
+
+The collection-owner audit endpoint also returns `extraction_corrected`,
+`retention_updated`, `legal_hold_added`, `legal_hold_released`,
+`document_deleted` and `document_expired`. Corrections identify the document and
+new extraction in `subject` (`document-id@extraction-id`); retention events use
+the new retention revision, and deletion uses the last document binding revision.
+Expiry identifies its actor as `system:retention`. Private owners can still read
+these records after the document is removed; global administration alone does
+not grant access. Audit failure prevents the associated mutation.

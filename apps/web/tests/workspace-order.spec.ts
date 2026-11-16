@@ -17,7 +17,8 @@ for (const locale of ['en', 'ar'] as const) for (const width of [390, 1440]) tes
       const outer = el.getBoundingClientRect(), inner = child.getBoundingClientRect(), style = getComputedStyle(el);
       return getComputedStyle(el).direction === 'rtl' ? outer.right - parseFloat(style.paddingRight) - inner.right : inner.left - outer.left - parseFloat(style.paddingLeft);
     });
-    expect(Math.abs(layout), route).toBeLessThanOrEqual(1);
+    // Management content is centered within its bounded reading measure.
+    expect(layout, route).toBeGreaterThanOrEqual(-1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await page.screenshot({ path: info.outputPath(`${route}-${locale}-${width}.png`), fullPage: true, animations: 'disabled' });
   }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, type DocumentImport } from '../../api/client';
+import { api, APIError, type DocumentImport } from '../../api/client';
+import {collectionErrorMessage} from '../../i18n/collection-errors';
 import { useI18n } from '../../i18n';
 import { knowledgeImport } from '../../i18n/knowledge-import';
 import { knowledgeRecovery } from '../../i18n/knowledge-recovery';
@@ -11,6 +12,8 @@ import { workflow } from '../../i18n/workflow';
 import { documentRecovery } from '../../i18n/document-recovery';
 import { documentProgress } from '../../i18n/document-progress';
 import { runDocumentImport } from './import-progress';
+import { DocumentEvidenceNotice } from '../../components/DocumentEvidenceNotice';
+import {ocrProgress} from '../../i18n/ocr-progress';
 
 const active = (item: DocumentImport) => ['queued', 'extracting', 'indexing'].includes(item.state);
 
@@ -58,7 +61,10 @@ export function KnowledgeImportRecovery({ revision, disabled, refresh, ocrSetupN
       if (mounted.current) await refresh();
     } catch (reason) {
       if (action === 'remove') throw reason; // Keep the confirmation open with its actionable error.
-      if (mounted.current && !abort.signal.aborted) setError(reason instanceof Error ? reason.message : messages.common.error);
+      if (mounted.current && !abort.signal.aborted) {
+        const code=reason instanceof APIError?reason.data?.error_code??reason.data?.error?.code:undefined;
+        setError(code?.startsWith('collection_')?collectionErrorMessage():documentRecovery(locale,code)??(reason instanceof Error?reason.message:messages.common.error));
+      }
     }
     finally { locked.current = false; operation.current = null; if (mounted.current) { setWorking(''); setGeneration(value => value + 1); } }
   };
@@ -72,6 +78,8 @@ export function KnowledgeImportRecovery({ revision, disabled, refresh, ocrSetupN
     <ul>{records.map(item => <li key={item.id}>
       <div><strong><bdi>{item.name}</bdi></strong><span>{documentProgress(locale, item.state) ?? (working === item.id ? imports.importing : item.state === 'interrupted' ? copy.interrupted : imports.failed)}</span>
         {documentRecovery(locale, item.error_code) && <p>{documentRecovery(locale, item.error_code)}</p>}
+        <DocumentEvidenceNotice evidence={item.evidence} />
+        {!!item.ocr_completed_pages && <p className="workspace-secondary">{ocrProgress(locale,item.ocr_completed_pages)}</p>}
         {ocrSetupNeeded && ['document_ocr_language_missing', 'document_ocr_language_invalid'].includes(item.error_code ?? '') && <button type="button" className="text-button" onClick={openOCRLanguageSetup}>{ocrSetup(locale).title}</button>}
       </div>
       <div className="knowledge-recovery-actions">

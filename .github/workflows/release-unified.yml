@@ -639,6 +639,7 @@ jobs:
           cp runtimes/pdfium/assets/NOTICE.txt "$BUNDLE_NAME/document-NOTICE.txt"
           cp offgrid-ocr-worker${{ matrix.platform == 'windows' && '.exe' || '' }} "$BUNDLE_NAME/"
           cp runtimes/ocr/worker/assets/NOTICE.txt "$BUNDLE_NAME/ocr-NOTICE.txt"
+          cp internal/documentimage/NOTICE.txt "$BUNDLE_NAME/image-NOTICE.txt"
           
           # Copy main binaries
           if [ "${{ matrix.platform }}" = "windows" ]; then
@@ -708,6 +709,7 @@ jobs:
           sudo cp "$SCRIPT_DIR/document-NOTICE.txt" /usr/local/bin/document-NOTICE.txt
           sudo cp "$SCRIPT_DIR/offgrid-ocr-worker" /usr/local/bin/offgrid-ocr-worker
           sudo cp "$SCRIPT_DIR/ocr-NOTICE.txt" /usr/local/bin/ocr-NOTICE.txt
+          sudo cp "$SCRIPT_DIR/image-NOTICE.txt" /usr/local/bin/image-NOTICE.txt
           sudo cp "$SCRIPT_DIR/llama-server" /usr/local/bin/llama-server
           sudo chmod +x /usr/local/bin/offgrid /usr/local/bin/llama-server /usr/local/bin/offgrid-document-worker /usr/local/bin/offgrid-ocr-worker
 
@@ -785,6 +787,7 @@ jobs:
           Copy-Item document-NOTICE.txt C:\Program Files\OffGrid\
           Copy-Item offgrid-ocr-worker.exe C:\Program Files\OffGrid\
           Copy-Item ocr-NOTICE.txt C:\Program Files\OffGrid\
+          Copy-Item image-NOTICE.txt C:\Program Files\OffGrid\
           Copy-Item *.dll C:\Program Files\OffGrid\
           # Keep the app-local DLLs beside llama-server.exe.
           
@@ -842,12 +845,12 @@ jobs:
           # Create checksums (use shasum on macOS, sha256sum on Linux)
           cd "$BUNDLE_NAME"
           if [ "${{ matrix.platform }}" = "windows" ]; then
-            sha256sum offgrid.exe llama-server.exe offgrid-document-worker.exe document-NOTICE.txt offgrid-ocr-worker.exe ocr-NOTICE.txt ./*.dll runtime-dependencies.json > checksums.sha256 2>/dev/null || \
-              shasum -a 256 offgrid.exe llama-server.exe offgrid-document-worker.exe document-NOTICE.txt offgrid-ocr-worker.exe ocr-NOTICE.txt ./*.dll runtime-dependencies.json > checksums.sha256
+            sha256sum offgrid.exe llama-server.exe offgrid-document-worker.exe document-NOTICE.txt offgrid-ocr-worker.exe ocr-NOTICE.txt image-NOTICE.txt ./*.dll runtime-dependencies.json > checksums.sha256 2>/dev/null || \
+              shasum -a 256 offgrid.exe llama-server.exe offgrid-document-worker.exe document-NOTICE.txt offgrid-ocr-worker.exe ocr-NOTICE.txt image-NOTICE.txt ./*.dll runtime-dependencies.json > checksums.sha256
           elif [ "${{ matrix.platform }}" = "darwin" ]; then
-            shasum -a 256 offgrid llama-server offgrid-document-worker document-NOTICE.txt offgrid-ocr-worker ocr-NOTICE.txt > checksums.sha256
+            shasum -a 256 offgrid llama-server offgrid-document-worker document-NOTICE.txt offgrid-ocr-worker ocr-NOTICE.txt image-NOTICE.txt > checksums.sha256
           else
-            sha256sum offgrid llama-server offgrid-document-worker document-NOTICE.txt offgrid-ocr-worker ocr-NOTICE.txt > checksums.sha256
+            sha256sum offgrid llama-server offgrid-document-worker document-NOTICE.txt offgrid-ocr-worker ocr-NOTICE.txt image-NOTICE.txt > checksums.sha256
           fi
           cd ..
           

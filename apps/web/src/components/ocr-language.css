@@ -1,0 +1,13 @@
+.ocr-language-choice { border: 0; padding: 0; margin: 20px 0; display: grid; gap: 8px; min-width: 0; }
+.ocr-language-choice legend { font-weight: 600; padding: 0; margin-block-end: 12px; }
+.ocr-language-choice label { font-size: var(--type-meta); color: var(--muted); }
+.ocr-language-choice select { width: 100%; min-width: 0; }
+.ocr-language-choice p { margin: 0; line-height: 1.5; }
+.ocr-language-dialog { max-width: min(480px, calc(100vw - 32px)); }
+.knowledge-ocr-pack { display: grid; gap: 8px; }
+.knowledge-ocr-pack a { overflow-wrap: anywhere; }
+.ocr-additional-language { display: grid; gap: 8px; min-width: 0; }
+.ocr-additional-language > div { display: flex; gap: 8px; min-width: 0; }
+.ocr-additional-language select { flex: 1; }
+.ocr-additional-language button { flex: 0 0 36px; font-size: 1.25rem; }
+.ocr-add-language { justify-self: start; }

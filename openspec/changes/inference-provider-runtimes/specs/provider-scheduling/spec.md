@@ -2,6 +2,24 @@
 
 ## ADDED Requirements
 
+### Requirement: Speculative reads respect host memory pressure
+Prewarming SHALL have bounded concurrency, bytes, duration and retained history.
+It SHALL stop on pause, memory pressure or read failure and SHALL NOT label a
+partial read as a completely warmed model. Windows model admission SHALL account
+for measured commit headroom separately from physical RAM.
+
+#### Scenario: Full commit despite free physical RAM
+- **WHEN** Windows reports insufficient commit headroom for a model load
+- **THEN** admission rejects the load without silently reducing its context
+
+#### Scenario: Repeated prewarm requests during pressure
+- **WHEN** requests arrive while warming is active or host memory is low
+- **THEN** they do not create an unbounded background queue or bypass the budget
+
+#### Scenario: Pause during prewarming
+- **WHEN** active model loading pauses speculative reads
+- **THEN** the speculative operation stops without a blocked producer or a false complete result
+
 ### Requirement: One scheduler governs local inference
 Parent, child, perception, capability-check, and ordinary chat generations SHALL
 share admission, model-load, memory, cancellation, and budget controls.

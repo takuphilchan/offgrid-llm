@@ -15,11 +15,11 @@
   .sidebar-create .new-chat-button span { display: none; }
   .sidebar-collapsed .sidebar-chat-row { flex-direction: column; }
   .sidebar-collapsed .sidebar-chat-row > .nav-link { flex: none; }
-  .sidebar-collapsed .brand, .sidebar-collapsed .sidebar-context, .sidebar-collapsed .nav-link span, .sidebar-collapsed .new-chat-button span, .sidebar-collapsed .workspace-options > button span, .sidebar-collapsed .workspace-options > button > svg:last-child { display: none; }
+  .sidebar-collapsed .brand, .sidebar-collapsed .sidebar-context, .sidebar-collapsed .nav-link span, .sidebar-collapsed .new-chat-button span { display: none; }
   .sidebar-collapsed .sidebar { padding-inline: 10px; }
   .sidebar-collapsed .sidebar-heading { justify-content: center; }
   .sidebar-collapsed .primary-nav { grid-template-columns: 1fr; }
-  .sidebar-collapsed :is(.nav-link, .new-chat-button, .workspace-options > button) { --control-justify: center; justify-content: center; padding-inline: 0; }
+  .sidebar-collapsed :is(.nav-link, .new-chat-button) { --control-justify: center; justify-content: center; padding-inline: 0; }
   .sidebar-toggle, .navigation-trigger { display: none; }
   .primary-nav { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
   .nav-section-work { display: flex; flex-direction: column; flex: 1; min-height: 0; }
@@ -51,7 +51,6 @@
   .sidebar-context .history-row.active strong { font-weight: 500; color: var(--text); }
   .sidebar-foot { flex-shrink: 0; margin-block-start: 0; border-block-start: 0; padding-block-start: 8px; display: grid; gap: 4px; }
   .sidebar-collapsed .sidebar-foot { margin-block-start: auto; }
-  .sidebar-foot .workspace-options > button { --control-justify: flex-start; width: 100%; }
   .workspace { min-width: 0; background: var(--surface-1); border-start-start-radius: 16px; overflow: clip; }
   .topbar { min-height: var(--header-height); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px var(--page-gutter); border-block-end: 0; }
   .topbar-leading { display: flex; align-items: center; gap: 12px; min-width: 0; }

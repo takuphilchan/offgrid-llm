@@ -17,7 +17,7 @@ var engineBytes []byte
 var engineNotices string
 
 // Filled only from the reproducible source build and then independently tested.
-const engineSHA = "acfa0590d55b0762fc9d82fbafa6b13fa8700613356bfdf94cf933497dc298cf"
+const engineSHA = "21dd0440aa3cc3ccd5b117f2016fc9dad9ca17c99a0c63d00b647d3e05703b38"
 
 type ocrEngine struct {
 	ctx     context.Context
@@ -27,6 +27,10 @@ type ocrEngine struct {
 }
 
 func newEngine(ctx context.Context, model []byte) (*ocrEngine, error) {
+	return newEngineForLanguage(ctx, model, "eng")
+}
+
+func newEngineForLanguage(ctx context.Context, model []byte, language string) (*ocrEngine, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -77,7 +81,7 @@ func newEngine(ctx context.Context, model []byte) (*ocrEngine, error) {
 	if err != nil {
 		return fail(err)
 	}
-	lang, err := e.write([]byte("eng\x00"))
+	lang, err := e.write([]byte(language + "\x00"))
 	if err != nil {
 		return fail(err)
 	}

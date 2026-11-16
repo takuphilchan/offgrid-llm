@@ -47,7 +47,7 @@ func (s *Server) resolveConversationRun(w http.ResponseWriter, r *http.Request, 
 	return s.resolveConversationRunBeforeInput(w, r, c, command, "")
 }
 
-func (s *Server) resolveConversationRunBeforeInput(w http.ResponseWriter, r *http.Request, c *agents.Conversation, command agents.ConversationCommand, beforeInput string) (agents.AgentConfig, string, bool) {
+func (s *Server) resolveConversationRunBeforeInput(w http.ResponseWriter, r *http.Request, c *agents.Conversation, command agents.ConversationCommand, beforeInput string, selectedEvidence ...bool) (agents.AgentConfig, string, bool) {
 	e, err := s.effectiveConversationPreferences(r, c, command.Payload.Input.Model)
 	if err != nil {
 		writeControlError(w, err)
@@ -58,6 +58,11 @@ func (s *Server) resolveConversationRunBeforeInput(w http.ResponseWriter, r *htt
 		return agents.AgentConfig{}, "", false
 	}
 	req := jobSubmitRequest{ConversationModelOverride: true, Prompt: command.Payload.Input.Content, Model: e.Model, ProfileID: e.ProfileID, ProfileRevision: e.ProfileRevision}
+	// Validate the profile inventory here, but leave retrieval to the immutable
+	// source selector. A pinned passage must not trigger a broader semantic search
+	// or require an embedding model before its exact evidence is assembled.
+	req.DeferKnowledge = len(selectedEvidence) > 0 && selectedEvidence[0]
+	req.SelectedKnowledge = req.DeferKnowledge
 	if e.ProfileID != "" {
 		profile, loadErr := s.agentManager.GetProfile(s.workspaceID, s.agentActor(r), e.ProfileID, e.ProfileRevision)
 		if loadErr != nil {

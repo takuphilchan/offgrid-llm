@@ -95,7 +95,8 @@ func (b *browserRunTools) DeriveNativeActionExpectation(task *agents.Task, call 
 		if err != nil {
 			return nil, err
 		}
-		if b.documentToolsAvailable(task) && nativeDocumentTaskIntent(task) && !nativeDocumentControlFallback(task) {
+		state, _ := documentState(task)
+		if b.documentToolsAvailable(task) && state.step > 0 && !nativeDocumentControlFallback(task) {
 			return nil, computer.ErrInvalidControl
 		}
 		if nativeDocumentControlFallback(task) && !freshControlViewAfterDocumentFallback(task, view.Observation.ID) {

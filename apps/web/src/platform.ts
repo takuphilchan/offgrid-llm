@@ -2,6 +2,16 @@ export type DesktopPaths = { config: string; models: string; data: string };
 export type DesktopBackend = { state: 'checking' | 'starting' | 'ready' | 'offline' | 'incompatible' | 'unavailable' | 'error'; url: string; managedByDesktop: boolean; desktopVersion: string; version?: string; revision?: string; uiBuildID?: string; apiVersion?: number; reason?: string; code?: string; bridgeProtocol?: number; compatibilityBasis?: 'declared-contract' | 'reviewed-legacy' };
 
 export type DesktopBridge = {
+  commandWindowProtocol?: number;
+  getCommandWindow?: () => Promise<CommandWindowState>;
+  openCommandWindow?: () => Promise<CommandWindowState>;
+  expandCommandWindow?: () => Promise<CommandWindowState>;
+  dismissCommandWindow?: () => Promise<CommandWindowState>;
+  setCommandLayout?: (layout:'input'|'work'|'voice', motion?:{prepared:boolean;reduceMotion:boolean}) => Promise<CommandWindowState>;
+  onCommandTransition?: (callback:(request:{id:number})=>void) => () => void;
+  acknowledgeCommandTransition?: (request:{id:number;reduceMotion:boolean}) => Promise<void>;
+  setCommandShortcut?: (shortcut: string) => Promise<CommandWindowState>;
+  onCommandWindow?: (callback: (state: CommandWindowState) => void) => () => void;
   bridgeProtocol?: number;
   terminalProtocol?: number;
   onTerminalContext?: (callback:(context:unknown)=>boolean)=>()=>void;
@@ -37,6 +47,8 @@ export type DesktopBridge = {
   onThemeChange: (callback: (theme: 'dark' | 'light') => void) => () => void;
   getPaths: () => Promise<DesktopPaths>;
 };
+
+export type CommandWindowState = { mode: 'full' | 'compact'; shortcut: string; registered: boolean };
 
 declare global {
   interface Window {

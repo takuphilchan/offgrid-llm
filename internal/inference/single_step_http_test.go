@@ -217,7 +217,7 @@ func TestSingleStepEmbedsToolLocalReferencesWithoutCollisions(t *testing.T) {
 func TestSingleStepPreservesForcedToolAndImages(t *testing.T) {
 	req := singleStepFixture()
 	req.ToolChoice = map[string]any{"type": "function", "function": map[string]any{"name": "fixture_read"}}
-	req.Messages = append(req.Messages, api.ChatMessage{Role: "user", Content: []api.ChatContentPart{{Type: "text", Text: "Owned image observation"}, {Type: "image_url", ImageURL: &api.ChatImageURL{URL: "data:image/png;base64,fixture"}}}})
+	req.Messages = append(req.Messages, api.ChatMessage{Role: "user", Content: []api.ChatContentPart{{Type: "text", Text: "Owned image observation"}, {Type: "image_url", ImageURL: &api.ChatImageURL{URL: inferenceImageFixture(t, 0)}}}})
 	body, err := marshalLlamaRequest(req)
 	if err != nil || !strings.Contains(string(body), `"image_url"`) {
 		t.Fatal("image or forced choice lost", err)

@@ -12,6 +12,47 @@ import (
 )
 
 func validateConversationInput(c api.ConversationInputCommand) error {
+	if len(c.Payload.KnowledgeSelections) > 16 {
+		return ErrControlCommand
+	}
+	selected := map[string]bool{}
+	for _, source := range c.Payload.KnowledgeSelections {
+		if !validProfileText(source.DocumentID, 256, true) || !validProfileText(source.Revision, 128, true) || source.Page < 0 || source.Page > 100000 || len(source.BlockIDs) > 32 || (source.Page > 0 && len(source.BlockIDs) > 0) || (source.Page == 0 && len(source.BlockIDs) == 0) || selected[source.DocumentID] {
+			return ErrControlCommand
+		}
+		selected[source.DocumentID] = true
+		seen := map[string]bool{}
+		for _, id := range source.BlockIDs {
+			if !validProfileText(id, 128, true) || seen[id] {
+				return ErrControlCommand
+			}
+			seen[id] = true
+		}
+	}
+	if len(c.Payload.Attachments) > 8 || len(c.Payload.KnowledgeDocuments) > 16 || api.ValidateSessionImages(c.Payload.Images) != nil {
+		return ErrControlCommand
+	}
+	if len(c.Payload.Attachments) > 0 && !validProfileText(c.Payload.SourceSession, 256, true) {
+		return ErrControlCommand
+	}
+	seen := map[string]bool{}
+	for _, source := range c.Payload.Attachments {
+		if !validTaskID(source.ID) || len(source.Revision) != 64 || source.Page < 0 || source.Page > 100000 || seen[source.ID] {
+			return ErrControlCommand
+		}
+		if _, err := hex.DecodeString(source.Revision); err != nil {
+			return ErrControlCommand
+		}
+		seen[source.ID] = true
+	}
+	for _, id := range c.Payload.KnowledgeDocuments {
+		if !validProfileText(id, 256, true) {
+			return ErrControlCommand
+		}
+	}
+	if (c.Payload.Intent == "answer" || c.Payload.Intent == "correction") && (len(c.Payload.Attachments)+len(c.Payload.Images)+len(c.Payload.KnowledgeDocuments)+len(c.Payload.KnowledgeSelections) > 0 || c.Payload.UseKnowledge) {
+		return ErrControlCommand
+	}
 	if !validProfileText(c.RequestID, 128, true) || strings.ContainsAny(c.RequestID, "\r\n") || c.Kind != "submit_input" || !validTaskID(c.TargetID) || c.ExpectedRevision < 1 || !validProfileText(c.Payload.Content, 32000, true) || strings.TrimSpace(c.Payload.Content) == "" || !validProfileText(c.Payload.Model, 256, false) {
 		return ErrControlCommand
 	}

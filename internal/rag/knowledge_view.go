@@ -183,7 +183,11 @@ func (v *KnowledgeView) RemoveDocument(id string) error {
 		if err != nil || !v.principal.allows(policy, true) {
 			return ErrCollectionUnavailable
 		}
-		return s.deleteDocument(id)
+		actor := v.principal.actor
+		if v.principal.sharedOnly {
+			actor = "system:legacy-workspace"
+		}
+		return s.deleteDocumentWithAudit(context.Background(), id, actor, "document_deleted")
 	}
 	return e.store.DeleteDocument(id)
 }

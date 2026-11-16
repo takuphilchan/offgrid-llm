@@ -13,6 +13,11 @@ not claim every CLI diagnostic, server error or OS-owned label is localized.
 
 ## Create and review packs
 
+Startup welcome lines are included as `desktop/startup-welcome` in the same
+29-language export. They are draft translations, with native review pending.
+Imported corrections apply to both the native startup screen and the workspace
+loading screen; welcoming copy is separate from factual loading status.
+
 Run from the repository root:
 
 ```sh

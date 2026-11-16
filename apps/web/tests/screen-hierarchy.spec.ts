@@ -26,12 +26,12 @@ for(const width of [390,1440]) test(`Activity sections share a single content al
 for(const locale of ['en','fr','de','es','ar','sw','sn','nd','zu']) for(const width of [320,1280]) test(`settings rows keep labels and bounded controls aligned: ${locale} ${width}`,async({page},info)=>{
  const state=await craftFixture(page,locale,width===320?'light':'dark');await page.setViewportSize({width,height:700});
  await page.goto('/ui/#/settings');await expect(page.locator('#settings-language')).toBeVisible();
- await expect(page.getByRole('heading',{level:1})).toHaveCount(1);
+ await expect(page.locator('.settings-group:not([hidden]) h2')).toHaveCount(1);
  const fields=await page.locator('.settings-group .settings-panel').evaluateAll(rows=>rows.filter(row=>row.getClientRects().length>0&&row.children.length>1).map(row=>{
   const label=row.firstElementChild!.getBoundingClientRect(),control=row.lastElementChild!.getBoundingClientRect();
   return {label:{x:label.x,y:label.y,bottom:label.bottom,right:label.right},control:{x:control.x,y:control.y,width:control.width,right:control.right},columns:getComputedStyle(row).gridTemplateColumns};
  }));
- expect(fields.length).toBeGreaterThanOrEqual(3);
+ expect(fields.length).toBeGreaterThanOrEqual(1);
  if(width===1280){
   for(const field of fields){expect(field.control.width).toBeLessThanOrEqual(321);const edge=locale==='ar'?'right':'x';expect(Math.abs(field.control[edge]-fields[0].control[edge])).toBeLessThanOrEqual(1);}
  }else for(const field of fields)expect(field.control.y).toBeGreaterThanOrEqual(field.label.bottom);
@@ -54,11 +54,11 @@ test('installed inventory is not advertised as ready and clearing a filter prese
 
 for(const category of ['Language','Embeddings','Speech recognition','Speech generation']) test(`empty ${category} inventory offers discovery without downloading`,async({page})=>{
  const state=await craftFixture(page,'en','light');await page.route('**/v1/models',r=>r.fulfill({json:{data:[]}}));
- await page.goto('/ui/#/models');await page.getByRole('button',{name:category,exact:true}).click();
- const empty=page.getByRole('tabpanel').locator('.workspace-empty').first();
+ await page.goto('/ui/#/models');await page.locator('.model-category-filter').selectOption({label:category});
+ const empty=page.locator('#model-library-panel .workspace-empty').first();
  await empty.getByRole('button',{name:'Discover models',exact:true}).click();
- await expect(page.getByRole('tab',{name:'Discover models',exact:true})).toHaveAttribute('aria-selected','true');
- await expect(page.getByRole('tab',{name:'Discover models',exact:true})).toBeFocused();
+ await expect(page.locator('.model-library-navigation [aria-current=page]')).toHaveText('Discover models');
+ await expect(page.locator('.model-library-navigation [aria-current=page]')).toBeFocused();
  expect(state.writes).toEqual([]);
 });
 

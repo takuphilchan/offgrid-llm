@@ -21,6 +21,7 @@ export function OCRLanguageSetup({ disabled, refresh }: { disabled: boolean; ref
   const { locale, messages } = useI18n(); const copy = ocrSetup(locale);
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [notice, setNotice] = useState('');
   const [installing, setInstalling] = useState(false);
+  const [selected,setSelected]=useState('eng');
   const [languages, setLanguages] = useState<Awaited<ReturnType<typeof api.ocrLanguages>>['languages']>([]);
   const operation = useRef<AbortController | null>(null), mounted = useRef(true), locked = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; operation.current?.abort(); }; }, []);
@@ -48,8 +49,10 @@ export function OCRLanguageSetup({ disabled, refresh }: { disabled: boolean; ref
     <summary>{copy.title}</summary>
     {open && <div>
       <p className="workspace-secondary">{copy.guidance}</p>
-      {languages.map(language => <div key={language.language}>
+      {languages.length>0&&<label>{messages.common.language}<select disabled={disabled||busy} value={selected} onChange={event=>setSelected(event.target.value)}>{languages.map(language=><option key={language.language} value={language.language}>{language.name}</option>)}</select></label>}
+      {languages.filter(language=>language.language===selected).map(language => <div key={language.language} className="knowledge-ocr-pack">
         <strong><bdi>{language.name}</bdi></strong>
+        {language.source_url?.startsWith('https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/')&&<a href={language.source_url} target="_blank" rel="noreferrer"><bdi>{`${language.language}.traineddata`}</bdi></a>}
         {language.state === 'installed_verified' ? <p role="status">{copy.installed}</p> : <FilePicker label={copy.importFile} accept=".traineddata" disabled={disabled || busy} onFiles={files => { if (files[0]) void install(language.language, files[0]); }} />}
       </div>)}
       {busy && <p role="status">{installing ? copy.installing : messages.common.loading}</p>}

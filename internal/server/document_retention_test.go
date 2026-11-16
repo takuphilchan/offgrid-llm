@@ -115,4 +115,41 @@ func TestDocumentRetentionRoutesAuthorityHoldAndExpiry(t *testing.T) {
 			t.Fatal("expired source denial leaked content or allowed caching", path)
 		}
 	}
+	auditPath := "/v1/collections?id=" + p.ID + "&view=audit"
+	w = do("owner", "GET", auditPath, "")
+	var ledger struct {
+		Events []rag.CollectionAudit `json:"events"`
+	}
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &ledger) != nil {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	want := map[string]bool{"legal_hold_added": false, "legal_hold_released": false, "document_expired": false}
+	for _, event := range ledger.Events {
+		if _, ok := want[event.Action]; ok {
+			want[event.Action] = true
+			if event.Subject != doc.ID {
+				t.Fatal("wrong audited document", event)
+			}
+			actor := ids["owner"]
+			if event.Action == "document_expired" {
+				actor = "system:retention"
+			}
+			if event.Actor != actor {
+				t.Fatal("wrong audited actor", event)
+			}
+		}
+	}
+	for action, seen := range want {
+		if !seen {
+			t.Fatal("missing event after deletion", action)
+		}
+	}
+	if strings.Contains(w.Body.String(), doc.RawContent) {
+		t.Fatal("audit disclosed document body")
+	}
+	for _, actor := range []string{"reader", "editor", "outsider"} {
+		if w = do(actor, "GET", auditPath, ""); w.Code != 404 {
+			t.Fatal("non-owner read audit", actor, w.Code)
+		}
+	}
 }

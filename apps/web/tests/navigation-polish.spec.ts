@@ -1,0 +1,94 @@
+import {expect,test} from '@playwright/test';
+import {craftFixture} from './helpers/craft-fixture';
+import {settingsNavigation} from '../src/i18n/settings-navigation';
+import {modelLibrary} from '../src/i18n/model-library';
+import {mkdirSync} from 'node:fs';
+import {resolve} from 'node:path';
+import {workspaceShell} from '../src/i18n/workspace-shell';
+
+for(const [locale,theme,width] of [['en','light',1440],['en','dark',1440],['ar','dark',390],['zh-Hans','light',390]] as const) test(`direct Models, compact Settings and themed dropdown ${locale} ${theme}`,async({page})=>{
+ const fixture=await craftFixture(page,locale,theme);
+ await page.setViewportSize({width,height:900});await page.goto('/ui/#/settings/voice');
+ const copy=settingsNavigation[locale];
+ await expect(page.locator('#voice-settings-title')).toBeVisible();
+ await expect(page.locator('.settings-navigation nav [aria-current=page]')).toHaveText(copy.sections[2]);
+ await page.reload();await expect(page.locator('#voice-settings-title')).toBeVisible();
+ const nav=await page.locator('.settings-navigation').boundingBox(),content=await page.locator('.settings-content').boundingBox();
+ if(width>=1024){expect(nav!.x+nav!.width).toBeLessThan(content!.x);await expect(page.locator('.sidebar-detail .settings-navigation')).toBeVisible();}
+ else expect(nav!.y+nav!.height).toBeLessThanOrEqual(content!.y);
+ if(width>=1024)await expect(page.locator('#workspace-navigation a[href="#/models"]')).toBeVisible();
+ const out=resolve('../../build/ui-craft/quick-access-repair');mkdirSync(out,{recursive:true});
+ await page.screenshot({path:resolve(out,`settings-${locale}-${theme}.png`)});
+ await page.locator('.settings-navigation nav button').first().click();
+ await expect(page).toHaveURL(/#\/settings\/general$/);
+ await page.goBack();await expect(page.locator('#voice-settings-title')).toBeVisible();
+ await page.goto('/ui/#/models');
+ const navigation=page.locator('.model-library-navigation');await expect(navigation.locator('button')).toHaveCount(3);
+ await expect(navigation.getByRole('button',{name:modelLibrary(locale).search,exact:true})).toBeVisible();
+ const category=page.locator('.model-category-filter');
+ await expect(category).toHaveCSS('appearance','base-select');
+ await category.click();await expect(category).toHaveJSProperty('value','language');
+ await page.screenshot({path:resolve(out,`dropdown-${locale}-${theme}.png`)});
+ const picker=await category.evaluate(el=>{const style=getComputedStyle(el,'::picker(select)');return {radius:style.borderRadius,background:style.backgroundColor};});
+ expect(picker.radius).toBe('16px');expect(picker.background).not.toBe('rgba(0, 0, 0, 0)');
+ await page.keyboard.press('Escape');await expect(category).toBeFocused();
+ await category.selectOption('speech_recognition');
+ await navigation.getByRole('button',{name:modelLibrary(locale).search,exact:true}).click();
+ await expect(page.locator('.model-search-form input')).toBeVisible();
+ await page.locator('.model-search-form input').fill('Unsubmitted repository query');
+ await navigation.locator('button').first().click();
+ await navigation.getByRole('button',{name:modelLibrary(locale).search,exact:true}).click();
+ await expect(page.locator('.model-search-form input')).toHaveValue('Unsubmitted repository query');
+ await expect(category).toHaveValue('speech_recognition');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ expect(fixture.writes).toEqual([]);
+ await page.screenshot({path:resolve(out,`models-${locale}-${theme}.png`)});
+});
+
+test('Settings context survives collapse, RTL and an enlarged viewport without duplicate navigation',async({page})=>{
+ await craftFixture(page,'ar','dark');await page.setViewportSize({width:1440,height:900});await page.goto('/ui/#/settings/voice');
+ const copy=settingsNavigation.ar;
+ await expect(page.locator('.sidebar-detail .settings-navigation')).toBeVisible();
+ const nav=await page.locator('.settings-navigation').boundingBox(),content=await page.locator('.settings-content').boundingBox();
+ expect(nav!.x).toBeGreaterThan(content!.x+content!.width);
+ await page.getByRole('button',{name:workspaceShell.ar.collapse,exact:true}).click();
+ await expect(page.locator('.settings-page > .settings-navigation')).toBeVisible();
+ await expect(page.locator('.settings-navigation')).toHaveCount(1);
+ await page.getByRole('button',{name:workspaceShell.ar.expand,exact:true}).click();
+ await expect(page.locator('.sidebar-detail .settings-navigation')).toBeVisible();
+ await page.getByRole('searchbox',{name:copy.search}).fill(copy.sections[2]);
+ await expect(page.locator('#voice-settings-title')).toBeVisible();
+ await page.setViewportSize({width:720,height:450});
+ await expect(page.locator('.settings-page > .settings-navigation')).toBeVisible();
+ await expect(page.getByRole('searchbox',{name:copy.search})).toHaveValue(copy.sections[2]);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+test('dropdown keyboard selection and forced colors remain usable with enlarged text',async({page})=>{
+ await craftFixture(page,'en','dark');await page.setViewportSize({width:680,height:740});await page.goto('/ui/#/settings');
+ await page.locator('.settings-navigation [data-section=appearance]').click();
+ await page.locator('#appearance-text-size').selectOption('150');
+ await page.locator('.settings-navigation [data-section=general]').click();
+ const language=page.locator('#settings-language');await language.focus();await page.keyboard.press('Space');
+ await expect(language).toHaveCSS('appearance','base-select');
+ await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
+ await expect(language).not.toHaveValue('en');
+ await page.emulateMedia({forcedColors:'active'});await language.click();
+ await expect(language).toBeInViewport();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.keyboard.press('Escape');await expect(language).toBeFocused();
+});
+for(const theme of ['light','dark'] as const)test(`reference Appearance page and sidebar ${theme}`,async({page})=>{
+ const fixture=await craftFixture(page,'en',theme);await page.setViewportSize({width:1440,height:960});await page.goto('/ui/#/settings/appearance');
+ await expect(page.locator('#appearance-title')).toHaveText('Appearance');
+ await expect(page.locator('.sidebar-detail [data-section=appearance]')).toHaveAttribute('aria-current','page');
+ await expect(page.locator('#setting-theme button')).toHaveCount(3);
+ await expect(page.locator('.appearance-values .appearance-preference-row')).toHaveCount(4);
+ await expect(page.locator('#settings-language')).toBeHidden();
+ await page.locator('#setting-theme button').nth(1).click();await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+ await page.locator('#setting-theme button').nth(theme==='dark'?2:1).click();
+ const out=resolve('../../build/ui-craft/quick-access-repair');mkdirSync(out,{recursive:true});
+ await page.screenshot({path:resolve(out,`appearance-reference-${theme}.png`)});
+ await page.locator('.settings-navigation [data-section=general]').click();await expect(page.locator('#settings-language')).toBeVisible();
+ expect(fixture.writes).toEqual([]);
+});

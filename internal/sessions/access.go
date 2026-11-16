@@ -71,6 +71,9 @@ func (s *ScopedManager) loadOwned(name string) (*Session, error) {
 		// Do not disclose the existence or owner of somebody else's session.
 		return nil, ErrSessionNotFound
 	}
+	if err := s.manager.checkCanonical(session); err != nil && !errors.Is(err, ErrCanonicalConversation) {
+		return nil, err
+	}
 	return session, nil
 }
 

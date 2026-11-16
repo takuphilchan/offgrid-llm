@@ -15,3 +15,27 @@
   .model-select-options small { color: var(--muted); overflow-wrap: anywhere; font-size: var(--type-caption); line-height: 1.5; }
   .model-select-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: inherit; }
 }
+@layer controls {
+ .composer { container:composer / inline-size; }
+ .composer .composer-actions .model-select,.composer.composer-compact .composer-actions > .composer-pinned-model { max-width:260px; }
+ .model-select-options .model-select-id { white-space:normal; text-overflow:clip; overflow:visible; overflow-wrap:anywhere; }
+ .model-select-name strong { overflow-wrap:anywhere; }
+ .model-trigger-name { white-space:nowrap; }
+ .composer .model-select-trigger > .model-trigger-name,.composer-pinned-model .model-trigger-name { overflow:visible; text-overflow:clip; }
+ .model-label-narrow { display:none; }
+ @container composer (max-width:520px) {
+  .model-label-regular { display:none; }
+  .model-label-narrow { display:inline; }
+  .composer-actions .model-select,.composer.composer-compact .composer-actions > .composer-pinned-model { max-width:150px; }
+ }
+}
+
+@layer controls {
+ /* Allow the action row to wrap at narrow widths or enlarged text instead of
+    letting a zero-minimum grid column overlap the model picker. */
+ .chat-page .composer.composer-compact > .composer-footer {
+  display:flex; grid-column:1/-1; grid-row:2; align-items:center; flex-wrap:wrap; gap:8px; min-width:0;
+ }
+ .chat-page .composer.composer-compact .composer-footer > .composer-utilities { flex:0 0 auto; }
+ .chat-page .composer.composer-compact .composer-footer > .composer-actions { flex:0 1 auto; max-width:100%; margin-inline-start:auto; }
+}

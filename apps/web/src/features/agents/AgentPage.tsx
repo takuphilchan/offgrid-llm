@@ -51,9 +51,9 @@ export function AgentPage({ models, model }: { models: Model[]; model: string })
     return () => { request.current++; clearInterval(timer); };
   }, [admin]);
   useWorkspaceRefresh(refresh);
-  if (view === 'profiles' || view === 'home' || view === 'workspace') return <><AgentNavigation view="profiles" />{identity?.profiles
+  if (view === 'profiles' || view === 'home' || view === 'workspace') return <div className="agent-management-page"><AgentNavigation view="profiles" />{identity?.profiles
     ? <AgentProfiles key={identity.workspace} models={models} preferredModel={model} />
-    : identityError || identity ? <ScopedNotice kind="error" action={<button className="secondary-button" onClick={() => void refresh()}>{messages.common.retry}</button>}>{identityError ? copy.connection : agentProfilesText[locale].unsupported}</ScopedNotice> : <p role="status">{messages.common.loading}</p>}</>;
+    : identityError || identity ? <ScopedNotice kind="error" action={<button className="secondary-button" onClick={() => void refresh()}>{messages.common.retry}</button>}>{identityError ? copy.connection : agentProfilesText[locale].unsupported}</ScopedNotice> : <p role="status">{messages.common.loading}</p>}</div>;
   if (!admin) return <><AgentNavigation /><PermissionNotice /></>;
   return <AgentManagement model={model} view={view} />;
 }

@@ -15,7 +15,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
 )
 
-const KnowledgeUsage = "offgrid kb status|list|enable MODEL|disable|add PATH|import-attachment SESSION FILE_ID SHA256|imports|import-status ID|review-import ID|retry-import ID|cancel-import ID|remove-import ID|ocr-languages|import-ocr-language LANGUAGE PATH|original ID --output NEW_FILE|retention ID [--revision N --delete-after UTC_UNIX_SECONDS --legal-hold true|false]|remove ID|search QUERY|clear --yes"
+const KnowledgeUsage = "offgrid kb status|list|enable MODEL|disable|add PATH|import-attachment SESSION FILE_ID SHA256 COLLECTION_ID REVIEWED_REVISION|imports|import-status ID|review-import ID|retry-import ID|cancel-import ID|remove-import ID|ocr-languages|import-ocr-language LANGUAGE PATH|original ID --output NEW_FILE|structure ID [--revision REV --unit UNIT --offset N --limit N --relationship-offset N]|correct REVIEW.json|retention ID [--revision N --delete-after UTC_UNIX_SECONDS --legal-hold true|false]|remove ID|search QUERY|clear --yes|" + KnowledgeAnalysisUsage
 
 func RunKnowledgeService(ctx context.Context, client *serviceclient.Client, args []string, input io.Reader, progress io.Writer, jsonMode bool) (any, error) {
 	if len(args) == 0 {
@@ -23,6 +23,23 @@ func RunKnowledgeService(ctx context.Context, client *serviceclient.Client, args
 	}
 	if args[0] == "retention" {
 		return runKnowledgeRetention(ctx, client, args)
+	}
+	if args[0] == "structure" || args[0] == "correct" {
+		return runKnowledgeStructure(ctx, client, args)
+	}
+	switch args[0] {
+	case "compose-summary", "compositions", "composition", "composition-report", "composition-evidence", "cancel-composition", "retry-composition":
+		return runKnowledgeComposition(ctx, client, args)
+	case "synthesis-review", "save-synthesis-review":
+		return runKnowledgeSynthesisReview(ctx, client, args)
+	case "synthesise", "syntheses", "synthesis", "synthesis-results", "retry-synthesis":
+		return runKnowledgeSynthesis(ctx, client, args)
+	case "analysis-export", "synthesis-export", "composition-export":
+		return exportKnowledgeAnalysis(ctx, client, args)
+	case "compare", "analyses", "analysis", "analysis-results", "analysis-source", "cancel-analysis", "retry-analysis":
+		return runKnowledgeAnalyses(ctx, client, args)
+	case "collections", "collection", "collection-audit", "create-collection", "update-collection", "document-collection", "move-document", "import-collection":
+		return runKnowledgeCollections(ctx, client, args)
 	}
 	var result map[string]any
 	get := func(path string) (any, error) {
@@ -161,6 +178,10 @@ func ingestKnowledgePath(ctx context.Context, client *serviceclient.Client, path
 }
 
 func ingestKnowledgeFile(ctx context.Context, client *serviceclient.Client, path string) (any, error) {
+	return uploadKnowledgeFile(ctx, client, path, "/v1/documents/ingest", "", 0)
+}
+
+func uploadKnowledgeFile(ctx context.Context, client *serviceclient.Client, path, endpoint, collection string, reviewedRevision int) (any, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return nil, err
@@ -196,7 +217,7 @@ func ingestKnowledgeFile(ctx context.Context, client *serviceclient.Client, path
 		}
 		_ = writer.CloseWithError(err)
 	}()
-	resp, err := client.Do(ctx, http.MethodPost, "/v1/documents/ingest", multipartWriter.FormDataContentType(), reader)
+	resp, err := client.Do(ctx, http.MethodPost, endpoint, multipartWriter.FormDataContentType(), reader)
 	if err != nil {
 		return nil, err
 	}
@@ -204,6 +225,17 @@ func ingestKnowledgeFile(ctx context.Context, client *serviceclient.Client, path
 	var result map[string]any
 	if err := serviceclient.DecodeContext(ctx, resp.Body, &result); err != nil {
 		return nil, err
+	}
+	if collection != "" {
+		parsed, _ := url.Parse(endpoint)
+		if selected := parsed.Query().Get("ocr_language"); selected != "" && result["ocr_language"] != selected {
+			return nil, &serviceclient.Error{Code: "invalid_response", Message: "OCR selection was not confirmed. Inspect saved imports before retrying."}
+		}
+		id, _ := result["id"].(string)
+		if reviewedRevision < 1 || result["collection_revision"] != float64(reviewedRevision) || result["collection_id"] != collection || result["state"] != "accepted" || id == "" {
+			return nil, &serviceclient.Error{Code: "invalid_response", Message: "Collection import was not confirmed. Inspect saved imports before retrying."}
+		}
+		return result, nil
 	}
 	if err := ValidateKnowledgeResponse("add", result); err != nil {
 		return nil, err
@@ -250,7 +282,7 @@ func ValidateKnowledgeResponse(action string, result map[string]any) error {
 
 func isKBSupportedFile(path string) bool {
 	switch strings.ToLower(filepath.Ext(path)) {
-	case ".txt", ".md", ".markdown", ".json", ".csv", ".xml", ".html", ".htm", ".pdf", ".docx", ".xlsx", ".pptx", ".rtf", ".go", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".h", ".hpp", ".rs", ".sh", ".yaml", ".yml", ".toml":
+	case ".png", ".jpg", ".jpeg", ".txt", ".md", ".markdown", ".json", ".csv", ".xml", ".html", ".htm", ".pdf", ".docx", ".xlsx", ".pptx", ".rtf", ".go", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".h", ".hpp", ".rs", ".sh", ".yaml", ".yml", ".toml":
 		return true
 	}
 	return false

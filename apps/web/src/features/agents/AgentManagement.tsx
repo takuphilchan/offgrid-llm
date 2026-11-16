@@ -13,6 +13,8 @@ import { AgentNavigation } from './AgentNavigation';
 import { SearchField } from '../../components/SearchField';
 import { ProviderSetupDialog } from './ProviderSetupDialog';
 import { agentManagement } from '../../i18n/agent-management';
+import { AgentToolList } from './AgentToolList';
+import { readableModelName } from '../models/model-display';
 
 // Management does not mount a task runner or poll execution/history endpoints.
 export function AgentManagement({ model, view }: { model: string; view: 'tools' | 'connections' | 'external' }) {
@@ -42,6 +44,11 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
   const [copied, setCopied] = useState(false);
   const runtimeRequest = useRef(0);
   const integrationRequest = useRef(0);
+  const mutationLock = useRef(false);
+  const connectionTrigger = useRef<HTMLButtonElement>(null);
+  const connectionInput = useRef<HTMLInputElement>(null);
+  const mutationBusy = !!toolBusy || !!connectionBusy;
+  useEffect(() => { if (addingConnection) connectionInput.current?.focus(); }, [addingConnection]);
 
   const refreshRuntime = async () => {
     const request = ++runtimeRequest.current;
@@ -69,33 +76,40 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
   useWorkspaceRefresh(refreshRuntime);
 
   const toggleTool = async (tool: AgentTool) => {
+    if (mutationLock.current || loadingRuntime) return;
+    mutationLock.current = true;
     setToolBusy(tool.name); setError('');
     try { await api.setAgentToolEnabled(tool.name, !tool.enabled); await refreshRuntime(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
-    finally { setToolBusy(''); }
+    finally { mutationLock.current = false; setToolBusy(''); }
   };
   const testConnection = async () => {
-    if (!connectionURL.trim() || connectionBusy || removeServer) return;
+    if (!connectionURL.trim() || mutationLock.current || removeServer) return;
+    mutationLock.current = true;
     setConnectionBusy('test'); setConnectionMessage(''); setError('');
     try { const response = await api.testMCP(connectionURL.trim()); setConnectionMessage(`${response.tools_count} ${text.agentRuntime.tools.toLowerCase()}`); }
     catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
-    finally { setConnectionBusy(''); }
+    finally { mutationLock.current = false; setConnectionBusy(''); }
   };
   const connect = async (event: FormEvent) => {
     event.preventDefault();
-    if (!connectionName.trim() || !connectionURL.trim() || connectionBusy || removeServer) return;
+    if (!connectionName.trim() || !connectionURL.trim() || mutationLock.current || removeServer) return;
+    mutationLock.current = true;
     setConnectionBusy('connect'); setConnectionMessage(''); setError('');
     try {
       const response = await api.connectMCP(connectionName.trim(), connectionURL.trim());
       setConnectionMessage(`${response.tools_added} ${text.agentRuntime.tools.toLowerCase()}`);
       setConnectionName(''); setConnectionURL('');
+      setAddingConnection(false);
       await refreshRuntime();
+      requestAnimationFrame(() => connectionTrigger.current?.focus());
     } catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
-    finally { setConnectionBusy(''); }
+    finally { mutationLock.current = false; setConnectionBusy(''); }
   };
 
   const removeConnection = async () => {
-    if (!removeServer || connectionBusy) return;
+    if (!removeServer || mutationLock.current) return;
+    mutationLock.current = true;
     setConnectionBusy('remove'); setConnectionMessage('');
     try {
       await api.removeMCP(removeServer.name);
@@ -105,7 +119,7 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
       setServers(current => current.filter(server => server.name !== removeServer.name));
       setConnectionMessage(mcpText.removed);
       await refreshRuntime();
-    } finally { setConnectionBusy(''); }
+    } finally { mutationLock.current = false; setConnectionBusy(''); }
   };
 
   const showIntegrationSetup = async (item: ExternalIntegration) => {
@@ -118,12 +132,8 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
 
   const copyIntegrationSetup = async () => {
     if (!integrationSetup) return;
-    try {
-      await navigator.clipboard.writeText(integrationSetup.setup.install_command);
-      setCopied(true);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : text.common.error);
-    }
+    await navigator.clipboard.writeText(integrationSetup.setup.install_command);
+    setCopied(true);
   };
 
 
@@ -134,27 +144,28 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
     {view !== 'external' && <div id="agent-connections-panel" className="agent-view" role="region" aria-label={text.agentRuntime.connectors}>
       <section className="runtime-panel connector-panel">
         <div>
-          <SectionHeading title={text.agentRuntime.connectors} description={management.connections} actions={<button type="button" className="secondary-button library-create-action" aria-expanded={addingConnection} aria-controls="mcp-connect-form" disabled={connectionBusy !== ''} onClick={() => setAddingConnection(value => !value)}><Icon name={addingConnection ? 'close' : 'plus'} size={16} />{addingConnection ? text.models.cancel : text.agentRuntime.connect}</button>} />
+          <SectionHeading title={text.agentRuntime.connectors} description={management.connections} actions={<button ref={connectionTrigger} type="button" className="secondary-button library-create-action" aria-expanded={addingConnection} aria-controls="mcp-connect-form" disabled={mutationBusy} onClick={() => setAddingConnection(value => !value)}><Icon name={addingConnection ? 'close' : 'plus'} size={16} />{addingConnection ? text.models.cancel : text.agentRuntime.connect}</button>} />
           <div className="connector-list">
             {connectionError && <div className="inline-error" role="alert">{connectionError} <button type="button" className="secondary-button" disabled={loadingRuntime} onClick={() => void refreshRuntime()}>{text.common.retry}</button></div>}
             {servers.length === 0 ? loadingRuntime ? <p role="status">{text.common.loading}</p> : connectionError ? null : <p className="management-empty">{text.agentRuntime.noConnectors}</p> : servers.map(server => <article key={server.name}>
-              <i aria-hidden="true" data-connected={server.status === 'connected'} />
+              <span className="connector-glyph"><Icon name="plug" size={20}/></span>
               <div>
                 <h3>{server.name}</h3>
-                <small>{server.transport} · {server.tools} {text.agentRuntime.tools.toLowerCase()} · {server.status === 'connected' ? mcpText.connected : server.status === 'disabled' ? mcpText.disabled : mcpText.disconnected}</small>
+                <small><i aria-hidden="true" data-connected={server.status === 'connected'} />{server.status === 'connected' ? mcpText.connected : server.status === 'disabled' ? mcpText.disabled : mcpText.disconnected} · {server.tools.toLocaleString(language)} {text.agentRuntime.tools.toLocaleLowerCase(language)}</small>
+                {server.url && <small className="connector-address" dir="ltr">{server.url}</small>}
               </div>
-              <button type="button" className="text-button connector-remove" aria-label={`${mcpText.remove}: ${server.name}`} disabled={connectionBusy !== ''} onClick={() => setRemoveServer(server)}><Icon name="trash" size={14} />{mcpText.remove}</button>
+              <button type="button" className="utility-button icon-button connector-remove" title={mcpText.remove} aria-label={`${mcpText.remove}: ${server.name}`} disabled={mutationBusy} onClick={() => setRemoveServer(server)}><Icon name="trash" size={17} /></button>
             </article>)}
           </div>
           {connectionMessage && <p className="connection-success" role="status">{connectionMessage}</p>}
         </div>
         {addingConnection && <form id="mcp-connect-form" onSubmit={connect} aria-label={text.agentRuntime.connect}>
           <h3>{text.agentRuntime.connect}</h3>
-          <label><span>{text.agentRuntime.connectorName}</span><input disabled={connectionBusy !== ''} value={connectionName} onChange={event => { setConnectionName(event.target.value); setConnectionMessage(''); }} /></label>
-          <label><span>{text.agentRuntime.connectorURL}</span><input type="url" disabled={connectionBusy !== ''} placeholder="https://mcp.example.com/mcp" value={connectionURL} onChange={event => { setConnectionURL(event.target.value); setConnectionMessage(''); }} /></label>
+          <label><span>{text.agentRuntime.connectorName}</span><input ref={connectionInput} required disabled={mutationBusy} value={connectionName} onChange={event => { setConnectionName(event.target.value); setConnectionMessage(''); }} /></label>
+          <label><span>{text.agentRuntime.connectorURL}</span><input type="url" required dir="ltr" disabled={mutationBusy} placeholder="https://mcp.example.com/mcp" value={connectionURL} onChange={event => { setConnectionURL(event.target.value); setConnectionMessage(''); }} /></label>
           <ActionGroup>
-            <button type="button" className="secondary-button" onClick={() => void testConnection()} disabled={!connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'test' ? text.agentRuntime.testing : text.agentRuntime.test}</button>
-            <button className="primary-button" disabled={!connectionName.trim() || !connectionURL.trim() || connectionBusy !== ''}>{connectionBusy === 'connect' ? text.agentRuntime.connecting : text.agentRuntime.connect}</button>
+            <button type="button" className="text-button" onClick={() => void testConnection()} disabled={!connectionURL.trim() || mutationBusy}>{connectionBusy === 'test' ? text.agentRuntime.testing : text.agentRuntime.test}</button>
+            <button className="primary-button" disabled={!connectionName.trim() || !connectionURL.trim() || mutationBusy}>{connectionBusy === 'connect' ? text.agentRuntime.connecting : text.agentRuntime.connect}</button>
           </ActionGroup>
         </form>}
       </section>
@@ -162,8 +173,8 @@ export function AgentManagement({ model, view }: { model: string; view: 'tools' 
     </div>}
     {view !== 'external' && <div id="agent-tools-panel" className="agent-view" role="region" aria-labelledby="agent-tools-tab"><section className="runtime-panel management-list-panel">
       <SectionHeading title={text.agentRuntime.tools} description={`${enabledTools}/${tools.length} ${text.agentRuntime.enabled}`} actions={!!tools.length && <SearchField label={text.agentRuntime.tools} value={toolQuery} onChange={setToolQuery} />} />
-      {!!tools.length && !visibleTools.length && <p role="status">{text.history.noMatches}</p>}
-      {tools.length === 0 ? loadingRuntime ? <p role="status">{text.common.loading}</p> : runtimeError ? null : <p className="management-empty">{text.agentRuntime.noTools}</p> : <div className="tool-list">{visibleTools.map(tool => <article key={tool.name}><div><h3>{tool.name}</h3><p>{tool.description}</p><details><summary>{presentation[locale].details}</summary><small>{tool.source}{tool.capability ? ` · ${tool.capability.risk} ${text.agentRuntime.risk}` : ''}</small></details></div><label className="switch"><input type="checkbox" aria-label={tool.name} checked={tool.enabled} disabled={toolBusy === tool.name} onChange={() => void toggleTool(tool)} /><span /></label></article>)}</div>}
+      {!!tools.length && !visibleTools.length && <EmptyState title={text.shell.noActions} />}
+      {tools.length === 0 ? loadingRuntime ? <p role="status">{text.common.loading}</p> : runtimeError ? null : <p className="management-empty">{text.agentRuntime.noTools}</p> : <AgentToolList tools={visibleTools} busy={mutationBusy || loadingRuntime} toggle={tool => void toggleTool(tool)} />}
     </section></div>}
 
     {view === 'external' && <div className="agent-view" role="region" aria-labelledby="agent-external-tab"><ExternalProvidersPanel integrations={integrations} loading={loadingRuntime} error={integrationError} onRetry={() => void refreshRuntime()} busy={integrationBusy} setup={integrationSetup} copied={copied} onSetup={showIntegrationSetup} onCopy={copyIntegrationSetup} onClose={() => setIntegrationSetup(null)} /></div>}
@@ -179,7 +190,7 @@ type ExternalProvidersPanelProps = {
   setup: { id: string; name: string; setup: IntegrationSetup } | null;
   copied: boolean;
   onSetup: (item: ExternalIntegration) => void;
-  onCopy: () => void;
+  onCopy: () => Promise<void>;
   onClose: () => void;
 };
 
@@ -194,9 +205,10 @@ function ExternalProvidersPanel({ integrations, loading, error, onRetry, busy, s
     {error && <div className="inline-error" role="alert">{error} <button type="button" className="secondary-button" disabled={loading} onClick={onRetry}>{text.common.retry}</button></div>}
     {!loading && !error && integrations.length === 0 && <EmptyState title={text.agentRuntime.noExternalProviders} />}
     <div className="provider-grid">{integrations.map(item => <article key={item.id} className="provider-card">
-      <header><h3>{item.name}</h3><p>{item.description}</p></header>
+      <header><span className="provider-glyph"><Icon name="agents" size={22}/></span><div><h3>{item.name}</h3><p>{item.description}</p></div></header>
+      {item.model_id && <p className="provider-model"><Icon name="models" size={16}/><span>{readableModelName(item.model_id)}</span></p>}
       <div className="provider-readiness">
-        <p className="provider-readiness-label"><Icon name={item.ready ? 'check' : 'warning'} size={16} />{item.ready ? labels.ready : labels.blocked}</p>
+        <p className="provider-readiness-label"><Icon name={item.ready ? 'check' : 'info'} size={16} />{item.ready ? labels.ready : labels.blocked}</p>
         {item.warnings.length > 0 && <ul>{item.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>}
         <p className="provider-host-note">{labels.host}</p>
       </div>

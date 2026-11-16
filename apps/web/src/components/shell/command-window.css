@@ -1,0 +1,40 @@
+.command-window-header { display:flex; align-items:center; justify-content:space-between; padding:6px 12px 0 20px; height:36px; flex:none; color:var(--muted); -webkit-app-region:drag; user-select:none; }
+.command-window-header strong { font-size:12px; font-weight:500; }
+.command-window-header>div { display:flex; gap:2px; -webkit-app-region:no-drag; }
+.command-window-header .icon-button { width:28px; height:28px; min-height:28px; border:0; border-radius:8px; background:transparent; color:var(--muted); }
+.command-window-header .icon-button:hover { color:var(--text); background:var(--surface-2); }
+.app-shell.command-window { display:block; min-width:0; background:var(--surface-1); }
+.command-window>.sidebar,.command-window>.navigation-scrim { display:none; }
+.command-window>.workspace { width:100%; margin:0; border-radius:0; background:var(--surface-1); }
+.command-window .page-content { padding:0 10px 10px; }
+.command-window .chat-layout { gap:8px; }
+.command-window .conversation { padding:0 10px; }
+.command-window .conversation-content { padding-block:12px; }
+.command-window .work-home { display:none; }
+.command-window .chat-layout:has(.work-home) .conversation { display:none; }
+.command-window .chat-layout:has(.work-home) { justify-content:flex-end; }
+.command-window .composer { width:100%; max-width:none; max-height:calc(100dvh - 46px); margin:0; flex-shrink:0; }
+.command-window .composer.composer-compact .composer-input textarea { min-height:40px; }
+.command-window:has(.work-home) .composer { border-color:transparent; padding:2px 6px 0; border-radius:0; }
+.command-window:has(.work-home) .composer:has(textarea:focus-visible) { border-color:transparent; }
+.command-window:has(.work-home) .command-window-header strong { visibility:hidden; }
+.command-window:has(.work-home) .command-window-header .icon-button:first-child { display:none; }
+.command-window .document-view-tabs,.command-window .document-reader,.command-window .document-pane-resize { display:none; }
+.command-window .document-workspace.has-document { display:block; }
+.command-window .document-workspace .document-chat { display:flex!important; height:100%; }
+.command-window .message { padding-block:10px; }
+.command-window .message.user .message-heading { display:none; }
+.command-window .message-actions { margin-block-start:6px; }
+.command-window .message-label { font-size:11px; }
+.command-window .message-body { font-size:14px; }
+.command-window .composer-context-menu { max-height:calc(var(--workspace-viewport,100dvh) - 70px); }
+/* Native bounds and React layout settle on the same presentation lane. Fade
+   content, never the window itself; keep the selected theme behind the resize. */
+:root[data-window-transition] { background:var(--surface-1); }
+:root[data-window-transition] :is(.app-shell,.talk-surface) { transition:opacity 120ms ease-out; }
+:root[data-window-transition=leaving] :is(.app-shell,.talk-surface) { opacity:0; transition-duration:70ms; }
+:root[data-window-transition=resizing] :is(.app-shell,.talk-surface) { opacity:0; transition:none; }
+:root[data-window-transition=entering] :is(.app-shell,.talk-surface) { opacity:1; }
+:root[data-window-transition] .talk-surface-content { animation:none; }
+@media(prefers-reduced-motion:reduce) { :root[data-window-transition] :is(.app-shell,.talk-surface) { transition:none; } }
+:root[data-reduce-motion=true][data-window-transition] :is(.app-shell,.talk-surface) { transition:none; }

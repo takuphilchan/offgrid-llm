@@ -6,7 +6,7 @@ for(const locale of ['de','ar','en'] as const) test(`dropdown geometry and compa
   const state=await craftFixture(page,locale,'light');
   await page.addInitScript(()=>{if(!localStorage.getItem('offgrid.appearance.v1'))localStorage.setItem('offgrid.appearance.v1',JSON.stringify({version:1,light:'dracula',dark:'solarized',textSize:150,reduceMotion:false}));});
   await page.setViewportSize({width:locale==='de'?640:390,height:900});
-  await page.goto('/ui/#/settings');
+  await page.goto('/ui/#/settings/appearance');
   const nav=page.locator('.navigation-trigger');
   await expect(nav).toHaveAccessibleName(workspaceShell[locale].navigation);
   expect((await nav.boundingBox())!.width).toBeLessThanOrEqual(44);
@@ -15,13 +15,13 @@ for(const locale of ['de','ar','en'] as const) test(`dropdown geometry and compa
   await page.keyboard.press('Escape');await expect(nav).toBeFocused();
   const select=page.locator('#appearance-text-size');
   await expect(select).toHaveCSS('font-size','21px');
-  await expect(select).toHaveCSS('appearance','none');
+  await expect(select).toHaveCSS('appearance','base-select');
   const geometry=await select.evaluate(el=>{
     const s=getComputedStyle(el);return {height:el.getBoundingClientRect().height,end:parseFloat(s.paddingInlineEnd),start:parseFloat(s.paddingInlineStart),image:s.backgroundImage};
   });
-  expect(geometry.height).toBeGreaterThanOrEqual(40);expect(geometry.end).toBeGreaterThanOrEqual(32);expect(geometry.start).toBeGreaterThanOrEqual(10);expect(geometry.image).toContain('gradient');
+  expect(geometry.height).toBeGreaterThanOrEqual(40);expect(geometry.end).toBeGreaterThanOrEqual(10);expect(geometry.start).toBeGreaterThanOrEqual(10);expect(geometry.image).toBe('none');
   await page.screenshot({path:test.info().outputPath('settings.png'),fullPage:true});
-  await select.focus();await page.keyboard.press('Home');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
+  await select.focus();await page.keyboard.press('Space');await page.keyboard.press('Home');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
   await expect(select).toHaveValue('110');
   await page.reload();await expect(select).toHaveValue('110');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

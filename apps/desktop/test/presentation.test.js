@@ -38,8 +38,9 @@ test('desktop presentation validates preferences and all nine dictionaries have 
 
 for (const locale of Object.keys(catalog)) test(`startup applies ${locale} and saved dark theme before backend connection`, async () => {
   const elements = new Map();
-  const documentElement = { dataset: {} };
+  const documentElement = { dataset: {}, style: {setProperty(){},removeProperty(){}} };
   const sandbox = vm.createContext({
+    performance: {now:()=>0}, setInterval:()=>1, clearInterval(){},
     document: { documentElement, querySelectorAll: () => [], getElementById(id) {
       if (!elements.has(id)) elements.set(id, { hidden: false, classList: { toggle() {} }, textContent: '', addEventListener() {} });
       return elements.get(id);
@@ -54,7 +55,7 @@ for (const locale of Object.keys(catalog)) test(`startup applies ${locale} and s
   assert.equal(documentElement.lang, locale);
   assert.equal(documentElement.dir, locale === 'ar' ? 'rtl' : 'ltr');
   assert.equal(documentElement.dataset.theme, 'dark');
-  assert.equal(elements.get('status-title').textContent, catalog[locale].ready);
+  assert.equal(elements.get('status-title').textContent, catalog[locale].opening);
   vm.runInContext("render({state:'checking',autoReconnect:true})",sandbox);
   assert.equal(elements.get('status-title').textContent,catalog[locale].reconnecting);
   assert.equal(elements.get('status-text').textContent,catalog[locale].reconnectingBody);

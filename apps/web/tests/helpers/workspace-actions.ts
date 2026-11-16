@@ -10,7 +10,7 @@ export async function changePreferences(page: Page, values: {locale?: string; th
   const previous = page.url();
   await openSettings(page);
   if (values.locale) await page.locator('#settings-language').selectOption(values.locale);
-  if (values.theme) await page.locator('#setting-theme button').nth(['system','dark','light'].indexOf(values.theme)).click();
+  if (values.theme) { await page.locator('.settings-navigation [data-section=appearance]').click(); await page.locator('#setting-theme button').nth(['system','light','dark'].indexOf(values.theme)).click(); }
   if (!previous.endsWith('#/settings')) await page.goto(previous);
 }
 
@@ -36,13 +36,9 @@ export async function openWorkDetails(page: Page) {
   if (!await details.evaluate(el => (el as HTMLDetailsElement).open)) await details.locator(':scope > summary').click();
 }
 
+// Simulate returning from CLI or another app: this refreshes data in place.
 export async function refreshWorkspace(page: Page) {
-  const drawer = page.locator('.sidebar');
-  await drawer.waitFor({state:'attached'});
-  const opened = await page.evaluate(()=>matchMedia('(max-width:1023px)').matches) && !await drawer.isVisible();
-  if (opened) await page.locator('.navigation-trigger').click();
-  await page.locator('.workspace-options > button').click();
-  await page.locator('.workspace-options-panel button[aria-busy]').click();
-  await page.keyboard.press('Escape');
-  if (opened) await page.keyboard.press('Escape');
+  const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/v1/models');
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  await response;
 }

@@ -3,8 +3,9 @@ import { craftFixture } from './helpers/craft-fixture';
 import { knowledgeRecovery } from '../src/i18n/knowledge-recovery';
 import type { LocaleCode } from '../src/i18n';
 import { documentRecovery } from '../src/i18n/document-recovery';
+import {reviewKnowledgeImport} from './helpers/collection-review';
 
-const saved = { id: 'import-saved', name: 'Annual report 日本語.pdf', state: 'needs_input', error_code: 'document_ocr_required', bytes: 100, sha256: 'a'.repeat(64), attempt: 1 };
+const saved = { id: 'import-saved', name: 'Annual report 日本語.pdf', state: 'needs_input', error_code: 'document_ocr_required', bytes: 100, sha256: 'a'.repeat(64), attempt: 1,collection_id:'workspace',collection_revision:1 };
 async function setup(page: Page, locale: LocaleCode = 'en') {
   await craftFixture(page, locale, 'light');
   await page.route('**/api/v2/system', r => r.fulfill({ json: { product: 'offgrid', version: 'fixture', workspace_id: 'craft', capabilities: ['document-imports-v1'] } }));
@@ -76,7 +77,7 @@ test('cancel during import stops the remaining batch and keeps saved recovery', 
   state.records = [];
   let accepted = 0, processing = 0, release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
-  await page.route('**/v1/documents/imports*', async r => {
+  await page.route(/\/v1\/(?:documents|collections)\/imports/, async r => {
     const url = new URL(r.request().url());
     if (r.request().method() === 'GET') return r.fulfill({ json: { imports: state.records } });
     if (!url.searchParams.has('id')) {
@@ -90,6 +91,7 @@ test('cancel during import stops the remaining batch and keeps saved recovery', 
   await page.goto('/ui/#/knowledge');
   const file = { name: 'first.txt', mimeType: 'text/plain', buffer: Buffer.from('retained source') };
   await page.locator('[data-knowledge-import]').setInputFiles([file, { ...file, name: 'never-sent.txt' }]);
+  await reviewKnowledgeImport(page);
   await expect.poll(() => processing).toBe(1);
   await page.locator('.knowledge-import-actions').getByRole('button', { name: 'Cancel', exact: true }).click();
   release();
@@ -103,7 +105,7 @@ test('leaving after acceptance never starts extraction in the abandoned page', a
   await setup(page);
   let accepted = 0, processing = 0, release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
-  await page.route('**/v1/documents/imports*', async r => {
+  await page.route(/\/v1\/(?:documents|collections)\/imports/, async r => {
     if (r.request().method() === 'GET') return r.fulfill({ json: { imports: [] } });
     if (new URL(r.request().url()).searchParams.has('id')) { processing++; return r.fulfill({ json: saved }); }
     accepted++; await gate;
@@ -111,6 +113,7 @@ test('leaving after acceptance never starts extraction in the abandoned page', a
   });
   await page.goto('/ui/#/knowledge');
   await page.locator('[data-knowledge-import]').setInputFiles({ name: 'saved.txt', mimeType: 'text/plain', buffer: Buffer.from('retained source') });
+  await reviewKnowledgeImport(page);
   await expect.poll(() => accepted).toBe(1);
   await page.evaluate(() => { location.hash = '#/chat'; });
   await expect(page.locator('.composer textarea')).toBeVisible();

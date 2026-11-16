@@ -72,8 +72,8 @@ func TestCanonicalImportRetainsSourceAndRejectsDualWriters(t *testing.T) {
 	if err = scope.Delete("chat"); !errors.Is(err, sessions.ErrCanonicalConversation) {
 		t.Fatal("legacy delete erased migration source", err)
 	}
-	if _, err = scope.CreateAttachment("chat", "draft.txt", "text/plain", []byte("new content")); !errors.Is(err, sessions.ErrCanonicalConversation) {
-		t.Fatal("legacy attachment mutation admitted", err)
+	if _, err = scope.CreateAttachment("chat", "draft.txt", "text/plain", []byte("new content")); err != nil {
+		t.Fatal("immutable source upload rejected after canonical migration", err)
 	}
 	after, err := os.ReadFile(path)
 	if err != nil || !bytes.Equal(original, after) {

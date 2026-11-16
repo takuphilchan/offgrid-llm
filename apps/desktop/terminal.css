@@ -15,11 +15,11 @@
 #terminal-display select:focus-visible{outline:1px solid var(--muted);outline-offset:2px}
 .display-note,#display-save-status{font-size:12px;line-height:1.5;color:var(--muted);margin:8px 0 16px}.display-actions{display:flex;justify-content:space-between;margin-top:20px}.display-actions button:last-child{background:var(--hover)}
 @media(forced-colors:active){body,#terminal-display{background:Canvas;color:CanvasText}#terminal-display select:focus-visible{outline:2px solid Highlight}.display-note{color:CanvasText}}
-*{box-sizing:border-box}html{background:var(--shell)}body{border-start-start-radius:16px;margin:0;background:var(--bg);color:var(--fg);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+*{box-sizing:border-box}html{background:var(--bg)}body{border-start-start-radius:20px;border-start-end-radius:20px;margin:0;background:var(--canvas,var(--bg));color:var(--fg);height:100vh;display:flex;flex-direction:column;overflow:hidden}
 #terminal-error-details{margin:0 16px 8px;font-size:12px;color:var(--muted);max-height:30vh;overflow:auto;flex-shrink:0}#terminal-error-details[hidden]{display:none}#terminal-error-details summary{cursor:pointer}#terminal-error-text,#context-error pre{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}
 button,input{font:inherit;color:inherit}button{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;background:transparent;border-radius:7px;min-height:30px;padding:4px 10px;cursor:pointer}button:hover{background:var(--hover)}button:focus-visible,input:focus-visible{outline:2px solid var(--fg);outline-offset:-2px}button:disabled{opacity:.4;cursor:default}
 header{display:flex;align-items:center;gap:8px;padding:4px 12px;border-bottom:0;min-height:43px;flex:none}#chat{color:var(--muted)}#tabs{display:flex;gap:4px;min-width:0;overflow:auto;flex:0 1 auto;scrollbar-width:thin}.terminal-tab{display:flex;align-items:center;flex:none;border-radius:8px;max-width:240px}.terminal-tab:has([aria-selected=true]){background:var(--hover)}.terminal-tab>button:first-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.terminal-tab .close{padding:2px 6px;color:var(--muted)}.tools{display:flex;gap:2px;flex:none;margin-inline-start:auto}
-#panes{flex:1;min-height:0;position:relative}.pane{height:100%;padding:18px 24px;overflow:hidden;direction:ltr;display:flex}.terminal-surface{width:100%;height:100%;min-width:0}.pane[hidden],#empty[hidden],#find[hidden]{display:none}#empty{display:grid;place-content:center;text-align:center;height:100%;padding:12px;gap:8px}#empty p{margin:0;color:var(--muted);max-width:65ch}#start{justify-self:center;background:var(--hover);margin-top:8px}footer{min-height:25px;display:flex;justify-content:space-between;gap:12px;align-items:center;padding:3px 12px;color:var(--muted);font-size:12px;flex:none}#identity{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}#hint{flex:none}#notice:empty{display:none}#notice{padding:6px 12px;color:var(--fg);background:var(--hover);flex:none}#find{display:flex;gap:4px;padding:4px 12px}#query{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px}.xterm-viewport{scrollbar-width:thin;scrollbar-color:var(--muted) transparent}
+#panes{flex:1;min-height:0;position:relative}.pane{height:100%;padding:18px 24px;overflow:hidden;direction:ltr;display:flex}.terminal-surface{width:100%;height:100%;min-width:0}.pane[hidden],#empty[hidden],#find[hidden]{display:none}#empty{display:grid;place-content:center;text-align:center;height:100%;padding:12px;gap:8px}#empty p{margin:0;color:var(--muted);max-width:65ch}footer{min-height:25px;display:flex;justify-content:space-between;gap:12px;align-items:center;padding:3px 12px;color:var(--muted);font-size:12px;flex:none}#identity{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}#hint{flex:none}#notice:empty{display:none}#notice{padding:6px 12px;color:var(--fg);background:var(--hover);flex:none}#find{display:flex;gap:4px;padding:4px 12px}#query{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px}.xterm-viewport{scrollbar-width:thin;scrollbar-color:var(--muted) transparent}
 @media(max-width:650px){#hint{display:none}.tools #cli,.tools #agent{font-size:11px}.terminal-tab{max-width:140px}.pane{padding:12px 14px}}
 
 @media(max-width:480px){header{gap:4px;padding:4px 6px}#chat{font-size:0;padding:4px 6px;min-width:28px}#chat span{display:none}.tools{gap:0}.tools button{width:28px;padding:4px 3px}.tools #cli,.tools #agent{font-size:0}.tools #cli span,.tools #agent span{display:none}.terminal-tab{max-width:130px}.terminal-tab>button:first-child{padding:4px 7px}footer{padding:3px 6px}#find{padding:4px 6px;gap:0}}
@@ -28,22 +28,28 @@ header{display:flex;align-items:center;gap:8px;padding:4px 12px;border-bottom:0;
 #query:focus-visible{outline:none;border-color:var(--muted)}
 @media(forced-colors:active){#query:focus-visible{outline:2px solid Highlight;outline-offset:2px}}
 
-/* The empty workspace offers the same launch paths as the toolbar. */
-#empty{padding:24px;text-align:start;place-items:center}
-.terminal-welcome{width:min(100%,520px)}
-#empty h1{font-size:22px;font-weight:550;letter-spacing:-.025em;margin:0 0 8px}
-#empty p{line-height:1.6;max-width:48ch}
-.terminal-launch-options{display:grid;gap:10px;margin:24px 0 16px}
-.terminal-launch-options button,#start{display:flex;justify-content:flex-start;gap:16px;width:100%;padding:16px;margin:0;background:transparent;border:1px solid var(--line);border-radius:12px;text-align:start}
-.terminal-launch-options button:hover{background:var(--hover);border-color:var(--muted)}
-.terminal-launch-options button:focus-visible,#start:focus-visible{outline:none;border-color:var(--muted);background:var(--hover)}
+/* Launch choices share the Settings action-card hierarchy. */
+#empty{padding:32px 24px;text-align:start;place-items:center;background:var(--canvas,var(--bg))}
+.terminal-welcome{width:min(100%,680px)}
+#empty h1{font-size:26px;font-weight:550;letter-spacing:-.025em;margin:0 0 10px;text-align:center}
+#empty p{line-height:1.6;max-width:58ch;margin:0 auto;text-align:center}
+.terminal-launch-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:32px 0 20px}
+.terminal-launch-options button{display:grid;grid-template-columns:40px minmax(0,1fr) 16px;align-items:center;gap:12px;width:100%;padding:24px 18px;margin:0;background:var(--canvas,var(--bg));border:1px solid var(--line);border-radius:20px;text-align:start;transition:background 180ms ease,border-color 180ms ease,transform 180ms ease}
+.terminal-launch-options button:hover:not(:disabled){background:var(--hover);border-color:var(--muted);transform:translateY(-2px)}
+.terminal-launch-options button:active{transform:none}
+.terminal-launch-options button:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
 #terminal-welcome-title:focus{outline:none}
-@media(forced-colors:active){.terminal-launch-options button:focus-visible,#start:focus-visible{outline:2px solid Highlight;outline-offset:3px}}
-.terminal-launch-options button>span:first-of-type{flex:1;display:grid;gap:4px}
-.terminal-launch-options strong{font-weight:550;font-size:14px}
+.terminal-launch-options button>span:first-of-type{min-width:0;display:grid;gap:6px}
+.terminal-launch-options button>span:last-child{color:var(--muted)}
+:root[dir=rtl] .terminal-launch-options button>span:last-child{transform:scaleX(-1)}
+.terminal-launch-options strong{font-weight:500;font-size:15px}
 .terminal-launch-options small{font-size:13px;color:var(--muted);line-height:1.5}
-.terminal-launch-options .terminal-icon{width:20px;height:20px;color:var(--muted)}
-#empty .terminal-welcome-note{font-size:12px}
+.terminal-launch-options .terminal-icon{width:40px;height:40px;padding:9px;border-radius:13px;background:var(--hover);color:var(--fg)}
+#empty .terminal-welcome-note{font-size:12px;max-width:52ch}
+@media(max-width:620px){.terminal-launch-options{grid-template-columns:minmax(0,1fr)}.terminal-welcome{max-width:400px}#empty h1{font-size:22px}}
+@media(prefers-reduced-motion:reduce){.terminal-launch-options button,.terminal-launch-options button:hover:not(:disabled){transition:none;transform:none}}
+:root[data-reduce-motion=true] .terminal-launch-options button,:root[data-reduce-motion=true] .terminal-launch-options button:hover:not(:disabled){transition:none;transform:none}
+@media(forced-colors:active){.terminal-launch-options button{border-color:ButtonText}.terminal-launch-options button:focus-visible{outline-color:Highlight}}
 
 /* Terminal tabs and launch controls share one compact strip. */
 .terminal-tab>button:first-child{display:block;min-width:0;text-align:start;flex:1}.terminal-tab .close{flex:none}

@@ -14,15 +14,16 @@ import (
 	"time"
 )
 
-const revision = "pdfium-8057-0001cb839e62425b-offgrid4"
+const revision = "pdfium-8057-0001cb839e62425b-offgrid5"
 const maxInput = 50 << 20
 const maxText = 16 << 20
 const maxPages = 1000
 
 type pageUnit struct {
-	Page  int    `json:"page"`
-	Text  string `json:"text"`
-	State string `json:"state"`
+	Fields []formField `json:"fields,omitempty"`
+	Page   int         `json:"page"`
+	Text   string      `json:"text"`
+	State  string      `json:"state"`
 }
 
 type receipt struct {
@@ -101,6 +102,11 @@ func extract(ctx context.Context, data []byte) ([]pageUnit, string) {
 	}
 	defer document.close()
 	engine, doc, count := document.engine, document.handle, document.pages
+	form, closeForm, code := document.formEnvironment()
+	if code != "" {
+		return nil, code
+	}
+	defer closeForm()
 	pages := make([]pageUnit, 0, count)
 	total := 0
 	for i := uint64(0); i < count; i++ {
@@ -111,6 +117,16 @@ func extract(ctx context.Context, data []byte) ([]pageUnit, string) {
 		if err != nil || page == 0 {
 			return nil, "document_invalid"
 		}
+		if _, err := engine.call("FORM_OnAfterLoadPage", page, form); err != nil {
+			engine.call("FPDF_ClosePage", page)
+			return nil, "document_invalid"
+		}
+		fields, fieldCode := readFormFields(engine, page, form)
+		engine.call("FORM_OnBeforeClosePage", page, form)
+		if fieldCode != "" {
+			engine.call("FPDF_ClosePage", page)
+			return nil, fieldCode
+		}
 		text, needsOCR, code := readPage(engine, page, maxText-total)
 		textWithVisuals := code == "" && needsOCR && nativeTextWithVisuals(engine, page, text)
 		_, closeErr := engine.call("FPDF_ClosePage", page)
@@ -120,7 +136,16 @@ func extract(ctx context.Context, data []byte) ([]pageUnit, string) {
 		if closeErr != nil {
 			return nil, "document_invalid"
 		}
+		for _, field := range fields {
+			total += len(field.Name) + len(field.Label) + len(field.Value) + 64
+			for _, option := range field.Options {
+				total += len(option.Label) + 32
+			}
+		}
 		total += len(text)
+		if total > maxText {
+			return nil, "document_limit"
+		}
 		state := "ready"
 		if needsOCR {
 			state = "ocr_required"
@@ -130,7 +155,7 @@ func extract(ctx context.Context, data []byte) ([]pageUnit, string) {
 		} else if strings.TrimSpace(text) == "" {
 			state = "empty"
 		}
-		pages = append(pages, pageUnit{Page: int(i + 1), Text: text, State: state})
+		pages = append(pages, pageUnit{Page: int(i + 1), Text: text, State: state, Fields: fields})
 	}
 	return pages, ""
 }

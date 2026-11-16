@@ -27,7 +27,7 @@ for(const [id,modes] of Object.entries(catalog.terminal))for(const [mode,ansi] o
  assert.ok(contrast(actual.selectionBackground,actual.selectionForeground)>=4.5);
  assert.equal(actual.cursorAccent,actual.background);
  const chrome=require('../branding.cjs').windowChrome('win32',mode,tokens);
- assert.equal(chrome.backgroundColor,tokens['surface-0']);assert.equal(chrome.titleBarOverlay.symbolColor,tokens.text);
+ assert.equal(chrome.backgroundColor,tokens['surface-0']);assert.equal(chrome.frame,false);
  const forced=prefs.theme(mode==='dark',{background:'#ffffff',foreground:'#000000'},{...tokens,ansi});
  assert.equal(forced.background,'#ffffff');assert.equal(forced.blue,'#000000');
 });

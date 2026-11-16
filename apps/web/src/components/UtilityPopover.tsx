@@ -113,7 +113,7 @@ export function UtilityPopover({ label, trigger, children, className = '', trigg
         if (top !== undefined) { event.preventDefault(); el.scrollTop = top; }
       }}
       onBeforeToggle={event => { if (event.target === event.currentTarget) setOpen(event.newState === 'open'); }}
-      onClick={event => { if ((event.target as Element).closest('a[href]')) panel.current?.hidePopover(); }}
+      onClick={event => { if ((event.target as Element).closest('a[href],[data-popover-dismiss]')) {panel.current?.hidePopover();if((event.target as Element).closest('[data-popover-dismiss]'))button.current?.focus();} }}
       onToggle={event => { if (event.target === event.currentTarget) onOpenChange?.(event.newState === 'open'); }}>
       <div ref={content} className="utility-popover-content">{children}</div>
     </div>

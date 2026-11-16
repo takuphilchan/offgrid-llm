@@ -11,10 +11,8 @@
   .work-state-filters [aria-pressed=true] { background:var(--surface-2); font-weight:var(--weight-heading); }
   .work-state-filters button span { font-variant-numeric:tabular-nums; color:var(--muted); }
   .activity-known-chats { margin-block:var(--space-4); }
-  /* Three decorative families maximum: sidebar, composer, floating utilities.
-     Reading surfaces and code remain flat. All ramps resolve centrally. */
-  .app-shell > .sidebar { background-image: var(--gradient-sidebar); }
-  .chat-workspace .composer { background-image: var(--gradient-composer); }
+  /* Flat semantic surfaces keep content and active state dominant. */
+  .chat-workspace .composer { background-image:none; }
   .download-state.downloading > div span, .download-state.finalizing > div span { background-image: var(--gradient-progress); }
 }
 @layer workspace {
@@ -40,9 +38,9 @@
     to { transform: translateY(0); }
   }
   .utility-popover-panel, dialog.command-palette {
-    background-color: var(--material-fill);
-    background-image: var(--gradient-floating);
-    backdrop-filter: var(--material-blur);
+    background-color: var(--surface-1);
+    background-image:none;
+    backdrop-filter:none;
   }
   @media (prefers-reduced-motion: reduce) {
     .utility-popover-panel:popover-open, .command-palette, dialog.onboarding[open] { animation: none; }
@@ -305,6 +303,7 @@
   .run-row > i, .run-row > i.completed, .run-row > i.failed, .event-list article > i { background: var(--text); }
   .run-row > i.failed { background: transparent; border: 1px solid var(--text); }
   .event-list pre { color: var(--muted); }
+  .task-resource-usage { max-width: 100%; max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
   .settings-panel h2 { font-size: var(--type-section); }
   .settings-panel p { color: var(--muted); font-size: 13px; }
   .desktop-storage { align-items: flex-start; }
@@ -360,6 +359,11 @@
   .onboarding-connection .readiness-list { margin: 0; }
   .onboarding-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
   .onboarding-actions > button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
+  .workspace-setup { position:relative; width:min(720px,100%); margin:auto; padding:clamp(24px,5vw,64px); overflow-y:auto; outline:0; }
+  .workspace-setup h2 { font-size:var(--type-title); font-weight:var(--weight-heading); }
+  .workspace-setup > p { color:var(--muted); line-height:1.65; margin-block:20px; }
+  .workspace-setup .onboarding-close { inset-block-start:12px; inset-inline-end:12px; }
+  .workspace-setup .onboarding-actions { margin-block-start:28px; }
   .readiness-list > div { font-size: 13px; }
   .readiness-list strong { font-size: 12px; }
   .readiness-list i, .readiness-list i.ready { background: transparent; border: 1px solid var(--text); }
@@ -406,9 +410,12 @@
   dialog.onboarding::backdrop { background: rgb(0 0 0 / .6); backdrop-filter: none; }
   .document-source-dialog { color: var(--text); background: var(--surface-1); border: 1px solid var(--line); border-radius: 14px; width: min(850px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 24px; overflow: auto; }
   .document-source-dialog::backdrop { background: rgb(0 0 0 / .6); }
-  .document-source-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-  .document-source-dialog h2 { overflow-wrap: anywhere; }
-  .document-source-dialog pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 65vh; overflow: auto; }
+  .document-source-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-block-end:16px; }
+  .document-source-dialog > header h2 { overflow-wrap: anywhere; margin:0; font-size:var(--type-title); }
+  .document-source-dialog > header button { flex:none; }
+  .document-source-dialog > pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 65vh; overflow: auto; font:inherit; line-height:1.75; padding:24px; background:var(--surface-0); border-radius:var(--radius-md); }
+  .document-source-dialog > p { font-size:var(--type-meta); line-height:1.5; }
+  @media(max-width:480px){.document-source-dialog{padding:16px}.document-source-dialog>pre{padding:16px}}
   .model-search-hint { color: var(--muted); line-height: 1.6; max-width: 78ch; margin: 0 0 16px; }
   .model-search-form { display: flex; gap: 12px; margin-bottom: 20px; }
   .model-search-form input { flex: 1; min-width: 0; }

@@ -23,6 +23,21 @@ async function fixture(page:Page,locale:LocaleCode='en',failure=false){
 }
 const file={name:source.name,mimeType:'text/plain',buffer:Buffer.from('A café in 日本語. Code 12345.')};
 
+test('a retained preparation failure does not discard later files in the same batch',async({page})=>{
+ await fixture(page);const uploads:string[]=[],items:any[]=[];
+ await page.route('**/v1/sessions/*/attachments',route=>{
+  if(route.request().method()==='GET')return route.fulfill({json:{attachments:items}});
+  const first=uploads.length===0,name=first?'needs-ocr.pdf':'ready.txt';uploads.push(name);
+  const attachment={...source,id:'file-'+(first?'d':'e').repeat(32),name,status:first?'failed':'ready',revision:first?undefined:source.revision,error_code:first?'document_ocr_required':undefined};items.push(attachment);
+  return route.fulfill({status:first?422:200,json:first?{attachment,error:{code:'document_ocr_required',message:'This file needs OCR.'}}:{attachment}});
+ });
+ await page.locator('.composer textarea').fill('Keep this question');
+ await page.locator('input[data-attachment=files]').setInputFiles([{name:'needs-ocr.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF fixture')},{name:'ready.txt',mimeType:'text/plain',buffer:Buffer.from('Ready evidence')}]);
+ await expect(page.locator('.file-attachments')).toContainText('needs-ocr.pdf');await expect(page.locator('.file-attachments')).toContainText('ready.txt');expect(uploads).toEqual(['needs-ocr.pdf','ready.txt']);
+ await expect(page.getByRole('button',{name:'Send',exact:true})).toBeDisabled();await expect(page.locator('.composer textarea')).toHaveValue('Keep this question');
+ await page.reload();await expect(page.locator('.file-attachments')).toContainText('ready.txt');expect(uploads).toHaveLength(2);
+});
+
 test('adding and removing a document preserves image and text drafts across reload',async({page})=>{
  const state=await fixture(page);
  await page.locator('.composer textarea').fill('Compare this picture with the document');
@@ -220,7 +235,7 @@ test('attachment actions form a compact aligned menu in light, dark and RTL layo
     const bounds=await panel.boundingBox();
     expect(bounds!.width).toBeLessThanOrEqual(240);
     const actions=panel.locator('.utility-popover-content > button, .saved-file-picker > button');
-    await expect(actions).toHaveCount(3);
+    await expect(actions).toHaveCount(4);
     for (const button of await actions.all()) {
       await expect(button.locator('svg')).toHaveCount(1);
       const box=await button.boundingBox();

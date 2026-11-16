@@ -1,5 +1,88 @@
 # Proposal
 
+## Approved desktop-agent direction (2026-11-15)
+
+The owner rejected the installed document-led redesign and approved replacing
+its product direction with three entry points to the same saved work: a compact
+desktop command window, a quiet full workspace, and the CLI. This is the current
+scope; earlier checked tasks record historical implementation, not acceptance of
+that design. Documents remain useful task context and outputs, not the product's
+front door. Do not add a SaaS dashboard, compulsory projects, decorative metrics
+or another execution engine.
+
+Provide a configurable global shortcut and tray entry for compact text/voice
+input. Preserve the existing trusted desktop session, request identities, local
+runtime and permissions when changing window presentation. Dismiss, Stop and
+Quit are separate actions. A background process is necessary while the shortcut
+is available; closing the full window does not mean the service has quit. No
+always-listening microphone, automatic startup, download or access grant.
+
+Simplify the full workspace, sidebar, composer, source reader and dark surfaces.
+Keep the request, real progress and result central. Models has its own visible
+sidebar destination; detailed voice, runtime and resource preferences belong in
+Settings. Settings uses compact section navigation rather than a second tall
+sidebar. Voice replaces text in the same window, without a dimmed chat backdrop.
+Shared dropdowns theme both closed controls and supported native popup lists.
+Preserve visible active access,
+source scope, errors and stop controls. Model acquisition becomes one guided
+setup with reviewed capability packs, a single browse/search path, persistent
+downloads and an installed inventory. Reuse existing pinned model/package/runtime
+installers; a pack is a reviewed dependency plan, not an unverified archive.
+
+Acceptance covers typed and dictated requests, opening a selected application,
+browser search with scoped access, correcting/stopping work, handing the same
+saved work between surfaces, model setup failure/recovery, and unobtrusive source
+inspection. All 29 locales, accessibility, themes and existing CLI contracts
+remain in scope. Native effects, real model capability, fixture rendering and
+human language review require distinct evidence. See task group 44.
+
+## Proposed coherent workspace redesign (2026-11-14)
+
+Planning requested by the owner after repeated screenshot-driven repairs failed
+to produce a coherent product experience. This section defines the next scope;
+implementation is now underway under the subsequent instruction to implement and install. See docs/quality/evidence/work-surface-redesign-2026-11-15.md for actual outcomes and open gates. Continue this
+change, coordinating with `agent-conversation-workflows` and
+`document-ingestion-reliability`, rather than creating another competing UI plan.
+
+The product should let a person start a conversation or a concrete task, work on
+its sources and result, and return later without reconstructing context. The
+visible UI, information architecture and interaction state must change together.
+The central work surface should show the document, comparison or editable result
+when that is the task, with a contextual assistant. Simple conversation remains
+immediately available without requiring a project, folder or agent configuration.
+
+Current gaps include ordinary messages exposed as execution panels, document
+selection requiring a new-conversation handoff on the canonical input path,
+reader-page selection lacking a validated submission contract, and results,
+readers and chat behaving as separate destinations. Existing source readers,
+collections, durable analyses, review history and exports provide reusable
+foundations; their presence does not establish end-to-end usability.
+
+Deliver six connected packages: (1) complete interaction prototype and acceptance
+matrix, (2) shared shell and component foundations, (3) unified conversation and
+source-context contracts, (4) document-to-result workflow, (5) consistency across
+remaining product surfaces, and (6) migration and release verification. The
+numbered gates are implementation checkpoints within one coordinated refactor,
+not a requirement to ask the owner to restart work after every small patch.
+
+The flagship acceptance journey is select documents, extract requirements,
+inspect citations and exceptions, correct/review the result, export it and reopen
+the same work. Also qualify quick conversation, current-page questions, version
+comparison and an explicitly authorized folder task. Preserve all 29 interface
+languages, themes, keyboard/RTL/zoom behavior and truthful coverage notices.
+
+This direction supersedes earlier Chat-first navigation, fixed sidebar geometry
+and standalone ordinary-input activity presentation where they conflict. It does
+not change profile restrictions, source ownership, legacy write guards, local
+processing rules or installation consent. Historical completed tasks remain
+historical evidence; they do not satisfy the new acceptance gates automatically.
+
+No inference-engine replacement, new executor, compulsory project entity,
+multi-tenant architecture, model training, P2P/LoRA expansion or automatic
+downloads are included. Document extraction and model/hardware qualification
+remain owned by their existing changes. Installation and publication remain
+separate from implementation. See the opening design section and task group 43.
+
 ## Approved Activity and attention reconciliation (2026-11-05)
 
 Replace the fragmented attention/history projection with a shared, actor-scoped

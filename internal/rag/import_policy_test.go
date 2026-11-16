@@ -156,7 +156,7 @@ func TestImportCollectionMigrationAndCorruptionFailClosed(t *testing.T) {
 	}
 	defer func() { s.Close() }()
 	r := acceptedImport(t, s, "owner", "legacy")
-	if _, err := s.db.Exec(`DROP TRIGGER documents_retention_insert; DROP TABLE document_retention; DROP TRIGGER imports_collection_insert; DROP TABLE import_collections; ALTER TABLE document_collections DROP COLUMN source_namespace; DELETE FROM knowledge_policy_migrations WHERE version>=3`); err != nil {
+	if _, err := s.db.Exec(`ALTER TABLE document_imports DROP COLUMN ocr_language; DROP TABLE knowledge_collection_audit; DROP TRIGGER documents_retention_insert; DROP TABLE document_retention; DROP TRIGGER imports_collection_insert; DROP TABLE import_collections; ALTER TABLE document_collections DROP COLUMN source_namespace; DELETE FROM knowledge_policy_migrations WHERE version>=3`); err != nil {
 		t.Fatal(err)
 	}
 	s.Close()

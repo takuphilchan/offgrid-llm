@@ -31,13 +31,13 @@ for (const theme of ['light', 'dark']) test(`workspace joins the rail with a rou
   await page.goto('/ui/#/chat/new');
   await expect(page.locator('.sidebar')).toHaveCSS('border-right-width', '0px');
   await expect(page.locator('.topbar')).toHaveCSS('border-bottom-width', '0px');
-  await expect(page.locator('main.workspace')).toHaveCSS('border-top-left-radius', '16px');
+  await expect(page.locator('main.workspace')).toHaveCSS('border-top-left-radius', '20px');
   await page.locator('.composer textarea').fill('Preserve this draft');
   await page.locator('.sidebar-collapse').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Preserve this draft');
   await page.screenshot({ path: `../../build/workspace-canvas-${theme}-20261106.png` });
   await page.evaluate(() => document.documentElement.dir = 'rtl');
-  await expect(page.locator('main.workspace')).toHaveCSS('border-top-right-radius', '16px');
+  await expect(page.locator('main.workspace')).toHaveCSS('border-top-right-radius', '20px');
 });
 
 for (const theme of ['light', 'dark']) test(`composer uses one restrained focus boundary in ${theme}`, async ({ page }) => {
@@ -66,9 +66,7 @@ for (const theme of ['light', 'dark']) test(`settings and compact menus retain u
   await page.goto('/ui/#/models');
   await expect(page.locator('.installed-model')).toHaveCount(1);
   await expect(page.locator('.sidebar-foot .service-state')).toHaveCount(0);
-  await page.locator('.workspace-options > button').click();
-  await expect(page.locator('.workspace-options-panel')).toContainText('Service ready');
-  await page.keyboard.press('Escape');
+  await expect(page.locator('.workspace-options')).toHaveCount(0);
   const trigger = page.locator('.model-maintenance > button');
   await trigger.click();
   const panel = page.locator('.model-maintenance .utility-action-panel');

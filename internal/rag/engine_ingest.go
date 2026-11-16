@@ -6,14 +6,24 @@ import (
 	"log"
 	"strings"
 	"time"
+
+	"github.com/takuphilchan/offgrid-llm/internal/document"
 )
 
 // IngestText ingests plain text content
 func (e *Engine) IngestText(ctx context.Context, name, content string, metadata map[string]string) (*Document, error) {
-	return e.ingestText(ctx, name, content, metadata, nil, "text/plain", nil)
+	// User metadata is not an extractor receipt. Parser entry points attach
+	// their own evidence; plain-text clients cannot assert reviewed coverage.
+	retained := make(map[string]string, len(metadata))
+	for key, value := range metadata {
+		if key != "extraction_coverage" {
+			retained[key] = value
+		}
+	}
+	return e.ingestText(ctx, name, content, retained, nil, "text/plain", nil)
 }
 
-func (e *Engine) ingestText(ctx context.Context, name, content string, metadata map[string]string, ranges []SourceRange, contentType string, original *OriginalSource) (*Document, error) {
+func (e *Engine) ingestText(ctx context.Context, name, content string, metadata map[string]string, ranges []SourceRange, contentType string, original *OriginalSource, structures ...*document.Extraction) (*Document, error) {
 	if err := e.ingestMu.acquire(ctx); err != nil {
 		return nil, err
 	}
@@ -68,6 +78,11 @@ func (e *Engine) ingestText(ctx context.Context, name, content string, metadata 
 			return nil, err
 		}
 		if original != nil && original.importRef != nil {
+			// Same original bytes do not imply the same reviewed evidence. Never
+			// silently substitute an existing library revision for the selected one.
+			if original.revisions != nil && (len(structures) == 0 || existingDoc.ExtractionRevision != structures[0].ID) {
+				return nil, ErrExtractionConflict
+			}
 			if store, ok := e.store.(*SQLiteStore); ok {
 				if err := store.linkExistingImport(existingDoc, original); err != nil {
 					return nil, err
@@ -98,6 +113,12 @@ func (e *Engine) ingestText(ctx context.Context, name, content string, metadata 
 	}
 
 	// Use auto-tuned chunking if enabled
+	if len(structures) > 0 {
+		doc.Extraction = structures[0]
+	}
+	if err := doc.ensureExtraction(); err != nil {
+		return nil, err
+	}
 	var chunker *Chunker
 	if e.autoTuneChunks {
 		opts, analysis := AutoTuneChunkingOptions(content)

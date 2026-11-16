@@ -104,6 +104,8 @@ func (m *Manager) profileDatabase() (*sql.DB, error) {
 id TEXT PRIMARY KEY, workspace TEXT NOT NULL, actor TEXT NOT NULL,
 revision INTEGER NOT NULL, archived INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS agent_profiles_owner ON agent_profiles(workspace,actor);
+CREATE TABLE IF NOT EXISTS agent_profile_tombstones (
+id TEXT PRIMARY KEY, workspace TEXT NOT NULL, actor TEXT NOT NULL, deleted_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS agent_profile_revisions (
 profile_id TEXT NOT NULL REFERENCES agent_profiles(id), revision INTEGER NOT NULL,
 snapshot BLOB NOT NULL, PRIMARY KEY(profile_id,revision));`)
@@ -220,6 +222,9 @@ func (m *Manager) SaveProfile(workspace, actor, id string, expectedRevision int,
 	for _, child := range settings.Delegates {
 		if child == id {
 			return nil, ErrInvalidProfile
+		}
+		if err = rejectDeletedProfile(tx, AgentConfig{Profile: &AgentProfile{ID: child}}); err != nil {
+			return nil, err
 		}
 	}
 	snapshot, err := json.Marshal(profile)

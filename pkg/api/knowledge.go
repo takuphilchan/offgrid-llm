@@ -1,14 +1,22 @@
 package api
 
+import "github.com/takuphilchan/offgrid-llm/internal/document"
+
+type DocumentEvidence = document.Coverage
+type DocumentWarning = document.Warning
+
 // KnowledgePassage records bounded retrieval evidence supplied to inference.
 // It is not a claim that every interpretation in an answer is supported.
 type KnowledgePassage struct {
-	Source      *KnowledgeSourceLocator `json:"source,omitempty"`
-	DocumentID  string                  `json:"document_id"`
-	Name        string                  `json:"name"`
-	ChunkID     string                  `json:"chunk_id"`
-	Content     string                  `json:"content"`
-	ContentHash string                  `json:"content_hash"`
+	EvidenceReceipt *document.EvidenceReceipt `json:"evidence_receipt,omitempty"`
+	RetrievalMode   string                    `json:"retrieval_mode,omitempty"`
+	Evidence        *DocumentEvidence         `json:"evidence,omitempty"`
+	Source          *KnowledgeSourceLocator   `json:"source,omitempty"`
+	DocumentID      string                    `json:"document_id"`
+	Name            string                    `json:"name"`
+	ChunkID         string                    `json:"chunk_id"`
+	Content         string                    `json:"content"`
+	ContentHash     string                    `json:"content_hash"`
 }
 
 // KnowledgeSourceLocator describes the actual excerpt, not a model-authored

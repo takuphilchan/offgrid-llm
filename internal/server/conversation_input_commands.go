@@ -68,6 +68,14 @@ func (s *Server) handleSubmitConversationInput(w http.ResponseWriter, r *http.Re
 			return
 		}
 	}
+	if err := s.validateConversationSources(r, current, command.Payload); err != nil {
+		if _, ok := err.(*serviceError); ok {
+			writeServiceError(w, err)
+		} else {
+			writeControlError(w, err)
+		}
+		return
+	}
 	receipt, err := s.agentRunner.AcceptConversationInput(scope, command)
 	if err != nil {
 		writeControlError(w, err)

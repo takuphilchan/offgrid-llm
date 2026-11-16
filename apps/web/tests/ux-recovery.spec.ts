@@ -11,10 +11,10 @@ async function workspace(page:Page, override:(path:string,route:Route)=>Promise<
  await page.route('**/v1/**',async r=>{const path=new URL(r.request().url()).pathname;const custom=await override(path,r);if(custom!==undefined)return r.fulfill({json:custom});return r.fulfill({json: path==='/v1/users/me'?{authenticated:false,user:null}:path==='/v1/models'?{data:[{id:'chat-model',type:'chat'}]}:path==='/v1/catalog'?{models:[embedding]}:path==='/v1/documents'?{documents:[],count:0}:path==='/v1/rag/status'?{enabled:false,stats:{}}:path==='/v1/sessions'?{sessions:[]}:path.endsWith('/turn')?{turn:null}:{} });});
 }
 
-test('onboarding contains keyboard focus and Escape restores the workspace',async({page})=>{
- await workspace(page,undefined,true);await page.goto('/ui/');const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible();
- for(let i=0;i<8;i++){await page.keyboard.press('Tab');expect(await page.evaluate(()=>!!document.activeElement?.closest('dialog'))).toBe(true);}
- await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await page.locator('.sidebar a[href="#/models"]').click();await expect(page.locator('.models-workspace')).toBeVisible();
+test('inline setup receives keyboard focus and Escape restores the workspace',async({page})=>{
+ await workspace(page,undefined,true);await page.goto('/ui/');const dialog=page.locator('.workspace-setup');await expect(dialog).toBeVisible();
+ await dialog.focus();await page.keyboard.press('Tab');await expect(dialog.locator('.onboarding-close')).toBeFocused();
+ await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click();await expect(page.locator('.models-workspace')).toBeVisible();
 });
 
 test('Activity ignores a late response for the previous selected task',async({page})=>{
@@ -47,7 +47,7 @@ test('knowledge activation survives leaving its setup page',async({page})=>{
   if(path==='/v1/models/download/progress')return submitted?{'bge-m3.gguf':{file_name:'bge-m3.gguf',enable_knowledge:true,status:complete?'complete':'downloading',bytes_done:100,bytes_total:1000,percent:10,speed:0,started_at:1}}:{};
  });
  await page.goto('/ui/#/knowledge');await page.getByRole('button',{name:'Install and enable'}).click();await expect(page.locator('.knowledge-setup')).toContainText('10.0%');
- await page.locator('.sidebar a[href="#/models"]').click();await page.locator('.sidebar a[href="#/knowledge"]').click();await expect(page.locator('.knowledge-setup-controls .primary-button')).toBeDisabled();
+ await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click();await page.locator('.sidebar a[href="#/knowledge"]').click();await expect(page.locator('.knowledge-setup-controls .primary-button')).toBeDisabled();
  complete=true;await page.getByRole('button',{name:'Manage Knowledge',exact:true}).click();await expect(page.locator(".knowledge-menu-status").getByText("bge-m3",{exact:true})).toBeVisible();
 });
 
@@ -87,6 +87,6 @@ test('an active chat reconnects after navigation without submitting new work',as
   if(path.endsWith('/turn/cancel')){expect(route.request().postDataJSON()).toEqual({id:turn.id});cancellations++;return{success:true};}
  });
  await page.addInitScript(()=>{const original=window.fetch.bind(window);(window as any).attachments=0;window.fetch=async(input,init)=>{if(!String(input).includes('/turn/events'))return original(input,init);(window as any).attachments++;return new Response(new ReadableStream({start(c){c.enqueue(new TextEncoder().encode('data: {"type":"delta","delta":"Retained partial"}\n\n'));init?.signal?.addEventListener('abort',()=>c.error(new DOMException('aborted','AbortError')),{once:true});}}),{headers:{'content-type':'text/event-stream'}});};});
- await page.goto('/ui/#/chat');await expect(page.locator('.streaming-response')).toContainText('Retained partial');await page.locator('.sidebar a[href="#/models"]').click();expect(cancellations).toBe(0);
+ await page.goto('/ui/#/chat');await expect(page.locator('.streaming-response')).toContainText('Retained partial');await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click();expect(cancellations).toBe(0);
  await page.locator('.sidebar a[href="#/chat"]').click();await expect(page.locator('.streaming-response')).toContainText('Retained partial');await expect.poll(()=>page.evaluate(()=>(window as any).attachments)).toBe(2);await page.locator('.composer-actions').getByRole('button', { name: 'Stop', exact: true }).click();await expect.poll(()=>cancellations).toBe(1);
 });

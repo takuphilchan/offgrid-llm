@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { IntegrationSetup } from '../../api/client';
 import { Icon } from '../../components/Icon';
 import { useI18n } from '../../i18n';
@@ -8,10 +8,16 @@ import { restoreFocus } from '../../lib/restore-focus';
 
 /** Instructions are read-only: copying a command never installs a provider. */
 export function ProviderSetupDialog({ name, setup, copied, onCopy, close, returnFocus }: {
-  name: string; setup: IntegrationSetup; copied: boolean; onCopy: () => void; close: () => void; returnFocus: HTMLElement | null;
+  name: string; setup: IntegrationSetup; copied: boolean; onCopy: () => Promise<void>; close: () => void; returnFocus: HTMLElement | null;
 }) {
   const { messages: text, locale } = useI18n();
   const dialog = useRef<HTMLDialogElement>(null);
+  const [copyError, setCopyError] = useState('');
+  const copyCommand = async () => {
+    setCopyError('');
+    try { await onCopy(); }
+    catch { setCopyError(text.common.error); }
+  };
   useEffect(() => {
     const node = dialog.current!;
     const previous = returnFocus;
@@ -26,8 +32,9 @@ export function ProviderSetupDialog({ name, setup, copied, onCopy, close, return
     </header>
     <div className="provider-setup-body">
       <section aria-label={text.agentRuntime.installPlugin}>
-        <div className="provider-command-heading"><h3><Icon name="terminal" size={18} />{text.agentRuntime.installPlugin}</h3><button type="button" className="text-button" onClick={onCopy}><Icon name={copied ? 'check' : 'copy'} size={16} />{copied ? text.agentRuntime.copied : text.agentRuntime.copy}</button></div>
+        <div className="provider-command-heading"><h3><Icon name="terminal" size={18} />{text.agentRuntime.installPlugin}</h3><button type="button" className="text-button" onClick={() => void copyCommand()}><Icon name={copied ? 'check' : 'copy'} size={16} />{copied ? text.agentRuntime.copied : text.agentRuntime.copy}</button></div>
         <pre tabIndex={0} dir="ltr"><code>{setup.install_command}</code></pre>
+        {copyError && <p className="inline-error" role="alert">{copyError}</p>}
       </section>
       <section aria-label={text.agentRuntime.verification}>
         <h3>{text.agentRuntime.verification}</h3>

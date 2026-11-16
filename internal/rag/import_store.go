@@ -5,11 +5,15 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/takuphilchan/offgrid-llm/internal/document"
+	"github.com/takuphilchan/offgrid-llm/internal/documentocr"
 )
 
 const importSchema = 1
@@ -19,20 +23,25 @@ var ErrImportConflict = errors.New("document import changed or is already runnin
 
 // ImportRecord contains bounded progress metadata, never original/extracted bytes.
 // Pending originals require both their owner and current destination access.
-// The internal collection binding is not yet an exposed API contract.
+// The returned destination describes scope; membership is checked independently.
 type ImportRecord struct {
-	CollectionID    string    `json:"-"`
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	SHA256          string    `json:"sha256"`
-	Bytes           int64     `json:"bytes"`
-	State           string    `json:"state"`
-	Attempt         int       `json:"attempt"`
-	ErrorCode       string    `json:"error_code,omitempty"`
-	DocumentID      string    `json:"document_id,omitempty"`
-	ReviewAvailable bool      `json:"review_available,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ExtractionRevision string             `json:"extraction_revision,omitempty"`
+	OCRCompletedPages  int                `json:"ocr_completed_pages,omitempty"`
+	OCRLanguage        string             `json:"ocr_language"`
+	Evidence           *document.Coverage `json:"evidence,omitempty"`
+	CollectionID       string             `json:"collection_id"`
+	CollectionRevision int                `json:"collection_revision,omitempty"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	SHA256             string             `json:"sha256"`
+	Bytes              int64              `json:"bytes"`
+	State              string             `json:"state"`
+	Attempt            int                `json:"attempt"`
+	ErrorCode          string             `json:"error_code,omitempty"`
+	DocumentID         string             `json:"document_id,omitempty"`
+	ReviewAvailable    bool               `json:"review_available,omitempty"`
+	CreatedAt          time.Time          `json:"created_at"`
+	UpdatedAt          time.Time          `json:"updated_at"`
 }
 
 type importLease struct {
@@ -41,13 +50,24 @@ type importLease struct {
 	attempt    int
 }
 
-const importColumns = `id,name,source_sha256,byte_size,state,attempt,error_code,document_id,created_at,updated_at,(extraction_json<>'' AND state IN ('needs_input','interrupted','cancelled','failed')),COALESCE((SELECT collection_id FROM import_collections WHERE import_id=document_imports.id AND schema_version=1),'')`
+const importColumns = `id,name,source_sha256,byte_size,state,attempt,error_code,document_id,created_at,updated_at,(extraction_json<>'' AND state IN ('needs_input','interrupted','cancelled','failed')),COALESCE((SELECT collection_id FROM import_collections WHERE import_id=document_imports.id AND schema_version=1),''),coverage_json,COALESCE((SELECT expected_revision FROM import_collections WHERE import_id=document_imports.id AND schema_version=1),0),ocr_language,(SELECT COUNT(*) FROM document_import_ocr_pages WHERE import_id=document_imports.id),COALESCE((SELECT current_revision FROM document_import_revisions WHERE import_id=document_imports.id),'')`
 
 type rowScanner interface{ Scan(...any) error }
 
 func scanImport(row rowScanner) (*ImportRecord, error) {
 	var r ImportRecord
-	err := row.Scan(&r.ID, &r.Name, &r.SHA256, &r.Bytes, &r.State, &r.Attempt, &r.ErrorCode, &r.DocumentID, &r.CreatedAt, &r.UpdatedAt, &r.ReviewAvailable, &r.CollectionID)
+	var coverage string
+	err := row.Scan(&r.ID, &r.Name, &r.SHA256, &r.Bytes, &r.State, &r.Attempt, &r.ErrorCode, &r.DocumentID, &r.CreatedAt, &r.UpdatedAt, &r.ReviewAvailable, &r.CollectionID, &coverage, &r.CollectionRevision, &r.OCRLanguage, &r.OCRCompletedPages, &r.ExtractionRevision)
+	if err == nil {
+		if _, ok := documentocr.LookupSelection(r.OCRLanguage); !ok {
+			return nil, fmt.Errorf("retained OCR selection requires a compatible application")
+		}
+	}
+	if err == nil && coverage != "" {
+		if len(coverage) > document.MaxCoverageBytes || json.Unmarshal([]byte(coverage), &r.Evidence) != nil {
+			return nil, fmt.Errorf("invalid retained import coverage")
+		}
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrImportNotFound
 	}
@@ -61,9 +81,24 @@ func (s *SQLiteStore) AcceptImport(owner, key, name string, data []byte) (*Impor
 	return s.AcceptImportIntoCollection(owner, key, name, data, WorkspaceCollection)
 }
 
-// Collection-management endpoints remain gated until saved-context policy and
-// retention checks pass. The default client import stays in the shared workspace.
-func (s *SQLiteStore) AcceptImportIntoCollection(owner, key, name string, data []byte, collection string) (*ImportRecord, error) {
+// Legacy callers retain workspace behavior. Reviewed imports additionally pin
+// the audience revision through publication.
+func (s *SQLiteStore) AcceptImportIntoCollection(owner, key, name string, data []byte, collection string, reviewedRevision ...int) (*ImportRecord, error) {
+	return s.AcceptImportWithOCRLanguage(owner, key, name, data, collection, "eng", reviewedRevision...)
+}
+
+func (s *SQLiteStore) AcceptImportWithOCRLanguage(owner, key, name string, data []byte, collection, language string, reviewedRevision ...int) (*ImportRecord, error) {
+	return s.acceptImportWithRevisions(owner, key, name, data, collection, language, nil, reviewedRevision...)
+}
+
+func (s *SQLiteStore) AcceptImportWithRevisions(owner, key, name string, data []byte, collection, language string, history []*document.Extraction, reviewedRevision ...int) (*ImportRecord, error) {
+	return s.acceptImportWithRevisions(owner, key, name, data, collection, language, history, reviewedRevision...)
+}
+
+func (s *SQLiteStore) acceptImportWithRevisions(owner, key, name string, data []byte, collection, language string, history []*document.Extraction, reviewedRevision ...int) (*ImportRecord, error) {
+	if _, ok := documentocr.LookupSelection(language); !ok {
+		return nil, &ParseError{Code: "document_ocr_language_unavailable", Message: "The selected OCR language is unavailable. No substitute language was used."}
+	}
 	collection = normalizedCollection(collection)
 	if owner == "" || len(owner) > 256 || key == "" || len(key) > 128 || strings.ContainsAny(key, "\x00\r\n") || name == "" || len(name) > 512 || !utf8.ValidString(name) || strings.ContainsAny(name, "/\\\x00\r\n") {
 		return nil, &ParseError{Code: "document_invalid", Message: "Import identity and filename are invalid."}
@@ -73,6 +108,14 @@ func (s *SQLiteStore) AcceptImportIntoCollection(owner, key, name string, data [
 	}
 	digest := sha256.Sum256(data)
 	hash := hex.EncodeToString(digest[:])
+	retained, err := encodeImportRevisions(history, hash)
+	if err != nil {
+		return nil, err
+	}
+	currentRevision := ""
+	if len(history) > 0 {
+		currentRevision = history[len(history)-1].ID
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	tx, err := s.db.Begin()
@@ -83,9 +126,31 @@ func (s *SQLiteStore) AcceptImportIntoCollection(owner, key, name string, data [
 	if err := collectionAccess(tx, knowledgePrincipal{actor: owner}, collection, true); err != nil {
 		return nil, err
 	}
+	expectedRevision := 0
+	if len(reviewedRevision) != 0 {
+		expectedRevision = reviewedRevision[0]
+		p, err := scanCollection(tx.QueryRow(`SELECT `+collectionColumns+` FROM knowledge_collections WHERE id=?`, collection))
+		if err != nil {
+			return nil, err
+		}
+		if expectedRevision < 1 || p.Revision != expectedRevision {
+			return nil, ErrCollectionConflict
+		}
+	}
 	prior, err := scanImport(tx.QueryRow(`SELECT `+importColumns+` FROM document_imports WHERE owner=? AND request_key=? AND schema_version=?`, owner, key, importSchema))
 	if err == nil {
-		if prior.CollectionID != collection || prior.Name != name || prior.SHA256 != hash || prior.Bytes != int64(len(data)) {
+		var priorExtraction string
+		if err := tx.QueryRow(`SELECT COALESCE((SELECT current_revision FROM document_import_revisions WHERE import_id=?),'')`, prior.ID).Scan(&priorExtraction); err != nil {
+			return nil, err
+		}
+		if priorExtraction != currentRevision {
+			return nil, ErrImportConflict
+		}
+		var priorRevision int
+		if err := tx.QueryRow(`SELECT expected_revision FROM import_collections WHERE import_id=?`, prior.ID).Scan(&priorRevision); err != nil {
+			return nil, err
+		}
+		if prior.OCRLanguage != language || priorRevision != expectedRevision || prior.CollectionID != collection || prior.Name != name || prior.SHA256 != hash || prior.Bytes != int64(len(data)) {
 			return nil, ErrImportConflict
 		}
 		return prior, nil
@@ -100,7 +165,7 @@ func (s *SQLiteStore) AcceptImportIntoCollection(owner, key, name string, data [
 	if count >= 4096 {
 		return nil, &ParseError{Code: "document_storage_limit", Message: "Knowledge import history has reached its storage limit."}
 	}
-	if err = checkOriginalQuota(tx, s.originalQuota, int64(len(data))); err != nil {
+	if err = checkOriginalQuota(tx, s.originalQuota, int64(len(data)+len(retained))); err != nil {
 		return nil, err
 	}
 	var random [16]byte
@@ -109,16 +174,27 @@ func (s *SQLiteStore) AcceptImportIntoCollection(owner, key, name string, data [
 	}
 	now := time.Now().UTC()
 	r := &ImportRecord{CollectionID: collection, ID: "import-" + hex.EncodeToString(random[:]), Name: name, SHA256: hash, Bytes: int64(len(data)), State: "accepted", CreatedAt: now, UpdatedAt: now}
-	_, err = tx.Exec(`INSERT INTO document_imports(id,schema_version,owner,request_key,name,source_sha256,byte_size,content,state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, r.ID, importSchema, owner, key, name, hash, len(data), data, r.State, now, now)
+	r.CollectionRevision = expectedRevision
+	r.OCRLanguage = language
+	_, err = tx.Exec(`INSERT INTO document_imports(id,schema_version,owner,request_key,name,source_sha256,byte_size,content,state,created_at,updated_at,ocr_language) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, r.ID, importSchema, owner, key, name, hash, len(data), data, r.State, now, now, language)
 	if err != nil {
 		return nil, err
 	}
-	if _, err = tx.Exec(`UPDATE import_collections SET collection_id=? WHERE import_id=? AND schema_version=1`, collection, r.ID); err != nil {
+	if _, err = tx.Exec(`UPDATE import_collections SET collection_id=?,expected_revision=? WHERE import_id=? AND schema_version=1`, collection, expectedRevision, r.ID); err != nil {
+		return nil, err
+	}
+	if len(retained) > 0 {
+		if _, err = tx.Exec(`INSERT INTO document_import_revisions(import_id,schema_version,current_revision,history_sha256,history) VALUES(?,1,?,?,?)`, r.ID, currentRevision, document.TextSHA256(string(retained)), retained); err != nil {
+			return nil, err
+		}
+	}
+	if err = recordCollectionAudit(tx, owner, collection, "import_accepted", r.ID, expectedRevision); err != nil {
 		return nil, err
 	}
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
+	r.ExtractionRevision = currentRevision
 	return r, nil
 }
 
@@ -164,7 +240,7 @@ func (s *SQLiteStore) Imports(owner string) ([]*ImportRecord, error) {
 
 func checkOriginalQuota(tx *sql.Tx, limit, additional int64) error {
 	var used int64
-	err := tx.QueryRow(`SELECT (SELECT COALESCE(SUM(byte_size),0) FROM document_originals)+(SELECT COALESCE(SUM(COALESCE(LENGTH(content),0)+LENGTH(CAST(extraction_json AS BLOB))),0) FROM document_imports)`).Scan(&used)
+	err := tx.QueryRow(`SELECT (SELECT COALESCE(SUM(byte_size),0) FROM document_originals)+(SELECT COALESCE(SUM(COALESCE(LENGTH(content),0)+LENGTH(CAST(extraction_json AS BLOB))),0) FROM document_imports)+(SELECT COALESCE(SUM(LENGTH(receipt)),0) FROM document_import_ocr_pages)+(SELECT COALESCE(SUM(LENGTH(history)),0) FROM document_import_revisions)`).Scan(&used)
 	if err != nil {
 		return err
 	}
@@ -207,7 +283,7 @@ func (s *SQLiteStore) beginImport(owner, id string) (*ImportRecord, error) {
 	r.Attempt++
 	r.ErrorCode = ""
 	r.UpdatedAt = time.Now().UTC()
-	_, err = tx.Exec(`UPDATE document_imports SET state=?,attempt=?,error_code='',extraction_json='',updated_at=? WHERE id=?`, r.State, r.Attempt, r.UpdatedAt, id)
+	_, err = tx.Exec(`UPDATE document_imports SET state=?,attempt=?,error_code='',extraction_json='',coverage_json='',updated_at=? WHERE id=?`, r.State, r.Attempt, r.UpdatedAt, id)
 	if err != nil {
 		return nil, err
 	}

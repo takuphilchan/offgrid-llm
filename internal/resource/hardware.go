@@ -7,12 +7,16 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 // SystemResources represents available hardware resources
 type SystemResources struct {
 	TotalRAM           int64  // Total RAM in MB
 	AvailableRAM       int64  // Available RAM in MB
+	AvailableCommitMB  int64  // Windows process/system commit headroom; distinct from physical RAM.
+	CommitMeasured     bool   // A measured zero means exhausted, not unknown.
 	GPUAvailable       bool   // Whether GPU is available
 	GPUMemory          int64  // GPU VRAM in MB
 	GPUAvailableMemory int64  // Free GPU VRAM in MB at detection time
@@ -121,9 +125,7 @@ func (res *SystemResources) GetOptimalThreads() int {
 
 // detectRAM detects total and available RAM
 func detectRAM(res *SystemResources) error {
-	if total, available, ok := detectNativeRAM(); ok {
-		res.TotalRAM = total
-		res.AvailableRAM = available
+	if detectNativeMemory(res) {
 		return nil
 	}
 	if runtime.GOOS == "linux" {
@@ -152,20 +154,36 @@ func detectRAM(res *SystemResources) error {
 		return nil
 	}
 
-	// For macOS, use sysctl
+	// Use current OS availability, not a fixed percentage of installed RAM.
 	if runtime.GOOS == "darwin" {
-		cmd := exec.Command("sysctl", "-n", "hw.memsize")
-		output, err := cmd.Output()
+		memory, err := mem.VirtualMemory()
 		if err != nil {
 			return err
 		}
-		bytes, _ := strconv.ParseInt(strings.TrimSpace(string(output)), 10, 64)
-		res.TotalRAM = bytes / (1024 * 1024)       // Convert bytes to MB
-		res.AvailableRAM = res.TotalRAM * 80 / 100 // Estimate 80% available
+		res.TotalRAM = int64(memory.Total >> 20)
+		res.AvailableRAM = int64(memory.Available >> 20)
 		return nil
 	}
 
 	return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+}
+
+// DetectMemoryResources avoids CPU/GPU subprocesses for frequent pressure checks.
+func DetectMemoryResources() (*SystemResources, error) {
+	res := &SystemResources{OS: runtime.GOOS, Arch: runtime.GOARCH}
+	if err := detectRAM(res); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// AvailableHostMemoryMB is an admission bound, not a display of physical RAM.
+func (res *SystemResources) AvailableHostMemoryMB() int64 {
+	available := max(int64(0), res.AvailableRAM)
+	if res.CommitMeasured {
+		available = min(available, max(int64(0), res.AvailableCommitMB))
+	}
+	return available
 }
 
 // detectGPU detects NVIDIA GPU using nvidia-smi

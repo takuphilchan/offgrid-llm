@@ -97,6 +97,9 @@ func captureKnowledge(ctx context.Context, result *rag.RAGContext) {
 			continue
 		}
 		passage := sessions.KnowledgePassage{DocumentID: item.DocumentID, Name: item.DocName, ChunkID: item.Chunk.ID, Content: item.Chunk.Content, ContentHash: rag.GenerateContentHash(item.Chunk.Content)}
+		passage.Evidence = item.ExtractionCoverage()
+		passage.EvidenceReceipt = item.EvidenceReceipt
+		passage.RetrievalMode = result.RetrievalMode
 		if source := item.Chunk.Source; source != nil {
 			passage.Source = &api.KnowledgeSourceLocator{Kind: source.Kind, Index: source.Index, Name: source.Name, Cells: source.CellReferences(item.Chunk.StartChar, item.Chunk.EndChar), StartByte: item.Chunk.StartChar, EndByte: item.Chunk.EndChar, SHA256: source.SHA256, Revision: source.Revision}
 		}

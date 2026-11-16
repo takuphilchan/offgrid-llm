@@ -1177,6 +1177,8 @@ paths:
       description: Requires ownership or sessions:all; other users' conversations return 404. Linked agent work requires ownership. Active linked work requires an explicit retain or stop choice; stop waits for confirmed quiescence and never resolves uncertain effects. Canonical jobs and minimal deduplication records survive deletion. Plain generation still returns 409 while active.
       parameters:
         - { name: work, in: query, schema: { type: string, enum: [retain, stop] }, description: Retain linked jobs in the inspector or request stopping before deletion. }
+        - { name: canonical_id, in: query, schema: { type: string }, description: Explicit migrated conversation identity. Required with revision to delete a canonical conversation; legacy writers remain fenced. }
+        - { name: revision, in: query, schema: { type: integer, minimum: 1 }, description: Current canonical conversation revision. Concurrent changes return 409. A repeated deletion with the same identity finishes retained file cleanup. }
       responses:
         '200':
           description: Conversation deleted
@@ -1209,6 +1211,8 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
     post:
       operationId: uploadSessionAttachment
+      parameters:
+        - { name: ocr_language, in: query, schema: { type: string }, description: 'Ordered pinned pack IDs joined by +, up to three; encode + as %2B in URLs. Single selection requires document-ocr-language-selection-v1; mixed selection requires document-ocr-mixed-languages-v1. Retained across prepare retries.' }
       description: Uploads and prepares a private source. Up to eight files, 50 MiB per file, 100 MiB per conversation and 500 MiB per owner. Failed extraction retains the original and returns its attachment identity with an error. No automatic Knowledge publication, model download or filesystem grant.
       requestBody:
         required: true
@@ -1287,16 +1291,18 @@ paths:
               schema: { $ref: '#/components/schemas/SessionAttachmentResult' }
   /v1/sessions/{name}/attachments/{attachment_id}/preview:
     parameters:
+      - { name: revision, in: query, schema: { type: string, pattern: '^[a-f0-9]{64}$' }, description: Pin retained attachment text to this published revision. Images remain the immutable original. Omit to inspect the current revision. }
       - $ref: '#/components/parameters/SessionName'
       - { name: attachment_id, in: path, required: true, schema: { type: string } }
       - { name: sha256, in: query, schema: { type: string }, description: Expected original digest; mismatch rejects delivery. }
-      - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000 }, description: Render this PDF page as PNG; omit for structured native source units. }
+      - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000 }, description: Render a PDF page or single PNG/JPEG image (page 1) as PNG; omit for source units with retained OCR text. }
+      - { name: thumbnail, in: query, schema: { type: boolean }, description: With page, return a bounded 192 by 256 pixel PNG preview with source identity. Never runs OCR. }
     get:
       operationId: getSessionAttachmentPreview
       description: Read-only owner-scoped local preview, including partial native text. Never indexes, downloads language data or generates an answer.
       responses:
         '200':
-          description: Source units or bounded PDF page
+          description: Source units or bounded PDF/image page
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DocumentPreview' }
@@ -1326,6 +1332,82 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '422': { $ref: '#/components/responses/Error' }
+  /v1/sessions/{name}/attachments/{attachment_id}/structure:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+      - { name: attachment_id, in: path, required: true, schema: { type: string } }
+      - { name: revision, in: query, required: true, schema: { type: string, maxLength: 128 }, description: Pinned attachment revision, distinct from the structured extraction revision returned in the response. }
+      - { name: unit, in: query, schema: { type: string, maxLength: 128 } }
+      - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 200000 } }
+      - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      - { name: relationship_offset, in: query, schema: { type: integer, minimum: 0, maximum: 400000 } }
+      - { name: navigation_offset, in: query, schema: { type: integer, minimum: 0, maximum: 200000 } }
+      - { name: corrections, in: query, schema: { type: boolean }, description: Explicitly request owner editing controls for the current revision. Historical revisions remain read-only. }
+    get:
+      operationId: getSessionAttachmentStructure
+      description: Owner-scoped, digest-verified structured inspection of the retained private source. Read-only by default; corrections=true exposes editing only to the owner for the current revision. Does not reparse or publish to Knowledge. Legacy sources without retained structure return unavailable. Response is no-store.
+      responses:
+        '200':
+          description: Bounded immutable block and relationship page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentStructurePage' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /v1/sessions/{name}/attachments/{attachment_id}/corrections:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+      - { name: attachment_id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: correctSessionAttachment
+      description: Owner-only correction; publishes a derived revision while preserving originals and historical citations.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_revision, extraction_revision, edits]
+              properties:
+                expected_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+                extraction_revision: { type: string, maxLength: 128 }
+                edits:
+                  type: array
+                  minItems: 1
+                  maxItems: 256
+                  items:
+                    type: object
+                    required: [block_id, expected_text_sha256, text]
+                    properties:
+                      block_id: { type: string }
+                      expected_text_sha256: { type: string }
+                      text: { type: string }
+      responses:
+        '200':
+          description: Published correction receipt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionAttachmentResult' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+  /v1/sessions/{name}/attachments/{attachment_id}/revisions:
+    parameters:
+      - $ref: '#/components/parameters/SessionName'
+      - { name: attachment_id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getSessionAttachmentRevisions
+      description: Bounded revision metadata under current source access, newest first.
+      responses:
+        '200':
+          description: Retained revision history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentRevisionHistory' }
+        '404': { $ref: '#/components/responses/Error' }
   /v1/sessions/{name}/attachments/{attachment_id}/original:
     parameters:
       - $ref: '#/components/parameters/SessionName'
@@ -1452,6 +1534,17 @@ paths:
       responses:
         '200': { description: Cancellation requested for this exact turn. Refresh for terminal state. }
         '409': { $ref: '#/components/responses/Error' }
+  /v1/document-ocr-languages:
+    get:
+      operationId: getChatOCRLanguages
+      description: Read-only OCR readiness for authenticated Chat users. No pack installation or document content access.
+      responses:
+        '200':
+          description: Pinned language catalog, installation states and explicit unsupported interface locales
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OCRLanguageReadiness' }
+        '403': { $ref: '#/components/responses/Error' }
   /v1/documents/ocr-languages:
     get:
       operationId: getOCRLanguages
@@ -1488,7 +1581,7 @@ paths:
       description: Requires Knowledge management permission. Without id returns the most recent 100 imports owned by the authenticated actor; with id returns that actor's exact record. Never returns original bytes. Restart marks in-flight imports interrupted without replay.
       parameters:
         - { name: id, in: query, schema: { type: string } }
-        - { name: view, in: query, description: With id, extraction returns owner-scoped partial PDF pages for review only. Never indexes or resumes work., schema: { type: string, enum: [extraction] } }
+        - { name: view, in: query, description: With id, extraction returns owner-scoped partial document pages for review only. Never indexes or resumes work., schema: { type: string, enum: [extraction] } }
       responses:
         '200':
           description: Saved import or recent import list
@@ -1507,6 +1600,9 @@ paths:
       operationId: prepareDocumentImport
       description: Without id, accept and retain a bounded multipart upload before extraction; returns 202 without starting a worker. Reusing an Idempotency-Key with the same actor/name/bytes returns the same record, changed bytes conflict. With id and action=retry, process the retained source synchronously with durable progress; action=cancel invalidates pending publication. A completed retry returns saved success without replay. Request cancellation retains progress and original bytes for explicit recovery.
       parameters:
+        - { name: ocr_language, in: query, schema: { type: string }, description: Explicit pinned pack ID on initial acceptance only; retries retain the saved selection. }
+        - { name: collection_id, in: query, schema: { type: string }, description: Explicit destination on acceptance. Requires collection_revision. Mandatory for JSON attachment publication; omission retains legacy workspace behavior only for multipart uploads. New clients use /v1/collections/imports. }
+        - { name: collection_revision, in: query, schema: { type: integer, minimum: 1 }, description: Reviewed destination audience; checked at acceptance and publication. }
         - { name: id, in: query, schema: { type: string } }
         - { name: action, in: query, schema: { type: string, enum: [retry, cancel] } }
         - { name: Idempotency-Key, in: header, schema: { type: string, maxLength: 128 } }
@@ -1536,6 +1632,7 @@ paths:
         '409': { $ref: '#/components/responses/Error' }
         '503': { description: Reader/import queue unavailable (document_busy) or packaged reader unavailable. Inspect saved state; no automatic replay., $ref: '#/components/responses/Error' }
         '422': { $ref: '#/components/responses/Error' }
+        '426': { description: Attachment publication requires destination audience review (collection_review_required). Upgrade the client; do not fall back to shared publication., $ref: '#/components/responses/Error' }
     delete:
       operationId: removeDocumentImport
       description: Remove the actor's import record and pending original, invalidating in-flight publication. Does not delete an already published Knowledge document or backups.
@@ -1588,6 +1685,462 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
+  /v1/document-analyses:
+    post:
+      operationId: createDocumentAnalysis
+      description: Creates an owner-private durable comparison of two exact Knowledge extraction revisions. Requires Knowledge read permission and current access to both sources. No model or embedding download is needed. Other analysis workflows return 501 in this build. Reuse request_key only with identical ordered sources; inspect status after an uncertain response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [request_key, workflow, sources]
+              properties:
+                request_key: { type: string, minLength: 1, maxLength: 128 }
+                workflow: { type: string, enum: [comparison] }
+                sources: { type: array, minItems: 2, maxItems: 2, items: { $ref: '#/components/schemas/AnalysisSourceRef' } }
+      responses:
+        '202':
+          description: Durable job accepted or its existing status returned; completion is separate.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentAnalysis' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '501': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+    get:
+      operationId: getDocumentAnalysis
+      description: With id, return owner-private status and source-unit accounting under current access to every source. Without id, list bounded owner-private history, omitting jobs with inaccessible sources. Refresh pagination after concurrent additions or deletions. Complete means retained text/cell traversal finished without recorded extraction gaps; it does not certify visual or semantic interpretation.
+      parameters:
+        - { name: id, in: query, schema: { type: string, minLength: 1, maxLength: 128 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 256, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20, default: 20 } }
+      responses:
+        '200':
+          description: Current durable status
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/DocumentAnalysis' }
+                  - { $ref: '#/components/schemas/DocumentAnalysisHistory' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/document-analyses/results:
+    get:
+      operationId: getDocumentAnalysisResults
+      description: Bounded deterministic differences for one committed unit pair. Interrupted work may expose completed checkpoints with its incomplete job status. Source access is rechecked. Repeated or unmatched text is represented as removals/additions, not guessed semantic equivalence.
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string, maxLength: 128 } }
+        - { name: step, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 400000, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 100 } }
+      responses:
+        '200':
+          description: One page of committed differences
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentAnalysisResults' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/document-analyses/source:
+    get:
+      operationId: getDocumentAnalysisSource
+      description: Opens a server-retained change citation under current access to both documents. Validates revision, unit, block, UTF-8 range and SHA-256. Returns at most 256 KiB of text with explicit truncation; formulas and external references are never executed.
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string, maxLength: 128 } }
+        - { name: step, in: query, required: true, schema: { type: integer, minimum: 0 } }
+        - { name: change, in: query, required: true, schema: { type: integer, minimum: 0, maximum: 400000 } }
+        - { name: side, in: query, required: true, schema: { type: string, enum: [before, after] } }
+      responses:
+        '200':
+          description: Verified retained source text and optional native cell metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [analysis_id, document_id, citation, text, truncated]
+                properties:
+                  analysis_id: { type: string }
+                  document_id: { type: string }
+                  citation: { $ref: '#/components/schemas/AnalysisCitation' }
+                  text: { type: string }
+                  truncated: { type: boolean }
+                  cell: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/document-analyses/export:
+    get:
+      operationId: exportDocumentAnalysis
+      tags: [Knowledge]
+      summary: Export a finished comparison with exact evidence and coverage
+      description: >-
+        Requires current access to both pinned sources and ownership of the job.
+        Returns an all-or-nothing UTF-8 artifact, limited to 8 MiB, with its SHA-256.
+        JSON is an ordered array of typed records; CSV includes explicit evidence
+        columns and exact metadata JSON; Markdown uses inert fenced source text.
+        All source pairs, changes, unresolved gaps and revision references are
+        retained. Incomplete extraction remains incomplete. CSV formula-like
+        display cells are apostrophe-prefixed; metadata_json retains exact text.
+        Exported copies have separate retention and cannot be recalled by source
+        deletion or access revocation. A content-free preparation event is audited;
+        it does not prove the client saved a file. No inference model is invoked.
+      parameters:
+        - {name: id, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
+        - {name: format, in: query, required: true, schema: {type: string, enum: [json, csv, markdown]}}
+      responses:
+        '200':
+          description: Verified export artifact; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [analysis_id, format, content, sha256]
+                properties:
+                  analysis_id: {type: string}
+                  format: {type: string, enum: [json, csv, markdown]}
+                  content: {type: string, description: Complete UTF-8 artifact, at most 8 MiB}
+                  sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        '400': {description: Invalid ID or format}
+        '404': {description: Job or current source access unavailable}
+        '409': {description: Comparison traversal has not finished}
+        '429': {description: Export concurrency or artifact size limit}
+        '503': {description: Export could not be prepared}
+  /v1/document-analyses/synthesis/export:
+    get:
+      operationId: exportDocumentSynthesis
+      tags: [Knowledge]
+      summary: Export draft summary or requirements candidates for review
+      description: >-
+        Requires current access to all pinned sources and ownership of the job.
+        Returns an all-or-nothing UTF-8 artifact, limited to 8 MiB, with its SHA-256.
+        JSON is an ordered array of typed records; CSV includes explicit evidence
+        columns and exact metadata JSON; Markdown uses inert fenced source text.
+        All source units, candidates, conditions, exceptions and gaps are
+        retained. Exact citations do not certify model claims. Human review decisions
+        and attribution are included separately from model verification. CSV formula-like
+        display cells are apostrophe-prefixed; metadata_json retains exact text.
+        Exported copies have separate retention and cannot be recalled by source
+        deletion or access revocation. A content-free preparation event is audited;
+        it does not prove the client saved a file. No inference model is invoked.
+      parameters:
+        - {name: id, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
+        - {name: format, in: query, required: true, schema: {type: string, enum: [json, csv, markdown]}}
+      responses:
+        '200':
+          description: Verified export artifact; Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [analysis_id, format, content, sha256]
+                properties:
+                  analysis_id: {type: string}
+                  format: {type: string, enum: [json, csv, markdown]}
+                  content: {type: string, description: Complete UTF-8 artifact, at most 8 MiB}
+                  sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        '400': {description: Invalid ID or format}
+        '404': {description: Job or current source access unavailable}
+        '409': {description: Candidate traversal has not finished}
+        '429': {description: Export concurrency or artifact size limit}
+        '503': {description: Export could not be prepared}
+  /v1/document-analyses/synthesis/review:
+    get:
+      operationId: getDocumentSynthesisReview
+      tags: [Knowledge]
+      summary: Read the latest human review of a pinned draft section
+      parameters:
+        - {name: id, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
+        - {name: batch, in: query, required: true, schema: {type: integer, minimum: 0, maximum: 100000}}
+        - {name: revision, in: query, schema: {type: integer, minimum: 0, maximum: 256, default: 0}, description: Zero selects the latest review; a positive value selects an immutable historical review}
+      responses:
+        '200':
+          description: Current review or revision zero with unreviewed decisions; no-store
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SynthesisReview'}
+        '404': {description: Private analysis or current source access unavailable}
+    post:
+      operationId: saveDocumentSynthesisReview
+      tags: [Knowledge]
+      summary: Append a human review revision without changing model output
+      description: >-
+        Requires the private analysis owner and current access to all sources.
+        Pins batch identity and response digest. expected_revision provides optimistic
+        concurrency; zero is an unreviewed section. Checked sections require a keep
+        or exclude decision for every candidate. Notes are limited to 2048 UTF-8
+        bytes each. At most 256 revisions per section and 8 MiB per job are retained.
+        Records the authenticated author and time. Review does not certify complete
+        extraction or independent semantic accuracy. Read after an uncertain write;
+        do not automatically replay. History follows source retention and holds.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SynthesisReviewRequest'}
+      responses:
+        '200':
+          description: Saved review; no-store
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SynthesisReview'}
+        '400': {description: Invalid decision or pinned identity}
+        '404': {description: Private analysis or source access unavailable}
+        '409': {description: Stale review revision or unfinished traversal}
+        '429': {description: Review storage limit reached}
+  /v1/document-analyses/synthesis/compositions:
+    get:
+      operationId: getDocumentCompositions
+      summary: Read private composition status or paginated history for one analysis
+      parameters:
+        - {name: id, in: query, required: false, schema: {type: string, minLength: 1, maxLength: 128}}
+        - {name: analysis_id, in: query, required: false, schema: {type: string, minLength: 1, maxLength: 128}}
+        - {name: offset, in: query, required: false, schema: {type: integer, minimum: 0}}
+      responses:
+        '200':
+          description: Status when id is supplied, otherwise history for analysis_id; no-store
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - {$ref: '#/components/schemas/DocumentComposition'}
+                  - {$ref: '#/components/schemas/DocumentCompositionHistory'}
+        '404': {description: Private analysis or current source access unavailable}
+    post:
+      operationId: createDocumentComposition
+      summary: Compose a summary from pinned section drafts and human review revisions
+      description: >-
+        Summary analyses only. Explicit installed local model and language. No tools,
+        remote services or downloads. Current source access is checked before preparation
+        and at every checkpoint. Excluded candidates are never model inputs. Durable
+        bounded merges preserve original-source links and omitted-input gaps. New prose
+        requires semantic review; input review decisions do not approve it. An owner-scoped
+        request_key is idempotent. After an uncertain write inspect history before retrying.
+        Changed reviews stop further merges; completed historical reports remain readable
+        with reviews_current false. Source deletion and legal holds cover derived reports.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DocumentCompositionRequest'}
+      responses:
+        '202':
+          description: Authenticated bounded response; no-store
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DocumentComposition'}
+        '400': {description: Invalid input}
+        '404': {description: Private analysis or current source access unavailable}
+        '409': {description: Unfinished traversal, changed reviews or stale state}
+        '429': {description: Capacity limit}
+  /v1/document-analyses/synthesis/compositions/export:
+    get:
+      operationId: exportDocumentComposition
+      summary: Export a bounded draft summary with original candidates, review snapshots and gaps
+      parameters:
+        - {name: id, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
+        - {name: format, in: query, required: true, schema: {type: string, enum: [json, csv, markdown]}}
+      responses:
+        '200':
+          description: At most 8 MiB of content with SHA-256; source access rechecked; export audit recorded
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DocumentAnalysisExport'}
+        '404': {description: Private analysis or current source access unavailable}
+        '409': {description: Composition not finished}
+        '429': {description: Export size or concurrency limit}
+  /v1/document-analyses/synthesis/compositions/report:
+    get:
+      operationId: getDocumentCompositionReport
+      summary: Read a bounded draft report with coverage gaps
+      parameters:
+        - {name: id, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
+      responses:
+        '200':
+          description: Authenticated bounded response; no-store
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DocumentCompositionReport'}
+        '400': {description: Invalid input}
+        '404': {description: Private analysis or current source access unavailable}
+        '409': {description: Unfinished traversal, changed reviews or stale state}
+        '429': {description: Capacity limit}
+  /v1/document-analyses/synthesis/compositions/evidence:
+    get:
+      operationId: getDocumentCompositionEvidence
+      summary: Read up to eight original-source candidates for a composed section
+      parameters:
+        - {name: id, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
+        - {name: section, in: query, required: true, schema: {type: integer, minimum: 0}}
+        - {name: offset, in: query, required: false, schema: {type: integer, minimum: 0}}
+      responses:
+        '200':
+          description: Authenticated bounded response; no-store
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DocumentCompositionEvidence'}
+        '400': {description: Invalid input}
+        '404': {description: Private analysis or current source access unavailable}
+        '409': {description: Unfinished traversal, changed reviews or stale state}
+        '429': {description: Capacity limit}
+  /v1/document-analyses/synthesis/compositions/cancel:
+    post:
+      operationId: cancelDocumentComposition
+      summary: Cancel private work, including after source revocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DocumentAnalysisControl'}
+      responses:
+        '200':
+          description: Authenticated bounded response; no-store
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DocumentAnalysisAccepted'}
+        '400': {description: Invalid input}
+        '404': {description: Private analysis or current source access unavailable}
+        '409': {description: Unfinished traversal, changed reviews or stale state}
+        '429': {description: Capacity limit}
+  /v1/document-analyses/synthesis/compositions/retry:
+    post:
+      operationId: retryDocumentComposition
+      summary: Resume the first uncommitted merge with the same pinned model and reviews
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DocumentAnalysisControl'}
+      responses:
+        '200':
+          description: Authenticated bounded response; no-store
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DocumentAnalysisAccepted'}
+        '400': {description: Invalid input}
+        '404': {description: Private analysis or current source access unavailable}
+        '409': {description: Unfinished traversal, changed reviews or stale state}
+        '429': {description: Capacity limit}
+  /v1/document-analyses/cancel:
+    post:
+      operationId: cancelDocumentAnalysis
+      description: Stops the owner's job without deleting committed evidence. An owner may cancel after losing source access; no source details are returned. Repeated cancellation is harmless.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DocumentAnalysisControl' }
+      responses:
+        '200':
+          description: Cancellation accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentAnalysisAccepted' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/document-analyses/retry:
+    post:
+      operationId: retryDocumentAnalysis
+      description: Resumes queued, interrupted, failed or cancelled work after its last committed unit checkpoint. Current access to every source is required. Never replays completed jobs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DocumentAnalysisControl' }
+      responses:
+        '200':
+          description: Resume accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentAnalysisAccepted' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/documents/structure:
+    get:
+      operationId: getDocumentStructure
+      description: Read a verified immutable extraction under current collection access. Pin revision while paginating. Text and metadata are bounded and omissions explicit. Does not run extraction or download dependencies.
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string, maxLength: 256 } }
+        - { name: revision, in: query, schema: { type: string, maxLength: 128 } }
+        - { name: unit, in: query, schema: { type: string, maxLength: 128 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 200000, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+        - { name: relationship_offset, in: query, schema: { type: integer, minimum: 0, maximum: 400000, default: 0 } }
+        - { name: navigation_offset, in: query, schema: { type: integer, minimum: 0, maximum: 200000, default: 0 } }
+      responses:
+        '200':
+          description: Revision-pinned block page; relationship pagination refers to links touching this block page.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentStructurePage' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/documents/corrections:
+    post:
+      operationId: correctDocumentExtraction
+      description: Requires Knowledge management and collection write access. Publishes an attributed child revision and replacement index atomically. Original bytes and older citations remain unchanged. Reuses embeddings only for identical text under the configured index identity. Author comes from authentication. Do not retry automatically after an unknown outcome; inspect the active revision first.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [document_id, expected_revision, edits]
+              properties:
+                document_id: { type: string, minLength: 1, maxLength: 256 }
+                expected_revision: { type: string, minLength: 1, maxLength: 128 }
+                edits:
+                  type: array
+                  minItems: 1
+                  maxItems: 256
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [block_id, expected_text_sha256, text]
+                    properties:
+                      block_id: { type: string }
+                      expected_text_sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+                      text: { type: string, description: Complete replacement for a leaf block. Parent edits cannot remove linked evidence. Request body is limited to 2 MiB. }
+      responses:
+        '200':
+          description: New extraction and index published
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, document]
+                properties:
+                  success: { type: boolean }
+                  document: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
   /v1/documents/source:
     get:
       operationId: getDocumentSource
@@ -1596,7 +2149,8 @@ paths:
         - { name: id, in: query, required: true, schema: { type: string } }
         - { name: format, in: query, schema: { type: string, enum: [text, original, preview], default: text } }
         - { name: sha256, in: query, schema: { type: string }, description: Expected original digest for preview requests. }
-        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000 }, description: PDF page for format=preview; omit for structured source units. }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000 }, description: PDF page or PNG/JPEG image (page 1) for format=preview; omit for source units. }
+        - { name: thumbnail, in: query, schema: { type: boolean }, description: With page and format=preview, return a bounded 192 by 256 pixel PNG preview with source identity. Never runs OCR. }
         - { name: start_byte, in: query, description: UTF-8 byte offset of a saved citation. Supply all five citation fields together; text format only., schema: { type: integer, minimum: 0 } }
         - { name: end_byte, in: query, description: Exclusive UTF-8 byte offset. Passage size is at most 800000 bytes., schema: { type: integer, minimum: 1 } }
         - { name: source_sha256, in: query, schema: { type: string, pattern: '^[a-f0-9]{64}$' } }
@@ -1648,6 +2202,222 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Error' }
         '422': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/document-analyses/synthesis:
+    get:
+      operationId: getDocumentSynthesis
+      description: Read an owner-private candidate analysis, or history without id. Current source membership is checked; completed traversal remains awaiting_review, not an approved answer.
+      parameters:
+        - { name: id, in: query, schema: { type: string, maxLength: 128 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 256 } }
+      responses:
+        '200':
+          description: Candidate job or authorized history
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/DocumentSynthesis' }
+                  - { $ref: '#/components/schemas/DocumentSynthesisHistory' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createDocumentSynthesis
+      description: Explicit local-model candidate summary or requirements traversal. Requires Chat and Knowledge permissions. No downloads or tools; immutable model/runtime identity, current source access, exact prompt counting and durable batch receipts. Semantic support and full-document qualification are separate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [request_key, workflow, sources, model, language]
+              properties:
+                request_key: { type: string, minLength: 1, maxLength: 128 }
+                workflow: { type: string, enum: [summary, requirements] }
+                sources: { type: array, minItems: 1, maxItems: 16, items: { $ref: '#/components/schemas/AnalysisSourceRef' } }
+                model: { type: string, minLength: 1, maxLength: 256 }
+                language: { type: string, pattern: '^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$' }
+      responses:
+        '202':
+          description: Accepted candidate traversal
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentSynthesis' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/document-analyses/synthesis/results:
+    get:
+      operationId: getDocumentSynthesisResults
+      description: At most two validated batch receipts. Raw model responses are private and never returned. Source quote identity is checked, not semantic entailment.
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 100000 } }
+      responses:
+        '200':
+          description: Candidate sections with exact source quotes and disclosed gaps
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentSynthesisResults' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /v1/document-analyses/synthesis/retry:
+    post:
+      operationId: retryDocumentSynthesis
+      description: Explicitly resume from the last committed batch with the original model identity. Cancel uses the existing document-analyses/cancel endpoint. No automatic inference replay.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [id]
+              properties: { id: { type: string, minLength: 1, maxLength: 128 } }
+      responses:
+        '200':
+          description: Accepted
+          content:
+            application/json:
+              schema: { type: object, required: [accepted], properties: { accepted: { type: boolean, const: true } } }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /v1/collections:
+    get:
+      operationId: getCollections
+      description: List readable collections, read one policy, or page its owner-only audit. Global administrative permission does not grant private membership.
+      parameters:
+        - { name: id, in: query, schema: { type: string } }
+        - { name: view, in: query, schema: { type: string, enum: [audit] } }
+        - { name: after, in: query, schema: { type: integer, format: int64, minimum: 0 } }
+      responses:
+        '200':
+          description: Current authorized policies or at most 100 audit events after the given sequence
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/KnowledgeCollection' }
+                  - type: object
+                    required: [collections]
+                    properties:
+                      collections: { type: array, maxItems: 1024, items: { $ref: '#/components/schemas/KnowledgeCollection' } }
+                  - type: object
+                    required: [events]
+                    properties:
+                      events: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/CollectionAuditEvent' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+    post:
+      operationId: createCollection
+      description: Create a private collection owned by the authenticated actor. Sharing is a separate revision-checked update.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties: { name: { type: string, minLength: 1, maxLength: 256 } }
+      responses:
+        '201':
+          description: Private collection created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KnowledgeCollection' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+    put:
+      operationId: updateCollection
+      description: Owner-only replacement of name and membership. Both member lists must be explicit; stale revisions never retry automatically. The legacy workspace collection is immutable.
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CollectionUpdate' }
+      responses:
+        '200':
+          description: Updated policy, committed atomically with its audit entry
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KnowledgeCollection' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/collections/imports:
+    post:
+      operationId: acceptCollectionImport
+      description: Accept an original into an explicitly reviewed collection. This distinct route prevents older services silently importing into the shared workspace. Never fall back to the legacy import route. Retry processing through the returned durable import identity.
+      parameters:
+        - { name: ocr_language, in: query, schema: { type: string }, description: 'Ordered pinned pack IDs joined by +, up to three; encode + as %2B in URLs. Single selection requires document-ocr-language-selection-v1; mixed selection requires document-ocr-mixed-languages-v1.' }
+        - { name: collection_id, in: query, required: true, schema: { type: string } }
+        - { name: collection_revision, in: query, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: Idempotency-Key, in: header, schema: { type: string, maxLength: 128 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DocumentAttachmentImport' }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties: { file: { type: string, format: binary } }
+      responses:
+        '202':
+          description: Original retained under the reviewed audience; extraction has not started
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentImport' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /v1/documents/collection:
+    get:
+      operationId: getDocumentCollection
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Current binding and audience policy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentCollection' }
+        '404': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+    put:
+      operationId: moveDocumentCollection
+      description: Move a document using the reviewed binding and both audience revisions. A private source requires its collection owner; the destination requires write access. No source bytes or extraction revisions change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CollectionMove' }
+      responses:
+        '200':
+          description: Confirmed document binding
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentCollection' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
   /v1/documents:
     get:
@@ -2128,6 +2898,33 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentProfile' }
+    delete:
+      operationId: deleteAgentProfile
+      description: Atomically delete an owned profile, its revisions, deletable standalone work and private profile memory after reviewing the current snapshot. Active work, canonical conversation work, schedules and dependent profiles or jobs block deletion. Shared files and backups remain separate retention domains.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_revision, review_token]
+              properties:
+                expected_revision: { type: integer, minimum: 1 }
+                review_token: { type: string, pattern: '^[a-f0-9]{64}$' }
+      responses:
+        '200':
+          description: Deletion committed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, deleted]
+                properties:
+                  id: { type: string }
+                  deleted: { type: boolean, const: true }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
     put:
       operationId: updateAgentProfile
       requestBody:
@@ -2171,6 +2968,18 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentProfileValidation' }
+  /api/v2/agent-profiles/{id}/deletion:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: reviewAgentProfileDeletion
+      responses:
+        '200':
+          description: Owner-scoped deletion counts and optimistic review token; no mutation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentProfileDeletionReview' }
+        '404': { $ref: '#/components/responses/Error' }
   /api/v2/agent-profiles/{id}/effective:
     parameters:
       - { in: path, name: id, required: true, schema: { type: string } }
@@ -2818,646 +3627,6 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
   schemas:
-    InferenceAdmissionStatus:
-      type: object
-      required: [policy, admitted, capacity, foreground_queued, background_queued, queue_capacity]
-      properties:
-        policy: { type: string }
-        admitted: { type: integer, minimum: 0, description: Requests admitted before acquiring provider-family and runtime resources; not a count of active generations. }
-        capacity: { type: integer, minimum: 1 }
-        foreground_queued: { type: integer, minimum: 0 }
-        background_queued: { type: integer, minimum: 0 }
-        queue_capacity: { type: integer, minimum: 1 }
-    WorkControlCommand:
-      type: object
-      additionalProperties: false
-      required: [request_id, target_id, expected_revision, kind, payload]
-      properties:
-        request_id: { type: string, minLength: 1, maxLength: 128 }
-        target_id: { type: string }
-        expected_revision: { type: integer, format: int64, minimum: 1 }
-        kind: { type: string, enum: [stop, pause, correct, continue] }
-        payload:
-          type: object
-          additionalProperties: false
-          properties:
-            instruction: { type: string, minLength: 1, maxLength: 16000, description: Required only for correct. No budget is replenished. }
-    ConversationPreferences:
-      type: object
-      additionalProperties: false
-      properties:
-        model: { type: string, maxLength: 256 }
-        profile_id: { type: string }
-        profile_revision: { type: integer, minimum: 1 }
-        restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
-        delegation: { type: boolean }
-    CanonicalConversation:
-      type: object
-      required: [id, revision, project_id, title, preferences, created_at, configuration_known]
-      properties:
-        pending_question: { $ref: '#/components/schemas/ConversationQuestion' }
-        context_revision: { type: integer, format: int64, minimum: 0, description: Version of explicit project/folder selection. Ordinary messages do not advance it; late access approval preserves a newer selection. }
-        configuration_known: { type: boolean, description: False when migrated browser-only configuration has no persisted evidence. }
-        id: { type: string }
-        revision: { type: integer, format: int64, minimum: 1 }
-        project_id: { type: string }
-        title: { type: string }
-        preferences: { $ref: '#/components/schemas/ConversationPreferences' }
-        focused_work_id: { type: string }
-        created_at: { type: string, format: date-time }
-    ConversationQuestion:
-      type: object
-      description: Read-only projection of the focused work's pending primary clarification. Observation never answers or resumes work.
-      required: [id, work_id, run_id, content]
-      properties:
-        id: { type: string }
-        work_id: { type: string }
-        run_id: { type: string }
-        content: { type: string }
-    CanonicalConversationPage:
-      type: object
-      required: [items, has_more]
-      properties:
-        items: { type: array, items: { $ref: '#/components/schemas/CanonicalConversation' } }
-        next_cursor: { type: string }
-        has_more: { type: boolean }
-    ConversationProject:
-      type: object
-      required: [id, revision, name, default, preferences]
-      properties:
-        id: { type: string }
-        revision: { type: integer, format: int64, minimum: 1 }
-        name: { type: string }
-        default: { type: boolean }
-        preferences: { $ref: '#/components/schemas/ConversationPreferences' }
-        resources: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/ProjectResourceReference' } }
-        configuration_digest: { type: string, description: SHA-256 of the accepted project TOML bytes. Absent after an explicit service preference edit. }
-        folder_identity: { type: string, description: Opaque host/folder identity. Project membership grants no access. }
-        configuration_source: { type: string, enum: [file, service], description: Explicit service edits survive later folder refreshes. }
-    ProjectResourceReference:
-      type: object
-      additionalProperties: false
-      required: [kind, id]
-      properties:
-        kind: { type: string, enum: [skill, knowledge, connection, instructions] }
-        id: { type: string, maxLength: 512 }
-        revision: { type: string, maxLength: 128, description: Skill revision number, Knowledge content hash, or connection tool schema revision. Omit to resolve and pin at admission. }
-        required: { type: boolean }
-    ResourceResolution:
-      type: object
-      required: [kind, id, selected, reason]
-      properties:
-        kind: { type: string }
-        id: { type: string }
-        revision: { type: string }
-        required: { type: boolean }
-        selected: { type: boolean }
-        reason: { type: string }
-    ProjectCommand:
-      type: object
-      additionalProperties: false
-      required: [request_id, target_id, expected_revision, kind, payload]
-      properties:
-        request_id: { type: string, minLength: 1, maxLength: 128 }
-        target_id: { type: string, description: Empty only for create_project. }
-        expected_revision: { type: integer, minimum: 0, format: int64 }
-        kind: { type: string, enum: [create_project, configure_project] }
-        payload:
-          type: object
-          additionalProperties: false
-          required: [name]
-          properties:
-            name: { type: string, minLength: 1, maxLength: 256 }
-            configuration_toml: { type: string, description: Version 1 UTF-8 project configuration, at most 64 KiB. Cannot be mixed with explicit preferences or resources. Unknown keys, authority, credentials and executable hooks are rejected. }
-            preferences: { $ref: '#/components/schemas/ProjectPreferences' }
-            resources: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/ProjectResourceReference' } }
-    UserDefaultValues:
-      type: object
-      additionalProperties: false
-      properties:
-        model: { type: string, maxLength: 256 }
-        delegation: { type: boolean }
-    UserPreferences:
-      type: object
-      required: [id, revision, preferences]
-      properties:
-        id: { type: string, const: user-defaults }
-        revision: { type: integer, format: int64, minimum: 0 }
-        preferences: { $ref: '#/components/schemas/UserDefaultValues' }
-    UserPreferencesCommand:
-      type: object
-      additionalProperties: false
-      required: [request_id, target_id, expected_revision, kind, payload]
-      properties:
-        request_id: { type: string, minLength: 1, maxLength: 128 }
-        target_id: { type: string, const: user-defaults }
-        expected_revision: { type: integer, format: int64, minimum: 0 }
-        kind: { type: string, const: configure_user_preferences }
-        payload: { $ref: '#/components/schemas/UserDefaultValues' }
-    ProjectPreferences:
-      type: object
-      additionalProperties: false
-      properties:
-        model: { type: string, maxLength: 256 }
-        delegation: { type: boolean }
-        restrictions: { type: object, additionalProperties: false, description: Empty compatibility field only. Project preferences cannot grant or widen authority. }
-    ConversationWorkItem:
-      type: object
-      required: [id, revision, project_id, project_revision, objective, acceptance, run_id, status, instruction_version, control_epoch, independently_verified]
-      properties:
-        id: { type: string }
-        revision: { type: integer, format: int64, minimum: 1 }
-        project_id: { type: string }
-        project_revision: { type: integer, format: int64 }
-        objective: { type: string }
-        acceptance: { type: array, items: { type: string } }
-        run_id: { type: string }
-        run_ids: { type: array, items: { type: string }, description: Ordered retained execution attempts. run_id identifies the current attempt; prior outcomes are not rewritten. }
-        status: { type: string }
-        instruction_version: { type: integer, minimum: 1 }
-        control_epoch: { type: integer, minimum: 0 }
-        result_reference: { type: string }
-        independently_verified: { type: boolean, description: Completion does not imply independent verification. }
-        worker_policy: { $ref: '#/components/schemas/WorkerPolicy' }
-    WorkerPolicy:
-      type: object
-      description: Service-owned resource policy pinned at work admission; never an authority grant. Absent on older work, which retains version 1 defaults.
-      required: [version, max_sessions, max_active, max_depth, initial_model_calls]
-      properties:
-        version: { type: integer, enum: [1] }
-        max_sessions: { type: integer, minimum: 1, maximum: 32 }
-        max_active: { type: integer, minimum: 1, maximum: 8 }
-        max_depth: { type: integer, enum: [1] }
-        initial_model_calls: { type: integer, minimum: 1, maximum: 50 }
-    ConversationCommand:
-      type: object
-      additionalProperties: false
-      required: [request_id, target_id, expected_revision, kind, payload]
-      properties:
-        request_id: { type: string, minLength: 1, maxLength: 128 }
-        target_id: { type: string, description: Empty only when creating or importing a conversation. }
-        expected_revision: { type: integer, format: int64, minimum: 0 }
-        kind: { type: string, enum: [create_conversation, import_conversation, configure_conversation, rename_conversation, select_project, use_project_folder, clear_project_folder, link_work, focus_work, create_work] }
-        payload:
-          type: object
-          additionalProperties: false
-          properties:
-            title: { type: string, maxLength: 256 }
-            legacy_name: { type: string, maxLength: 256, description: Required only for import_conversation with empty target and revision zero. Imports an owned inactive legacy session transactionally and retains its original files. }
-            work_id: { type: string, maxLength: 128, description: link_work attaches owned accessible work and focuses it. focus_work requires an existing link; omit work_id to clear focus. Neither command dispatches or copies grants. }
-            project_id: { type: string }
-            folder: { $ref: '#/components/schemas/ExecutionReference', description: Required only for use_project_folder. Resolves a live approved host and imports safe fixed-path project metadata. Does not create authority or rewrite existing work. }
-            preferences: { $ref: '#/components/schemas/ConversationPreferences' }
-            input:
-              type: object
-              additionalProperties: false
-              required: [content]
-              properties:
-                content: { type: string, minLength: 1, maxLength: 32000 }
-                model: { type: string, maxLength: 256 }
-                acceptance: { type: array, maxItems: 32, items: { type: string, minLength: 1, maxLength: 4096 } }
-    ConversationCommandReceipt:
-      type: object
-      required: [request_id, target_id, revision, event_cursor]
-      properties:
-        input: { $ref: '#/components/schemas/ConversationInboxEntry' }
-        user_preferences: { $ref: '#/components/schemas/UserPreferences' }
-        request_id: { type: string }
-        target_id: { type: string }
-        revision: { type: integer, format: int64 }
-        event_cursor: { type: integer, format: int64 }
-        conversation: { $ref: '#/components/schemas/CanonicalConversation' }
-        work: { $ref: '#/components/schemas/ConversationWorkItem' }
-        project: { $ref: '#/components/schemas/ConversationProject' }
-        worker: { $ref: '#/components/schemas/WorkerSession' }
-        message: { $ref: '#/components/schemas/WorkerMessage' }
-        import: { $ref: '#/components/schemas/ConversationImportManifest' }
-    ConversationInboxInput:
-      type: object
-      additionalProperties: false
-      required: [content]
-      properties:
-        question_id: { type: string, description: Required for answer intent. Exact saved primary clarification identity; never authorizes host access. Omit for other intents. }
-        content: { type: string, minLength: 1, maxLength: 32000 }
-        model: { type: string, maxLength: 256 }
-        intent: { type: string, enum: [message, correction, new_work, answer] }
-        focused_work_id: { type: string, description: Omitted uses current focus. Empty string selects unbound conversation input. }
-        origin: { type: string, enum: [typed, dictation, steering] }
-    ConversationInputCommand:
-      type: object
-      additionalProperties: false
-      description: Preview text-input envelope. Acceptance is independent of inference readiness. Answer intent binds an exact primary clarification and records its mailbox/history/continuation transaction without another model turn. Host approvals retain their existing access controls.
-      required: [request_id, target_id, expected_revision, kind, payload]
-      properties:
-        request_id: { type: string, minLength: 1, maxLength: 128 }
-        target_id: { type: string }
-        expected_revision: { type: integer, format: int64, minimum: 1 }
-        kind: { type: string, const: submit_input }
-        payload: { $ref: '#/components/schemas/ConversationInboxInput' }
-    ConversationInputControlCommand:
-      type: object
-      additionalProperties: false
-      required: [request_id, target_id, expected_revision, kind, payload]
-      properties:
-        request_id: { type: string, minLength: 1, maxLength: 128 }
-        target_id: { type: string, description: Input identity. }
-        expected_revision: { type: integer, format: int64, minimum: 1, description: Current containing-conversation revision. }
-        kind: { type: string, enum: [stop, continue, revalidate] }
-        payload:
-          type: object
-          additionalProperties: false
-          properties:
-            instruction_version: { type: integer, minimum: 0, description: Required and positive for revalidate; must match the current focused work instruction version. Otherwise omit or use zero. }
-    ConversationInboxEntry:
-      type: object
-      required: [id, sequence, conversation_id, conversation_revision, request_id, input, state, accepted_at]
-      properties:
-        question: { $ref: '#/components/schemas/ConversationQuestion' }
-        context_unavailable: { type: boolean, description: Derived decision and result references withheld because actor or source access changed. Original user input and control state remain inspectable. }
-        stopped_at: { type: string, format: date-time }
-        hold_released_at: { type: string, format: date-time }
-        revalidated_at: { type: string, format: date-time }
-        revalidated_instruction_version: { type: integer, minimum: 1 }
-        decision:
-          $ref: '#/components/schemas/ConversationDecision'
-        decision_issue:
-          $ref: '#/components/schemas/ConversationDecisionIssue'
-        delivery_issue:
-          type: object
-          required: [code, message, retry_at]
-          properties:
-            code: { type: string }
-            message: { type: string }
-            retry_at: { type: string, format: date-time }
-        id: { type: string }
-        sequence: { type: integer, format: int64 }
-        conversation_id: { type: string }
-        conversation_revision: { type: integer, format: int64 }
-        request_id: { type: string }
-        work_id: { type: string }
-        instruction_version: { type: integer, minimum: 0 }
-        input: { $ref: '#/components/schemas/ConversationInboxInput' }
-        created_work_id: { type: string, description: Work admitted from this input. The original work_id still identifies the input's previous focus. }
-        state: { type: string }
-        run_id: { type: string }
-        accepted_at: { type: string, format: date-time }
-        delivered_at: { type: string, format: date-time }
-        settled_at: { type: string, format: date-time }
-        run_status: { type: string }
-        result_reference: { type: string }
-        incorporation: { type: string, enum: [answered, correction, new_work, worker_answer] }
-        applied_at: { type: string, format: date-time }
-        applied_instruction_version: { type: integer, minimum: 0 }
-    ConversationDecision:
-      type: object
-      additionalProperties: false
-      description: Durable foreground proposal. Only applied_at and applied_instruction_version confirm incorporation; a reply or recorded proposal alone does not.
-      required: [kind, instruction_version]
-      properties:
-        kind: { type: string, enum: [answered, correction, new_work] }
-        instruction_version: { type: integer, minimum: 0, description: Current work instruction version for a correction; otherwise zero. }
-        expected_result: { type: string, maxLength: 4096, description: Required only for new_work. A proposed acceptance condition; the objective remains the exact accepted user input. }
-    ConversationDecisionIssue:
-      type: object
-      required: [code, message, retry_at]
-      properties:
-        code: { type: string }
-        message: { type: string }
-        retry_at: { type: string, format: date-time }
-    ConversationInboxPage:
-      type: object
-      required: [items, next_cursor, has_more]
-      properties:
-        items: { type: array, items: { $ref: '#/components/schemas/ConversationInboxEntry' } }
-        next_cursor: { type: integer, format: int64 }
-        has_more: { type: boolean }
-    ConversationImportManifest:
-      type: object
-      required: [version, legacy_name, conversation_id, source_sha256, authority, configuration_known, legacy_run_ids, imported_at]
-      properties:
-        version: { type: integer, const: 1 }
-        legacy_name: { type: string }
-        conversation_id: { type: string }
-        source_sha256: { type: string }
-        authority: { type: string, const: agent_control_store }
-        configuration_known: { type: boolean }
-        legacy_run_ids: { type: [array, 'null'], items: { type: string } }
-        imported_at: { type: string, format: date-time }
-    WorkerSession:
-      type: object
-      required: [id, revision, work_id, root_run_id, current_run_id, run_ids, assignment, assignment_version, status, stopped, closed]
-      properties:
-        question: { $ref: '#/components/schemas/WorkerQuestion' }
-        id: { type: string }
-        revision: { type: integer, format: int64 }
-        work_id: { type: string }
-        root_run_id: { type: string }
-        current_run_id: { type: string }
-        run_ids: { type: array, items: { type: string } }
-        assignment_version: { type: integer, minimum: 1 }
-        assignment:
-          type: object
-          required: [goal, expected_result, tools, depends_on, instruction_version, model_calls]
-          properties:
-            goal: { type: string }
-            expected_result: { type: string }
-            mode: { type: string, enum: [research, edit, test], description: Assignment execution mode. Older stored assignments may omit it. }
-            reason: { type: string, maxLength: 2048, description: Recorded delegation rationale when supplied; absent for legacy assignments. }
-            tools: { type: [array, 'null'], items: { type: string } }
-            depends_on: { type: [array, 'null'], items: { type: string } }
-            instruction_version: { type: integer }
-            model_calls: { type: integer }
-            profile_id: { type: string }
-        status: { type: string }
-        stopped: { type: boolean }
-        closed: { type: boolean }
-        result_reference: { type: string }
-    WorkerCommand:
-      type: object
-      additionalProperties: false
-      required: [request_id, target_id, expected_revision, kind, payload]
-      properties:
-        request_id: { type: string, minLength: 1, maxLength: 128 }
-        target_id: { type: string }
-        expected_revision: { type: integer, format: int64, minimum: 1 }
-        kind: { type: string, enum: [message, stop, close, continue, answer] }
-        payload:
-          type: object
-          additionalProperties: false
-          properties:
-            content: { type: string, minLength: 1, maxLength: 16000, description: Required for message, continue and answer. }
-            question_id: { type: string, description: Required only for answer; identifies the exact pending question. }
-    WorkerQuestion:
-      type: object
-      required: [id, worker_id, run_id, content, instruction_version, assignment_version, state, requested_at]
-      properties:
-        id: { type: string }
-        worker_id: { type: string }
-        run_id: { type: string }
-        content: { type: string }
-        instruction_version: { type: integer, minimum: 1 }
-        assignment_version: { type: integer, minimum: 1 }
-        state: { type: string, enum: [pending, answered] }
-        requested_at: { type: string, format: date-time }
-        answer_message_id: { type: string, description: Accepted answer's mailbox identity; consult its state for delivery and application. }
-    WorkerMessage:
-      type: object
-      required: [id, worker_id, run_id, content, state, instruction_version, accepted_at]
-      properties:
-        question_id: { type: string }
-        id: { type: string }
-        worker_id: { type: string }
-        run_id: { type: string }
-        content: { type: string }
-        state: { type: string, enum: [accepted, delivered, applied, abandoned] }
-        instruction_version: { type: integer }
-        accepted_at: { type: string, format: date-time }
-        delivered_at: { type: string, format: date-time }
-        applied_at: { type: string, format: date-time }
-        abandoned_at: { type: string, format: date-time }
-        resolution_reason: { type: string }
-    WorkerMessagePage:
-      type: object
-      required: [items, next_cursor, has_more]
-      properties:
-        items: { type: array, items: { $ref: '#/components/schemas/WorkerMessage' } }
-        next_cursor: { type: integer, format: int64 }
-        has_more: { type: boolean }
-    WorkChange:
-      type: object
-      required: [id, work_id, run_id, worker_run_id, kind, state, instruction_version, control_epoch, current, operation_count, validation_state, validation_count, integrated_count, available]
-      properties:
-        id: { type: string }
-        work_id: { type: string }
-        run_id: { type: string }
-        worker_run_id: { type: string }
-        kind: { type: string, enum: [proposal, candidate] }
-        state: { type: string }
-        instruction_version: { type: integer, format: int64 }
-        control_epoch: { type: integer, format: int64 }
-        current: { type: boolean }
-        operation_count: { type: integer }
-        validation_state: { type: string }
-        validation_count: { type: integer }
-        integration_id: { type: string }
-        integrated_count: { type: integer }
-        available: { type: boolean }
-        limitation: { type: string }
-    ConversationResultPage:
-      type: object
-      required: [id, run_id, instruction_version, control_epoch, status, independently_verified, evidence_steps, content, offset, next_offset, total_bytes, complete]
-      properties:
-        id: { type: string }
-        run_id: { type: string }
-        work_id: { type: string }
-        worker_id: { type: string }
-        conversation_id: { type: string }
-        instruction_version: { type: integer, minimum: 0 }
-        control_epoch: { type: integer, minimum: 0 }
-        status: { type: string }
-        independently_verified: { type: boolean }
-        evidence_steps: { type: array, items: { type: integer } }
-        content: { type: string }
-        offset: { type: integer, minimum: 0 }
-        next_offset: { type: integer, minimum: 0 }
-        total_bytes: { type: integer, minimum: 0 }
-        complete: { type: boolean }
-    WorkChangeList:
-      type: object
-      required: [items, next_cursor, has_more]
-      properties:
-        items: { type: array, items: { $ref: '#/components/schemas/WorkChange' } }
-        next_cursor: { type: string }
-        has_more: { type: boolean }
-    WorkFileVersion:
-      type: object
-      required: [kind, bytes, mode]
-      properties:
-        kind: { type: string }
-        bytes: { type: integer, format: int64 }
-        mode: { type: integer }
-        sha256: { type: string }
-    WorkFileChange:
-      type: object
-      required: [path, kind]
-      properties:
-        path: { type: string }
-        kind: { type: string }
-        base: { $ref: '#/components/schemas/WorkFileVersion' }
-        result: { $ref: '#/components/schemas/WorkFileVersion' }
-    WorkValidationCheck:
-      type: object
-      required: [id, state, request_digest, receipt_digest]
-      properties:
-        id: { type: string }
-        state: { type: string }
-        exit_code: { type: integer }
-        request_digest: { type: string }
-        receipt_digest: { type: string }
-    WorkFileReceipt:
-      type: object
-      required: [ordinal, path, operation, state, dispatched, original_retained]
-      properties:
-        ordinal: { type: integer }
-        path: { type: string }
-        operation: { type: string }
-        state: { type: string }
-        dispatched: { type: boolean }
-        original_retained: { type: boolean }
-        displaced_digest: { type: string }
-        result_digest: { type: string }
-        error: { type: string }
-    WorkChangeContent:
-      type: object
-      required: [sha256, bytes, offset, data]
-      properties:
-        sha256: { type: string }
-        bytes: { type: integer, format: int64 }
-        offset: { type: integer, format: int64 }
-        data: { type: string, format: byte }
-    WorkRecoveryFile:
-      type: object
-      required: [id, path, role, bytes]
-      description: Observed retained content. Unconfirmed files do not prove a replacement occurred. Reads never restore files or settle uncertain work.
-      properties:
-        id: { type: string }
-        path: { type: string }
-        role: { type: string, enum: [displaced, unconfirmed] }
-        bytes: { type: integer, format: int64 }
-        sha256: { type: string }
-        limitation: { type: string }
-    WorkChangeDetail:
-      type: object
-      required: [change, view]
-      properties:
-        change: { $ref: '#/components/schemas/WorkChange' }
-        view: { type: string, enum: [files, validation, integration, recovery, content, preserved] }
-        files: { type: array, items: { $ref: '#/components/schemas/WorkFileChange' } }
-        checks: { type: array, items: { $ref: '#/components/schemas/WorkValidationCheck' } }
-        receipts: { type: array, items: { $ref: '#/components/schemas/WorkFileReceipt' } }
-        recovery: { type: array, items: { $ref: '#/components/schemas/WorkRecoveryFile' } }
-        content: { $ref: '#/components/schemas/WorkChangeContent' }
-        next_offset: { type: integer, format: int64 }
-        conflict_path: { type: string }
-        error: { type: string }
-    EffectiveConversationPreferences:
-      type: object
-      required: [model, delegation, restrictions, provenance, configuration_known, project_id, project_revision, resources]
-      properties:
-        folder:
-          type: object
-          required: [session, available, reason]
-          description: Observed availability of the saved folder reference. No grant is restored by inspection.
-          properties:
-            session: { type: string }
-            available: { type: boolean }
-            reason: { type: string }
-        user_preferences_revision: { type: integer, format: int64, minimum: 0 }
-        project_id: { type: string }
-        project_revision: { type: integer, format: int64 }
-        resources: { type: array, items: { $ref: '#/components/schemas/ResourceResolution' } }
-        configuration_known: { type: boolean }
-        model: { type: string }
-        delegation: { type: boolean }
-        profile_id: { type: string }
-        profile_revision: { type: integer }
-        restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
-        provenance: { type: object, additionalProperties: { type: string } }
-    ControlEventPage:
-      type: object
-      required: [events, next_cursor, has_more, history_gap]
-      properties:
-        events:
-          type: array
-          items:
-            type: object
-            required: [cursor, target_id, revision, kind, recorded_at, payload]
-            properties:
-              cursor: { type: integer, format: int64 }
-              target_id: { type: string }
-              revision: { type: integer, format: int64 }
-              kind: { type: string }
-              recorded_at: { type: string, format: date-time }
-              payload: { type: object, additionalProperties: true }
-        next_cursor: { type: integer, format: int64 }
-        has_more: { type: boolean }
-        history_gap: { type: boolean }
-        snapshot:
-          oneOf:
-            - { $ref: '#/components/schemas/CanonicalConversation' }
-            - { $ref: '#/components/schemas/ConversationWorkItem' }
-            - { $ref: '#/components/schemas/WorkerSession' }
-    AgentConversationConfiguration:
-      type: object
-      required: [version, profile, model, restrictions]
-      properties:
-        version: { type: integer, enum: [1] }
-        profile:
-          oneOf:
-            - { $ref: '#/components/schemas/AgentProfile' }
-            - { type: 'null' }
-        model: { type: string }
-        restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
-    TaskResourceUsage:
-      type: object
-      description: Run accounting. Root attempts inherit prior root charges; do not sum attempts. Child allocations include pending reservations and retained spent slots. Context preparation is part of the inference allowance, not an additional time charge.
-      required: [model_call_limit, model_calls, child_call_allocations, charged_output_tokens, measured_output_tokens, charged_inference_ns, measured_inference_ns, context_preparations, measured_context_preparation_ns]
-      properties:
-        model_call_limit: { type: integer }
-        model_calls: { type: integer }
-        child_call_allocations: { type: integer }
-        tools:
-          type: object
-          description: Service-observed invocation accounting; does not measure a process after its start invocation returns. Legacy reservations are conservative, not measured historical tool calls.
-          required: [version, calls_per_decision, per_call_ns, reserved_calls, legacy_reserved_calls, charged_ns, measured_ns, unsettled_calls]
-          properties:
-            version: { type: integer }
-            calls_per_decision: { type: integer }
-            per_call_ns: { type: integer, format: int64 }
-            reserved_calls: { type: integer }
-            legacy_reserved_calls: { type: integer }
-            charged_ns: { type: integer, format: int64 }
-            measured_ns: { type: integer, format: int64 }
-            unsettled_calls: { type: integer }
-        processes:
-          type: object
-          description: Owned-process supervised elapsed time, not CPU time. Start reservations remain charged until authenticated terminal timing is received. Missing legacy timing does not mean zero usage. Invocation and process timings overlap and must not be summed as elapsed latency.
-          required: [version, per_decision_ns, starts_per_decision, reserved_starts, legacy_reserved_starts, charged_ns, measured_ns, unsettled_starts]
-          properties:
-            version: { type: integer }
-            per_decision_ns: { type: integer, format: int64 }
-            starts_per_decision: { type: integer }
-            reserved_starts: { type: integer }
-            legacy_reserved_starts: { type: integer }
-            charged_ns: { type: integer, format: int64 }
-            measured_ns: { type: integer, format: int64 }
-            unsettled_starts: { type: integer }
-        storage:
-          type: object
-          description: Root work reservation for private worker copies in logical file bytes, not physical disk allocation or an OS quota. Unknown preparation retains its full reservation; only confirmed artifact release refunds it. Measurements are last observed retained content, not a live disk scan.
-          required: [version, limit_bytes, charged_bytes, retained_copies, measured_bytes, unmeasured_copies]
-          properties:
-            version: { type: integer }
-            limit_bytes: { type: integer, format: int64 }
-            charged_bytes: { type: integer, format: int64 }
-            retained_copies: { type: integer }
-            measured_bytes: { type: integer, format: int64 }
-            unmeasured_copies: { type: integer }
-        input:
-          type: object
-          description: Absent for historical runs without input accounting; absence does not mean zero usage.
-          required: [window, charged_tokens, measured_tokens, unmeasured_calls]
-          properties:
-            window: { type: integer }
-            charged_tokens: { type: integer, format: int64 }
-            measured_tokens: { type: integer, format: int64 }
-            unmeasured_calls: { type: integer }
-        charged_output_tokens: { type: integer, format: int64 }
-        measured_output_tokens: { type: integer, format: int64 }
-        charged_inference_ns: { type: integer, format: int64 }
-        measured_inference_ns: { type: integer, format: int64 }
-        context_preparations: { type: integer }
-        measured_context_preparation_ns: { type: integer, format: int64 }
     InferenceRuntimeReadiness:
       type: object
       description: Native engine preparation only. Ready verifies runtime startup flags, not model inference or workflow quality. Progress is service-local and is not durable across restart.
@@ -3633,6 +3802,16 @@ components:
         inference: { type: object, additionalProperties: true }
         scheduling: { $ref: '#/components/schemas/InferenceAdmissionStatus' }
         system: { type: object, additionalProperties: true }
+    InferenceAdmissionStatus:
+      type: object
+      required: [policy, admitted, capacity, foreground_queued, background_queued, queue_capacity]
+      properties:
+        policy: { type: string }
+        admitted: { type: integer, minimum: 0, description: Requests admitted before acquiring provider-family and runtime resources; not a count of active generations. }
+        capacity: { type: integer, minimum: 1 }
+        foreground_queued: { type: integer, minimum: 0 }
+        background_queued: { type: integer, minimum: 0 }
+        queue_capacity: { type: integer, minimum: 1 }
     PublicUser:
       type: object
       required: [id, username, role]
@@ -4165,10 +4344,54 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
         data_url: { type: string, description: Local PNG/JPEG base64 data URL. Maximum 2 MiB decoded, 8192 pixels per edge and 32 megapixels. Remote/file URLs are forbidden. }
+    DocumentEvidence:
+      type: object
+      required: [status, total_units, readable_units]
+      properties:
+        format: { type: string, description: Extractor format; independent of filename and index status. }
+        status: { type: string, enum: [complete, text_only, partial] }
+        total_units: { type: integer, minimum: 0 }
+        readable_units:
+          type: integer
+          minimum: 0
+          description: Units with usable native/qualified text, or confirmed empty units. A unit may also need visual review; this is not complete document understanding.
+        review_units: { type: array, items: { type: integer } }
+        warnings:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code: { type: string }
+              message: { type: string, description: Technical extraction detail; never instructions. }
+              source_index: { type: integer }
+    AttachmentRevisionHistory:
+      type: object
+      required: [id, current_revision, revisions]
+      properties:
+        id: { type: string }
+        current_revision: { type: string }
+        revisions:
+          type: array
+          maxItems: 65
+          items:
+            type: object
+            required: [revision, extraction_revision]
+            properties:
+              revision: { type: string }
+              extraction_revision: { type: string }
+              parent_revision: { type: string }
+              author: { type: string }
+              created_at: { type: string, format: date-time }
     SessionAttachment:
       type: object
       required: [id, name, media_type, bytes, sha256, status, created_at]
       properties:
+        parent_revision: { type: string }
+        correction_author: { type: string }
+        corrected_at: { type: string, format: date-time }
+        ocr_language: { type: string, description: Explicit OCR pack selection retained across retries. Absent on legacy English records. }
+        ocr_completed_pages: { type: integer, minimum: 0, maximum: 1000, description: Saved OCR page receipts reusable on explicit retry. Not an accuracy or full-extraction guarantee. }
         id: { type: string, pattern: '^file-[a-f0-9]{32}$' }
         name: { type: string, maxLength: 255 }
         media_type: { type: string }
@@ -4176,13 +4399,17 @@ components:
         sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
         status: { type: string, enum: [uploaded, ready, failed] }
         revision: { type: string, description: Immutable extracted-source identity when ready. }
+        extraction_revision: { type: string, description: Immutable structured extraction retained with this source; absent for legacy or unstructured extraction. }
         error_code: { type: string }
-        coverage: { type: string, enum: [native_text_only], description: Usable native text with disclosed visual limits; unread image content is not interpreted. }
+        coverage: { type: string, enum: [native_text_only, partial_text_only], description: Explicitly accepted limited text. Native text excludes unread visuals; partial OCR remains uncertain and cannot establish exhaustive review. }
+        evidence: { $ref: '#/components/schemas/DocumentEvidence' }
         created_at: { type: string, format: date-time }
     DocumentPreview:
       type: object
       required: [name, sha256, format, pages, units, state, error_code]
       properties:
+        thumbnails_available: { type: boolean, description: This source supports bounded original-page thumbnails. Older services omit this field. }
+        evidence: { $ref: '#/components/schemas/DocumentEvidence' }
         name: { type: string }
         sha256: { type: string }
         format: { type: string }
@@ -4202,6 +4429,14 @@ components:
               state: { type: string }
               source_sha256: { type: string }
               extractor_revision: { type: string }
+              image_geometry:
+                type: object
+                description: 'Original encoded pixel grid for verified image documents. Preview pixels use the declared EXIF orientation; absent for unsupported geometry.'
+                required: [width, height, orientation]
+                properties:
+                  width: { type: integer, minimum: 1, maximum: 8192 }
+                  height: { type: integer, minimum: 1, maximum: 8192 }
+                  orientation: { type: integer, minimum: 1, maximum: 8 }
     SessionAttachmentReference:
       type: object
       additionalProperties: false
@@ -4249,6 +4484,8 @@ components:
       description: Exact source revision and UTF-8 extracted-text byte ranges supplied for this answer. Excerpts are not a complete document review.
       required: [id, revision, name, mode, total_bytes, ranges]
       properties:
+        extraction_revision: { type: string, description: Retained structured extraction identity, absent for legacy sources. }
+        linked_evidence: { $ref: '#/components/schemas/AttachmentLinkedEvidence' }
         id: { type: string }
         revision: { type: string }
         name: { type: string }
@@ -4257,10 +4494,43 @@ components:
         ranges:
           type: array
           items: { type: array, minItems: 2, maxItems: 2, items: { type: integer, minimum: 0 } }
+    AttachmentLinkedEvidence:
+      type: object
+      description: Explicit structural dependencies in this saved attachment selection. Complete links do not imply complete extraction, exhaustive review or answer correctness. Absent on legacy sources.
+      required: [extraction_revision, links_complete]
+      properties:
+        extraction_revision: { type: string }
+        links_complete: { type: boolean }
+        required_spans:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            required: [start_byte, end_byte]
+            properties:
+              start_byte: { type: integer, minimum: 0 }
+              end_byte: { type: integer, minimum: 0 }
+        omitted_blocks: { type: array, maxItems: 16, items: { type: string } }
+        limit_reached: { type: boolean }
+    EvidenceReceipt:
+      type: object
+      description: Structural links supplied with this excerpt, independent of extraction coverage and answer correctness.
+      required: [extraction_revision, group_id, links_complete]
+      properties:
+        extraction_revision: { type: string }
+        block_ids: { type: array, maxItems: 128, items: { type: string } }
+        group_id: { type: string }
+        required_chunks: { type: array, maxItems: 16, items: { type: string } }
+        omitted_blocks: { type: array, maxItems: 128, description: Known linked block identities not included by bounded expansion. May be capped; limit_reached remains true., items: { type: string } }
+        links_complete: { type: boolean, description: False if explicit linked context was omitted or truncated. Never a full-document review guarantee. }
+        limit_reached: { type: boolean }
     KnowledgePassage:
       type: object
       required: [document_id, name, chunk_id, content, content_hash]
       properties:
+        retrieval_mode: { type: string, enum: [hybrid, semantic, lexical], description: Retrieval method, not an accuracy guarantee. }
+        evidence_receipt: { $ref: '#/components/schemas/EvidenceReceipt' }
+        evidence: { $ref: '#/components/schemas/DocumentEvidence' }
         source: { $ref: '#/components/schemas/KnowledgeSourceLocator' }
         document_id: { type: string }
         name: { type: string }
@@ -4280,12 +4550,606 @@ components:
         end_byte: { type: integer, minimum: 0 }
         source_sha256: { type: string }
         extractor_revision: { type: string }
+    WorkControlCommand:
+      type: object
+      additionalProperties: false
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string }
+        expected_revision: { type: integer, format: int64, minimum: 1 }
+        kind: { type: string, enum: [stop, pause, correct, continue] }
+        payload:
+          type: object
+          additionalProperties: false
+          properties:
+            instruction: { type: string, minLength: 1, maxLength: 16000, description: Required only for correct. No budget is replenished. }
+    ConversationPreferences:
+      type: object
+      additionalProperties: false
+      properties:
+        model: { type: string, maxLength: 256 }
+        profile_id: { type: string }
+        profile_revision: { type: integer, minimum: 1 }
+        restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
+        delegation: { type: boolean }
+    CanonicalConversation:
+      type: object
+      required: [id, revision, project_id, title, preferences, created_at, configuration_known]
+      properties:
+        pending_question: { $ref: '#/components/schemas/ConversationQuestion' }
+        context_revision: { type: integer, format: int64, minimum: 0, description: Version of explicit project/folder selection. Ordinary messages do not advance it; late access approval preserves a newer selection. }
+        configuration_known: { type: boolean, description: False when migrated browser-only configuration has no persisted evidence. }
+        id: { type: string }
+        revision: { type: integer, format: int64, minimum: 1 }
+        project_id: { type: string }
+        title: { type: string }
+        preferences: { $ref: '#/components/schemas/ConversationPreferences' }
+        focused_work_id: { type: string }
+        created_at: { type: string, format: date-time }
+    ConversationQuestion:
+      type: object
+      description: Read-only projection of the focused work's pending primary clarification. Observation never answers or resumes work.
+      required: [id, work_id, run_id, content]
+      properties:
+        id: { type: string }
+        work_id: { type: string }
+        run_id: { type: string }
+        content: { type: string }
+    CanonicalConversationPage:
+      type: object
+      required: [items, has_more]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/CanonicalConversation' } }
+        next_cursor: { type: string }
+        has_more: { type: boolean }
+    ConversationProject:
+      type: object
+      required: [id, revision, name, default, preferences]
+      properties:
+        id: { type: string }
+        revision: { type: integer, format: int64, minimum: 1 }
+        name: { type: string }
+        default: { type: boolean }
+        preferences: { $ref: '#/components/schemas/ConversationPreferences' }
+        resources: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/ProjectResourceReference' } }
+        configuration_digest: { type: string, description: SHA-256 of the accepted project TOML bytes. Absent after an explicit service preference edit. }
+        folder_identity: { type: string, description: Opaque host/folder identity. Project membership grants no access. }
+        configuration_source: { type: string, enum: [file, service], description: Explicit service edits survive later folder refreshes. }
+    ProjectResourceReference:
+      type: object
+      additionalProperties: false
+      required: [kind, id]
+      properties:
+        kind: { type: string, enum: [skill, knowledge, connection, instructions] }
+        id: { type: string, maxLength: 512 }
+        revision: { type: string, maxLength: 128, description: Skill revision number, Knowledge content hash, or connection tool schema revision. Omit to resolve and pin at admission. }
+        required: { type: boolean }
+    ResourceResolution:
+      type: object
+      required: [kind, id, selected, reason]
+      properties:
+        kind: { type: string }
+        id: { type: string }
+        revision: { type: string }
+        required: { type: boolean }
+        selected: { type: boolean }
+        reason: { type: string }
+    ProjectCommand:
+      type: object
+      additionalProperties: false
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string, description: Empty only for create_project. }
+        expected_revision: { type: integer, minimum: 0, format: int64 }
+        kind: { type: string, enum: [create_project, configure_project] }
+        payload:
+          type: object
+          additionalProperties: false
+          required: [name]
+          properties:
+            name: { type: string, minLength: 1, maxLength: 256 }
+            configuration_toml: { type: string, description: Version 1 UTF-8 project configuration, at most 64 KiB. Cannot be mixed with explicit preferences or resources. Unknown keys, authority, credentials and executable hooks are rejected. }
+            preferences: { $ref: '#/components/schemas/ProjectPreferences' }
+            resources: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/ProjectResourceReference' } }
+    UserDefaultValues:
+      type: object
+      additionalProperties: false
+      properties:
+        model: { type: string, maxLength: 256 }
+        delegation: { type: boolean }
+    UserPreferences:
+      type: object
+      required: [id, revision, preferences]
+      properties:
+        id: { type: string, const: user-defaults }
+        revision: { type: integer, format: int64, minimum: 0 }
+        preferences: { $ref: '#/components/schemas/UserDefaultValues' }
+    UserPreferencesCommand:
+      type: object
+      additionalProperties: false
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string, const: user-defaults }
+        expected_revision: { type: integer, format: int64, minimum: 0 }
+        kind: { type: string, const: configure_user_preferences }
+        payload: { $ref: '#/components/schemas/UserDefaultValues' }
+    ProjectPreferences:
+      type: object
+      additionalProperties: false
+      properties:
+        model: { type: string, maxLength: 256 }
+        delegation: { type: boolean }
+        restrictions: { type: object, additionalProperties: false, description: Empty compatibility field only. Project preferences cannot grant or widen authority. }
+    ConversationWorkItem:
+      type: object
+      required: [id, revision, project_id, project_revision, objective, acceptance, run_id, status, instruction_version, control_epoch, independently_verified]
+      properties:
+        id: { type: string }
+        revision: { type: integer, format: int64, minimum: 1 }
+        project_id: { type: string }
+        project_revision: { type: integer, format: int64 }
+        objective: { type: string }
+        acceptance: { type: array, items: { type: string } }
+        run_id: { type: string }
+        run_ids: { type: array, items: { type: string }, description: Ordered retained execution attempts. run_id identifies the current attempt; prior outcomes are not rewritten. }
+        status: { type: string }
+        instruction_version: { type: integer, minimum: 1 }
+        control_epoch: { type: integer, minimum: 0 }
+        result_reference: { type: string }
+        independently_verified: { type: boolean, description: Completion does not imply independent verification. }
+        worker_policy: { $ref: '#/components/schemas/WorkerPolicy' }
+    WorkerPolicy:
+      type: object
+      description: Service-owned resource policy pinned at work admission; never an authority grant. Absent on older work, which retains version 1 defaults.
+      required: [version, max_sessions, max_active, max_depth, initial_model_calls]
+      properties:
+        version: { type: integer, enum: [1] }
+        max_sessions: { type: integer, minimum: 1, maximum: 32 }
+        max_active: { type: integer, minimum: 1, maximum: 8 }
+        max_depth: { type: integer, enum: [1] }
+        initial_model_calls: { type: integer, minimum: 1, maximum: 50 }
+    ConversationCommand:
+      type: object
+      additionalProperties: false
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string, description: Empty only when creating or importing a conversation. }
+        expected_revision: { type: integer, format: int64, minimum: 0 }
+        kind: { type: string, enum: [create_conversation, import_conversation, configure_conversation, rename_conversation, select_project, use_project_folder, clear_project_folder, link_work, focus_work, create_work] }
+        payload:
+          type: object
+          additionalProperties: false
+          properties:
+            title: { type: string, maxLength: 256 }
+            legacy_name: { type: string, maxLength: 256, description: Required only for import_conversation with empty target and revision zero. Imports an owned inactive legacy session transactionally and retains its original files. }
+            work_id: { type: string, maxLength: 128, description: link_work attaches owned accessible work and focuses it. focus_work requires an existing link; omit work_id to clear focus. Neither command dispatches or copies grants. }
+            project_id: { type: string }
+            folder: { $ref: '#/components/schemas/ExecutionReference', description: Required only for use_project_folder. Resolves a live approved host and imports safe fixed-path project metadata. Does not create authority or rewrite existing work. }
+            preferences: { $ref: '#/components/schemas/ConversationPreferences' }
+            input:
+              type: object
+              additionalProperties: false
+              required: [content]
+              properties:
+                content: { type: string, minLength: 1, maxLength: 32000 }
+                model: { type: string, maxLength: 256 }
+                acceptance: { type: array, maxItems: 32, items: { type: string, minLength: 1, maxLength: 4096 } }
+    ConversationCommandReceipt:
+      type: object
+      required: [request_id, target_id, revision, event_cursor]
+      properties:
+        input: { $ref: '#/components/schemas/ConversationInboxEntry' }
+        user_preferences: { $ref: '#/components/schemas/UserPreferences' }
+        request_id: { type: string }
+        target_id: { type: string }
+        revision: { type: integer, format: int64 }
+        event_cursor: { type: integer, format: int64 }
+        conversation: { $ref: '#/components/schemas/CanonicalConversation' }
+        work: { $ref: '#/components/schemas/ConversationWorkItem' }
+        project: { $ref: '#/components/schemas/ConversationProject' }
+        worker: { $ref: '#/components/schemas/WorkerSession' }
+        message: { $ref: '#/components/schemas/WorkerMessage' }
+        import: { $ref: '#/components/schemas/ConversationImportManifest' }
+    ConversationAttachment:
+      type: object
+      additionalProperties: false
+      required: [id, revision]
+      properties:
+        id: { type: string }
+        revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+        page: { type: integer, minimum: 0, maximum: 100000, description: One-based page in the pinned extraction. Zero selects document retrieval. }
+    ConversationKnowledgeSelection:
+      type: object
+      additionalProperties: false
+      required: [document_id, revision]
+      properties:
+        document_id: { type: string, minLength: 1, maxLength: 256 }
+        revision: { type: string, minLength: 1, maxLength: 128 }
+        page: { type: integer, minimum: 1, maximum: 100000 }
+        block_ids: { type: array, minItems: 1, maxItems: 32, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 128 } }
+      description: Explicit page or block selection in an immutable Knowledge extraction. Exactly one scope is required; this cannot be combined with broad Knowledge retrieval.
+    ConversationInboxInput:
+      type: object
+      additionalProperties: false
+      required: [content]
+      properties:
+        knowledge_selections: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/ConversationKnowledgeSelection' } }
+        source_session: { type: string, maxLength: 256, description: Owning session whose canonical manifest matches this conversation. }
+        attachments: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/ConversationAttachment' } }
+        images: { type: array, maxItems: 4, items: { $ref: '#/components/schemas/SessionImage' } }
+        knowledge_documents: { type: array, maxItems: 16, items: { type: string } }
+        use_knowledge: { type: boolean, description: Retrieve from currently permitted Knowledge within effective resource restrictions. }
+        question_id: { type: string, description: Required for answer intent. Exact saved primary clarification identity; never authorizes host access. Omit for other intents. }
+        content: { type: string, minLength: 1, maxLength: 32000 }
+        model: { type: string, maxLength: 256 }
+        intent: { type: string, enum: [message, correction, new_work, answer] }
+        focused_work_id: { type: string, description: Omitted uses current focus. Empty string selects unbound conversation input. }
+        origin: { type: string, enum: [typed, dictation, steering] }
+    ConversationInputCommand:
+      type: object
+      additionalProperties: false
+      description: Durable input envelope. Source inputs require conversation-source-inputs-v1 and are validated before acceptance. Inference starts separately. Answer intent binds an exact primary clarification; host approvals retain their existing access controls.
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string }
+        expected_revision: { type: integer, format: int64, minimum: 1 }
+        kind: { type: string, const: submit_input }
+        payload: { $ref: '#/components/schemas/ConversationInboxInput' }
+    ConversationInputControlCommand:
+      type: object
+      additionalProperties: false
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string, description: Input identity. }
+        expected_revision: { type: integer, format: int64, minimum: 1, description: Current containing-conversation revision. }
+        kind: { type: string, enum: [stop, continue, revalidate] }
+        payload:
+          type: object
+          additionalProperties: false
+          properties:
+            instruction_version: { type: integer, minimum: 0, description: Required and positive for revalidate; must match the current focused work instruction version. Otherwise omit or use zero. }
+    ConversationInboxEntry:
+      type: object
+      required: [id, sequence, conversation_id, conversation_revision, request_id, input, state, accepted_at]
+      properties:
+        question: { $ref: '#/components/schemas/ConversationQuestion' }
+        context_unavailable: { type: boolean, description: Derived decision and result references withheld because actor or source access changed. Original user input and control state remain inspectable. }
+        stopped_at: { type: string, format: date-time }
+        hold_released_at: { type: string, format: date-time }
+        revalidated_at: { type: string, format: date-time }
+        revalidated_instruction_version: { type: integer, minimum: 1 }
+        decision:
+          $ref: '#/components/schemas/ConversationDecision'
+        decision_issue:
+          $ref: '#/components/schemas/ConversationDecisionIssue'
+        delivery_issue:
+          type: object
+          required: [code, message, retry_at]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            retry_at: { type: string, format: date-time }
+        id: { type: string }
+        sequence: { type: integer, format: int64 }
+        conversation_id: { type: string }
+        conversation_revision: { type: integer, format: int64 }
+        request_id: { type: string }
+        work_id: { type: string }
+        instruction_version: { type: integer, minimum: 0 }
+        input: { $ref: '#/components/schemas/ConversationInboxInput' }
+        created_work_id: { type: string, description: Work admitted from this input. The original work_id still identifies the input's previous focus. }
+        state: { type: string }
+        run_id: { type: string }
+        accepted_at: { type: string, format: date-time }
+        delivered_at: { type: string, format: date-time }
+        settled_at: { type: string, format: date-time }
+        run_status: { type: string }
+        result_reference: { type: string }
+        incorporation: { type: string, enum: [answered, correction, new_work, worker_answer] }
+        applied_at: { type: string, format: date-time }
+        applied_instruction_version: { type: integer, minimum: 0 }
+    ConversationDecision:
+      type: object
+      additionalProperties: false
+      description: Durable foreground proposal. Only applied_at and applied_instruction_version confirm incorporation; a reply or recorded proposal alone does not.
+      required: [kind, instruction_version]
+      properties:
+        kind: { type: string, enum: [answered, correction, new_work] }
+        instruction_version: { type: integer, minimum: 0, description: Current work instruction version for a correction; otherwise zero. }
+        expected_result: { type: string, maxLength: 4096, description: Required only for new_work. A proposed acceptance condition; the objective remains the exact accepted user input. }
+    ConversationDecisionIssue:
+      type: object
+      required: [code, message, retry_at]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        retry_at: { type: string, format: date-time }
+    ConversationInboxPage:
+      type: object
+      required: [items, next_cursor, has_more]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ConversationInboxEntry' } }
+        next_cursor: { type: integer, format: int64 }
+        has_more: { type: boolean }
+    ConversationImportManifest:
+      type: object
+      required: [version, legacy_name, conversation_id, source_sha256, authority, configuration_known, legacy_run_ids, imported_at]
+      properties:
+        version: { type: integer, const: 1 }
+        legacy_name: { type: string }
+        conversation_id: { type: string }
+        source_sha256: { type: string }
+        authority: { type: string, const: agent_control_store }
+        configuration_known: { type: boolean }
+        legacy_run_ids: { type: [array, 'null'], items: { type: string } }
+        imported_at: { type: string, format: date-time }
+    WorkerSession:
+      type: object
+      required: [id, revision, work_id, root_run_id, current_run_id, run_ids, assignment, assignment_version, status, stopped, closed]
+      properties:
+        question: { $ref: '#/components/schemas/WorkerQuestion' }
+        id: { type: string }
+        revision: { type: integer, format: int64 }
+        work_id: { type: string }
+        root_run_id: { type: string }
+        current_run_id: { type: string }
+        run_ids: { type: array, items: { type: string } }
+        assignment_version: { type: integer, minimum: 1 }
+        assignment:
+          type: object
+          required: [goal, expected_result, tools, depends_on, instruction_version, model_calls]
+          properties:
+            goal: { type: string }
+            expected_result: { type: string }
+            mode: { type: string, enum: [research, edit, test], description: Assignment execution mode. Older stored assignments may omit it. }
+            reason: { type: string, maxLength: 2048, description: Recorded delegation rationale when supplied; absent for legacy assignments. }
+            tools: { type: [array, 'null'], items: { type: string } }
+            depends_on: { type: [array, 'null'], items: { type: string } }
+            instruction_version: { type: integer }
+            model_calls: { type: integer }
+            profile_id: { type: string }
+        status: { type: string }
+        stopped: { type: boolean }
+        closed: { type: boolean }
+        result_reference: { type: string }
+    WorkerCommand:
+      type: object
+      additionalProperties: false
+      required: [request_id, target_id, expected_revision, kind, payload]
+      properties:
+        request_id: { type: string, minLength: 1, maxLength: 128 }
+        target_id: { type: string }
+        expected_revision: { type: integer, format: int64, minimum: 1 }
+        kind: { type: string, enum: [message, stop, close, continue, answer] }
+        payload:
+          type: object
+          additionalProperties: false
+          properties:
+            content: { type: string, minLength: 1, maxLength: 16000, description: Required for message, continue and answer. }
+            question_id: { type: string, description: Required only for answer; identifies the exact pending question. }
+    WorkerQuestion:
+      type: object
+      required: [id, worker_id, run_id, content, instruction_version, assignment_version, state, requested_at]
+      properties:
+        id: { type: string }
+        worker_id: { type: string }
+        run_id: { type: string }
+        content: { type: string }
+        instruction_version: { type: integer, minimum: 1 }
+        assignment_version: { type: integer, minimum: 1 }
+        state: { type: string, enum: [pending, answered] }
+        requested_at: { type: string, format: date-time }
+        answer_message_id: { type: string, description: Accepted answer's mailbox identity; consult its state for delivery and application. }
+    WorkerMessage:
+      type: object
+      required: [id, worker_id, run_id, content, state, instruction_version, accepted_at]
+      properties:
+        question_id: { type: string }
+        id: { type: string }
+        worker_id: { type: string }
+        run_id: { type: string }
+        content: { type: string }
+        state: { type: string, enum: [accepted, delivered, applied, abandoned] }
+        instruction_version: { type: integer }
+        accepted_at: { type: string, format: date-time }
+        delivered_at: { type: string, format: date-time }
+        applied_at: { type: string, format: date-time }
+        abandoned_at: { type: string, format: date-time }
+        resolution_reason: { type: string }
+    WorkerMessagePage:
+      type: object
+      required: [items, next_cursor, has_more]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/WorkerMessage' } }
+        next_cursor: { type: integer, format: int64 }
+        has_more: { type: boolean }
+    WorkChange:
+      type: object
+      required: [id, work_id, run_id, worker_run_id, kind, state, instruction_version, control_epoch, current, operation_count, validation_state, validation_count, integrated_count, available]
+      properties:
+        id: { type: string }
+        work_id: { type: string }
+        run_id: { type: string }
+        worker_run_id: { type: string }
+        kind: { type: string, enum: [proposal, candidate] }
+        state: { type: string }
+        instruction_version: { type: integer, format: int64 }
+        control_epoch: { type: integer, format: int64 }
+        current: { type: boolean }
+        operation_count: { type: integer }
+        validation_state: { type: string }
+        validation_count: { type: integer }
+        integration_id: { type: string }
+        integrated_count: { type: integer }
+        available: { type: boolean }
+        limitation: { type: string }
+    ConversationResultPage:
+      type: object
+      required: [id, run_id, instruction_version, control_epoch, status, independently_verified, evidence_steps, content, offset, next_offset, total_bytes, complete]
+      properties:
+        id: { type: string }
+        run_id: { type: string }
+        work_id: { type: string }
+        worker_id: { type: string }
+        conversation_id: { type: string }
+        instruction_version: { type: integer, minimum: 0 }
+        control_epoch: { type: integer, minimum: 0 }
+        status: { type: string }
+        independently_verified: { type: boolean }
+        evidence_steps: { type: array, items: { type: integer } }
+        content: { type: string }
+        offset: { type: integer, minimum: 0 }
+        next_offset: { type: integer, minimum: 0 }
+        total_bytes: { type: integer, minimum: 0 }
+        complete: { type: boolean }
+    WorkChangeList:
+      type: object
+      required: [items, next_cursor, has_more]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/WorkChange' } }
+        next_cursor: { type: string }
+        has_more: { type: boolean }
+    WorkFileVersion:
+      type: object
+      required: [kind, bytes, mode]
+      properties:
+        kind: { type: string }
+        bytes: { type: integer, format: int64 }
+        mode: { type: integer }
+        sha256: { type: string }
+    WorkFileChange:
+      type: object
+      required: [path, kind]
+      properties:
+        path: { type: string }
+        kind: { type: string }
+        base: { $ref: '#/components/schemas/WorkFileVersion' }
+        result: { $ref: '#/components/schemas/WorkFileVersion' }
+    WorkValidationCheck:
+      type: object
+      required: [id, state, request_digest, receipt_digest]
+      properties:
+        id: { type: string }
+        state: { type: string }
+        exit_code: { type: integer }
+        request_digest: { type: string }
+        receipt_digest: { type: string }
+    WorkFileReceipt:
+      type: object
+      required: [ordinal, path, operation, state, dispatched, original_retained]
+      properties:
+        ordinal: { type: integer }
+        path: { type: string }
+        operation: { type: string }
+        state: { type: string }
+        dispatched: { type: boolean }
+        original_retained: { type: boolean }
+        displaced_digest: { type: string }
+        result_digest: { type: string }
+        error: { type: string }
+    WorkChangeContent:
+      type: object
+      required: [sha256, bytes, offset, data]
+      properties:
+        sha256: { type: string }
+        bytes: { type: integer, format: int64 }
+        offset: { type: integer, format: int64 }
+        data: { type: string, format: byte }
+    WorkRecoveryFile:
+      type: object
+      required: [id, path, role, bytes]
+      description: Observed retained content. Unconfirmed files do not prove a replacement occurred. Reads never restore files or settle uncertain work.
+      properties:
+        id: { type: string }
+        path: { type: string }
+        role: { type: string, enum: [displaced, unconfirmed] }
+        bytes: { type: integer, format: int64 }
+        sha256: { type: string }
+        limitation: { type: string }
+    WorkChangeDetail:
+      type: object
+      required: [change, view]
+      properties:
+        change: { $ref: '#/components/schemas/WorkChange' }
+        view: { type: string, enum: [files, validation, integration, recovery, content, preserved] }
+        files: { type: array, items: { $ref: '#/components/schemas/WorkFileChange' } }
+        checks: { type: array, items: { $ref: '#/components/schemas/WorkValidationCheck' } }
+        receipts: { type: array, items: { $ref: '#/components/schemas/WorkFileReceipt' } }
+        recovery: { type: array, items: { $ref: '#/components/schemas/WorkRecoveryFile' } }
+        content: { $ref: '#/components/schemas/WorkChangeContent' }
+        next_offset: { type: integer, format: int64 }
+        conflict_path: { type: string }
+        error: { type: string }
+    EffectiveConversationPreferences:
+      type: object
+      required: [model, delegation, restrictions, provenance, configuration_known, project_id, project_revision, resources]
+      properties:
+        folder:
+          type: object
+          required: [session, available, reason]
+          description: Observed availability of the saved folder reference. No grant is restored by inspection.
+          properties:
+            session: { type: string }
+            available: { type: boolean }
+            reason: { type: string }
+        user_preferences_revision: { type: integer, format: int64, minimum: 0 }
+        project_id: { type: string }
+        project_revision: { type: integer, format: int64 }
+        resources: { type: array, items: { $ref: '#/components/schemas/ResourceResolution' } }
+        configuration_known: { type: boolean }
+        model: { type: string }
+        delegation: { type: boolean }
+        profile_id: { type: string }
+        profile_revision: { type: integer }
+        restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
+        provenance: { type: object, additionalProperties: { type: string } }
+    ControlEventPage:
+      type: object
+      required: [events, next_cursor, has_more, history_gap]
+      properties:
+        events:
+          type: array
+          items:
+            type: object
+            required: [cursor, target_id, revision, kind, recorded_at, payload]
+            properties:
+              cursor: { type: integer, format: int64 }
+              target_id: { type: string }
+              revision: { type: integer, format: int64 }
+              kind: { type: string }
+              recorded_at: { type: string, format: date-time }
+              payload: { type: object, additionalProperties: true }
+        next_cursor: { type: integer, format: int64 }
+        has_more: { type: boolean }
+        history_gap: { type: boolean }
+        snapshot:
+          oneOf:
+            - { $ref: '#/components/schemas/CanonicalConversation' }
+            - { $ref: '#/components/schemas/ConversationWorkItem' }
+            - { $ref: '#/components/schemas/WorkerSession' }
     AgentSelection:
       type: object
       required: [id, revision]
       properties:
         id: { type: string }
         revision: { type: integer, minimum: 1 }
+    AgentConversationConfiguration:
+      type: object
+      required: [version, profile, model, restrictions]
+      properties:
+        version: { type: integer, enum: [1] }
+        profile:
+          oneOf:
+            - { $ref: '#/components/schemas/AgentProfile' }
+            - { type: 'null' }
+        model: { type: string }
+        restrictions: { $ref: '#/components/schemas/AgentResourceRestrictions' }
     AgentResourceRestrictions:
       type: object
       additionalProperties: false
@@ -4419,10 +5283,597 @@ components:
               index: { type: integer }
               message: { $ref: '#/components/schemas/ChatMessage' }
               finish_reason: { type: [string, 'null'] }
+    AnalysisSourceRef:
+      type: object
+      additionalProperties: false
+      required: [document_id, revision]
+      properties:
+        document_id: { type: string, minLength: 1, maxLength: 256 }
+        revision: { type: string, minLength: 1, maxLength: 128 }
+        original_sha256: { type: string, pattern: '^[a-f0-9]{64}$', description: Required for retained originals; omitted only for legacy text. }
+    AnalysisCitation:
+      type: object
+      required: [source, revision, unit_id, span, text_sha256]
+      properties:
+        source: { type: integer, minimum: 0, maximum: 15 }
+        revision: { type: string }
+        unit_id: { type: string }
+        block_id: { type: string }
+        span: { $ref: '#/components/schemas/DocumentSpan' }
+        text_sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+    AnalysisUnitPair:
+      type: object
+      required: [alignment]
+      properties:
+        before_unit: { type: string }
+        after_unit: { type: string }
+        alignment: { type: string, enum: [sheet_name, position, unmatched] }
+    DocumentAnalysisExport:
+      type: object
+      required: [analysis_id, format, content, sha256]
+      properties:
+        analysis_id: {type: string}
+        format: {type: string, enum: [json, csv, markdown]}
+        content: {type: string, description: At most 8 MiB of UTF-8 content}
+        sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+    DocumentCompositionRequest:
+      type: object
+      required: [request_key, analysis_id, model, language]
+      properties:
+        request_key: {type: string}
+        analysis_id: {type: string}
+        model: {type: string}
+        language: {type: string}
+    DocumentComposition:
+      type: object
+      required: [id, analysis_id, plan_id, source_plan_id, model, state, attempt, completed_steps, total_steps, reviews_current, created_at, updated_at]
+      properties:
+        id: {type: string}
+        analysis_id: {type: string}
+        plan_id: {type: string}
+        source_plan_id: {type: string}
+        model: {$ref: '#/components/schemas/SynthesisModelIdentity'}
+        state: {type: string, enum: [queued, running, interrupted, cancelled, failed, awaiting_review]}
+        attempt: {type: integer, minimum: 0}
+        completed_steps: {type: integer, minimum: 0, maximum: 65536}
+        total_steps: {type: integer, minimum: 0, maximum: 65536}
+        reviews_current: {type: boolean}
+        error_code: {type: string}
+        created_at: {type: string}
+        updated_at: {type: string}
+    DocumentCompositionHistory:
+      type: object
+      required: [analysis_id, items, next_offset]
+      properties:
+        analysis_id: {type: string}
+        items: {type: array, maxItems: 20, items: {$ref: '#/components/schemas/DocumentComposition'}}
+        next_offset: {type: [integer, 'null'], minimum: 0}
+    CompositionSection:
+      type: object
+      required: [text, contributors, verification]
+      properties:
+        text: {type: string}
+        contributors: {type: integer, minimum: 0, maximum: 65536}
+        verification: {type: string, const: source_identity_only}
+    CompositionGapCount:
+      type: object
+      required: [code, count]
+      properties:
+        code: {type: string}
+        count: {type: integer, minimum: 0}
+    DocumentCompositionReport:
+      type: object
+      required: [composition, source_units, sections, gaps, extraction_gaps, candidate_gaps, unrepresented_batches, semantic_review_required]
+      properties:
+        composition: {$ref: '#/components/schemas/DocumentComposition'}
+        source_units: {type: integer, minimum: 0}
+        sections: {type: array, maxItems: 4, items: {$ref: '#/components/schemas/CompositionSection'}}
+        gaps: {type: array, maxItems: 64, items: {$ref: '#/components/schemas/CompositionGapCount'}}
+        extraction_gaps: {type: array, maxItems: 256, items: {$ref: '#/components/schemas/CompositionGapCount'}}
+        candidate_gaps: {type: array, maxItems: 256, items: {$ref: '#/components/schemas/CompositionGapCount'}}
+        unrepresented_batches: {type: integer, minimum: 0, maximum: 100000}
+        semantic_review_required: {type: boolean, const: true}
+    CompositionInput:
+      type: object
+      required: [id, batch, batch_id, candidate_index, candidate_sha256, review_revision, decision, section_checked]
+      properties:
+        id: {type: string}
+        batch: {type: integer, minimum: 0, maximum: 100000}
+        batch_id: {type: string}
+        candidate_index: {type: integer, minimum: 0, maximum: 31}
+        candidate_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        review_revision: {type: integer, minimum: 0, maximum: 256}
+        decision: {type: string, enum: [keep, unreviewed]}
+        section_checked: {type: boolean}
+    CompositionEvidenceItem:
+      type: object
+      required: [input, candidate]
+      properties:
+        input: {$ref: '#/components/schemas/CompositionInput'}
+        candidate: {$ref: '#/components/schemas/SynthesisCandidate'}
+    DocumentCompositionEvidence:
+      type: object
+      required: [composition_id, plan_id, section, offset, total, items, next_offset]
+      properties:
+        composition_id: {type: string}
+        plan_id: {type: string}
+        section: {type: integer, minimum: 0, maximum: 3}
+        offset: {type: integer, minimum: 0, maximum: 65536}
+        total: {type: integer, minimum: 0, maximum: 65536}
+        items: {type: array, maxItems: 8, items: {$ref: '#/components/schemas/CompositionEvidenceItem'}}
+        next_offset: {type: [integer, 'null'], minimum: 0}
+    SynthesisDecision:
+      type: object
+      additionalProperties: false
+      required: [decision, note]
+      properties:
+        decision: {type: string, enum: [unreviewed, keep, exclude]}
+        note: {type: string, maxLength: 2048, description: At most 2048 UTF-8 bytes}
+    SynthesisReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [id, batch, batch_id, response_sha256, expected_revision, section_checked, decisions]
+      properties:
+        id: {type: string, minLength: 1, maxLength: 128}
+        batch: {type: integer, minimum: 0, maximum: 100000}
+        batch_id: {type: string}
+        response_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        expected_revision: {type: integer, minimum: 0, maximum: 255}
+        section_checked: {type: boolean}
+        decisions: {type: array, maxItems: 32, items: {$ref: '#/components/schemas/SynthesisDecision'}}
+    SynthesisReview:
+      type: object
+      required: [analysis_id, batch, batch_id, response_sha256, revision, section_checked, decisions, author, updated_at]
+      properties:
+        analysis_id: {type: string}
+        batch: {type: integer, minimum: 0}
+        batch_id: {type: string}
+        response_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        revision: {type: integer, minimum: 0, maximum: 256}
+        section_checked: {type: boolean}
+        decisions: {type: array, maxItems: 32, items: {$ref: '#/components/schemas/SynthesisDecision'}}
+        author: {type: string, description: Empty only for unsaved revision zero}
+        updated_at: {type: string, description: UTC RFC3339 timestamp or empty for revision zero}
+    SynthesisModelIdentity:
+      type: object
+      required: [model_id, model_sha256, runtime, language, context_tokens, response_tokens, protocol]
+      properties:
+        model_id: { type: string }
+        model_sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        runtime:
+          type: object
+          required: [name, revision]
+          properties: { name: { type: string }, revision: { type: string }, sha256: { type: string } }
+        language: { type: string }
+        context_tokens: { type: integer, minimum: 1024 }
+        response_tokens: { type: integer, minimum: 256 }
+        protocol: { type: string, const: document-synthesis-candidates-v1 }
+    SynthesisGap:
+      type: object
+      required: [source, code]
+      properties: { source: { type: integer, minimum: 0, maximum: 15 }, unit_id: { type: string }, code: { type: string } }
+    DocumentSynthesis:
+      type: object
+      required: [id, plan, model, primary_bytes, state, attempt, completed_batches, completed_units, unit_cursor, next_byte, review_required, created_at, updated_at]
+      properties:
+        id: { type: string }
+        model: { $ref: '#/components/schemas/SynthesisModelIdentity' }
+        primary_bytes: { type: integer, minimum: 1024, maximum: 8192 }
+        state: { type: string, enum: [queued, running, interrupted, cancelled, failed, awaiting_review] }
+        attempt: { type: integer, minimum: 0 }
+        completed_batches: { type: integer, minimum: 0 }
+        completed_units: { type: integer, minimum: 0 }
+        unit_cursor: { type: integer, minimum: 0 }
+        next_byte: { type: integer, minimum: 0 }
+        review_required: { type: boolean }
+        error_code: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        plan:
+          type: object
+          required: [id, version, workflow, sources, units, gaps]
+          properties:
+            id: { type: string }
+            version: { type: string, const: document-analysis-v1 }
+            workflow: { type: string, enum: [summary, requirements] }
+            sources: { type: array, minItems: 1, maxItems: 16, items: { $ref: '#/components/schemas/AnalysisSourceRef' } }
+            gaps: { type: array, items: { $ref: '#/components/schemas/SynthesisGap' } }
+            units:
+              type: array
+              items:
+                type: object
+                required: [ordinal, source, unit_id, span, blocks]
+                properties:
+                  ordinal: { type: integer, minimum: 0 }
+                  source: { type: integer, minimum: 0, maximum: 15 }
+                  unit_id: { type: string }
+                  span: { $ref: '#/components/schemas/DocumentSpan' }
+                  blocks: { type: integer, minimum: 0 }
+    SynthesisQuote:
+      type: object
+      required: [text, citation]
+      properties:
+        text: { type: string, maxLength: 8192 }
+        citation: { $ref: '#/components/schemas/AnalysisCitation' }
+    SynthesisCandidate:
+      type: object
+      required: [text, evidence, conditions, exceptions, verification]
+      properties:
+        text: { type: string, maxLength: 4096 }
+        verification: { type: string, const: source_identity_only }
+        evidence: { type: array, minItems: 1, maxItems: 8, items: { $ref: '#/components/schemas/SynthesisQuote' } }
+        conditions: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/SynthesisQuote' } }
+        exceptions: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/SynthesisQuote' } }
+    SynthesisReceipt:
+      type: object
+      required: [method, batch_id, model_identity, unit_ordinal, primary, end_of_unit, prompt_tokens, response_sha256, result]
+      properties:
+        validation: { type: string, enum: [source-values-v2], description: Absent on historical receipts using literal numeric validation; old decisions are preserved. }
+        method: { type: string, enum: [model, empty_source] }
+        batch_id: { type: string }
+        model_identity: { type: string }
+        unit_ordinal: { type: integer, minimum: 0 }
+        primary: { $ref: '#/components/schemas/DocumentSpan' }
+        end_of_unit: { type: boolean }
+        prompt_tokens: { type: integer, minimum: 0 }
+        response_sha256: { type: string }
+        result:
+          type: object
+          required: [batch_id, candidates, gaps, no_findings_reported, semantic_review_required]
+          properties:
+            batch_id: { type: string }
+            candidates: { type: array, maxItems: 32, items: { $ref: '#/components/schemas/SynthesisCandidate' } }
+            gaps: { type: array, items: { $ref: '#/components/schemas/SynthesisGap' } }
+            no_findings_reported: { type: boolean }
+            semantic_review_required: { type: boolean }
+    DocumentSynthesisResults:
+      type: object
+      required: [analysis_id, offset, next_offset, total_batches, receipts]
+      properties:
+        analysis_id: { type: string }
+        offset: { type: integer, minimum: 0 }
+        next_offset: { type: [integer, 'null'], minimum: 0 }
+        total_batches: { type: integer, minimum: 0 }
+        receipts: { type: array, maxItems: 2, items: { $ref: '#/components/schemas/SynthesisReceipt' } }
+    DocumentSynthesisHistory:
+      type: object
+      required: [analyses, next_offset]
+      properties:
+        next_offset: { type: [integer, 'null'], minimum: 1, maximum: 256 }
+        analyses:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [id, state, documents, created_at, updated_at]
+            properties:
+              id: { type: string }
+              state: { type: string, enum: [queued, running, interrupted, cancelled, failed, awaiting_review] }
+              documents: { type: array, minItems: 1, maxItems: 16, items: { type: string } }
+              created_at: { type: string, format: date-time }
+              updated_at: { type: string, format: date-time }
+    DocumentAnalysisHistory:
+      type: object
+      required: [analyses, next_offset]
+      properties:
+        next_offset: { type: [integer, 'null'], minimum: 1, maximum: 256 }
+        analyses:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [id, state, documents, created_at, updated_at]
+            properties:
+              id: { type: string }
+              state: { type: string, enum: [queued, running, interrupted, cancelled, failed, complete, incomplete] }
+              documents: { type: array, minItems: 2, maxItems: 2, items: { type: string } }
+              created_at: { type: string, format: date-time }
+              updated_at: { type: string, format: date-time }
+    DocumentAnalysis:
+      type: object
+      required: [id, plan, pairs, state, attempt, completed_steps, completed_units, review_required, created_at, updated_at]
+      properties:
+        id: { type: string }
+        state: { type: string, enum: [queued, running, interrupted, cancelled, failed, complete, incomplete] }
+        attempt: { type: integer, minimum: 0 }
+        completed_steps: { type: integer, minimum: 0 }
+        completed_units: { type: integer, minimum: 0 }
+        review_required: { type: boolean }
+        error_code: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        pairs: { type: array, items: { $ref: '#/components/schemas/AnalysisUnitPair' } }
+        plan:
+          type: object
+          required: [id, version, workflow, sources, units, gaps]
+          properties:
+            id: { type: string }
+            version: { type: string, const: document-analysis-v1 }
+            workflow: { type: string, const: comparison }
+            sources: { type: array, minItems: 2, maxItems: 2, items: { $ref: '#/components/schemas/AnalysisSourceRef' } }
+            units:
+              type: array
+              items:
+                type: object
+                required: [ordinal, source, unit_id, span, blocks]
+                properties:
+                  ordinal: { type: integer, minimum: 0 }
+                  source: { type: integer, minimum: 0, maximum: 1 }
+                  unit_id: { type: string }
+                  span: { $ref: '#/components/schemas/DocumentSpan' }
+                  blocks: { type: integer, minimum: 0 }
+            gaps:
+              type: array
+              items:
+                type: object
+                required: [source, code]
+                properties:
+                  source: { type: integer, minimum: 0, maximum: 1 }
+                  unit_id: { type: string }
+                  code: { type: string }
+    AnalysisPreview:
+      type: object
+      description: At most 512 UTF-8 bytes from the start of a validated source citation. A preview never replaces the full citation.
+      required: [text, span, text_sha256, truncated]
+      properties:
+        text: { type: string, maxLength: 512 }
+        span: { $ref: '#/components/schemas/DocumentSpan' }
+        text_sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        truncated: { type: boolean }
+    DocumentAnalysisResults:
+      type: object
+      required: [analysis_id, step, offset, next_offset, total_changes, result]
+      properties:
+        analysis_id: { type: string }
+        step: { type: integer, minimum: 0 }
+        offset: { type: integer, minimum: 0 }
+        next_offset: { type: [integer, 'null'], minimum: 0 }
+        total_changes: { type: integer, minimum: 0 }
+        previews:
+          type: array
+          description: Optional bounded source previews in the same order as result.changes. Older services may omit them.
+          maxItems: 100
+          items:
+            type: object
+            properties:
+              before: { $ref: '#/components/schemas/AnalysisPreview' }
+              after: { $ref: '#/components/schemas/AnalysisPreview' }
+        result:
+          type: object
+          required: [pair, changes, unchanged_lines, before_lines, after_lines, compared_cells, ambiguous_cells]
+          properties:
+            pair: { $ref: '#/components/schemas/AnalysisUnitPair' }
+            unchanged_lines: { type: integer, minimum: 0 }
+            before_lines: { type: integer, minimum: 0 }
+            after_lines: { type: integer, minimum: 0 }
+            compared_cells: { type: integer, minimum: 0 }
+            ambiguous_cells: { type: integer, minimum: 0 }
+            changes:
+              type: array
+              maxItems: 100
+              items:
+                type: object
+                required: [kind]
+                properties:
+                  kind: { type: string, enum: [text_removed, text_added, cell_modified, cell_removed, cell_added] }
+                  before: { $ref: '#/components/schemas/AnalysisCitation' }
+                  after: { $ref: '#/components/schemas/AnalysisCitation' }
+    DocumentAnalysisControl:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 128 }
+    DocumentAnalysisAccepted:
+      type: object
+      required: [accepted]
+      properties:
+        accepted: { type: boolean, const: true }
+    DocumentWarning:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        source_index: { type: integer }
+    DocumentSpan:
+      type: object
+      required: [start_byte, end_byte]
+      properties:
+        start_byte: { type: integer, minimum: 0 }
+        end_byte: { type: integer, minimum: 0 }
+    DocumentNavigationEntry:
+      type: object
+      required: [block_id, unit_id, block_offset, kind, title, needs_review]
+      properties:
+        block_id: { type: string }
+        unit_id: { type: string }
+        block_offset: { type: integer, minimum: 0, description: Block offset within this source unit; open with unit and the same immutable revision. }
+        kind: { type: string }
+        title: { type: string, description: At most 256 UTF-8 bytes of retained text; not a generated summary. }
+        heading_level: { type: integer, minimum: 0, maximum: 9 }
+        needs_review: { type: boolean }
+    DocumentUnit:
+      type: object
+      required: [id, kind, index, span, state, parser_revision]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [page, slide, sheet, section] }
+        index: { type: integer, minimum: 1 }
+        name: { type: string }
+        span: { $ref: '#/components/schemas/DocumentSpan' }
+        state: { type: string }
+        parser_revision: { type: string }
+        hidden: { type: boolean }
+        merged_ranges: { type: array, items: { type: string } }
+        block_count: { type: integer, minimum: 0 }
+        review_blocks: { type: integer, minimum: 0 }
+        figure_blocks: { type: integer, minimum: 0 }
+        metadata_omitted: { type: boolean, description: Merged-range metadata exceeds this bounded reader projection; retained in the immutable extraction. }
+    DocumentBlock:
+      type: object
+      required: [id, unit_id, kind, span, method, text, text_sha256, truncated, editable, metadata_omitted]
+      properties:
+        revisions:
+          type: array
+          maxItems: 2048
+          description: Native tracked alternatives and provenance, excluded from current searchable text.
+          items:
+            type: object
+            required: [id, kind, text]
+            properties:
+              id: { type: string }
+              kind: { type: string, enum: [insertion, deletion, move_from, move_to, properties] }
+              text: { type: string }
+              author: { type: string }
+              date: { type: string }
+        form_field:
+          type: object
+          required: [name, value, kind]
+          properties:
+            label: { type: string }
+            options:
+              type: array
+              maxItems: 4096
+              items:
+                type: object
+                required: [index, label, selected]
+                properties:
+                  index: { type: integer, minimum: 0 }
+                  label: { type: string }
+                  selected: { type: boolean }
+            name: { type: string }
+            value: { type: string }
+            kind: { type: string, enum: [unknown, button, checkbox, radio, combo, list, text, signature] }
+            checked: { type: boolean }
+            hidden: { type: boolean }
+            native_bounds:
+              type: array
+              minItems: 4
+              maxItems: 4
+              items: { type: number }
+              description: PDF user-space left, bottom, right, top in points; not screen coordinates.
+        id: { type: string }
+        unit_id: { type: string }
+        kind: { type: string, enum: [heading, paragraph, list, table, row, cell, footnote, endnote, form_field, figure, caption, header, footer] }
+        span: { $ref: '#/components/schemas/DocumentSpan' }
+        method: { type: string, enum: [native, ocr, mixed, legacy, review, model] }
+        heading_level: { type: integer, minimum: 1, maximum: 9 }
+        review_state: { type: string }
+        source_part: { type: string }
+        figure:
+          type: object
+          required: [kind]
+          properties:
+            kind: { type: string }
+            part: { type: string, description: Internal original-package part identity; never a filesystem path or a fetched URL. }
+            relationship_id: { type: string }
+            external: { type: boolean }
+            name: { type: string }
+            title: { type: string }
+            description: { type: string, description: Authored alternative text, not verified image interpretation. }
+        table:
+          type: object
+          required: [rows, columns]
+          properties:
+            rows: { type: integer, minimum: 0 }
+            columns: { type: integer, minimum: 0 }
+            first_row_style: { type: boolean, description: Formatting flag only; does not establish semantic headers. }
+            first_column_style: { type: boolean }
+        text: { type: string }
+        text_sha256: { type: string, description: SHA-256 of the complete exact block text; never a hash of its truncated preview. }
+        truncated: { type: boolean }
+        editable: { type: boolean }
+        metadata_omitted: { type: boolean, description: Oversized cell/warning metadata is omitted from this bounded projection. }
+        warnings: { type: array, items: { $ref: '#/components/schemas/DocumentWarning' } }
+        bounds:
+          type: object
+          required: [x, y, width, height, unit]
+          properties:
+            x: { type: number }
+            y: { type: number }
+            width: { type: number }
+            height: { type: number }
+            unit: { type: string, enum: [points, pixels, normalized] }
+        cell:
+          type: object
+          required: [reference]
+          properties:
+            reference: { type: string }
+            row_span: { type: integer, minimum: 1 }
+            column_span: { type: integer, minimum: 1 }
+            horizontal_merge: { type: boolean }
+            vertical_merge: { type: boolean }
+            value_type: { type: string }
+            value: { type: string }
+            display: { type: string }
+            number_format: { type: string }
+            number_format_id: { type: integer, minimum: 0 }
+            display_state: { type: string, description: Stored text or a deterministic format projection; unrendered retains the raw value and does not claim original display fidelity. }
+            date_system: { type: string, enum: ['1900', '1904'] }
+            formula: { type: string }
+            formula_type: { type: string }
+            formula_reference: { type: string }
+            shared_formula_index: { type: integer, minimum: 0 }
+            formula_anchor: { type: string, description: Cell holding the shared formula definition; relative references are not evaluated or silently rewritten. }
+            cached_value: { type: string }
+            result_state: { type: string }
+            merged_range: { type: string }
+            hidden: { type: boolean }
+            hidden_reasons: { type: array, items: { type: string, enum: [sheet, row, column] } }
+    DocumentRelationship:
+      type: object
+      required: [from, to, kind]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        kind: { type: string, enum: [parent, heading_for, header_for, footnote_for, caption_for, notes_for, continuation, alternative] }
+    DocumentRuntimeIdentity:
+      type: object
+      required: [name, revision]
+      properties:
+        name: { type: string, maxLength: 256 }
+        revision: { type: string, maxLength: 256 }
+        sha256: { type: string, maxLength: 64 }
+    DocumentStructurePage:
+      type: object
+      required: [document_id, revision, format, method, units, blocks, relationships, total_blocks, offset, next_offset, relationship_offset, next_relationship_offset, total_relationships, can_correct]
+      properties:
+        attachment_revision: { type: string }
+        document_id: { type: string }
+        revision: { type: string }
+        parent_revision: { type: string }
+        parsers: { type: array, maxItems: 32, items: { $ref: '#/components/schemas/DocumentRuntimeIdentity' } }
+        language_packs: { type: array, maxItems: 32, items: { $ref: '#/components/schemas/DocumentRuntimeIdentity' } }
+        provenance_omitted: { type: boolean, description: Some runtime identities exceeded the bounded reader projection. }
+        original_sha256: { type: string }
+        format: { type: string }
+        method: { type: string }
+        author: { type: string }
+        created_at: { type: string, format: date-time }
+        coverage: { $ref: '#/components/schemas/DocumentEvidence' }
+        units: { type: array, items: { $ref: '#/components/schemas/DocumentUnit' } }
+        blocks: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/DocumentBlock' } }
+        relationships: { type: array, maxItems: 2000, items: { $ref: '#/components/schemas/DocumentRelationship' } }
+        total_blocks: { type: integer }
+        offset: { type: integer }
+        next_offset: { type: [integer, 'null'] }
+        relationship_offset: { type: integer }
+        next_relationship_offset: { type: [integer, 'null'] }
+        total_relationships: { type: integer }
+        navigation: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/DocumentNavigationEntry' } }
+        navigation_offset: { type: integer, minimum: 0 }
+        next_navigation_offset: { type: [integer, 'null'] }
+        total_navigation: { type: integer, minimum: 0 }
+        can_correct: { type: boolean }
     Document:
       type: object
       required: [id, name, content_type, size, chunk_count, created_at]
       properties:
+        collection_id: { type: string, description: Current access collection; informational only, never grants permission. }
+        collection_revision: { type: integer, minimum: 1, description: Current document binding revision, distinct from the collection audience revision. }
+        extraction_revision: { type: string, description: Immutable structured extraction identity. Absent for legacy records until explicitly rebuilt. }
+        evidence: { $ref: '#/components/schemas/DocumentEvidence' }
         id: { type: string }
         name: { type: string }
         content_type: { type: string }
@@ -4448,6 +5899,7 @@ components:
           properties:
             session: { type: string, minLength: 1, maxLength: 256 }
             id: { type: string, pattern: '^file-[a-f0-9]{32}$' }
+            revision: { type: string, pattern: '^[a-f0-9]{64}$', description: Pins the extraction copied with its correction ancestry. }
             sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
     DocumentRetention:
       type: object
@@ -4458,10 +5910,63 @@ components:
         revision: { type: integer, minimum: 1 }
         delete_after: { type: integer, format: int64, minimum: 0, maximum: 253402300799, description: UTC Unix seconds; zero retains until explicit deletion. }
         legal_hold: { type: boolean, description: Prevents document deletion, expiry and removal of associated import evidence. }
+    KnowledgeCollection:
+      type: object
+      required: [id, version, revision, name, readers, editors]
+      properties:
+        id: { type: string }
+        version: { type: integer, enum: [1] }
+        revision: { type: integer, minimum: 1 }
+        name: { type: string }
+        owner: { type: string, description: Absent for the legacy shared workspace collection. }
+        readers: { type: array, maxItems: 128, uniqueItems: true, items: { type: string } }
+        editors: { type: array, maxItems: 128, uniqueItems: true, items: { type: string } }
+    CollectionUpdate:
+      type: object
+      additionalProperties: false
+      required: [expected_revision, name, readers, editors]
+      properties:
+        expected_revision: { type: integer, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 256 }
+        readers: { type: array, maxItems: 128, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 256 } }
+        editors: { type: array, maxItems: 128, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 256 } }
+    DocumentCollection:
+      type: object
+      required: [document_id, revision, collection]
+      properties:
+        document_id: { type: string }
+        revision: { type: integer, minimum: 1 }
+        collection: { $ref: '#/components/schemas/KnowledgeCollection' }
+    CollectionMove:
+      type: object
+      additionalProperties: false
+      required: [document_id, expected_revision, expected_source_revision, destination_id, expected_destination_revision]
+      properties:
+        document_id: { type: string, minLength: 1 }
+        expected_revision: { type: integer, minimum: 1 }
+        expected_source_revision: { type: integer, minimum: 1 }
+        destination_id: { type: string, minLength: 1 }
+        expected_destination_revision: { type: integer, minimum: 1 }
+    CollectionAuditEvent:
+      type: object
+      required: [sequence, actor, action, subject, revision, created_at]
+      properties:
+        sequence: { type: integer, format: int64, minimum: 1 }
+        actor: { type: string }
+        action: { type: string }
+        subject: { type: string, description: Opaque collection, import or document identity; no source content. }
+        revision: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
     DocumentImport:
       type: object
       required: [id, name, sha256, bytes, state, attempt, created_at, updated_at]
       properties:
+        extraction_revision: { type: string, description: Immutable extraction accepted for attachment publication; retained after indexing. Absent for imports awaiting extraction. }
+        ocr_language: { type: string, description: OCR pack selection retained across retries and restarts. }
+        ocr_completed_pages: { type: integer, minimum: 0, maximum: 1000, description: Saved OCR page receipts reusable on explicit retry. Not an accuracy or full-extraction guarantee. }
+        evidence: { $ref: '#/components/schemas/DocumentEvidence' }
+        collection_id: { type: string, description: Retained destination; does not itself confer membership. }
+        collection_revision: { type: integer, minimum: 1, description: Reviewed audience revision for explicit collection imports; absent on legacy imports. }
         id: { type: string }
         name: { type: string }
         sha256: { type: string }
@@ -4518,6 +6023,10 @@ components:
       type: object
       required: [languages, document_formats]
       properties:
+        selection_mode: { type: string, enum: [single_language, ordered_languages] }
+        max_languages: { type: integer, minimum: 1, maximum: 3 }
+        manifest_revision: { type: string }
+        unavailable_interface_locales: { type: array, items: { type: string }, description: Interface languages with no pinned OCR pack; never substituted. }
         languages:
           type: array
           items:
@@ -4529,6 +6038,9 @@ components:
               sha256: { type: string }
               state: { type: string, enum: [missing, invalid, installed_verified] }
               qualification: { type: string }
+              interface_locales: { type: array, items: { type: string } }
+              source_url: { type: string, format: uri }
+              bytes: { type: integer }
         document_formats:
           type: array
           items: { $ref: '#/components/schemas/DocumentFormatReadiness' }
@@ -4758,6 +6270,16 @@ components:
         expected_revision: { type: integer, minimum: 0 }
         label: { type: string, minLength: 1, maxLength: 128 }
         content: { type: string, minLength: 1, maxLength: 8192 }
+    AgentProfileDeletionReview:
+      type: object
+      required: [revision, jobs, memory, blocked_jobs, dependencies, token]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        jobs: { type: integer, minimum: 0 }
+        memory: { type: integer, minimum: 0 }
+        blocked_jobs: { type: integer, minimum: 0 }
+        dependencies: { type: integer, minimum: 0 }
+        token: { type: string, pattern: '^[a-f0-9]{64}$' }
     AgentProfileSettings:
       type: object
       additionalProperties: false
@@ -4911,6 +6433,66 @@ components:
             goal: { type: string }
             depends_on: { type: array, items: { type: string } }
             tools: { type: array, items: { type: string } }
+    TaskResourceUsage:
+      type: object
+      description: Run accounting. Root attempts inherit prior root charges; do not sum attempts. Child allocations include pending reservations and retained spent slots. Context preparation is part of the inference allowance, not an additional time charge.
+      required: [model_call_limit, model_calls, child_call_allocations, charged_output_tokens, measured_output_tokens, charged_inference_ns, measured_inference_ns, context_preparations, measured_context_preparation_ns]
+      properties:
+        model_call_limit: { type: integer }
+        model_calls: { type: integer }
+        child_call_allocations: { type: integer }
+        tools:
+          type: object
+          description: Service-observed invocation accounting; does not measure a process after its start invocation returns. Legacy reservations are conservative, not measured historical tool calls.
+          required: [version, calls_per_decision, per_call_ns, reserved_calls, legacy_reserved_calls, charged_ns, measured_ns, unsettled_calls]
+          properties:
+            version: { type: integer }
+            calls_per_decision: { type: integer }
+            per_call_ns: { type: integer, format: int64 }
+            reserved_calls: { type: integer }
+            legacy_reserved_calls: { type: integer }
+            charged_ns: { type: integer, format: int64 }
+            measured_ns: { type: integer, format: int64 }
+            unsettled_calls: { type: integer }
+        processes:
+          type: object
+          description: Owned-process supervised elapsed time, not CPU time. Start reservations remain charged until authenticated terminal timing is received. Missing legacy timing does not mean zero usage. Invocation and process timings overlap and must not be summed as elapsed latency.
+          required: [version, per_decision_ns, starts_per_decision, reserved_starts, legacy_reserved_starts, charged_ns, measured_ns, unsettled_starts]
+          properties:
+            version: { type: integer }
+            per_decision_ns: { type: integer, format: int64 }
+            starts_per_decision: { type: integer }
+            reserved_starts: { type: integer }
+            legacy_reserved_starts: { type: integer }
+            charged_ns: { type: integer, format: int64 }
+            measured_ns: { type: integer, format: int64 }
+            unsettled_starts: { type: integer }
+        storage:
+          type: object
+          description: Root work reservation for private worker copies in logical file bytes, not physical disk allocation or an OS quota. Unknown preparation retains its full reservation; only confirmed artifact release refunds it. Measurements are last observed retained content, not a live disk scan.
+          required: [version, limit_bytes, charged_bytes, retained_copies, measured_bytes, unmeasured_copies]
+          properties:
+            version: { type: integer }
+            limit_bytes: { type: integer, format: int64 }
+            charged_bytes: { type: integer, format: int64 }
+            retained_copies: { type: integer }
+            measured_bytes: { type: integer, format: int64 }
+            unmeasured_copies: { type: integer }
+        input:
+          type: object
+          description: Absent for historical runs without input accounting; absence does not mean zero usage.
+          required: [window, charged_tokens, measured_tokens, unmeasured_calls]
+          properties:
+            window: { type: integer }
+            charged_tokens: { type: integer, format: int64 }
+            measured_tokens: { type: integer, format: int64 }
+            unmeasured_calls: { type: integer }
+        charged_output_tokens: { type: integer, format: int64 }
+        measured_output_tokens: { type: integer, format: int64 }
+        charged_inference_ns: { type: integer, format: int64 }
+        measured_inference_ns: { type: integer, format: int64 }
+        context_preparations: { type: integer }
+        measured_context_preparation_ns: { type: integer, format: int64 }
     TaskContext:
       type: object
       required: [window, estimated_tokens, compactions, archived_messages]
@@ -5040,6 +6622,7 @@ components:
       type: object
       required: [output, task_id, run_id, steps, status, pending_approval, resumable]
       properties:
+        response_preview_allowed: { type: boolean, description: Whether the current generating snapshot may be displayed as provisional response text. Never a verified or completed answer. Absent or false means wait for committed output. Source workflows and computer actions remain buffered. }
         work_id: { type: string, description: Stable work identity, independent of this execution attempt. }
         schedule: { $ref: '#/components/schemas/AgentScheduleOrigin' }
         origin:

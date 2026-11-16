@@ -140,3 +140,26 @@ def test_conversation_answer_preserves_displayed_question_without_model_turn():
         "request_id": "answer-once", "target_id": "conversation/one", "expected_revision": 7,
         "kind": "submit_input", "payload": payload,
     }, retry=False)
+
+
+def test_source_input_preserves_revision_page_and_selection_without_retry():
+    transport = Mock()
+    payload = {"content": "Explain the selected page", "source_session": "Policy",
+               "attachments": [{"id": "file-" + "a" * 32, "revision": "b" * 64, "page": 8}],
+               "knowledge_documents": ["policy"], "use_knowledge": True,
+               "images": [{"name": "figure.png", "data_url": "data:image/png;base64,fixture"}]}
+    Conversations(transport).submit_input("source-once", "conversation", 12, payload)
+    call = transport._request.call_args
+    assert call.args[2]["payload"] == payload
+    assert call.args[2]["request_id"] == "source-once"
+    assert call.kwargs == {"retry": False}
+
+
+def test_library_block_scope_is_sent_atomically_without_retry():
+    transport = Mock()
+    payload = {"content": "Explain this exception", "knowledge_selections": [
+        {"document_id": "policy", "revision": "extraction-original", "block_ids": ["clause", "exception"]}]}
+    Conversations(transport).submit_input("scope-once", "conversation", 12, payload)
+    transport._request.assert_called_once_with("POST", "/api/v2/conversations/conversation/inputs", {
+        "request_id": "scope-once", "target_id": "conversation", "expected_revision": 12,
+        "kind": "submit_input", "payload": payload}, retry=False)

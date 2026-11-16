@@ -117,6 +117,10 @@ func (bm *BinaryManager) GetLlamaServer() (string, error) {
 	return bm.prepareRuntime(context.Background(), false)
 }
 
+func (bm *BinaryManager) GetLlamaServerContext(ctx context.Context) (string, error) {
+	return bm.prepareRuntime(ctx, false)
+}
+
 func (bm *BinaryManager) resolveLlamaServer(ctx context.Context) (string, error) {
 	supports := func(path string) bool { return llamaServerSupportsRequiredFlagsContext(ctx, path) }
 	device := func(path, kind string) bool { return llamaServerHasGPUDeviceContext(ctx, path, kind) }
@@ -151,6 +155,9 @@ func (bm *BinaryManager) resolveLlamaServer(ctx context.Context) (string, error)
 		return path, nil
 	}
 	path := bm.versionedPath()
+	if localRuntimeOnly(ctx) {
+		return "", fmt.Errorf("installed local inference runtime required; automatic download is disabled for this operation")
+	}
 	if err := bm.downloadBinaryContext(ctx, path); err != nil {
 		return "", fmt.Errorf("download llama-server: %w", err)
 	}

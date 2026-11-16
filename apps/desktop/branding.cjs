@@ -11,12 +11,18 @@ function chromeColors(theme, palette) {
 }
 function windowChrome(platform, theme, palette) {
   return { backgroundColor: chromeColors(theme, palette).color, ...(platform === 'win32' ? {
-    titleBarStyle: 'hidden', titleBarOverlay: { ...chromeColors(theme, palette), height: 36 }
+    frame: false
   } : {}) };
 }
 function updateChrome(window, platform, theme, palette) {
   if (!window || window.isDestroyed()) return;
   window.setBackgroundColor(chromeColors(theme, palette).color);
-  if (platform === 'win32') window.setTitleBarOverlay({ ...chromeColors(theme, palette), height: 36 });
 }
-module.exports = { applyBranding, windowChrome, updateChrome };
+function controlWindow(window, action, compact = false) {
+  if (!['minimize','maximize','close'].includes(action)) throw Error('invalid_window_control');
+  if (!window || window.isDestroyed()) return;
+  if (action === 'close') window.close();
+  else if (action === 'minimize') window.minimize();
+  else if (!compact) { if (window.isMaximized()) window.unmaximize(); else window.maximize(); }
+}
+module.exports = { applyBranding, windowChrome, updateChrome, controlWindow };

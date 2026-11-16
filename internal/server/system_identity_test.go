@@ -92,6 +92,9 @@ func TestPublicSystemIdentityIsExactAndContainsNoPrivateState(t *testing.T) {
 	if strings.Contains(response.Body.String(), uiDir) || response.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("private path or cached identity")
 	}
+	if !strings.Contains(response.Body.String(), `"chat-image-orientation-v1"`) {
+		t.Fatal("still-image orientation capability missing")
+	}
 	for _, path := range []string{"/api/v2/system/private", "/api/v2/system-extra"} {
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, httptest.NewRequest("GET", path, nil))

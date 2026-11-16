@@ -4,6 +4,8 @@ Status: approved direction, implementation in progress. No milestone is certifie
 complete. "9/10" describes the ambition, not a rating earned by passing unit tests.
 See the [quality evidence index](README.md) for dated tested changes and the [release evidence](evidence/quality-stages-and-release-evidence.md) for recorded release gates. Implemented source, automated checks, and real-hardware qualification remain separate states.
 
+The [2026-11-15 work-surface redesign](evidence/work-surface-redesign-2026-11-15.md) records the shared navigation, canonical sources, immutable Library selection, reader and result refactor. Full Go, affected race packages, Python, desktop and the renderer fixture inventory have recorded outcomes, alongside a disposable upgrade/restart/rollback rehearsal and real local model smoke answers. Installation is not release qualification: native language approval, physical 8 GB testing, the full document corpus and representative departmental pilots remain separate gates.
+
 ## Historical September 2026 direction (superseded)
 
 This section records the approved direction at that time. The single current

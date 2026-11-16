@@ -7,6 +7,7 @@ async function setup(page:Page,capability=true){
  const state=await craftFixture(page,'en','dark');
  await page.route('**/api/v2/system',r=>r.fulfill({json:{product:'offgrid',version:'fixture',workspace_id:'craft',api_version:2,capabilities:capability?['gguf-offline-import-v1']:[]}}));
  await page.goto('/ui/#/models');
+ if(capability) await page.locator('.model-offline-import > summary').click();
  return state;
 }
 
@@ -48,6 +49,7 @@ test('lost response requires inspection and never automatically replays the uplo
  await expect(panel.locator('p[role=status]')).toContainText('not confirmed');
  await expect(panel.getByRole('button',{name:'Choose GGUF file',exact:true})).toBeDisabled();
  await page.goto('/ui/#/chat');await page.goto('/ui/#/models');
+ await page.locator('.model-offline-import > summary').click();
  await page.getByText('Import a model file',{exact:true}).click();
  await expect(panel.locator('p[role=status]')).toContainText('not confirmed');
  await panel.getByRole('button',{name:'Refresh installed models',exact:true}).click();
@@ -99,6 +101,7 @@ for(const locale of ['en','fr','de','es','ar','sw','sn','nd','zu'] as const) tes
  const state=await craftFixture(page,locale,'light');
  await page.route('**/api/v2/system',r=>r.fulfill({json:{product:'offgrid',workspace_id:'craft',capabilities:['gguf-offline-import-v1']}}));
  await page.setViewportSize({width:390,height:844});await page.goto('/ui/#/models');
+ await page.locator('.model-offline-import > summary').click();
  const copy=modelImport(locale);await page.getByText(copy.title,{exact:true}).click();
  await expect(page.locator('.offline-model-import').getByRole('button',{name:copy.choose,exact:true})).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
@@ -108,7 +111,7 @@ for(const locale of ['en','fr','de','es','ar','sw','sn','nd','zu'] as const) tes
 test('real isolated service stores exact uploaded bytes without selecting or loading the model',async({page})=>{
  test.skip(!process.env.OFFGRID_E2E_URL,'Requires an explicitly configured disposable real service, never the installed workspace');
  await page.addInitScript(()=>{localStorage.setItem('offgrid.onboarding.complete','true');localStorage.setItem('offgrid.locale','en');});
- await page.goto('/ui/#/models');
+ await page.goto('/ui/#/models');await page.locator('.model-offline-import > summary').click();
  const data=Buffer.alloc(1024**2);let p=0;
  const text=(s:string)=>{data.writeBigUInt64LE(BigInt(Buffer.byteLength(s)),p);p+=8;p+=data.write(s,p);};
  data.write('GGUF',p);p+=4;data.writeUInt32LE(3,p);p+=4;data.writeBigUInt64LE(1n,p);p+=8;data.writeBigUInt64LE(1n,p);p+=8;

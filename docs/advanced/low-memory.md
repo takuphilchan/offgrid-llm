@@ -1,115 +1,63 @@
-# Running on 4GB RAM
+﻿# Memory and disk use
 
-OffGrid LLM works on systems with as little as 4GB RAM by using smaller models and efficient quantization.
+Model file size is not total runtime memory. Weights, context/KV caches, compute
+buffers, embedding or voice workers, the desktop renderer and other applications
+all need space. A smaller quantized model may work on a constrained machine;
+installation alone does not qualify it for that machine or for reliable agent work.
+There is no fixed response-time guarantee for a RAM size.
 
-## Quick Start
+## Runtime safeguards
 
-**Find models for your RAM:**
-```bash
-offgrid search llama --ram 4
-offgrid search mistral --ram 4
-```
+Before a llama.cpp model load, OffGrid rechecks available host RAM and GPU memory.
+On Windows it also measures commit headroom: free physical RAM does not guarantee
+that Windows can commit another allocation. CPU budgets use the smaller available
+pool, and GPU loads must retain host commit headroom. A rejected load preserves the
+requested model and context; it does not silently lower quality or discard history.
+These are conservative estimates, not a hard process-memory cap or proof against
+all allocation failures. Other applications can consume memory after measurement.
 
-## Recommended Models for 4GB RAM
+Speculative prewarming has one active operation, a 1 MiB read buffer, a shared
+512 MiB maximum per batch, a 30-second deadline and at most 32 retained status
+records. Its budget also leaves at least 1 GiB or 10% of host RAM as reserve and
+uses at most one quarter of the remaining headroom. Pressure is checked between
+reads. Model loading pauses speculative reads, including a pause/resume cycle that
+happens between reads. Partial reads cannot claim the full model was warmed.
+The OS controls page-cache eviction; prewarming does not pin RAM.
 
-### 1B Models (~1GB RAM)
-- Llama 3.2 1B Instruct (Q4_K_M)
-- Qwen2.5 1.5B Instruct (Q4_K_M)
-- Phi-2 2.7B (Q4_K_M)
+System-memory measurement failure is reported as unknown. Go heap statistics are
+not substituted for total PC RAM. macOS availability is measured instead of
+assuming 80% of installed memory is free.
 
-**Download:**
-```bash
-offgrid search "llama 1b" --ram 4 --limit 3
-offgrid download-hf MaziyarPanahi/Llama-3.2-1B-Instruct-GGUF --file Llama-3.2-1B-Instruct.Q4_K_M.gguf
-```
+## Explicit operator choices
 
-### 3B Models (~2GB RAM)
-- Llama 3.2 3B Instruct (Q4_K_M)
-- Phi-3 Mini 3.8B (Q4_K_M)
-- StableLM 3B (Q4_K_M)
+`OFFGRID_MAX_MODELS=1` limits llama model-cache residency to one model. Existing
+configuration is preserved. This is not a total count of desktop, speech and
+embedding processes and is not a total application RAM limit.
 
-**Download:**
-```bash
-offgrid search "llama 3b" --ram 4
-offgrid download-hf bartowski/Llama-3.2-3B-Instruct-GGUF --file Llama-3.2-3B-Instruct-Q4_K_M.gguf
-```
+`OFFGRID_LOW_MEMORY=true` opts into one cached model, batch size 128, one inference
+slot and q4_0 KV cache. Runtime support for that cache format still matters. It does
+not silently shorten the configured context. Choose a smaller model or the
+Interactive response context explicitly when the current allocation does not fit.
+Quit OffGrid from its tray menu to stop its owned service; merely closing its main
+window intentionally leaves quick access available.
 
-## Understanding Quantization
+## Disk cleanup is separate
 
-**Q2_K** - Smallest files, lowest quality (~0.5GB for 3B models)
-**Q3_K** - Small files, acceptable quality (~0.6GB for 3B models)
-**Q4_K_M** - Recommended balance (~0.8GB for 3B models)
-**Q5_K** - Better quality, larger files (~1GB for 3B models)
+Old installers, preview builds, development caches and rollback snapshots consume
+disk space. They do not themselves stay in model RAM. A nearly full Windows system
+drive can prevent a system-managed page file from expanding. Do not disable the
+page file to reduce disk usage.
 
-For 4GB RAM, stick with Q4_K_M or lower quantizations.
+Before relocating rollback snapshots, confirm they are inactive, copy to a chosen
+archive drive, verify file hashes, and retain a manifest before removing the source
+copy. Keep the matching application/data snapshot for rollback. Do not delete
+conversation databases, model files, credentials, originals or the current desktop
+profile as cache cleanup. Previously exported files and backups have their own
+retention; deleting a live document does not delete those copies.
 
-## RAM Usage Breakdown
+The repeated local development installations can create several historical backup
+folders; ordinary runtime cache clearing is not a backup-retention policy. Build
+temporary directories and rollback copies should use an explicitly selected drive
+with sufficient capacity. Never automatically prune unique recovery snapshots.
 
-```
-1B model (Q4_K_M):
-  Model file: ~0.6GB
-  Runtime overhead: ~0.4GB
-  Total RAM: ~1GB
-
-3B model (Q4_K_M):
-  Model file: ~1.5GB
-  Runtime overhead: ~0.5GB
-  Total RAM: ~2GB
-```
-
-## Performance Tips
-
-**Reduce context window** (saves RAM):
-```bash
-offgrid run model.gguf --context 2048  # Default is 4096
-```
-
-**Disable unnecessary features:**
-- Close other applications
-- Use CPU-only mode if GPU has limited VRAM
-- Avoid very long conversations (clear context periodically)
-
-## What to Expect
-
-**1B models:**
-- Good for: Simple tasks, code completion, basic Q&A
-- Not good for: Complex reasoning, long-form writing
-
-**3B models:**
-- Good for: Most everyday tasks, coding help, summarization
-- Not good for: Very complex reasoning, specialized knowledge
-
-## Troubleshooting
-
-**Out of memory errors:**
-```bash
-# Use smaller model
-offgrid search --ram 4 --limit 5
-
-# Reduce context
-offgrid run model.gguf --context 1024
-
-# Use lighter quantization
-offgrid search llama --quant Q3_K_M
-```
-
-**Slow performance:**
-- This is normal on CPU-only with 4GB RAM
-- 1B models respond in 2-5 seconds
-- 3B models may take 5-15 seconds per response
-
-## Why This Matters
-
-4GB RAM support means OffGrid LLM works on:
-- Budget laptops from 2015-2020
-- Raspberry Pi 4 (4GB model)
-- Entry-level computers worldwide
-- Older hardware still in use
-
-This makes AI accessible regardless of economic constraints or hardware availability.
-
-## Next Steps
-
-- [Model Setup Guide](../guides/models.md)
-- [Performance Tuning](PERFORMANCE.md)
-- [HuggingFace Integration](../guides/huggingface.md)
+Windows commit semantics: [Microsoft MEMORYSTATUSEX documentation](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/ns-sysinfoapi-memorystatusex).

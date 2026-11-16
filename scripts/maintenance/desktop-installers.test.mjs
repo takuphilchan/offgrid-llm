@@ -281,7 +281,7 @@ test('generated archive installer preserves runtimes and refuses active processe
   const installer = match[1].split(/\r?\n/).map(line => line.replace(/^          /, '')).join('\n');
   const root = mkdtempSync(join(tmpdir(), 'offgrid-script-test-'));
   try {
-    for (const name of ['offgrid', 'llama-server', 'offgrid-document-worker', 'document-NOTICE.txt', 'offgrid-ocr-worker', 'ocr-NOTICE.txt', 'execution-runtime/execution-pack.json', 'audio/whisper/whisper', 'audio/piper/piper', 'web/ui/index.html']) {
+    for (const name of ['offgrid', 'llama-server', 'offgrid-document-worker', 'document-NOTICE.txt', 'offgrid-ocr-worker', 'ocr-NOTICE.txt', 'image-NOTICE.txt', 'execution-runtime/execution-pack.json', 'audio/whisper/whisper', 'audio/piper/piper', 'web/ui/index.html']) {
       mkdirSync(join(root, name, '..'), { recursive: true });
       writeFileSync(join(root, name), `fixture ${name}`);
     }
@@ -313,7 +313,7 @@ sudo(){
     mkdirSync(join(root, 'installed/bin'), { recursive: true });
     const result = spawnSync(bash, [join(root, 'install.sh').replaceAll('\\', '/')], { encoding: 'utf8', windowsHide: true, env: { ...process.env, PROCESS_STATUS: '1' } });
     assert.equal(result.status, 0, result.stdout + result.stderr);
-    for (const name of ['execution-runtime/execution-pack.json', 'audio/whisper/whisper', 'audio/piper/piper', 'web/ui/index.html']) {
+    for (const name of ['image-NOTICE.txt', 'execution-runtime/execution-pack.json', 'audio/whisper/whisper', 'audio/piper/piper', 'web/ui/index.html']) {
       assert.equal(readFileSync(join(root, 'installed/bin', name), 'utf8'), `fixture ${name}`);
     }
   } finally { rmSync(root, { recursive: true, force: true }); }

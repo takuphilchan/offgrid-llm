@@ -80,9 +80,29 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 	identity.Capabilities = append(identity.Capabilities, "agent-response-profiles-v1")
 	identity.Capabilities = append(identity.Capabilities, "scoped-knowledge-chat-v1")
 	identity.Capabilities = append(identity.Capabilities, "session-images-v1")
+	identity.Capabilities = append(identity.Capabilities, "chat-image-orientation-v1")
 	identity.Capabilities = append(identity.Capabilities, "session-files-v1")
 	identity.Capabilities = append(identity.Capabilities, "document-imports-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-evidence-receipts-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-structure-review-v1")
+	identity.Capabilities = append(identity.Capabilities, "session-document-corrections-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-navigation-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-comparison-jobs-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-analysis-history-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-analysis-export-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-synthesis-candidates-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-synthesis-export-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-synthesis-review-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-composition-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-linked-evidence-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-image-ocr-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-tiff-ocr-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-ocr-language-selection-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-ocr-mixed-languages-v1")
+	identity.Capabilities = append(identity.Capabilities, "document-ocr-page-recovery-v1")
+	identity.Capabilities = append(identity.Capabilities, "session-attachment-structure-v1")
 	identity.Capabilities = append(identity.Capabilities, "knowledge-retention-v1")
+	identity.Capabilities = append(identity.Capabilities, "knowledge-collections-v1")
 	identity.Capabilities = append(identity.Capabilities, "document-attachment-imports-v1")
 	identity.Capabilities = append(identity.Capabilities, "session-history-seed-v1")
 	identity.Capabilities = append(identity.Capabilities, "gguf-bundles-v1")
@@ -94,6 +114,9 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 			identity.Capabilities = append(identity.Capabilities, "conversation-inputs-v1")
 			if s.config != nil && s.config.EnableConversationPreview {
 				identity.Capabilities = append(identity.Capabilities, "conversation-input-admission-v1")
+				if s.sessionHandlers != nil && s.sessionHandlers.agentServer == s {
+					identity.Capabilities = append(identity.Capabilities, "conversation-source-inputs-v1", "conversation-source-scopes-v1")
+				}
 			}
 		}
 	}
@@ -109,7 +132,7 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 	if s.agentManager != nil && s.agentManager.ActivityReplaySupported() {
 		identity.Capabilities = append(identity.Capabilities, "durable-agent-events-v2")
 		if s.agentRunner != nil {
-			identity.Capabilities = append(identity.Capabilities, "task-lifecycle-v2", "bounded-readonly-delegation-v1", "task-context-archive-v1", "agent-profiles-v1", "agent-context-resources-v1", "agent-schedules-v1")
+			identity.Capabilities = append(identity.Capabilities, "task-lifecycle-v2", "bounded-readonly-delegation-v1", "task-context-archive-v1", "agent-profiles-v1", "agent-profile-deletion-v1", "agent-context-resources-v1", "agent-schedules-v1")
 			if s.sessionHandlers != nil && s.sessionHandlers.agentServer == s {
 				identity.Capabilities = append(identity.Capabilities, "agent-conversations-v1")
 			}

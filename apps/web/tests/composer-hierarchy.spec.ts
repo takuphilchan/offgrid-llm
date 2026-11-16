@@ -10,12 +10,9 @@ test('response tuning is disclosed without changing defaults or the draft', asyn
   const trigger=page.getByRole('button',{name:'Response settings',exact:true});await trigger.click();
   const panel=page.locator('.composer-context-menu > .utility-popover-panel');
   await expect(panel.getByRole('combobox',{name:'Context profile',exact:true})).not.toBeVisible();
-  await panel.locator('.response-advanced > summary').click();
-  const context=panel.getByRole('combobox',{name:'Context profile',exact:true});
-  await expect(context).toBeVisible();
-  const previous=await context.inputValue();
-  await page.keyboard.press('Escape');await expect(trigger).toBeFocused();await trigger.click();
-  await expect(context).toHaveValue(previous);
+  await expect(panel.locator('a[href="#/settings/responses"]')).toBeVisible();
+  await page.keyboard.press('Escape');await expect(trigger).toBeFocused();
+  await expect(page.locator('.composer-actions .model-select-trigger')).toBeVisible();
   await expect(draft).toHaveValue('Keep my draft');expect(state.writes).toEqual([]);
 });
 
@@ -40,11 +37,12 @@ for (const locale of ['en', 'ar'] as const) for (const width of [320, 768, 1280]
   await expect(page.locator('.agent-settings-summary input, .agent-settings-summary select')).toHaveCount(0);
   await page.keyboard.press('Escape'); await expect(trigger).toBeFocused();
   await expect(editor).toHaveValue('Keep this exact draft — café 日本語');
-  await expect(page.locator('.composer-active-context .chat-execution-workspace')).toBeVisible();
+  await expect(page.locator('.composer-actions .composer-pinned-model')).toBeVisible();
+  await expect(page.locator('.composer-utilities .chat-execution-workspace')).not.toBeVisible();
   await expect(page.locator('.composer-context .chat-agent-tools')).toBeVisible();
   await expect(page.locator('.composer-footer .voice-settings > button')).toHaveCount(0);
   const preferences=page.locator('.composer-context-menu > button');
-  await expect(page.locator('.voice-settings-inline')).toBeVisible();
+  await expect(page.locator('.composer-settings-link[href="#/settings/voice"]')).toBeVisible();
   await page.keyboard.press('Escape');await expect(preferences).toBeFocused();
   await expect(page.locator('.composer-context .composer-context-menu')).toHaveCount(0);
   await expect(page.locator('.composer-footer .composer-utilities .composer-context-menu > button')).toBeVisible();

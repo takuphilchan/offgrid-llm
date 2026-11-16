@@ -8,9 +8,14 @@ import (
 
 const maxActorAttachmentBytes int64 = 500 << 20
 
-// Caller holds mutationMu. Count original bytes, including interrupted uploads,
-// across this owner’s conversations. Admin access does not merge owner quotas.
-func (s *ScopedManager) checkAttachmentActorQuota(name string, incoming, limit int64) error {
+// Caller holds mutationMu. Count originals or derived graphs, including
+// interrupted writes, across this owner's conversations. Admin access does not
+// merge owner quotas; originals and structures use independent byte limits.
+func (s *ScopedManager) checkAttachmentActorQuota(name string, incoming, limit int64, suffixes ...string) error {
+	suffix := ".bin"
+	if len(suffixes) > 0 {
+		suffix = suffixes[0]
+	}
 	target, err := s.Load(name)
 	if err != nil {
 		return err
@@ -44,7 +49,7 @@ func (s *ScopedManager) checkAttachmentActorQuota(name string, incoming, limit i
 			return err
 		}
 		for _, entry := range entries {
-			if !strings.HasSuffix(entry.Name(), ".bin") {
+			if !strings.HasSuffix(entry.Name(), suffix) && !(suffix == ".revision-" && strings.Contains(entry.Name(), ".revision-")) && !(suffix == ".ocr-" && strings.Contains(entry.Name(), ".ocr-")) && !(suffix == ".structure" && strings.Contains(entry.Name(), ".structure.") && strings.HasSuffix(entry.Name(), ".partial")) {
 				continue
 			}
 			info, err := entry.Info()

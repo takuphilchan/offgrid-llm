@@ -12,10 +12,12 @@ import (
 	"io"
 	"os"
 	"time"
+
+	"github.com/takuphilchan/offgrid-llm/internal/documentocr"
 )
 
 const languageSHA = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
-const revision = "tesseract-5.5.4-acfa0590d55b0762-offgrid1"
+const revision = "tesseract-5.5.4-21dd0440aa3cc3cc-offgrid2"
 
 type request struct {
 	Protocol    int    `json:"protocol"`
@@ -69,7 +71,8 @@ func process(ctx context.Context, input []byte) receipt {
 		return fail("document_invalid")
 	}
 	out.PNG_SHA, out.LanguageSHA = req.PNG_SHA, req.LanguageSHA
-	if req.Language != "eng" {
+	pack, supported := documentocr.LookupSelection(req.Language)
+	if !supported {
 		return fail("document_ocr_language_unavailable")
 	}
 	if len(req.Model) == 0 {
@@ -78,7 +81,7 @@ func process(ctx context.Context, input []byte) receipt {
 	if len(req.Model) > 32<<20 || len(req.PNG) > 24<<20 {
 		return fail("document_limit")
 	}
-	if req.LanguageSHA != languageSHA || digest(req.Model) != languageSHA {
+	if req.LanguageSHA != pack.SHA256 || !documentocr.ValidateModels(req.Language, req.Model) {
 		return fail("document_ocr_language_invalid")
 	}
 	if digest(req.PNG) != req.PNG_SHA {
@@ -95,7 +98,7 @@ func process(ctx context.Context, input []byte) receipt {
 	if err != nil {
 		return fail("document_invalid")
 	}
-	engine, err := newEngine(ctx, req.Model)
+	engine, err := newEngineForLanguage(ctx, req.Model, req.Language)
 	if err != nil {
 		if ctx.Err() != nil {
 			return fail("document_timeout")

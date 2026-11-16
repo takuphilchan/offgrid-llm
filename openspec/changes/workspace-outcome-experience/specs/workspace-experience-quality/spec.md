@@ -4,6 +4,30 @@ Set observable visual and behavioral quality gates for the shared web and deskto
 
 ## ADDED Requirements
 
+### Requirement: Journey-level redesign acceptance
+The redesign SHALL be evaluated against complete quick-conversation,
+current-page question, requirements-review/export, comparison, authorized folder
+task and failure-recovery journeys. An inspected interactive prototype SHALL
+establish the layout and interaction contract before broad implementation.
+Fixture results, real service/model behavior, native language review and packaged
+installation checks SHALL be recorded separately. Historical component checks
+SHALL NOT automatically satisfy these new journey gates.
+
+#### Scenario: Review the proposed visual direction
+- **WHEN** the owner reviews the interaction prototype
+- **THEN** desktop and narrow layouts include populated, working, completed and recovery states with realistic content lengths
+- **AND** staged content is identified and prototype approval is not represented as working inference or release qualification
+
+#### Scenario: Verify the integrated redesign
+- **WHEN** the implementation is considered for release
+- **THEN** the six journeys have recorded behavior and screenshot evidence, all 29 locales have rendered coverage for new states, and themes/RTL/keyboard/200% zoom are checked
+- **AND** unresolved model, hardware, accessibility or native-language review gaps are named rather than replaced by aggregate completion percentages
+
+#### Scenario: Verify responsiveness without disguising runtime latency
+- **WHEN** the new renderer is measured on the fixed baseline hardware and fixture set
+- **THEN** p95 local interaction acknowledgment is below 100 ms and warm-navigation latency and renderer memory do not regress by more than 10% without a documented resolution before rollout
+- **AND** inference, import and retrieval durations are reported independently from animation and local acknowledgment
+
 ### Requirement: Predictable settings and native controls
 The sidebar gear SHALL navigate directly to Settings. Workspace status, refresh
 and sign-out SHALL remain in a separately identified overflow menu. Language and
@@ -273,3 +297,23 @@ high-contrast behavior, and running-app protection.
 - **WHEN** a user opens the uninstaller
 - **THEN** it explains which application files are removed and that models and saved work are retained
 - **AND** removal does not stop unrelated services or erase the retained workspace
+
+### Requirement: Theme-aware voice motion
+The voice surface SHALL use the active theme and distinguish listening ambience from measured microphone energy and processing state.
+
+#### Scenario: Listen with and without motion
+- **WHEN** microphone capture is active without incoming sound
+- **THEN** gentle continuous motion communicates the listening state without claiming detected speech
+- **AND** changing the active palette changes the orb colors while either system or application reduced motion stops all animation and energy scaling
+
+### Requirement: Themed trusted desktop confirmations
+Desktop confirmations SHALL use application palette tokens while retaining host ownership, explicit scope, cancellation and keyboard access.
+
+#### Scenario: Close a running terminal
+- **WHEN** terminal close is requested
+- **THEN** a host-owned modal shows the folder and stop warning with Cancel focused
+- **AND** only an explicit response from that modal main frame can authorize stopping; closing or losing the modal cancels
+
+#### Scenario: Navigation while a permission prompt is queued
+- **WHEN** the parent navigates or closes before a queued decision is made
+- **THEN** active and queued prompts cancel without granting access

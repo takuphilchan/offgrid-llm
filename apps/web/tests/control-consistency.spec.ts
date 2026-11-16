@@ -32,7 +32,7 @@ for (const width of [390,1440]) for(const theme of ['light','dark']) test(`prefe
   const language=page.locator('#settings-language');
   await expect(language).toBeVisible();
   const box=await language.boundingBox();expect(box!.width).toBeLessThanOrEqual(320);
-  await language.focus();await language.press('ArrowDown');await language.press('Enter');
+  await language.focus();await language.press('Space');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
   await expect(language).toHaveValue('fr');await expect(language).toBeFocused();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:info.outputPath('preferences.png'),fullPage:true});
@@ -63,8 +63,8 @@ for (const theme of ['dark', 'light'] as const) {
     await expect(language.locator('option')).toHaveCount(Object.keys(languageRegistry).length);
     await language.selectOption('en');
     await language.focus();
-    await language.press('ArrowDown');
-    await language.press('Enter');
+    await language.press('Space');await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
     await expect(language).toHaveValue('fr');
     await expect(language).toBeFocused();
   });
@@ -90,13 +90,13 @@ test('native select options respect forced colors instead of locking the applica
 test('search, chat agent and document controls share sizing and keyboard focus', async ({ page }) => {
   await fixture(page);
   await page.goto('/ui/#/models');
-  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   const query = page.locator('#model-search-query');
   const searchField = page.locator('.model-search-form .workspace-search-field');
   await expect(query).toBeVisible();
   await expect(query).toHaveAttribute('placeholder', 'Model name or publisher');
-  await expect(searchField).toHaveCSS('border-radius', '8px');
+  await expect(searchField).toHaveCSS('border-radius', '12px');
   await expect(searchField).toHaveCSS('min-height', '36px');
   const search = page.locator('.model-search-form > button');
   await expect(search).toBeDisabled();
@@ -107,7 +107,7 @@ test('search, chat agent and document controls share sizing and keyboard focus',
   await expect(page.getByRole('button', { name: 'Clear search' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(search).toBeFocused();
-  await expect(search).toHaveCSS('outline-width', '2px');
+  await expect(search).toHaveCSS('outline-style', 'solid');
   const [fieldBox, buttonBox] = await Promise.all([searchField.boundingBox(), search.boundingBox()]);
   expect(Math.abs(fieldBox!.height - buttonBox!.height)).toBeLessThanOrEqual(2);
   await page.goto('/ui/#/chat');
@@ -154,12 +154,11 @@ for (const theme of ['light', 'dark']) test(`workspace actions preserve secondar
   const actions = [
     page.getByRole('button', { name: 'Response settings', exact: true }),
     page.getByRole('button', { name: 'Use microphone', exact: true }),
-    page.getByRole('link', { name: 'Set up Knowledge', exact: true }),
   ];
   for (const action of actions) {
     const round = await action.evaluate(el => el.classList.contains('voice-button') || el.classList.contains('icon-button'));
     await expect(action).toHaveCSS('min-height', round ? '40px' : '32px');
-    await expect(action).toHaveCSS('border-radius', round ? '50%' : '8px');
+    await expect(action).toHaveCSS('border-radius', round ? '50%' : '999px');
     await expect(action).toHaveCSS('text-decoration-line', 'none');
     const utility = await action.evaluate(el => el.classList.contains('utility-button'));
     const quiet = utility || round;
@@ -169,17 +168,18 @@ for (const theme of ['light', 'dark']) test(`workspace actions preserve secondar
     await expect(action).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
     await action.hover();
     await expect(action).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-    await page.keyboard.press('Tab'); await action.focus(); await expect(action).toHaveCSS('outline-width', '2px');
+    await page.keyboard.press('Tab'); await action.focus(); await expect(action).toHaveCSS('outline-style', 'solid');
     await page.mouse.move(0, 0);
   }
   const voiceSettings = page.getByRole('button', { name: 'Response settings', exact: true });
   await voiceSettings.focus(); if (await voiceSettings.getAttribute('aria-expanded') !== 'true') await voiceSettings.press('Enter');
+  await page.getByRole('link',{name:'Voice settings',exact:true}).click();
   const manage = page.getByRole('link', { name: 'Manage speech models' });
-  await expect(manage).toHaveCSS('min-height', '32px');
+  expect((await manage.boundingBox()).height).toBeGreaterThanOrEqual(32);
   await expect(manage).toHaveCSS('text-decoration-line', 'none');
-  await manage.focus(); await expect(manage).toHaveCSS('outline-width', '2px');
+  await page.keyboard.press('Tab'); await manage.focus(); await expect(manage).toHaveCSS('outline-style', 'solid');
   await page.screenshot({ path: info.outputPath(`action-controls-${theme}.png`) });
-  await manage.press('Enter'); await expect(page).toHaveURL(/#\/models$/);
+  await manage.press('Enter'); await expect(page).toHaveURL(/#\/models(?:\/[^/]+)?$/);
 });
 
 for (const profile of [

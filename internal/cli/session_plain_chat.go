@@ -127,6 +127,9 @@ func (d *ConversationFileDraft) Command(ctx context.Context, client *serviceclie
 			return true, "", err
 		}
 		d.Files[n-1] = item
+		if item.Coverage == "partial_text_only" {
+			return true, "Available OCR text selected: " + TerminalSafe(item.Name) + ". Recognition remains uncertain; this is not a complete document review.", nil
+		}
 		if item.Coverage == "native_text_only" {
 			return true, "Available text selected: " + TerminalSafe(item.Name) + ". Image/scanned content remains unread; answers cannot cover the whole document.", nil
 		}
@@ -184,6 +187,12 @@ func (d *ConversationFileDraft) Command(ctx context.Context, client *serviceclie
 			}
 			if item.Coverage == "native_text_only" {
 				fmt.Fprintln(&text, "  Native text only; image/scanned content remains unread.")
+			}
+			if item.Evidence != nil && item.Evidence.Status != "complete" {
+				fmt.Fprintf(&text, "  Extraction: %s; not a complete review.\n", TerminalSafe(item.Evidence.Status))
+				for _, warning := range item.Evidence.Warnings {
+					fmt.Fprintln(&text, "  "+TerminalSafe(warning.Message))
+				}
 			}
 		}
 		return true, strings.TrimSpace(text.String()), nil

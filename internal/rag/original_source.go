@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/takuphilchan/offgrid-llm/internal/document"
 )
 
 const maxOriginalBytes = 50 << 20
@@ -19,6 +20,7 @@ var ErrOriginalUnavailable = errors.New("original document unavailable")
 // Its authority is the enclosing Knowledge workspace's existing policy; it is
 // not a conversation-private attachment or a cross-workspace deduplication key.
 type OriginalSource struct {
+	revisions []*document.Extraction
 	importRef *importLease
 	Name      string
 	MediaType string
@@ -48,7 +50,18 @@ func (e *Engine) ingestOriginal(ctx context.Context, name string, data []byte, r
 			return nil, fmt.Errorf("extraction does not match original source")
 		}
 	}
-	return e.ingestText(ctx, name, content, metadata, ranges, result.ContentType, original)
+	retained := make(map[string]string, len(metadata)+len(result.Metadata))
+	for key, value := range metadata {
+		retained[key] = value
+	}
+	result.bindCoverage()
+	for key, value := range result.Metadata {
+		retained[key] = value
+	}
+	if err := result.bindStructure(); err != nil {
+		return nil, err
+	}
+	return e.ingestText(ctx, name, content, retained, ranges, result.ContentType, original, result.Structure)
 }
 
 func (e *Engine) Original(id string) (*OriginalSource, error) {

@@ -11,6 +11,9 @@ import { documentRecovery } from '../../i18n/document-recovery';
 import { documentProgress } from '../../i18n/document-progress';
 import { runDocumentImport } from './import-progress';
 import { knowledgeOptions } from '../../i18n/knowledge-options';
+import type {CollectionPolicy} from '../../api/collections';
+import {KnowledgeImportReview} from './KnowledgeImportReview';
+import {collectionErrorMessage} from '../../i18n/collection-errors';
 
 type Result = { name: string; state: 'pending' | 'importing' | 'added' | 'failed' | 'unknown'; detail?: string };
 type Props = { status: RAGStatus | null; disabled: boolean; setupDisabled?: boolean; refresh: () => Promise<void>; durable?: boolean; actionTarget?: HTMLElement | null };
@@ -31,13 +34,15 @@ export function KnowledgeImport({ status, disabled, setupDisabled = disabled, re
   const [results, setResults] = useState<Result[]>([]);
   const [notice, setNotice] = useState('');
   const [revision, setRevision] = useState(0);
+  const [pending,setPending]=useState<File[]>([]);
   const formats = status?.document_formats;
   const accept = formats?.filter(format => ['available', 'installed_unchecked'].includes(format.runtime_state)).flatMap(format => format.extensions).join(',');
 
-  const add = async (files: File[]) => {
+  const add = async (files: File[],destination:CollectionPolicy,language?:string) => {
     if (disabled || locked.current || !files.length) return;
     if (files.length > 20) { setNotice(copy.batchLimit); return; }
     locked.current = true;
+    setPending([]);
     const abort = new AbortController(); operation.current = abort;
     setBusy(true); setNotice('');
     setResults(files.map(file => ({ name: file.name, state: 'pending' })));
@@ -56,28 +61,20 @@ export function KnowledgeImport({ status, disabled, setupDisabled = disabled, re
         }
         update(index, 'importing');
         try {
-          if (durable) {
-            const accepted = await api.acceptDocumentImport(file, crypto.randomUUID(), abort.signal);
-            if (!accepted.id) { update(index, 'unknown', copy.unknown); break; }
+          {
+            const accepted = await api.collections.acceptImport(destination.id,destination.revision,file,crypto.randomUUID(),abort.signal,language);
+            if (!accepted.id || accepted.state!=='accepted' || !accepted.sha256) { update(index, 'unknown', copy.unknown); break; }
             // Navigation/cancellation after acceptance must not start extraction.
             if (!mounted.current || abort.signal.aborted) { update(index, 'unknown', copy.unknown); break; }
             const completed = await runDocumentImport(accepted.id, abort.signal, state => {
               if (mounted.current) update(index, 'importing', documentProgress(locale, state));
             });
-            if (completed.state !== 'ready' || !completed.document_id) { update(index, 'unknown', copy.unknown); break; }
+            if (completed.id!==accepted.id||completed.collection_id!==destination.id||completed.collection_revision!==destination.revision||completed.sha256!==accepted.sha256||completed.state !== 'ready' || !completed.document_id) { update(index, 'unknown', copy.unknown); break; }
             update(index, 'added'); continue;
           }
-          const response = await api.ingest(file);
-          if (!response.success || !response.document?.id) {
-            update(index, 'unknown', copy.unknown); break;
-          }
-          // A legacy acknowledgment may omit readiness. Never label that indexed.
-          if (response.document.index_status !== 'ready') {
-            update(index, 'unknown', copy.unknown); break;
-          }
-          update(index, 'added');
         } catch (reason) {
           const code = reason instanceof APIError ? reason.data?.error_code ?? reason.data?.error?.code : undefined;
+          if(code?.startsWith('collection_')){update(index,'unknown',collectionErrorMessage());break;}
           // Only explicit pre-extraction/input rejection proves no publication.
           const rejected = ['document_invalid', 'document_empty', 'document_unsupported', 'document_unsupported_format', 'document_encrypted', 'document_limit', 'document_storage_limit', 'document_parser_unavailable', 'document_ocr_required', 'document_ocr_language_missing', 'document_ocr_language_invalid', 'document_ocr_language_storage'].includes(code);
           if (code === 'document_busy') { update(index, 'failed', documentRecovery(locale, code)); break; }
@@ -90,11 +87,12 @@ export function KnowledgeImport({ status, disabled, setupDisabled = disabled, re
   };
 
   const actions=(status?.enabled || status === null) && <div className="knowledge-import-actions">
-      <input hidden ref={input} type="file" multiple disabled={disabled || busy} accept={accept} data-knowledge-import onChange={event => { const files = [...event.target.files ?? []]; event.target.value = ''; void add(files); }} />
+      <input hidden ref={input} type="file" multiple disabled={disabled || busy || pending.length>0} accept={accept} data-knowledge-import onChange={event => { const files = [...event.target.files ?? []]; event.target.value = ''; if(disabled||locked.current||!files.length)return;if(files.length>20){setNotice(copy.batchLimit);return;}setNotice('');setPending(files); }} />
       <button type="button" className="secondary-button library-create-action" disabled={disabled || busy} onClick={() => input.current?.click()}><Icon name="plus" size={17} />{busy ? copy.importing : messages.knowledge.add}</button>
-      {durable && busy && <button type="button" className="text-button" onClick={() => operation.current?.abort()}>{messages.models.cancel}</button>}
+      {busy && <button type="button" className="text-button" onClick={() => operation.current?.abort()}>{messages.models.cancel}</button>}
     </div>;
   return <section className="knowledge-import" aria-label={messages.knowledge.add}>
+    {pending.length>0&&<KnowledgeImportReview files={pending} disabled={disabled} close={()=>setPending([])} confirm={(destination,language)=>void add(pending,destination,language)}/>}
     {actionTarget ? createPortal(actions,actionTarget) : actions}
     {notice && <p role="alert">{notice}</p>}
     {!!results.length && <div className="knowledge-import-results">
@@ -106,7 +104,7 @@ export function KnowledgeImport({ status, disabled, setupDisabled = disabled, re
     {!!formats?.length && <details className="knowledge-document-options">
       <summary>{knowledgeOptions(locale)}</summary>
       <div>
-        <details className="knowledge-format-details"><summary>{copy.formats}</summary><ul>{formats.map(format => <li key={format.id}><strong>{format.extensions.join(', ')}</strong><span>{format.runtime_state === 'unavailable' ? copy.unavailable : format.runtime_state === 'installed_unchecked' ? copy.unchecked : copy.available}</span>{format.id === 'pdf' && !format.ocr_available && format.ocr_state !== 'installed_unchecked' && <span>{['language_missing', 'language_invalid'].includes(format.ocr_state ?? '') ? documentRecovery(locale, 'document_ocr_language_missing') : copy.ocr}</span>}</li>)}</ul></details>
+        <details className="knowledge-format-details"><summary>{copy.formats}</summary><ul>{formats.map(format => <li key={format.id}><strong>{format.extensions.join(', ')}</strong><span>{format.runtime_state === 'unavailable' ? copy.unavailable : format.runtime_state === 'installed_unchecked' ? copy.unchecked : copy.available}</span>{['pdf','image_document','tiff'].includes(format.id) && !format.ocr_available && format.ocr_state !== 'installed_unchecked' && <span>{['language_missing', 'language_invalid'].includes(format.ocr_state ?? '') ? documentRecovery(locale, 'document_ocr_language_missing') : copy.ocr}</span>}</li>)}</ul></details>
         {formats.some(format => format.ocr_state && format.ocr_state !== 'unavailable') && <OCRLanguageSetup disabled={setupDisabled || busy} refresh={refresh} />}
       </div>
     </details>}

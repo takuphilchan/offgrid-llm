@@ -94,6 +94,12 @@ func RunSessionFiles(ctx context.Context, client *serviceclient.Client, args []s
 					return err
 				}
 			}
+			if a.Evidence != nil && a.Evidence.Status != "complete" {
+				fmt.Fprintf(out, "  Extraction coverage: %s (%d/%d units readable). Not a complete document review.\n", TerminalSafe(a.Evidence.Status), a.Evidence.ReadableUnits, a.Evidence.TotalUnits)
+				for _, warning := range a.Evidence.Warnings {
+					fmt.Fprintln(out, "  "+TerminalSafe(warning.Message))
+				}
+			}
 		}
 		return nil
 	case "remove-attachment":

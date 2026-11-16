@@ -3,6 +3,7 @@ import { craftFixture } from './helpers/craft-fixture';
 import { knowledgeImport } from '../src/i18n/knowledge-import';
 import { documentRecovery } from '../src/i18n/document-recovery';
 import { knowledgeUnitLabels } from '../src/i18n/knowledge-locators';
+import {reviewKnowledgeImport,collectionImportReceipt} from './helpers/collection-review';
 
 const formats = [
   { id: 'text', extensions: ['.txt'], runtime_state: 'available', max_file_bytes: 50 * 1024 * 1024 },
@@ -13,20 +14,25 @@ const file = (name: string) => ({ name, mimeType: name.endsWith('.pdf') ? 'appli
 async function setup(page: Page, locale = 'en') {
   const state = await craftFixture(page, locale, 'light');
   await page.route('**/v1/rag/status', route => route.fulfill({ json: { enabled: true, embedding_model: 'local-search', stats: {}, document_formats: formats } }));
+  await page.route('**/v1/documents/imports*',route=>{
+    const id=new URL(route.request().url()).searchParams.get('id');
+    return route.fulfill({json:id?collectionImportReceipt(id,'ready'):{imports:[]}});
+  });
   return state;
 }
 
 test('batch import retains individual outcomes and rejects unavailable PDFs before transfer', async ({ page }, info) => {
   await setup(page);
   const uploaded: string[] = [];
-  await page.route('**/v1/documents/ingest', route => {
+  await page.route('**/v1/collections/imports?*', route => {
     const body = route.request().postData() ?? '';
     uploaded.push(body);
-    return route.fulfill({ json: { success: true, document: { id: `d${uploaded.length}`, index_status: 'ready' } } });
+    return route.fulfill({status:202,json:collectionImportReceipt(`d${uploaded.length}`)});
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/ui/#/knowledge');
   await page.locator('[data-knowledge-import]').setInputFiles([file('Alpha 日本語.txt'), file('Report.pdf'), file('Bravo.txt')]);
+  expect(uploaded).toHaveLength(0);await reviewKnowledgeImport(page);
   await expect(page.locator('.knowledge-import-results [data-state="added"]')).toHaveCount(2);
   await expect(page.locator('.knowledge-import-results')).toHaveCSS('border-top-width','0px');
   await expect(page.locator('.knowledge-import-results')).toHaveCSS('border-bottom-width','0px');
@@ -44,9 +50,10 @@ test('batch import retains individual outcomes and rejects unavailable PDFs befo
 test('lost acknowledgment stops the batch without replay or false success', async ({ page }) => {
   await setup(page);
   let attempts = 0;
-  await page.route('**/v1/documents/ingest', route => { attempts++; return route.abort('failed'); });
+  await page.route('**/v1/collections/imports?*', route => { attempts++; return route.abort('failed'); });
   await page.goto('/ui/#/knowledge');
   await page.locator('[data-knowledge-import]').setInputFiles([file('uncertain.txt'), file('not-sent.txt')]);
+  await reviewKnowledgeImport(page);
   await expect(page.locator('.knowledge-import-results [data-state="unknown"]')).toContainText(knowledgeImport('en').unknown);
   await expect(page.locator('.knowledge-import-results [data-state="pending"]')).toContainText('not-sent.txt');
   expect(attempts).toBe(1);
@@ -57,13 +64,14 @@ test('lost acknowledgment stops the batch without replay or false success', asyn
 test('a parser rejection does not discard other files and no incomplete receipt counts as added', async ({ page }) => {
   await setup(page);
   let attempts = 0;
-  await page.route('**/v1/documents/ingest', route => {
+  await page.route('**/v1/collections/imports?*', route => {
     attempts++;
     return attempts === 1 ? route.fulfill({ status: 422, json: { error_code: 'document_invalid', error: 'Invalid document.' } })
-      : route.fulfill({ json: { success: true, document: { id: 'unready', index_status: 'indexing' } } });
+      : route.fulfill({json:collectionImportReceipt('unready','indexing')});
   });
   await page.goto('/ui/#/knowledge');
   await page.locator('[data-knowledge-import]').setInputFiles([file('invalid.txt'), file('incomplete.txt'), file('later.txt')]);
+  await reviewKnowledgeImport(page);
   await expect(page.locator('.knowledge-import-results [data-state="failed"]')).toContainText(documentRecovery('en', 'document_invalid')!);
   await expect(page.locator('.knowledge-import-results [data-state="unknown"]')).toContainText('incomplete.txt');
   await expect(page.locator('.knowledge-import-results [data-state="pending"]')).toContainText('later.txt');
@@ -76,6 +84,7 @@ test('file and batch limits are checked before upload', async ({ page }) => {
   await page.route('**/v1/rag/status', route => route.fulfill({ json: { enabled: true, stats: {}, document_formats: [{ ...formats[0], max_file_bytes: 3 }] } }));
   await page.goto('/ui/#/knowledge');
   await page.locator('[data-knowledge-import]').setInputFiles([file('large.txt')]);
+  await reviewKnowledgeImport(page);
   await expect(page.locator('.knowledge-import-results')).toContainText(knowledgeImport('en').sizeLimit);
   // Validation appears before the asynchronous library refresh unlocks import.
   // A user cannot choose another batch until this control is enabled again.
@@ -88,12 +97,13 @@ test('file and batch limits are checked before upload', async ({ page }) => {
 for (const code of ['document_storage_limit', 'document_unsupported_format']) test(`known rejection stays actionable without replay: ${code}`, async ({ page }) => {
   await setup(page);
   let attempts = 0;
-  await page.route('**/v1/documents/ingest', route => {
+  await page.route('**/v1/collections/imports?*', route => {
     attempts++;
     return route.fulfill({ status: 422, json: { error_code: code, error: 'Import rejected before publication.' } });
   });
   await page.goto('/ui/#/knowledge');
   await page.locator('[data-knowledge-import]').setInputFiles(file('rejected.txt'));
+  await reviewKnowledgeImport(page);
   await expect(page.locator('.knowledge-import-results [data-state="failed"]')).toContainText(documentRecovery('en', code)!);
   await expect(page.locator('.knowledge-import-results [data-state="unknown"]')).toHaveCount(0);
   await expect(page.locator('.knowledge-import-results [data-state="added"]')).toHaveCount(0);
@@ -104,9 +114,10 @@ test('a failed library refresh preserves the import acknowledgment', async ({ pa
   await setup(page);
   let imported = false;
   await page.route('**/v1/rag/status', route => route.fulfill(imported ? { status: 503, json: { error: 'Status unavailable' } } : { json: { enabled: true, stats: {}, document_formats: formats } }));
-  await page.route('**/v1/documents/ingest', route => { imported = true; return route.fulfill({ json: { success: true, document: { id: 'saved', index_status: 'ready' } } }); });
+  await page.route('**/v1/collections/imports?*', route => { imported = true; return route.fulfill({status:202,json:collectionImportReceipt('saved')}); });
   await page.goto('/ui/#/knowledge');
   await page.locator('[data-knowledge-import]').setInputFiles(file('saved.txt'));
+  await reviewKnowledgeImport(page);
   await expect(page.locator('.knowledge-import-results [data-state="added"]')).toContainText('saved.txt');
   await expect(page.getByRole('alert')).toContainText('Status unavailable');
   await expect(page.getByRole('button', {name:'Add document',exact:true})).toBeDisabled();
@@ -117,10 +128,11 @@ test('navigating away does not dispatch the rest of a batch', async ({ page }) =
   let release: (() => void) | undefined;
   const gate = new Promise<void>(resolve => { release = resolve; });
   let attempts = 0;
-  await page.route('**/v1/documents/ingest', async route => { attempts++; await gate; await route.fulfill({ json: { success: true, document: { id: 'one', index_status: 'ready' } } }); });
+  await page.route('**/v1/collections/imports?*', async route => { attempts++; await gate; await route.fulfill({status:202,json:collectionImportReceipt('one')}); });
   await page.goto('/ui/#/knowledge');
   await expect(page.getByRole('button', {name:'Add document',exact:true})).toBeEnabled();
   await page.locator('[data-knowledge-import]').setInputFiles([file('one.txt'), file('two.txt')]);
+  await reviewKnowledgeImport(page);
   await expect.poll(() => attempts).toBe(1);
   await page.evaluate(() => { location.hash = '#/chat'; });
   await expect(page.locator('.composer textarea')).toBeVisible();

@@ -131,6 +131,9 @@ func recordedControlReceipt(q controlReader, scope ControlScope, requestID, expe
 	}
 	var receipt ConversationCommandReceipt
 	err = json.Unmarshal(data, &receipt)
+	if err == nil && receipt.Conversation != nil {
+		_, err = readControlRecord(q, scope, receipt.Conversation.ID, "conversation")
+	}
 	return &receipt, err
 }
 

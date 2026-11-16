@@ -3,6 +3,7 @@ import { openSettings } from './helpers/workspace-actions';
 import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { installChatJob, openAgentChat, sendAgentMessage } from './fixtures/chat-job';
+import {reviewKnowledgeImport,collectionImportReceipt} from './helpers/collection-review';
 
 // Stateful API-boundary journeys. No model downloads, user recordings, native
 // input or claims of model quality. Real-service storage tests run separately.
@@ -46,7 +47,15 @@ async function workspace(page: Page) {
       return r.fulfill({status:202,json:state.run});
     }
     if(path===`/api/v2/jobs/${id}` && method==='DELETE') {state.run.prompt='';return r.fulfill({json:{success:true}});}
-    if(path==='/v1/documents/ingest') state.documents=[{id:'doc',name:'Journey.txt',size:16,chunk_count:1,index_status:'ready',source_retained:true}];
+    if(path==='/v1/collections'){
+      const collection={id:'workspace',version:1,revision:1,name:'Workspace',readers:[],editors:[]};
+      return r.fulfill({json:new URL(req.url()).searchParams.has('id')?collection:{collections:[collection]}});
+    }
+    if(path==='/v1/collections/imports')return r.fulfill({status:202,json:collectionImportReceipt('journey-import')});
+    if(path==='/v1/documents/imports'&&method==='POST'){
+      state.documents=[{id:'doc',name:'Journey.txt',size:16,chunk_count:1,index_status:'ready',source_retained:true}];
+      return r.fulfill({json:collectionImportReceipt('journey-import','ready')});
+    }
     if(path==='/v1/documents/delete') state.documents=[];
     const bodies:Record<string,unknown>={
       '/api/v2/system':{product:'offgrid',version:'journey',api_version:2,workspace_id:'journey',capabilities:['task-first-agents-v2','durable-agent-events-v2']},
@@ -111,14 +120,15 @@ test('04 synthetic dictation is editable, chosen speech models persist and playb
   const wav=Buffer.alloc(364);wav.write('RIFF');wav.writeUInt32LE(356,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(16000,24);wav.writeUInt32LE(32000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(320,40);
   await page.route('**/v1/audio/speech',r=>r.fulfill({contentType:'audio/wav',body:wav}));
   await page.goto('/ui/#/chat');await page.getByRole('button',{name:'Response settings',exact:true}).click();
-  await chooseModel(page, 'Recognition model', 'asr@r1');await chooseModel(page, 'Speech model', 'tts@r1');await page.keyboard.press('Escape');
+  await page.getByRole('link',{name:'Voice settings',exact:true}).click();
+  await chooseModel(page, 'Recognition model', 'asr@r1');await chooseModel(page, 'Speech model', 'tts@r1');await page.goto('/ui/#/chat');
   await page.getByRole('button',{name:'Use microphone',exact:true}).click();await page.getByRole('button',{name:'Stop recording',exact:true}).click();
   await expect(page.locator('.composer textarea')).toHaveValue('Dictated draft.');expect(s.turns).toEqual([]);
   await page.getByRole('button',{name:'Response settings',exact:true}).click();
   await page.getByRole('checkbox',{name:'Speak responses',exact:true}).click();await expect(page.getByRole('checkbox',{name:'Speak responses',exact:true})).toBeChecked();await page.keyboard.press('Escape');await send(page,'Edited dictated draft.');
   await expect.poll(()=>page.evaluate(()=>(window as any).playing)).toBe(true);await page.getByRole('button',{name:'Stop reading',exact:true}).first().click();
   await expect.poll(()=>page.evaluate(()=>(window as any).playing)).toBe(false);expect(s.turns).toHaveLength(1);expect(await page.evaluate(()=>(window as any).trackStopped)).toBe(true);
-  await nav(page,'agents');await nav(page,'chat');await page.getByRole('button',{name:'Response settings',exact:true}).click();await page.getByRole('button',{name:'Recognition model',exact:true}).click();await expect(page.getByRole('radiogroup',{name:'Recognition model'}).getByRole('radio',{checked:true})).toHaveValue('asr@r1');
+  await nav(page,'agents');await page.goto('/ui/#/settings/voice');await page.getByRole('button',{name:'Recognition model',exact:true}).click();await expect(page.getByRole('radiogroup',{name:'Recognition model'}).getByRole('radio',{checked:true})).toHaveValue('asr@r1');
 });
 test('05 ordinary task creates once and exposes saved output with an integrity-checked artifact',async({page})=>{
   const s=await workspace(page);await start(page,s);await expect(page.locator('.message.assistant')).toContainText(output.trim());
@@ -152,7 +162,7 @@ test('08 lost acceptance is recovered by saved identity without repeating uncert
 test('09 discovery keeps meaningful variants in one review and transfers only the chosen file',async({page})=>{
   const s=await workspace(page);await page.route('**/v1/search?*',r=>r.fulfill({json:{results:[{id:'fixture/repo',name:'Fixture model',author:'fixture',size_bytes:12288}]}}));
   await page.route('**/v1/search/files?*',r=>r.fulfill({json:{files:[{id:'small',file:'small.gguf',size_bytes:4096,supported:true},{id:'large',file:'large.gguf',size_bytes:8192,supported:true}]}}));
-  await page.goto('/ui/#/models');await page.getByRole('tab',{name:'Discover models',exact:true}).click();await page.getByRole('button',{name:'Search Hugging Face',exact:true}).click();await page.getByRole('searchbox').fill('fixture');await page.getByRole('button',{name:'Search',exact:true}).click();
+  await page.goto('/ui/#/models');await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();await page.getByRole('button',{name:'Search Hugging Face',exact:true}).click();await page.getByRole('searchbox').fill('fixture');await page.getByRole('button',{name:'Search',exact:true}).click();
   await page.getByRole('button',{name:'Review download',exact:true}).click();
   await chooseModel(page,'GGUF file / quantization','large');expect(s.writes).toEqual([]);await page.getByRole('button',{name:'Download',exact:true}).click();
   expect(s.writes).toHaveLength(1);expect(JSON.stringify(s.writes[0].data)).toContain('large.gguf');
@@ -163,21 +173,22 @@ test('10 interrupted model transfer survives navigation, resumes explicitly and 
   await page.route('**/api/v2/models/operations',r=>r.fulfill({json:{operations:[op]}}));
   await page.route('**/api/v2/models/operations/operation/resume',r=>{s.writes.push({path:'resume',data:{}});op.state='complete';return r.fulfill({json:op});});
   await page.route('**/api/v2/models/packages/speech/r1/remove',r=>{removed=true;s.writes.push({path:'remove',data:{}});return r.fulfill({json:{removed:true}});});
-  await page.goto('/ui/#/models');await page.getByRole('button',{name:'Speech recognition',exact:true}).click();await nav(page,'chat');await nav(page,'models');
+  await page.goto('/ui/#/models');await page.locator('.model-category-filter').selectOption({label:'Speech recognition'});await nav(page,'chat');await nav(page,'models');
   await page.getByRole('button',{name:'Resume',exact:true}).click();await page.locator('.package-card').getByRole('button',{name:'Delete',exact:true}).click();expect(removed).toBe(false);
   await page.getByRole('dialog').getByRole('button',{name:'Confirm delete',exact:true}).click();expect(removed).toBe(true);expect(s.writes.map(w=>w.path)).toEqual(['resume','remove']);expect(s.models).toBe(true);
 });
 test('11 document import, source inspection, disabled indexing and explicit deletion form one journey',async({page})=>{
   const s=await workspace(page);await page.goto('/ui/#/knowledge');await page.locator('input[type=file]').setInputFiles({name:'Journey.txt',mimeType:'text/plain',buffer:Buffer.from('Journey source.')});
+  await reviewKnowledgeImport(page);
   await expect(page.getByRole('heading',{name:'Journey.txt'})).toBeVisible();await page.getByRole('button',{name:'View source',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('Journey source.');await page.keyboard.press('Escape');
   await nav(page,'chat');s.knowledge=false;await nav(page,'knowledge');await page.getByRole('button',{name:'Manage document: Journey.txt'}).click();await expect(page.getByRole('button',{name:'Reindex',exact:true})).toBeDisabled();
-  await page.getByRole('button',{name:'Delete',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm delete',exact:true}).click();expect(s.documents).toEqual([]);expect(s.writes.map(w=>w.path)).toEqual(['/v1/documents/ingest','/v1/documents/delete']);
+  await page.getByRole('button',{name:'Delete',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm delete',exact:true}).click();expect(s.documents).toEqual([]);expect(s.writes.map(w=>w.path)).toEqual(['/v1/collections/imports','/v1/documents/imports','/v1/documents/delete']);
 });
 test('12 Activity opens canonical work; history deletion and preferences preserve an unrelated draft',async({page})=>{
   const s=await workspace(page);s.run.prompt='Completed journey';await page.goto('/ui/#/chat');await page.locator('.composer textarea').fill('Keep my private draft');await nav(page,'activity');
   await page.getByRole('button',{name:/^Completed journey/}).click();await expect(page).toHaveURL(new RegExp(id));await nav(page,'activity');
   await page.getByRole('button',{name:'Manage history: Completed journey',exact:true}).click();await page.getByRole('button',{name:'Delete task',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm delete',exact:true}).click();
-  await nav(page,'settings');await page.getByRole('button',{name:'Dark',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');await nav(page,'chat');await expect(page.locator('.composer textarea')).toHaveValue('Keep my private draft');
+  await nav(page,'settings');await page.getByRole('button',{name:'Appearance',exact:true}).click();await page.getByRole('button',{name:'Dark',exact:true}).click();await expect(page.locator('html')).toHaveAttribute('data-theme','dark');await nav(page,'chat');await expect(page.locator('.composer textarea')).toHaveValue('Keep my private draft');
   expect(s.run.prompt).toBe('');expect(s.writes.map(w=>w.path)).toEqual([`/api/v2/jobs/${id}`]);
 });
 import { refreshWorkspace } from './helpers/workspace-actions';

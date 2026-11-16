@@ -175,8 +175,8 @@ func (s *SQLiteStore) publishStagedIndex(ctx context.Context, stagePath string) 
 	}
 	for _, query := range []string{
 		`DELETE FROM chunks`,
-		`INSERT INTO chunks (id,document_id,content,chunk_index,start_char,end_char,page,section,content_hash,embedding,created_at)
-		 SELECT id,document_id,content,chunk_index,start_char,end_char,page,section,content_hash,embedding,created_at FROM rebuilt.chunks`,
+		`INSERT INTO chunks (id,document_id,content,chunk_index,start_char,end_char,page,section,content_hash,embedding,created_at,search_terms,embedding_v1)
+		 SELECT id,document_id,content,chunk_index,start_char,end_char,page,section,content_hash,embedding,created_at,search_terms,embedding_v1 FROM rebuilt.chunks`,
 		`UPDATE documents SET chunk_count=(SELECT chunk_count FROM rebuilt.documents r WHERE r.id=documents.id),
 		 content_hash=(SELECT content_hash FROM rebuilt.documents r WHERE r.id=documents.id),
 		 indexed_at=(SELECT indexed_at FROM rebuilt.documents r WHERE r.id=documents.id),index_status='ready',last_error=''`,

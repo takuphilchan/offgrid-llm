@@ -3,15 +3,19 @@ package rag
 import (
 	"sort"
 	"strings"
+
+	"github.com/takuphilchan/offgrid-llm/internal/document"
 )
 
 // SourceCell identifies an actual stored worksheet cell, including its displayed
 // formula/cache annotation. Document ranges use absolute UTF-8 byte offsets;
 // parser units use offsets relative to the sheet text.
 type SourceCell struct {
-	Reference string `json:"reference"`
-	Start     int    `json:"start_byte"`
-	End       int    `json:"end_byte"`
+	Data      *document.Cell `json:"data,omitempty"`
+	Headers   []string       `json:"headers,omitempty"`
+	Reference string         `json:"reference"`
+	Start     int            `json:"start_byte"`
+	End       int            `json:"end_byte"`
 }
 
 func validCellReference(ref string) bool {

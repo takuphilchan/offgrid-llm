@@ -98,6 +98,7 @@ FROM alpine:3.24 AS application-artifacts
 COPY --from=go-builder /build/offgrid /usr/local/bin/offgrid
 COPY --from=go-builder /build/offgrid-ocr-worker /usr/local/bin/offgrid-ocr-worker
 COPY --from=ocr-assets /build/runtimes/ocr/worker/assets/NOTICE.txt /usr/local/share/offgrid/ocr-NOTICE.txt
+COPY internal/documentimage/NOTICE.txt /usr/local/share/offgrid/image-NOTICE.txt
 COPY --from=go-builder /build/offgrid-document-worker /usr/local/bin/offgrid-document-worker
 COPY --from=document-assets /build/runtimes/pdfium/assets/NOTICE.txt /usr/local/share/offgrid/document-NOTICE.txt
 COPY --from=go-builder /build/execution-runtime /usr/local/bin/execution-runtime
@@ -181,6 +182,7 @@ COPY --from=go-builder /build/execution-runtime /usr/local/bin/execution-runtime
 COPY --from=llama-builder /build/llama.cpp/build/bin/llama-server /var/lib/offgrid/bin/llama-server
 COPY --from=go-builder /build/offgrid-ocr-worker /usr/local/bin/offgrid-ocr-worker
 COPY --from=ocr-assets /build/runtimes/ocr/worker/assets/NOTICE.txt /usr/local/share/offgrid/ocr-NOTICE.txt
+COPY internal/documentimage/NOTICE.txt /usr/local/share/offgrid/image-NOTICE.txt
 COPY --from=go-builder /build/offgrid-document-worker /usr/local/bin/offgrid-document-worker
 COPY --from=document-assets /build/runtimes/pdfium/assets/NOTICE.txt /usr/local/share/offgrid/document-NOTICE.txt
 

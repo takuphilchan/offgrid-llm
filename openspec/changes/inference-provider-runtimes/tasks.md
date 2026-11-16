@@ -1,5 +1,20 @@
 # Tasks
 
+## 7. Memory-pressure follow-up (2026-11-15)
+
+- [x] 7.1 Measure Windows commit headroom separately from physical RAM and apply
+  it to model load admission without changing requested allocations. Test CPU,
+  GPU, exhausted commit, unknown measurement and ordinary capacity cases.
+- [x] 7.2 Bound prewarming to one active operation, a finite byte/time budget and
+  bounded history; stop on pressure or pause, propagate read failures, and test
+  repeated async requests and cancellation without leaked producer goroutines.
+- [x] 7.3 Document memory versus disk limits and the verified local archive
+  relocation; run resource/inference/server checks and preserve user data.
+
+Evidence: `docs/quality/evidence/reader-library-flow-2026-11-15.md` (memory/archive
+section); safeguards and limits: `docs/advanced/low-memory.md`. Verified disk
+recovery is not a claim about freed runtime RAM or full hardware qualification.
+
 ## 1. Contracts and metadata
 
 - [x] 1.1 Add the provider lifecycle interface, typed worker protocol, event

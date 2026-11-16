@@ -138,7 +138,7 @@ func TestCollectionPolicyMigrationPreservesLegacySourcesAndFailsClosed(t *testin
 		t.Fatal(err)
 	}
 	// Recreate the pre-policy database shape, retaining its real document table.
-	if _, err := store.db.Exec(`DROP TRIGGER documents_retention_insert; DROP TABLE document_retention; DROP TRIGGER imports_collection_insert; DROP TABLE import_collections; DROP TRIGGER documents_collection_insert; DROP TABLE document_collections; DROP TABLE knowledge_collections; DROP TABLE knowledge_policy_migrations;`); err != nil {
+	if _, err := store.db.Exec(`ALTER TABLE document_imports DROP COLUMN ocr_language; DROP TABLE knowledge_collection_audit; DROP TRIGGER documents_retention_insert; DROP TABLE document_retention; DROP TRIGGER imports_collection_insert; DROP TABLE import_collections; DROP TRIGGER documents_collection_insert; DROP TABLE document_collections; DROP TABLE knowledge_collections; DROP TABLE knowledge_policy_migrations;`); err != nil {
 		t.Fatal(err)
 	}
 	store.Close()

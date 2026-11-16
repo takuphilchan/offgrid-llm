@@ -30,7 +30,7 @@ func (s *Server) taskKnowledgeAllowed(actor string, task *agents.Task) bool {
 	if c.KnowledgeContext != "" && len(ids) == 0 {
 		return false
 	}
-	return s.savedKnowledgeAllowed(actor, ids)
+	return s.savedKnowledgeAllowed(actor, ids) && s.taskAttachmentsAllowed(actor, task)
 }
 
 // Session ownership and sessions:all do not grant access to retained source

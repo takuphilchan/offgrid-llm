@@ -60,7 +60,7 @@ func (m *Manager) ControlRecords(scope ControlScope, kind, after string, limit i
 		return nil, err
 	}
 	defer db.Close()
-	rows, err := db.Query(`SELECT id,snapshot FROM agent_control_records WHERE workspace=? AND actor=? AND kind=? AND id>? ORDER BY id LIMIT ?`, scope.Workspace, scope.Actor, kind, after, limit+1)
+	rows, err := db.Query(`SELECT id,snapshot FROM agent_control_records WHERE workspace=? AND actor=? AND kind=? AND id>? AND NOT EXISTS (SELECT 1 FROM agent_conversation_deletions d WHERE d.workspace=agent_control_records.workspace AND d.actor=agent_control_records.actor AND d.conversation_id=agent_control_records.id) ORDER BY id LIMIT ?`, scope.Workspace, scope.Actor, kind, after, limit+1)
 	if err != nil {
 		return nil, err
 	}

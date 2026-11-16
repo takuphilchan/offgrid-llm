@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
@@ -30,7 +31,9 @@ func RunPlainConversationTurn(ctx context.Context, client *serviceclient.Client,
 	}
 	name := args[1]
 	request := serviceclient.ConversationRequest{RequestID: rand.Text()}
-	var paths, ids, words []string
+	var paths, ids, words, knowledgeIDs []string
+	var knowledgeSelections []api.ConversationKnowledgeSelection
+	page := 0
 	questionID := ""
 	intent := ""
 	for i := 2; i < len(args); i++ {
@@ -40,13 +43,29 @@ func RunPlainConversationTurn(ctx context.Context, client *serviceclient.Client,
 			break
 		}
 		switch arg {
-		case "--file", "--attachment", "--model", "--request-id", "--image", "--answer", "--intent":
+		case "--file", "--attachment", "--model", "--request-id", "--image", "--answer", "--intent", "--page", "--knowledge-document", "--knowledge-selection":
 			if i+1 == len(args) {
 				return Usage("%s needs a value", arg)
 			}
 			i++
 			value := args[i]
 			switch arg {
+			case "--page":
+				n, err := strconv.Atoi(value)
+				if err != nil || n < 1 {
+					return Usage("--page needs a positive page number")
+				}
+				page = n
+			case "--knowledge-selection":
+				var scope api.ConversationKnowledgeSelection
+				decoder := json.NewDecoder(strings.NewReader(value))
+				decoder.DisallowUnknownFields()
+				if decoder.Decode(&scope) != nil || decoder.Decode(new(any)) != io.EOF || scope.DocumentID == "" || scope.Revision == "" || (scope.Page < 1 && len(scope.BlockIDs) == 0) || len(knowledgeSelections) >= 16 {
+					return Usage("--knowledge-selection requires a revision-pinned document_id and page or block_ids JSON object")
+				}
+				knowledgeSelections = append(knowledgeSelections, scope)
+			case "--knowledge-document":
+				knowledgeIDs = append(knowledgeIDs, value)
 			case "--intent":
 				if value != "message" && value != "new_work" && value != "correction" {
 					return Usage("--intent must be message, new_work or correction; use --answer QUESTION_ID for answers")
@@ -90,10 +109,33 @@ func RunPlainConversationTurn(ctx context.Context, client *serviceclient.Client,
 	if err != nil {
 		return err
 	}
-	if saved.CanonicalID != "" {
-		if len(paths)+len(ids)+len(request.Images) > 0 || request.Knowledge {
-			return Usage("this conversation currently accepts text input; document and image admission is not enabled")
+	hasSources := len(paths)+len(ids)+len(request.Images)+len(knowledgeIDs)+len(knowledgeSelections) > 0 || request.Knowledge
+	if page > 0 && len(paths)+len(ids) != 1 {
+		return Usage("--page requires exactly one --file or --attachment")
+	}
+	if saved.CanonicalID != "" && hasSources {
+		if err := client.RequireCapability(ctx, "conversation-source-inputs-v1"); err != nil {
+			return err
 		}
+		if questionID != "" || intent == "correction" {
+			return Usage("answers and corrections do not accept source changes")
+		}
+	}
+	if len(knowledgeSelections) > 0 {
+		if saved.CanonicalID == "" || len(knowledgeIDs) > 0 || request.Knowledge {
+			return Usage("--knowledge-selection requires canonical input without broad Knowledge retrieval")
+		}
+		if err := client.RequireCapability(ctx, "conversation-source-scopes-v1"); err != nil {
+			return err
+		}
+	}
+	if len(knowledgeIDs) > 0 && saved.CanonicalID == "" {
+		return Usage("--knowledge-document requires a canonical conversation")
+	}
+	if page > 0 && saved.CanonicalID == "" {
+		return Usage("--page requires a canonical conversation")
+	}
+	if saved.CanonicalID != "" && !hasSources {
 		if questionID != "" {
 			return sendCanonicalInput(ctx, client, saved.CanonicalID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: "answer", QuestionID: questionID}, out, jsonMode)
 		}
@@ -114,7 +156,7 @@ func RunPlainConversationTurn(ctx context.Context, client *serviceclient.Client,
 			return sendCanonicalInput(ctx, client, conversation.ID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: intent}, out, jsonMode)
 		}
 	}
-	if intent != "" {
+	if intent != "" && saved.CanonicalID == "" {
 		return Usage("explicit input intent requires a canonical conversation and conversation input support on the service")
 	}
 	if len(paths)+len(ids) > 0 {
@@ -153,6 +195,13 @@ func RunPlainConversationTurn(ctx context.Context, client *serviceclient.Client,
 			return err
 		}
 		request.Attachments = append(request.Attachments, sessions.AttachmentReference{ID: item.ID, Revision: item.Revision})
+	}
+	if saved.CanonicalID != "" {
+		refs := make([]api.ConversationAttachment, len(request.Attachments))
+		for i, ref := range request.Attachments {
+			refs[i] = api.ConversationAttachment{ID: ref.ID, Revision: ref.Revision, Page: page}
+		}
+		return sendCanonicalInput(ctx, client, saved.CanonicalID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: intent, SourceSession: name, Attachments: refs, Images: request.Images, KnowledgeDocuments: knowledgeIDs, KnowledgeSelections: knowledgeSelections, UseKnowledge: request.Knowledge}, out, jsonMode)
 	}
 	return sendPlainConversation(ctx, client, name, request, out, jsonMode)
 }

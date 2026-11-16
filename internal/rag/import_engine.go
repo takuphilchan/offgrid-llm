@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/takuphilchan/offgrid-llm/internal/document"
 	"path/filepath"
 	"sync"
 )
@@ -110,6 +111,7 @@ func (e *Engine) RunImport(parent context.Context, owner, id string) (doc *Docum
 	// can continue while a library document is being indexed.
 	var data []byte
 	var parsed *ParseResult
+	var history []*document.Extraction
 	err = func() error {
 		release, acquireErr := sharedExtractionScheduler.acquire(ctx, extractionQueueTimeout)
 		if acquireErr != nil {
@@ -124,7 +126,18 @@ func (e *Engine) RunImport(parent context.Context, owner, id string) (doc *Docum
 		if readErr != nil {
 			return readErr
 		}
-		parsed, readErr = e.DocumentParser().parseContext(ctx, data, r.Name, filepath.Ext(r.Name))
+		history, readErr = s.importRevisions(lease, r.SHA256)
+		if readErr != nil || len(history) > 0 {
+			return readErr
+		}
+		parser := e.DocumentParserForOCRLanguage(r.OCRLanguage)
+		parser.UseOCRCheckpoints(s.importOCRCheckpoints(lease))
+		parsed, readErr = parser.parseContext(ctx, data, r.Name, filepath.Ext(r.Name))
+		if parsed != nil && ctx.Err() == nil {
+			if saveErr := s.saveImportCoverage(lease, parsed); saveErr != nil {
+				return saveErr
+			}
+		}
 		return readErr
 	}()
 	if err != nil {
@@ -137,6 +150,9 @@ func (e *Engine) RunImport(parent context.Context, owner, id string) (doc *Docum
 	}
 	if err = s.advanceImport(lease, "extracting", "indexing", ""); err != nil {
 		return nil, err
+	}
+	if len(history) > 0 {
+		return e.ingestImportedRevisions(ctx, r, data, history, &lease)
 	}
 	metadata := map[string]string{"original_filename": r.Name, "file_ext": filepath.Ext(r.Name), "content_type": parsed.ContentType}
 	for key, value := range parsed.Metadata {

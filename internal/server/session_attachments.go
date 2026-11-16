@@ -1,14 +1,17 @@
 package server
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"mime"
 	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/takuphilchan/offgrid-llm/internal/document"
 	"github.com/takuphilchan/offgrid-llm/internal/rag"
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
@@ -17,9 +20,9 @@ import (
 func attachmentServiceError(err error) error {
 	switch {
 	case errors.Is(err, sessions.ErrAttachmentContextLimit):
-		return newCodedServiceError(422, "attachment_context_limit", "Attached text exceeds the direct-chat limit. Choose smaller files or use Knowledge retrieval; no source was silently truncated.", nil)
+		return newCodedServiceError(422, "attachment_context_limit", "Attached evidence exceeds the direct-chat processing limit. Choose smaller files or use Knowledge retrieval; no source was silently truncated.", nil)
 	case errors.Is(err, sessions.ErrAttachmentLimit):
-		return newCodedServiceError(413, "attachment_limit", "Use up to eight files, 50 MiB each, 100 MiB per conversation and 500 MiB per account.", nil)
+		return newCodedServiceError(413, "attachment_limit", "A file, extracted-structure or storage limit was reached. Inspect retained attachments or use a smaller document. Originals allow eight files, 50 MiB each, 100 MiB per conversation and 500 MiB per account; structured extraction has separate processing and storage limits.", nil)
 	case errors.Is(err, sessions.ErrAttachmentUnavailable):
 		return newCodedServiceError(422, "attachment_unavailable", "An attached file is unavailable, changed or not prepared. Review the attachment before sending; your draft is retained.", nil)
 	case errors.Is(err, sessions.ErrAttachmentInUse):
@@ -71,6 +74,20 @@ func (h *SessionHandlers) handleSessionAttachments(w http.ResponseWriter, r *htt
 		_, _ = w.Write(data)
 		return
 	}
+	if r.Method == http.MethodGet && id != "" && subaction == "structure" {
+		h.sessionAttachmentStructure(w, r, name, id)
+		return
+	}
+	if r.Method == http.MethodGet && id != "" && subaction == "revisions" {
+		history, err := scope.AttachmentHistory(name, id)
+		if err != nil {
+			writeSessionError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(history)
+		return
+	}
 	if r.Method == http.MethodGet && id != "" && subaction == "passage" {
 		start, startErr := strconv.Atoi(r.URL.Query().Get("start"))
 		end, endErr := strconv.Atoi(r.URL.Query().Get("end"))
@@ -94,14 +111,35 @@ func (h *SessionHandlers) handleSessionAttachments(w http.ResponseWriter, r *htt
 			writeSessionError(w, err)
 			return
 		}
+		pinned := r.URL.Query().Get("revision")
+		if pinned == "" {
+			pinned = a.Revision
+		}
+		selected, text, parserRevision, graph, err := scope.AttachmentReviewDocument(name, id, pinned)
+		if err != nil {
+			writeSessionError(w, err)
+			return
+		}
+		a = selected
 		parser := rag.NewDocumentParser()
 		if h.agentServer != nil && h.agentServer.ragEngine != nil {
 			parser = h.agentServer.ragEngine.DocumentParser()
 		}
+		var retained []retainedImageText
+		if graph != nil && a.Status == "ready" && !r.URL.Query().Has("page") {
+			serveRetainedAttachmentPreview(w, r, a, data, graph, func() bool {
+				_, _, _, _, err := scope.AttachmentReviewDocument(name, id, pinned)
+				return err == nil
+			})
+			return
+		}
+		if a.Evidence != nil && a.Evidence.Format == "image_document" && !r.URL.Query().Has("page") {
+			retained = append(retained, retainedImageText{digest: a.SHA256, text: text, coverage: a.Evidence, revision: parserRevision, graph: graph})
+		}
 		serveDocumentPreview(w, r, parser, a.Name, data, func() bool {
-			current, _, err := scope.AttachmentOriginal(name, id)
+			current, _, _, _, err := scope.AttachmentReviewDocument(name, id, pinned)
 			return err == nil && current.SHA256 == a.SHA256
-		})
+		}, retained...)
 		return
 	}
 	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
@@ -114,6 +152,10 @@ func (h *SessionHandlers) handleSessionAttachments(w http.ResponseWriter, r *htt
 		return
 	}
 	defer unlock()
+	if r.Method == http.MethodPost && id != "" && subaction == "corrections" {
+		h.sessionAttachmentCorrection(w, r, name, id)
+		return
+	}
 	if r.Method == http.MethodDelete && id != "" && subaction == "" {
 		if err := scope.DeleteAttachment(name, id); err != nil {
 			writeSessionError(w, err)
@@ -127,6 +169,11 @@ func (h *SessionHandlers) handleSessionAttachments(w http.ResponseWriter, r *htt
 	var data []byte
 	var err error
 	if r.Method == http.MethodPost && id == "" {
+		language, languageErr := documentOCRLanguage(r)
+		if languageErr != nil {
+			writeDocumentIngestError(w, languageErr)
+			return
+		}
 		var filename, mediaType string
 		data, filename, mediaType, err = readDocumentUpload(r)
 		if err != nil {
@@ -137,7 +184,7 @@ func (h *SessionHandlers) handleSessionAttachments(w http.ResponseWriter, r *htt
 			writeErrorWithCode(w, "This file format is not supported for document attachment.", 422, "document_unsupported_format")
 			return
 		}
-		a, err = scope.CreateAttachment(name, filename, mediaType, data)
+		a, err = scope.CreateAttachmentWithOCRLanguage(name, filename, mediaType, data, language)
 	} else if r.Method == http.MethodPost && id != "" && subaction == "prepare" {
 		a, data, err = scope.AttachmentOriginal(name, id)
 	} else {
@@ -148,6 +195,19 @@ func (h *SessionHandlers) handleSessionAttachments(w http.ResponseWriter, r *htt
 		writeSessionError(w, err)
 		return
 	}
+	// Retry always uses the persisted selection, even when the pack was missing
+	// on the original attempt. A query cannot mutate an immutable source record.
+	if r.URL.Query().Has("ocr_language") {
+		language, languageErr := documentOCRLanguage(r)
+		stored := a.OCRLanguage
+		if stored == "" {
+			stored = "eng"
+		}
+		if languageErr != nil || language != stored {
+			writeErrorWithCode(w, "The OCR language differs from the saved attachment. Upload a new source to change it.", 409, "document_ocr_language_invalid")
+			return
+		}
+	}
 	if a.Status == "ready" {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"attachment": a})
@@ -155,13 +215,29 @@ func (h *SessionHandlers) handleSessionAttachments(w http.ResponseWriter, r *htt
 	}
 	parser := rag.NewDocumentParser()
 	if h.agentServer != nil && h.agentServer.ragEngine != nil {
-		parser = h.agentServer.ragEngine.DocumentParser()
+		parser = h.agentServer.ragEngine.DocumentParserForOCRLanguage(a.OCRLanguage)
 	}
+	parser.UseOCRCheckpoints(scope.AttachmentOCRCheckpoints(name, a.ID, a.SHA256))
 	textOnly := r.URL.Query().Get("text_only") == "true"
 	var result *rag.ParseResult
 	var parseErr error
+	retainedParser := ""
 	if textOnly {
 		result, parseErr = parser.PreviewContext(r.Context(), data, a.Name, filepath.Ext(a.Name))
+		if result != nil && result.Metadata["format"] == "image_document" {
+			current, retained, revision, graph, readErr := scope.AttachmentReviewDocument(name, a.ID)
+			if readErr != nil {
+				writeSessionError(w, readErr)
+				return
+			}
+			if current.SHA256 != a.SHA256 {
+				writeSessionError(w, sessions.ErrAttachmentUnavailable)
+				return
+			}
+			if applyRetainedImageText(result, a.SHA256, []retainedImageText{{digest: a.SHA256, text: retained, coverage: current.Evidence, revision: revision, graph: graph}}) {
+				retainedParser = revision
+			}
+		}
 		var problem *rag.ParseError
 		if result != nil && strings.TrimSpace(result.Content) != "" && errors.As(parseErr, &problem) && problem.Code == "document_ocr_required" {
 			parseErr = nil
@@ -204,10 +280,22 @@ func (h *SessionHandlers) handleSessionAttachments(w http.ResponseWriter, r *htt
 	if result != nil && result.Metadata["extractor_revision"] != "" {
 		parserRevision += "/" + result.Metadata["extractor_revision"]
 	}
+	var structure *document.Extraction
+	if result != nil {
+		structure = result.Structure
+	}
 	if textOnly && parseErr == nil && result.State == rag.ExtractionPartial {
-		a, err = scope.PrepareAttachmentTextOnly(name, a.ID, text, parserRevision)
+		coverage := "native_text_only"
+		suffix := "/native-text-only"
+		if result.Metadata["format"] == "image_document" {
+			coverage = "partial_text_only"
+			suffix = "/partial-text-only"
+			digest := sha256.Sum256([]byte(retainedParser))
+			parserRevision = fmt.Sprintf("document-parser-v1/retained-ocr-%x", digest[:16])
+		}
+		a, err = scope.PrepareAttachmentStructure(name, a.ID, text, parserRevision+suffix, "", coverage, result.Coverage(), structure)
 	} else {
-		a, err = scope.PrepareAttachment(name, a.ID, text, parserRevision, code)
+		a, err = scope.PrepareAttachmentStructure(name, a.ID, text, parserRevision, code, "", result.Coverage(), structure)
 	}
 	if err != nil {
 		writeSessionError(w, err)
@@ -257,7 +345,7 @@ func (h *SessionHandlers) validateSessionAttachments(r *http.Request, name strin
 func collectAttachmentMessages(scope *sessions.ScopedManager, name string, session *sessions.Session, turn *sessions.Turn) ([]api.ChatMessage, []sessions.AttachmentText, error) {
 	messages := make([]api.ChatMessage, 0, len(session.Messages)+1)
 	var allSources []sessions.AttachmentText
-	seen := map[string]string{}
+	seen := map[sessions.AttachmentReference]bool{}
 	appendMessage := func(role, text string, images []api.SessionImage, refs []sessions.AttachmentReference) error {
 		var sources []sessions.AttachmentText
 		var err error
@@ -268,13 +356,11 @@ func collectAttachmentMessages(scope *sessions.ScopedManager, name string, sessi
 			return attachmentServiceError(err)
 		}
 		for _, source := range sources {
-			if revision, ok := seen[source.Attachment.ID]; ok {
-				if revision != source.Attachment.Revision {
-					return attachmentServiceError(sessions.ErrAttachmentUnavailable)
-				}
+			ref := sessions.AttachmentReference{ID: source.Attachment.ID, Revision: source.Attachment.Revision}
+			if seen[ref] {
 				continue
 			}
-			seen[source.Attachment.ID] = source.Attachment.Revision
+			seen[ref] = true
 			allSources = append(allSources, source)
 		}
 		messages = append(messages, api.ChatMessage{Role: role, Content: api.SessionContent(text, images)})

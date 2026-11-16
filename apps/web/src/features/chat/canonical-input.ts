@@ -48,6 +48,11 @@ export async function submitCanonicalSession(options: {
   origin: 'typed' | 'dictation'; error: string; imported: (id: string) => void;
   question?: CanonicalQuestion | null;
   intent?: 'message' | 'new_work';
+  attachments?: Schema['ConversationAttachment'][];
+  images?: Schema['SessionImage'][];
+  knowledgeDocuments?: string[];
+  knowledgeSelections?: Schema['ConversationKnowledgeSelection'][];
+  useKnowledge?: boolean;
 }) {
   let id = options.id;
   if (!id) {
@@ -58,19 +63,35 @@ export async function submitCanonicalSession(options: {
   }
   const key = `${options.key}:input`;
   const payload: Schema['ConversationInboxInput'] = {content: options.content, model: options.model, origin: options.origin};
+  if (options.attachments?.length) Object.assign(payload, {source_session: options.name, attachments: options.attachments});
+  if (options.images?.length) payload.images = options.images;
+  if(options.knowledgeSelections?.length) payload.knowledge_selections=options.knowledgeSelections;
+  if (options.knowledgeDocuments?.length) payload.knowledge_documents = options.knowledgeDocuments;
+  if (options.useKnowledge) payload.use_knowledge = true;
   if (options.intent) payload.intent = options.intent;
   if (options.question) Object.assign(payload, {intent: 'answer', question_id: options.question.id, focused_work_id: options.question.work_id});
   // Recover the original dispatch before preparing any new configuration. A
   // lost acknowledgment must not turn retry into a second settings mutation.
   let pending: Schema['ConversationInputCommand'] | undefined;
-  let unresolvedAnswer = false;
+  let unresolved: Schema['ConversationInputCommand'] | undefined;
   try {
     const stored = JSON.parse(readDraft(key)) as Schema['ConversationInputCommand'];
-    const sameText = stored.payload?.content === options.content && stored.payload?.model === options.model && stored.payload?.origin === options.origin;
-    unresolvedAnswer = stored.target_id === id && stored.payload?.intent === 'answer' && !sameText;
+    const sameText = stored.payload?.content === options.content && stored.payload?.model === options.model && stored.payload?.origin === options.origin
+      && JSON.stringify(stored.payload?.attachments ?? []) === JSON.stringify(payload.attachments ?? [])
+      && JSON.stringify(stored.payload?.images ?? []) === JSON.stringify(payload.images ?? [])
+      && JSON.stringify(stored.payload?.knowledge_selections ?? []) === JSON.stringify(payload.knowledge_selections ?? [])
+      && JSON.stringify(stored.payload?.knowledge_documents ?? []) === JSON.stringify(payload.knowledge_documents ?? [])
+      && !!stored.payload?.use_knowledge === !!payload.use_knowledge;
+    if (stored.target_id === id && stored.kind === 'submit_input' && !sameText) unresolved = stored;
     if (stored.target_id === id && stored.kind === 'submit_input' && sameText) pending = stored;
   } catch { /* No unacknowledged input. */ }
-  if (unresolvedAnswer) throw new Error(options.error);
+  if (unresolved) {
+    // Editing the draft or changing its source is not confirmation that the
+    // preceding request failed. Observe its receipt before admitting new input.
+    const observed=(await canonicalInputs(id)).find(input=>input.request_id===unresolved.request_id);
+    if (!observed || JSON.stringify(observed.input)!==JSON.stringify(unresolved.payload)) throw new Error(options.error);
+    clearSubmittedDraft(key,JSON.stringify(unresolved));
+  }
   if (pending) return dispatchInput(key, pending, options.error);
   let conversation = await api.conversations.get(id);
   if (options.question) return dispatchInput(key, {request_id: crypto.randomUUID(), target_id: id, expected_revision: conversation.revision, kind: 'submit_input', payload}, options.error);

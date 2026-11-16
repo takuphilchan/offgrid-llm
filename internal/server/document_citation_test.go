@@ -63,6 +63,16 @@ func TestDocumentCitationReadbackRequiresExactRevisionAndPermission(t *testing.T
 	if err = json.Unmarshal(w.Body.Bytes(), &body); err != nil || w.Code != 200 || body.Content != passage || !body.Verified || body.Truncated || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal(w.Code, w.Body.String(), err)
 	}
+	oldRevision := doc.ExtractionRevision
+	doc.Extraction = nil
+	doc.RawContent = prefix + strings.Repeat("x", len(passage))
+	if err = store.ReplaceDocumentWithChunks(doc, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	w = read(key)
+	if err = json.Unmarshal(w.Body.Bytes(), &body); err != nil || w.Code != 200 || body.Content != passage || !strings.Contains(w.Body.String(), oldRevision) {
+		t.Fatal("historical citation lost or substituted", w.Code, w.Body.String(), err)
+	}
 	for _, token := range []string{"", guest} {
 		if w := read(token); w.Code != 401 && w.Code != 403 {
 			t.Fatal("unauthorized citation", w.Code)

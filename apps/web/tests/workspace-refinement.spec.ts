@@ -29,7 +29,7 @@ async function fixture(page: Page, theme = 'light') {
 
 test('one contextual sidebar preserves draft and selection through drawer transitions', async ({ page }) => {
   const writes = await fixture(page);
-  await expect(page.locator('.sidebar')).toHaveCSS('width', '304px');
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '340px');
   await expect(page.locator('.sidebar #conversation-history')).toHaveCount(1);
   await expect(page.locator('.chat-workspace #conversation-history')).toHaveCount(0);
   const editor = page.locator('.composer textarea');
@@ -65,9 +65,13 @@ test('manual reading exposes Latest without a second scrolling page', async ({ p
   await transcript.evaluate(el => { el.scrollTop = 0; el.dispatchEvent(new Event('scroll')); });
   await page.getByRole('button', { name: 'Latest', exact: true }).click();
   await expect.poll(() => transcript.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThan(3);
-  // A delayed native keyboard scroll can drift inside the 100px follow threshold.
-  // Explicit Latest must still pin the actual bottom, not merely hide its button.
+  // Reading intent must stay in place even close to the bottom. Only an explicit
+  // Latest action (or reaching the bottom) should resume following the output.
+  await transcript.dispatchEvent('wheel', {deltaY:-53});
   await transcript.evaluate(el => { el.scrollTop -= 53; el.dispatchEvent(new Event('scroll')); });
+  await expect.poll(() => transcript.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeGreaterThan(50);
+  await transcript.evaluate(el => { el.scrollTop -= 150; el.dispatchEvent(new Event('scroll')); });
+  await page.getByRole('button', { name: 'Latest', exact: true }).click();
   await expect.poll(() => transcript.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThan(3);
   expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1)).toBe(true);
 });
@@ -78,8 +82,9 @@ for (const theme of ['light', 'dark']) test(`six-page visual matrix ${theme}`, a
     await page.setViewportSize({ width, height });
     for (const route of ['chat', 'agents', 'models', 'knowledge', 'activity', 'settings']) {
       await page.goto(`/ui/#/${route}`);
-      await expect(page.locator('.topbar h1')).toBeVisible();
-      expect((await page.locator('.topbar h1').boundingBox())!.height).toBeLessThan(40);
+      const title=route==='settings'?page.locator('.settings-group:not([hidden]) h2').first():page.locator('.topbar h1');
+      await expect(title).toBeVisible();
+      expect((await title.boundingBox())!.height).toBeLessThan(65);
       await expect(page.locator('.page-failure')).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       if (route === 'chat') {

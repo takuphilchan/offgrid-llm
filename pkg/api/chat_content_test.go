@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"strings"
 	"testing"
 )
 
@@ -18,6 +19,21 @@ func testImageURL(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(content.Bytes())
+}
+
+func TestChatImageValidationRejectsTruncatedPixels(t *testing.T) {
+	_, encoded, _ := strings.Cut(testImageURL(t), ",")
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Complete PNG signature and IHDR, but no image pixel stream. DecodeConfig
+	// accepts this header; forwarding it is not valid image admission.
+	url := "data:image/png;base64," + base64.StdEncoding.EncodeToString(data[:33])
+	_, err = ValidateChatMessages([]ChatMessage{{Role: "user", Content: []ChatContentPart{{Type: "image_url", ImageURL: &ChatImageURL{URL: url}}}}})
+	if err == nil {
+		t.Fatal("truncated image forwarded by generic Chat validation")
+	}
 }
 
 func TestValidateChatMessagesAcceptsBoundedLocalImage(t *testing.T) {

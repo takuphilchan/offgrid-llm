@@ -1,0 +1,32 @@
+/* Feature-owned layout: keep the action menu anchored beside its document,
+   even when translated labels need separate rows. */
+.knowledge-documents .resource-actions { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; }
+.knowledge-documents .resource-actions>.knowledge-source-select { grid-column:1; overflow-wrap:anywhere; }
+.knowledge-documents .resource-actions>.text-button { grid-column:1; justify-self:start; text-align:start; }
+.knowledge-documents .resource-actions>.utility-popover { grid-column:2; grid-row:1 / 3; align-self:end; }
+@media(min-width:600px) {
+ .knowledge-documents .resource-actions { display:flex; flex-wrap:wrap; }
+ .knowledge-documents .resource-actions>.utility-popover { margin-inline-start:auto; }
+}
+@layer controls {
+ .knowledge-workspace { width:100%; max-width:1200px; margin-inline:auto; gap:20px; }
+ .knowledge-workspace>.section-heading { margin-block:0 4px; }
+ .knowledge-workspace .knowledge-workflows { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-block:0; }
+ .knowledge-workflows .action-card { min-height:88px; padding:18px 20px; gap:14px; border-radius:20px; }
+ .knowledge-workflows .action-card-copy strong { font-size:15px; }
+ .knowledge-workflows .action-card-copy>span { font-size:13px; line-height:1.5; }
+ .knowledge-workspace .knowledge-library-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:8px 0 0; }
+ .knowledge-library-toolbar .collection-library-controls { margin:0; gap:4px; }
+ .knowledge-library-toolbar .collection-library-controls label { display:block; font-size:0; }
+ .knowledge-library-toolbar .collection-library-controls select { width:200px; max-width:100%; font-size:14px; }
+ .knowledge-library-toolbar .list-search { flex:1; min-width:160px; max-width:360px; margin:0; }
+ .knowledge-workspace .knowledge-selection { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+ .knowledge-workspace .empty-state { min-height:220px; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:12px; text-align:center; }
+ .knowledge-workspace .knowledge-document-options { margin-block:0; }
+ @media(max-width:640px){.knowledge-workspace .knowledge-workflows{grid-template-columns:1fr}.knowledge-workflows .action-card{padding:16px;min-height:76px}.knowledge-library-toolbar .list-search{max-width:none;flex-basis:100%}}
+ .knowledge-workflows { margin-block:24px; }
+ .knowledge-workflows:empty { display:none; }
+ .knowledge-workflows .action-card { align-items:center; }
+ .knowledge-heading-import .library-create-action { border-radius:999px; }
+ .collection-library-controls select { --select-radius:999px; --select-background:transparent; border-radius:999px; background-color:transparent; }
+}

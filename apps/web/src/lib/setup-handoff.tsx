@@ -5,7 +5,7 @@ import { workspaceExperience } from '../i18n/workspace-experience';
 import { ScopedNotice } from '../components/WorkspacePresentation';
 
 type DraftReference = { kind: 'chat' | 'task'; id: string };
-export type KnowledgeSource = { id: string; name: string };
+export type KnowledgeSource = { id: string; name: string; revision?:string; page?:number; block_ids?:string[]; scopeLabel?:string };
 type Handoff = { origin: string; destination: 'models' | 'knowledge'; draft?: DraftReference };
 const Context = createContext<{ begin: (handoff: Handoff) => void; returning: DraftReference | undefined; consumed: () => void; requestedKnowledge: boolean; requestedSources: KnowledgeSource[]; askKnowledge: (sources?: KnowledgeSource[]) => void; consumeKnowledge: () => void }>({ begin: () => {}, returning: undefined, consumed: () => {}, requestedKnowledge: false, requestedSources: [], askKnowledge: () => {}, consumeKnowledge: () => {} });
 export const useSetupHandoff = () => useContext(Context);
@@ -45,7 +45,7 @@ export function SetupHandoffProvider({ children, refresh }: { children: ReactNod
   const askKnowledge = (sources: KnowledgeSource[] = []) => {
     if (!knowledge) return;
     setReturning(undefined); setHandoff(undefined); setRequestedKnowledge(true);
-    setRequestedSources(sources.slice(0, 16).map(({ id, name }) => ({ id, name })));
+    setRequestedSources(sources.slice(0, 16).map(source => ({...source,block_ids:source.block_ids?.slice()})));
     window.location.hash = '#/chat';
   };
   return <Context.Provider value={{ begin, returning, consumed: () => { setReturning(undefined); setHandoff(undefined); }, requestedKnowledge, requestedSources, askKnowledge, consumeKnowledge: () => { setRequestedKnowledge(false); setRequestedSources([]); } }}>

@@ -48,6 +48,15 @@ func prepareConversationRun(prompt, model, actor string, config AgentConfig, ori
 		history = append(history, task.Checkpoint.Messages[1:]...)
 		task.Checkpoint.Messages = history
 	}
+	// Current evidence belongs in the current user message, not trimmable history
+	// or system instructions. The runner's normal measured context gate applies.
+	if config.InputEvidence != "" || len(config.InputImages) > 0 {
+		content := prompt
+		if config.InputEvidence != "" {
+			content = config.InputEvidence
+		}
+		task.Checkpoint.Messages[len(task.Checkpoint.Messages)-1].Content = api.SessionContent(content, config.InputImages)
+	}
 	if err := initializeWorkflow(task); err != nil {
 		return nil, err
 	}

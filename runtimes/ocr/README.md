@@ -22,7 +22,26 @@ page. Four orientation attempts share one deadline; insufficient remaining time
 returns the validated partial result rather than starting an unbounded retry.
 Engine confidence is a quality signal, not proof that every word is correct.
 
-Only the pinned English pack is currently accepted. Explicit offline import is
+The shared [pinned language manifest](../../internal/documentocr/languages.json)
+accepts 25 `tessdata_fast` packs from one immutable upstream revision. Each pack
+has a SHA-256, exact source URL and an explicit interface-locale mapping. The two
+Portuguese interface variants use the same Portuguese pack; Shona, Ndebele and
+Zulu have no pack in this manifest and are never substituted. These are available
+adapters, not recognition-quality qualifications.
+
+Up to three ordered languages can be selected per new Chat attachment or Knowledge
+import. The first is primary. All selected packs must be installed; a missing pack
+never silently reduces the selection. Selection survives failed preparation,
+restart, page checkpoints and explicit attachment publication. Legacy imports
+retain English. Single-pack requests preserve their existing wire shape; mixed
+packs use a bounded memory-only bundle with individual digest verification. The
+worker verifies that Tesseract actually loaded every requested language. It has
+no filesystem mount, implicit language substitution or dependency download.
+Mixed selections require `document-ocr-mixed-languages-v1`; per-page hints and
+deskew remain open. Authored Chinese/French fixtures establish an exercised path,
+not broad recognition-quality qualification.
+
+Explicit offline import is
 available through `offgrid kb import-ocr-language eng PATH`, Python's
 `client.kb.import_ocr_language("eng", path)` and Knowledge's optional **Read scanned
 documents** setup. `offgrid kb ocr-languages` reports its state. The authenticated
@@ -71,7 +90,7 @@ before running the same offline build and digest checks. Release jobs share the
 verified engine/notices artifact. Desktop packaging requires both PDF and OCR
 workers and verifies the copied binaries and notices. Container builds compile
 the same sources in a separate build stage. End-user imports never invoke this
-tooling. English language data is imported separately by the user.
+tooling. Language data is imported separately by the user.
 
 Use the platform executable suffix on Windows. The runtime verifies the embedded
 engine digest, and `--licenses` exposes its embedded redistribution notices.

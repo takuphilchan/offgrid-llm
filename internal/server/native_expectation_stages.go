@@ -352,15 +352,9 @@ func (b *browserRunTools) projectActionCoupledTools(task *agents.Task, tools []a
 		if recoveryPending && !nativeDocumentRecoveryToolAllowed(name) && strings.HasPrefix(name, "computer_") {
 			continue
 		}
-		// Once a selected application has been independently verified, a
-		// negotiated document provider must get the first post-launch turn.
-		// Re-offering the generic observation tool here lets small models loop
-		// over an unchanged address field instead of discovering whether the
-		// surface supports documents. An unsupported provider returns a typed
-		// negative capability and the fallback then exposes a fresh control view.
-		if name == "computer_observe" && state.step == 0 && b.documentToolsAvailable(task) && documentIntent && desktopSelected(task) && !nativeDocumentControlFallback(task) && !recoveryPending {
-			continue
-		}
+		// Discovery availability is not a selection of the document protocol.
+		// Keep observation available until typed document state exists; otherwise
+		// merely negotiating a provider would force browser work into it.
 		if controlPending && (name == "task_history" || name == "task_plan" || name == "task_expectations" || (strings.HasPrefix(name, "computer_") && name != "computer_observe" && name != "computer_verify" && name != "computer_verify_checked" && name != "computer_inspect_control" && name != "computer_find_controls")) {
 			continue
 		}

@@ -12,7 +12,7 @@ import (
 
 func TestOCRLanguageImportRejectsUnknownDataBeforeWriting(t *testing.T) {
 	dir := t.TempDir()
-	if got := OCRLanguages(dir); len(got) != 1 || got[0].State != "missing" {
+	if got := OCRLanguages(dir); len(got) != 25 || got[0].State != "missing" {
 		t.Fatal(got)
 	}
 	for _, language := range []string{"eng", "../eng", "deu"} {

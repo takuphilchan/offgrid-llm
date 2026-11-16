@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -41,6 +42,10 @@ func (s *Server) projectConversationInput(r *http.Request, input api.Conversatio
 		session.Messages = append(session.Messages, sessions.Message{Role: "assistant", Content: input.Question.Content, Timestamp: input.AcceptedAt, TurnID: input.ID})
 	}
 	message := sessions.Message{Role: "user", Content: input.Input.Content, Timestamp: input.AcceptedAt, TurnID: input.ID, JobID: input.RunID}
+	message.Images = input.Input.Images
+	for _, source := range input.Input.Attachments {
+		message.Attachments = append(message.Attachments, sessions.AttachmentReference{ID: source.ID, Revision: source.Revision})
+	}
 	session.Messages = append(session.Messages, message)
 	updateProjectedTime(session, input.AcceptedAt)
 	turn := &sessions.Turn{ID: input.ID, JobID: input.RunID, Prompt: input.Input.Content, Status: input.State, Phase: input.State}
@@ -56,6 +61,7 @@ func (s *Server) projectConversationInput(r *http.Request, input api.Conversatio
 			turn.Status, turn.Phase = string(task.Status), string(task.Status)
 		}
 		session.ModelID = task.Model
+		message.Images, message.Attachments = nil, nil
 		message.Role, message.Content, message.Timestamp = "assistant", task.Result, task.CreatedAt
 		if task.CompletedAt != nil {
 			message.Timestamp = *task.CompletedAt
@@ -64,6 +70,11 @@ func (s *Server) projectConversationInput(r *http.Request, input api.Conversatio
 			message.Content = "This reply is unavailable because source access changed."
 		} else {
 			turn.Output, turn.Error = task.Result, task.Error
+			if len(task.Config.AttachmentSelections) > 0 {
+				if err := json.Unmarshal(task.Config.AttachmentSelections, &message.AttachmentSelections); err != nil {
+					return err
+				}
+			}
 			message.KnowledgeSources = task.Config.KnowledgeSources
 			message.KnowledgeDocuments = append([]string{}, task.Config.KnowledgeDependencies...)
 			for _, doc := range task.Config.KnowledgeDocuments {

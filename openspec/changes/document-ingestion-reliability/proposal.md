@@ -8,6 +8,17 @@ of access isolation, recovery and faithful citations, not a larger extension lis
 
 ## What Changes
 
+### Approved document and Knowledge upgrade (2026-11-12)
+
+Extend this change in seven ordered increments: repair evidence loss and multilingual
+retrieval; introduce immutable structured document revisions; expand printed-document
+and OCR adapters; unify evidence-first retrieval and durable analyses; integrate the
+shared reader/library; expose departmental collections; then qualify optional visual
+and archive adapters. Keep the 8 GB CPU core, optional local advanced pack, 29-language
+interface and explicit per-language/per-format qualification. Native review, model
+answer benchmarks and departmental pilot evidence remain independent release gates.
+The reader implementation is coordinated with `workspace-outcome-experience`.
+
 - Replace the unsafe PDF fallback with a bounded, packaged local parser path;
   diagnose encrypted, corrupt, scanned and unsupported content distinctly.
 - Introduce a tested format/readiness registry and extraction contract covering

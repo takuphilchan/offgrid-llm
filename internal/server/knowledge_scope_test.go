@@ -64,6 +64,8 @@ func (f *selectedKnowledgeFixture) EnhancePromptForDocuments(_ context.Context, 
 }
 func sourceScopeFixture() *selectedKnowledgeFixture {
 	result := &rag.RAGContext{Results: []rag.SearchResult{{DocumentID: "doc-a", DocName: "Notes", Chunk: &rag.Chunk{ID: "chunk-a", Content: "café 日本語 — evidence"}}}}
+	result.RetrievalMode = "hybrid"
+	result.Results[0].Metadata = map[string]string{"extraction_coverage": `{"format":"docx","status":"text_only","total_units":1,"readable_units":1,"warnings":[{"code":"document_text_only","message":"Images not interpreted"}]}`}
 	result.FormatContext()
 	return &selectedKnowledgeFixture{knowledgeFixture: knowledgeFixture{enabled: true, result: result}}
 }
@@ -131,6 +133,9 @@ func TestSelectedKnowledgeNeverFallsBackAndCapturesExactEvidence(t *testing.T) {
 			if passages[0].Content != "café 日本語 — evidence" || passages[0].ContentHash != rag.GenerateContentHash(passages[0].Content) {
 				t.Fatal("evidence changed")
 			}
+			if passages[0].Evidence == nil || passages[0].Evidence.Status != "text_only" || passages[0].RetrievalMode != "hybrid" {
+				t.Fatal("coverage or retrieval receipt lost", passages)
+			}
 		})
 	}
 }
@@ -177,6 +182,9 @@ func TestSelectedKnowledgeSurvivesAllSessionTransports(t *testing.T) {
 			}
 			if saved.Messages[1].KnowledgeSources[0].Content != "café 日本語 — evidence" {
 				t.Fatal("stored evidence changed")
+			}
+			if saved.Messages[1].KnowledgeSources[0].Evidence == nil || saved.Messages[1].KnowledgeSources[0].Evidence.Status != "text_only" || saved.Messages[1].KnowledgeSources[0].RetrievalMode != "hybrid" {
+				t.Fatal("saved coverage changed")
 			}
 			if transport == "durable" {
 				if !reflect.DeepEqual(saved.Turn.KnowledgeDocuments, []string{"doc-a"}) {

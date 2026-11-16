@@ -1,0 +1,48 @@
+@layer components {
+ .collection-manager.history-delete-dialog { width:min(940px,calc(100vw - 32px)); max-width:none; padding:24px; }
+ .collection-manager-heading,.collection-manager-heading>div { display:flex; align-items:center; gap:12px; }
+ .collection-manager-heading { justify-content:space-between; margin-block-end:20px; }
+ .collection-manager-heading h2 { margin:0; font-size:20px; }
+ .collection-manager-heading>div>svg { color:var(--muted); }
+ .collection-manager-layout { display:grid; grid-template-columns:220px minmax(0,1fr); gap:24px; min-height:220px; }
+ .collection-manager-list { min-width:0; }
+ .collection-manager-list ul { padding:0; margin:0 0 12px; list-style:none; max-height:320px; overflow:auto; }
+ .collection-manager-list li>button,.collection-new { display:flex; gap:10px; align-items:center; width:100%; text-align:start; border:0; border-radius:12px; padding:12px; background:transparent; color:var(--text); font-size:14px; }
+ .collection-manager-list li>button:hover,.collection-manager-list li>button[aria-current=true] { background:var(--surface-2); }
+ .collection-manager-list li>button>span { min-width:0; overflow-wrap:anywhere; }
+ .collection-manager-list svg { flex:none; color:var(--muted); }
+ .collection-manager-content { min-width:0; padding:20px; border-radius:18px; background:color-mix(in srgb,var(--surface-2) 42%,var(--surface-1)); }
+ .collection-manager-content .collection-editor { margin:0; }
+ .collection-manager-content .collection-create { display:grid; gap:12px; }
+ .collection-manager-content .collection-create :is(h3,p) { margin:0; }
+ .collection-manager-content .collection-create p { color:var(--muted); font-size:13px; line-height:1.6; }
+ .collection-manager-content .collection-create button { justify-self:start; border-radius:999px; }
+ .collection-manager-footer { display:flex; justify-content:flex-end; margin-block-start:16px; }
+ .collection-manager-footer button { display:inline-flex; align-items:center; gap:8px; }
+ @media(max-width:640px){.collection-manager-layout{grid-template-columns:1fr;gap:16px}.collection-manager-list ul{max-height:160px}.collection-manager-content{padding:16px}.collection-manager.history-delete-dialog{padding:20px}}
+ .collection-manager > select,.collection-manager > input,.collection-editor > input { width:100%; min-width:0; margin-block:8px 16px; }
+ .collection-editor { display:grid; gap:12px; min-width:0; margin-block:16px; }
+ .collection-editor > h3,.collection-editor > p { margin:0; }
+ .collection-manager .collection-members { list-style:none; padding:0; max-height:320px; margin:0; }
+ .collection-members li { display:flex; align-items:center; justify-content:space-between; gap:16px; padding-block:10px; }
+ .collection-members label { min-width:0; overflow-wrap:anywhere; }
+ .collection-members small { display:block; color:var(--muted); }
+ .collection-members select { flex:0 1 180px; min-width:0; }
+ .collection-library-controls { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-block:16px; min-width:0; }
+ .collection-library-controls label { display:grid; gap:6px; min-width:0; max-width:100%; }
+ .collection-library-controls select { max-width:100%; min-width:0; }
+ @media(max-width:480px){.collection-members li{align-items:stretch;flex-direction:column;gap:6px}.collection-members select{flex:auto;width:100%}}
+}
+@layer controls {
+ .collection-manager { width:min(680px,calc(100vw - 32px)); border-radius:24px; }
+ .collection-create-choice>summary { display:flex; align-items:center; gap:16px; width:100%; padding:18px; border:1px solid var(--line); border-radius:20px; background:var(--surface-1); cursor:pointer; }
+ .collection-create-choice>summary::before { display:none; }
+ .collection-create-choice>summary>svg { margin-inline-start:auto; flex:none; }
+ .collection-create-choice[open]>summary>svg { transform:rotate(45deg); }
+ .collection-create-choice>summary:hover { background:var(--surface-2); }
+ .collection-create { padding:20px 4px; display:grid; gap:12px; }
+ .collection-create>button { justify-self:end; }
+ .collection-manager :is(.primary-button,.secondary-button),.document-comparison :is(.primary-button,.secondary-button) { border-radius:999px; }
+ @media(prefers-reduced-motion:reduce) { .synthesis-modes>label { transition:none; } }
+ :root[data-reduce-motion=true] .synthesis-modes>label { transition:none; }
+}

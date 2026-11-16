@@ -5,12 +5,33 @@ import "time"
 // Input is accepted independently of inference readiness. A missing focus uses
 // the conversation's current focus; an explicit empty focus is unbound input.
 type ConversationInboxInput struct {
-	QuestionID    string  `json:"question_id,omitempty"`
-	Content       string  `json:"content"`
-	Model         string  `json:"model,omitempty"`
-	Intent        string  `json:"intent,omitempty"`
-	FocusedWorkID *string `json:"focused_work_id,omitempty"`
-	Origin        string  `json:"origin,omitempty"`
+	KnowledgeSelections []ConversationKnowledgeSelection `json:"knowledge_selections,omitempty"`
+	UseKnowledge        bool                             `json:"use_knowledge,omitempty"`
+	SourceSession       string                           `json:"source_session,omitempty"`
+	Attachments         []ConversationAttachment         `json:"attachments,omitempty"`
+	Images              []SessionImage                   `json:"images,omitempty"`
+	KnowledgeDocuments  []string                         `json:"knowledge_documents,omitempty"`
+	QuestionID          string                           `json:"question_id,omitempty"`
+	Content             string                           `json:"content"`
+	Model               string                           `json:"model,omitempty"`
+	Intent              string                           `json:"intent,omitempty"`
+	FocusedWorkID       *string                          `json:"focused_work_id,omitempty"`
+	Origin              string                           `json:"origin,omitempty"`
+}
+
+type ConversationKnowledgeSelection struct {
+	DocumentID string   `json:"document_id"`
+	Revision   string   `json:"revision"`
+	Page       int      `json:"page,omitempty"`
+	BlockIDs   []string `json:"block_ids,omitempty"`
+}
+
+// A source selection is data, never a grant. Page is one-based within the
+// immutable extraction. Zero selects the document's ordinary retrieval scope.
+type ConversationAttachment struct {
+	ID       string `json:"id"`
+	Revision string `json:"revision"`
+	Page     int    `json:"page,omitempty"`
 }
 
 // Derived from the focused work's saved primary clarification, never a grant.

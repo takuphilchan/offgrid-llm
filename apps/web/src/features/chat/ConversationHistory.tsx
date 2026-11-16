@@ -17,7 +17,7 @@ export function ConversationHistory({ sessions, activeName, busy, loading, locke
   const [query, setQuery] = useWorkspaceState('chat.historyQuery', '');
   const [limit, setLimit] = useWorkspaceState('chat.historyLimit', 20);
   const filtered = sessions.filter(session => visibleSessionTitle(session).toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language)));
-  const item = (session: ChatSession) => ({ id: session.name, label: visibleSessionTitle(session) });
+  const item = (session: ChatSession) => ({ id: session.name, label: visibleSessionTitle(session), canonicalId: session.canonical_id, revision: session.control_revision });
   return <section id="conversation-history" className="conversation-history" aria-label={text.chat.conversations}>
     <HistoryToolbar query={query} onQuery={value => { setQuery(value); setLimit(20); }} searchLabel={text.history.searchChats} title={text.chat.conversations} count={sessions.length} busy={busy || loading || locked} refresh={refresh} clearLabel={text.history.clearChats} clearDisabled={!filtered.length} clear={() => remove(filtered.map(item))} />
     {notice && <p className="history-notice" role="status">{notice}</p>}

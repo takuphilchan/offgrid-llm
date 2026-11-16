@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/takuphilchan/offgrid-llm/internal/document"
 )
 
 // ImportExtraction is review-only evidence, never an indexable document. It is
@@ -20,6 +22,31 @@ type ImportExtraction struct {
 	Warnings []ExtractionWarning `json:"warnings"`
 }
 
+func (s *SQLiteStore) saveImportCoverage(lease importLease, parsed *ParseResult) error {
+	data, err := json.Marshal(parsed.Coverage())
+	if err != nil || len(data) > document.MaxCoverageBytes {
+		return fmt.Errorf("extraction coverage exceeds storage limit")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if collection, err := importAccess(tx, lease.owner, lease.id, true); err != nil || collection != normalizedCollection(lease.collection) {
+		return ErrCollectionUnavailable
+	}
+	result, err := tx.Exec(`UPDATE document_imports SET coverage_json=? WHERE id=? AND owner=? AND attempt=? AND state='extracting'`, string(data), lease.id, lease.owner, lease.attempt)
+	if err != nil {
+		return err
+	}
+	if n, err := result.RowsAffected(); err != nil || n != 1 {
+		return ErrImportConflict
+	}
+	return tx.Commit()
+}
+
 func (v *ImportExtraction) validate(digest string) error {
 	if _, err := hex.DecodeString(digest); err != nil || len(digest) != 64 {
 		return fmt.Errorf("invalid partial source digest")
@@ -29,8 +56,11 @@ func (v *ImportExtraction) validate(digest string) error {
 	}
 	total := 0
 	for i, u := range v.Units {
-		// Partial review currently describes PDF pages only. Other adapters must
-		// qualify their own unit contract before publishing partial evidence.
+		if err := validatePDFFieldSpans(u); err != nil {
+			return err
+		}
+		// Partial review describes PDF and standalone image pages. Other adapters
+		// must establish their unit contract before publishing partial evidence.
 		if u.Kind != "page" || len(u.Cells) != 0 || u.Index != i+1 || u.SourceSHA256 != digest || u.ExtractorRevision == "" || len(u.ExtractorRevision) > 512 || !utf8.ValidString(u.Text) {
 			return fmt.Errorf("invalid partial source unit")
 		}

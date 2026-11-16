@@ -1,7 +1,7 @@
 {
   "name": "offgrid-llm-desktop",
   "desktopName": "com.offgrid.llm.desktop",
-  "version": "0.4.30",
+  "version": "0.4.32",
   "description": "OffGrid private local AI workspace",
   "homepage": "https://github.com/takuphilchan/offgrid-llm",
   "author": {
@@ -45,8 +45,15 @@
     "files": [
       "main.js",
       "branding.cjs",
+      "app-dialog.js",
+      "app-dialog-preload.js",
+      "app-dialog.html",
+      "app-dialog.css",
       "shutdown.js",
       "tray-feedback.js",
+      "command-window.js",
+      "command-window-motion.js",
+      "window-controls.json",
       "execution-runtime.js",
       "folder-trust.js",
       "folder-trust-copy.js",
@@ -80,6 +87,8 @@
       "preload.js",
       "loading.html",
       "startup.css",
+      "startup-surface.css",
+      "startup-welcome.js",
       "startup.js",
       "assets/icon.png",
       "package.json",
@@ -94,6 +103,10 @@
       "!node_modules/node-pty/**/*.pdb"
     ],
     "extraResources": [
+      {
+        "from": "../../internal/documentimage/NOTICE.txt",
+        "to": "bin/image-NOTICE.txt"
+      },
       {
         "from": "../../build/speech-runtime/${os}-${arch}",
         "to": "speech-runtime"

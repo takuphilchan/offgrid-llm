@@ -10,6 +10,8 @@ import (
 	_ "image/png"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/takuphilchan/offgrid-llm/internal/imageinput"
 )
 
 const (
@@ -102,8 +104,17 @@ func validChatText(value string) bool {
 }
 
 func validateDataImage(imageURL ChatImageURL) error {
+	return validateDataImageLimit(imageURL, maxImageBytes)
+}
+
+func validateDataImageLimit(imageURL ChatImageURL, byteLimit int) error {
+	_, _, _, err := decodeDataImage(imageURL, byteLimit)
+	return err
+}
+
+func decodeDataImage(imageURL ChatImageURL, byteLimit int) ([]byte, image.Image, int, error) {
 	if imageURL.Detail != "" && imageURL.Detail != "auto" && imageURL.Detail != "low" && imageURL.Detail != "high" {
-		return ErrInvalidMessageContent
+		return nil, nil, 0, ErrInvalidMessageContent
 	}
 	mediaType := ""
 	encoded := ""
@@ -114,16 +125,26 @@ func validateDataImage(imageURL ChatImageURL) error {
 			break
 		}
 	}
-	if mediaType == "" || encoded == "" || len(encoded) > base64.StdEncoding.EncodedLen(maxImageBytes) {
-		return ErrInvalidMessageContent
+	if mediaType == "" || encoded == "" || len(encoded) > base64.StdEncoding.EncodedLen(byteLimit) {
+		return nil, nil, 0, ErrInvalidMessageContent
 	}
 	content, err := base64.StdEncoding.Strict().DecodeString(encoded)
-	if err != nil || len(content) == 0 || len(content) > maxImageBytes {
-		return ErrInvalidMessageContent
+	if err != nil || len(content) == 0 || len(content) > byteLimit {
+		return nil, nil, 0, ErrInvalidMessageContent
 	}
 	configuration, detected, err := image.DecodeConfig(bytes.NewReader(content))
 	if err != nil || detected != strings.TrimPrefix(mediaType, "image/") || configuration.Width < 1 || configuration.Height < 1 || configuration.Width > maxImageDimension || configuration.Height > maxImageDimension || int64(configuration.Width)*int64(configuration.Height) > maxImagePixels {
-		return ErrInvalidMessageContent
+		return nil, nil, 0, ErrInvalidMessageContent
 	}
-	return nil
+	orientation, err := imageinput.Orientation(content, detected)
+	if err != nil {
+		return nil, nil, 0, ErrInvalidMessageContent
+	}
+	// Header parsing alone accepts truncated PNG/JPEG payloads. Bound allocation
+	// first, then validate the actual pixel stream on every public Chat path.
+	pixels, _, err := image.Decode(bytes.NewReader(content))
+	if err != nil {
+		return nil, nil, 0, ErrInvalidMessageContent
+	}
+	return content, pixels, orientation, nil
 }

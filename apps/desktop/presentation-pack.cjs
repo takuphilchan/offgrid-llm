@@ -1,7 +1,7 @@
 // Build-time check of the copied archive, not the source manifest alone.
 const fs=require('node:fs');
 const path=require('node:path');
-const required=['theme-palettes.json','language-registry.json','theme-NOTICE.txt','select-controls.css','terminal-translations.js','terminal-accessibility.js','locale-messages.js'];
+const required=['startup-surface.css','startup-welcome.js','theme-palettes.json','language-registry.json','theme-NOTICE.txt','select-controls.css','terminal-translations.js','terminal-accessibility.js','locale-messages.js'];
 const mapped={'locale-overrides/feature-packs.json':'../web/src/i18n/feature-packs.json'};
 function verify(resources, archive=require('@electron/asar')) {
  const file=path.join(resources,'app.asar');

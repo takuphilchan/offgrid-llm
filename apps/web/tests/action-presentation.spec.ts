@@ -30,14 +30,17 @@ for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
         const form = page.getByRole('form', { name: 'Connect', exact: true });
         const primary = form.getByRole('button', { name: 'Connect', exact: true });
         const secondary = form.getByRole('button', { name: 'Test connection', exact: true });
-        expect((await primary.boundingBox())!.height).toBe((await secondary.boundingBox())!.height);
+        // The primary action is larger than the quiet connection check.
+        expect((await primary.boundingBox())!.height).toBeGreaterThanOrEqual(32);
+        expect((await secondary.boundingBox())!.height).toBeGreaterThanOrEqual(32);
         await expect(form.getByRole('textbox', { name: 'Connection name', exact: true })).toBeVisible();
-        if (width === 1440) expect((await form.boundingBox())!.width).toBeLessThanOrEqual(352);
+        if (width === 1440) expect((await form.boundingBox())!.width).toBeLessThanOrEqual(560);
       }
-      if (route === 'models' || route === 'agents/tools') {
-        const selected = page.locator(route === 'models' ? '.model-library-tabs [aria-selected=true]' : '.task-management [aria-current=page]');
-        await expect(selected).toHaveCSS('border-bottom-width', '2px');
-        await expect(selected).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+      if (route === 'models') await expect(page.locator('.model-library-navigation [aria-current=page]')).toHaveText('Installed');
+      if (route === 'agents/tools') {
+        const selected = page.locator('.task-management [aria-current=page]');
+        await expect(selected).toHaveText('Tools & MCP');
+        await expect(selected).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       }
       await page.screenshot({ path: test.info().outputPath(`${route.replaceAll('/', '-')}.png`), fullPage: true });
     }

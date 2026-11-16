@@ -13,7 +13,12 @@ test('geometry messages cannot carry commands or invalid sizes',()=>{
 });
 
 test('terminal never covers native caption controls, including before layout and at zoom',()=>{
-  assert.equal(terminalBounds(undefined,1200,800,1,36).y,36);
-  assert.deepEqual(terminalBounds({x:124,y:18,width:476,height:382},1200,800,2,36),{x:248,y:36,width:952,height:764});
-  assert.equal(terminalBounds({x:0,y:0,width:1200,height:800},1200,800,1,36).y,36);
+  assert.equal(terminalBounds(undefined,1200,800,1,32).y,32);
+  for(const zoom of [1,1.1,1.25,1.5,2]) {
+    const rect=validateWorkspaceBounds({x:340,y:32/zoom,width:1200/zoom-340,height:(800-32)/zoom});
+    const bounds=terminalBounds(rect,1200,800,zoom,32);
+    assert.equal(bounds.y,32,`no caption seam at ${zoom}`);
+    assert.equal(bounds.y+bounds.height,800);
+  }
+  assert.equal(terminalBounds({x:0,y:0,width:1200,height:800},1200,800,1,32).y,32);
 });

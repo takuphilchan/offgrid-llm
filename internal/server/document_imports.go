@@ -2,18 +2,35 @@ package server
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"mime"
 	"net/http"
+	"strconv"
 
 	"github.com/takuphilchan/offgrid-llm/internal/rag"
 )
 
 func (s *Server) acceptDocumentImport(r *http.Request) (*rag.ImportRecord, error) {
-	data, name, sourceKey, err := s.documentImportSource(r)
+	language, err := documentOCRLanguage(r)
 	if err != nil {
 		return nil, err
+	}
+	media, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if media == "application/json" && (!r.URL.Query().Has("collection_id") || !r.URL.Query().Has("collection_revision")) {
+		return nil, &rag.ParseError{Code: "collection_review_required", Message: "Upgrade the client and review a destination collection and its current audience before publishing a conversation attachment."}
+	}
+	data, name, sourceKey, sourceLanguage, history, err := s.documentImportSnapshot(r)
+	if err != nil {
+		return nil, err
+	}
+	if sourceLanguage != "" {
+		if r.URL.Query().Has("ocr_language") && language != sourceLanguage {
+			return nil, rag.ErrImportConflict
+		}
+		language = sourceLanguage
 	}
 	store, err := s.ragEngine.ImportStore()
 	if err != nil {
@@ -22,6 +39,10 @@ func (s *Server) acceptDocumentImport(r *http.Request) (*rag.ImportRecord, error
 	key := r.Header.Get("Idempotency-Key")
 	if key == "" {
 		key = sourceKey
+		if key != "" && r.URL.Query().Has("collection_id") {
+			digest := sha256.Sum256([]byte(key + "\x00" + r.URL.Query().Get("collection_id") + "\x00" + r.URL.Query().Get("collection_revision")))
+			key = "collection-" + hex.EncodeToString(digest[:])
+		}
 	}
 	if key == "" {
 		var random [16]byte
@@ -30,7 +51,15 @@ func (s *Server) acceptDocumentImport(r *http.Request) (*rag.ImportRecord, error
 		}
 		key = hex.EncodeToString(random[:])
 	}
-	return store.AcceptImport(modelActor(r), key, name, data)
+	q := r.URL.Query()
+	if q.Has("collection_id") || q.Has("collection_revision") {
+		revision, err := strconv.Atoi(q.Get("collection_revision"))
+		if err != nil || revision < 1 || q.Get("collection_id") == "" {
+			return nil, rag.ErrCollectionInvalid
+		}
+		return store.AcceptImportWithRevisions(modelActor(r), key, name, data, q.Get("collection_id"), language, history, revision)
+	}
+	return store.AcceptImportWithRevisions(modelActor(r), key, name, data, rag.WorkspaceCollection, language, history)
 }
 
 // Progress and pending originals are owner-scoped. The normal Knowledge manager
@@ -41,10 +70,22 @@ func (s *Server) handleDocumentImports(w http.ResponseWriter, r *http.Request) {
 	}
 	store, err := s.ragEngine.ImportStore()
 	if err != nil {
+		if errors.Is(err, rag.ErrCollectionInvalid) || errors.Is(err, rag.ErrCollectionConflict) || errors.Is(err, rag.ErrCollectionUnavailable) {
+			writeCollectionError(w, err)
+			return
+		}
 		writeDocumentIngestError(w, err)
 		return
 	}
 	owner, id := modelActor(r), r.URL.Query().Get("id")
+	if r.Method == http.MethodPost && id != "" && r.URL.Query().Has("ocr_language") {
+		language, selectionErr := documentOCRLanguage(r)
+		current, readErr := store.Import(owner, id)
+		if selectionErr != nil || readErr != nil || current.OCRLanguage != language {
+			writeErrorWithCode(w, "The OCR selection cannot change on a saved import. Submit a new import to choose another language.", 409, "document_ocr_language_invalid")
+			return
+		}
+	}
 	respond := func(status int, value any) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")

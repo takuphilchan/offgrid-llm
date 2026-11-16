@@ -70,7 +70,7 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 	result.Metrics.ContextWindow = s.chatContextWindowForModel(profile, request.Model)
 	lease, err := s.acquireInferenceLease(ctx, request.Model, result.Metrics.ContextWindow, func() error { return phase("loading") })
 	if err != nil {
-		return result, newServiceError(http.StatusServiceUnavailable, "Model could not be loaded; check available memory and runtime logs", err)
+		return result, modelLoadError(err)
 	}
 	defer lease.Release()
 	admission := lease.Timing()

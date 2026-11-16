@@ -425,6 +425,7 @@ test("task first: no setup wall; saved task hands off without a pairing code or 
 test("all nine interface locales keep the task-first composer usable, including RTL", async ({
   page,
 }) => {
+  test.setTimeout(180000); // Nine navigations; individual action deadlines remain unchanged.
   await fixture(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await openAgentChat(page);

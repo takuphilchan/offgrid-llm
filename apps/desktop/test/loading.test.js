@@ -11,7 +11,8 @@ test('startup shows recovery and subscribes once without authorizing navigation'
   let subscription;
   let probes = 0;
   const sandbox = vm.createContext({
-    document: { documentElement: { dataset: {} }, querySelectorAll: () => [], getElementById(id) {
+    performance: {now:()=>0}, setInterval:()=>1, clearInterval(){},
+    document: { documentElement: { dataset: {}, style: {setProperty(){},removeProperty(){}} }, querySelectorAll: () => [], getElementById(id) {
       if (!elements.has(id)) elements.set(id, { hidden: false, classList: { toggle() {} }, textContent: '', addEventListener() {} });
       return elements.get(id);
     } },
@@ -35,7 +36,7 @@ test('startup shows recovery and subscribes once without authorizing navigation'
   assert.equal(elements.get('recovery').hidden, true);
   assert.equal(elements.get('technical').hidden, true);
   subscription({ state: 'ready', managedByDesktop: true });
-  assert.equal(elements.get('status-title').textContent, 'Connected');
+  assert.equal(elements.get('status-title').textContent, translations.en.opening);
   assert.equal(probes, 1);
   subscription({state:'incompatible', code:'service_contract_unsupported',canOpenBrowser:true});
   assert.equal(elements.get('status-title').textContent, translations.en.serviceUpdateTitle);

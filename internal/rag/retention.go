@@ -1,6 +1,7 @@
 package rag
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
@@ -39,18 +40,23 @@ func (s *SQLiteStore) SetDocumentRetention(actor, id string, expectedRevision in
 	if !validKnowledgeActor(actor) || deleteAfter < 0 || deleteAfter > 253402300799 {
 		return nil, ErrRetentionUnavailable
 	}
-	policy, _, err := documentPolicy(s.db, id)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	policy, _, err := documentPolicy(tx, id)
 	if err != nil || !policy.Allows(actor, true) || (policy.ID != WorkspaceCollection && policy.Owner != actor) {
 		return nil, ErrCollectionUnavailable
 	}
-	current, err := retentionPolicy(s.db, id)
+	current, err := retentionPolicy(tx, id)
 	if err != nil {
 		return nil, err
 	}
 	if current.Revision != expectedRevision {
 		return nil, ErrCollectionConflict
 	}
-	result, err := s.db.Exec(`UPDATE document_retention SET revision=revision+1,delete_after=?,legal_hold=? WHERE document_id=? AND revision=?`, deleteAfter, held, id, expectedRevision)
+	result, err := tx.Exec(`UPDATE document_retention SET revision=revision+1,delete_after=?,legal_hold=? WHERE document_id=? AND revision=?`, deleteAfter, held, id, expectedRevision)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +65,25 @@ func (s *SQLiteStore) SetDocumentRetention(actor, id string, expectedRevision in
 	} else if count != 1 {
 		return nil, ErrCollectionConflict
 	}
-	return retentionPolicy(s.db, id)
+	action := "retention_updated"
+	if held != current.LegalHold {
+		if held {
+			action = "legal_hold_added"
+		} else {
+			action = "legal_hold_released"
+		}
+	}
+	if err = recordCollectionAudit(tx, actor, policy.ID, action, id, expectedRevision+1); err != nil {
+		return nil, err
+	}
+	updated, err := retentionPolicy(tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return updated, nil
 }
 
 // Expiry uses the same transactional deletion path as manual removal. Batch
@@ -90,7 +114,7 @@ func (s *SQLiteStore) expireDocuments(now time.Time, limit int) (int, error) {
 		return 0, err
 	}
 	for i, id := range ids {
-		if err = s.deleteDocument(id); err != nil {
+		if err = s.deleteDocumentWithAudit(context.Background(), id, "system:retention", "document_expired"); err != nil {
 			return i, err
 		}
 	}

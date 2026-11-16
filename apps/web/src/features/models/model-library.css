@@ -2,9 +2,15 @@
   .model-transfers { border-block-end: 0; padding-block: var(--space-2); }
   .model-transfers > summary { width: fit-content; font-size: var(--type-ui); cursor: pointer; }
   .model-transfers > .stack { margin-block: var(--space-3); }
-  .models-workspace { display: grid; grid-template-columns: 176px minmax(0, 1fr); column-gap: 32px; row-gap: 20px; }
+  .models-workspace { display:flex; flex-direction:column; gap:20px; max-width:1120px; margin-inline:auto; }
   .model-library-tabs { display: flex; flex-wrap: wrap; gap: 20px; grid-column: 1 / -1; border-block-end: 1px solid var(--separator); }
-  .model-library-toolbar { display: contents; }
+  .model-library-toolbar { display:flex; align-items:end; gap:16px; flex-wrap:wrap; }
+  .model-library-navigation { display:flex; align-items:center; gap:4px; flex:0 1 auto; flex-wrap:wrap; min-width:0; padding:4px; border-radius:18px; background:color-mix(in srgb,var(--text) 4%,var(--surface-1)); }
+  .model-category-control { margin-inline-start:auto; display:grid; gap:6px; color:var(--muted); font-size:var(--type-caption); min-width:0; max-width:100%; }
+  .model-library-navigation strong { font-size:var(--type-body); font-weight:550; }
+  .model-library-navigation .secondary-button { margin-inline-start:auto; }
+  .model-category-filter { width:auto; max-width:100%; min-width:150px; }
+  .model-offline-import>summary { color:var(--muted); font-size:var(--type-meta); }
   .models-workspace .model-category-picker { grid-column: 1; grid-row: 2 / span 2; display: flex; flex-direction: column; align-self: start; gap: 4px; }
   .models-workspace .model-category-picker > button { justify-content: start; text-align: start; padding: 10px 12px; }
   .models-workspace > .model-search-hint { grid-column: 2; margin: 0; max-width: 70ch; color: var(--muted); font-size: var(--type-ui); }
@@ -49,8 +55,11 @@
   .installed-model > .model-display { padding: 16px; }
   .model-display .installed-model-main { display: block; text-align: start; width: fit-content; max-width: 100%; }
   .model-display .installed-model-main strong { white-space: normal; overflow-wrap: anywhere; font-size: var(--type-body); }
-  .installed-model { border-inline-start: 3px solid transparent; }
-  .installed-models .installed-model.selected { background: transparent; border-inline-start-color: var(--text); }
+  .installed-model { border-inline-start: 0; }
+  .installed-models .installed-model.selected { background: var(--accent-soft); border-radius: var(--radius-md); }
+  @media (forced-colors: active) {
+    .installed-models .installed-model.selected { outline: 1px solid Highlight; outline-offset: -1px; }
+  }
   .installed-model .model-actions { flex-wrap: wrap; align-self: start; padding-block-start: 16px; }
   .model-maintenance .utility-popover-content { display: grid; gap: 2px; }
   .model-section > .workspace-search-field { max-width: 560px; }
@@ -76,6 +85,9 @@
   }
 }
 @layer controls {
+  .model-library-navigation > button { display:flex; align-items:center; gap:7px; color:var(--muted); border:0; border-radius:14px; padding:9px 12px; font-weight:400; background:transparent; transition:background 160ms ease,color 160ms ease; }
+  .model-library-navigation > button[aria-current=page] { color:var(--text); background:var(--surface-1); box-shadow:0 1px 3px color-mix(in srgb,var(--text) 8%,transparent); font-weight:500; }
+  .model-category-control > select { width:200px; max-width:100%; }
   .models-workspace .model-category-picker > button { justify-content: start; text-align: start; border: 0; background: transparent; font-size: var(--type-ui); font-weight: var(--weight-regular); }
   .models-workspace .model-category-picker > button[aria-pressed=true] { background: var(--surface-2); color: var(--text); font-weight: var(--weight-heading); }
 }

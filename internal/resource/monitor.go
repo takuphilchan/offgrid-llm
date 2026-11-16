@@ -25,6 +25,7 @@ type Stats struct {
 	MemoryUsedMB       uint64    `json:"memory_used_mb"`
 	MemoryTotalMB      uint64    `json:"memory_total_mb"`
 	MemoryUsagePercent float64   `json:"memory_usage_percent"`
+	MemoryMeasured     bool      `json:"memory_measured"`
 	DiskUsedGB         uint64    `json:"disk_used_gb"`
 	DiskTotalGB        uint64    `json:"disk_total_gb"`
 	DiskUsagePercent   float64   `json:"disk_usage_percent"`
@@ -79,15 +80,10 @@ func (m *Monitor) updateStats() {
 
 	// Get system memory stats
 	vmStat, err := mem.VirtualMemory()
-	if err != nil {
-		// Fallback to runtime stats
-		var memStats runtime.MemStats
-		runtime.ReadMemStats(&memStats)
-		vmStat = &mem.VirtualMemoryStat{
-			Total:       memStats.Sys,
-			Used:        memStats.Alloc,
-			UsedPercent: float64(memStats.Alloc) / float64(memStats.Sys) * 100,
-		}
+	memoryMeasured := err == nil && vmStat != nil
+	if !memoryMeasured {
+		// Go heap usage is not system RAM. Explicitly report an unknown sample.
+		vmStat = &mem.VirtualMemoryStat{}
 	}
 
 	// Get CPU usage
@@ -113,6 +109,7 @@ func (m *Monitor) updateStats() {
 		MemoryUsedMB:       vmStat.Used / 1024 / 1024,
 		MemoryTotalMB:      vmStat.Total / 1024 / 1024,
 		MemoryUsagePercent: vmStat.UsedPercent,
+		MemoryMeasured:     memoryMeasured,
 		DiskUsedGB:         diskUsedGB,
 		DiskTotalGB:        diskTotalGB,
 		DiskUsagePercent:   diskPercent,
@@ -123,8 +120,11 @@ func (m *Monitor) updateStats() {
 
 // CheckAvailableMemory checks if there's enough memory for a model
 func (m *Monitor) CheckAvailableMemory(requiredMB uint64) (bool, error) {
-	stats := m.GetStats()
-	availableMB := stats.MemoryTotalMB - stats.MemoryUsedMB
+	resources, err := DetectMemoryResources()
+	if err != nil {
+		return false, fmt.Errorf("cannot measure available memory: %w", err)
+	}
+	availableMB := uint64(resources.AvailableHostMemoryMB())
 
 	if availableMB < requiredMB {
 		return false, fmt.Errorf("insufficient memory: need %d MB, have %d MB available",

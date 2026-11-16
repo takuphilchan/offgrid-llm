@@ -6,6 +6,47 @@ health check alone does not prove it can complete a useful task.
 
 ## Reusable agents in Chat
 
+Open **Agents → Agent profiles** to create or edit a profile. Search and the
+**Archived** filter belong to the profile list. The editor keeps **Save agent**
+and **Use in Chat** beside its heading. Instructions and model selection come
+first; expand **Tools and context** only for resources the work needs. Instruction
+examples edit the draft; they do not save a profile or grant access.
+
+An archived profile is read-only and marked in the list. It cannot be newly
+selected as a delegate. A previously selected, now-unavailable delegate remains
+visible so you can remove it explicitly before saving.
+
+**Tools & MCP** manages workspace tools and connections. Tool descriptions and
+icons help with browsing; expand technical details to inspect the exact identity.
+Changes are serialized while a request is pending. Failed changes retain their
+previous state, and a failed connection request keeps its name and URL for retry.
+
+**External agents** separates service/model compatibility from installation on
+this computer and workflow qualification. Open setup instructions to copy the
+command and inspect verification steps. Opening or copying these instructions
+does not execute them; clipboard failures appear inside the setup dialog.
+
+### Archive or permanently delete a profile
+
+Archiving keeps the profile and its history. In the development build, services
+advertising `agent-profile-deletion-v1` also expose **Delete** for an owned profile,
+including archived profiles. Before confirming, review the counts of associated
+standalone work and private memory. Deletion removes that profile's saved revisions,
+eligible task bodies/events and private memory in one transaction. It does not
+delete shared documents, external files, exports or backups.
+
+Active tasks, canonical conversation work, dependencies from another profile or
+task, and schedules referencing the profile block deletion. Resolve those through
+their own lifecycle controls first. A stale review, revision conflict or storage
+failure leaves the operation unapplied; refresh the review before retrying.
+An administrator does not acquire another user's private deletion authority.
+
+CLI: run `offgrid agent profiles deletion-review ID`, inspect the returned counts,
+then use `offgrid agent profiles delete ID REVISION REVIEW_TOKEN`. The Python client
+provides `client.agent.profiles.deletion_review(id)` and
+`client.agent.profiles.delete(id, expected_revision=revision, review_token=token)`.
+Neither client automatically retries an ambiguous or conflicting deletion.
+
 For verbatim text already in a task request, a compatible new job may offer
 `workspace_write_from_input`. The agent selects unique boundary strings in that
 root's request or an applied correction, and the service copies the selected

@@ -26,49 +26,42 @@ async function fixture(page: Page, role = 'admin') {
   return state;
 }
 
-for (const theme of ['light', 'dark']) test(`library selection remains visible in ${theme} after shared controls and hover`, async ({ page }) => {
+for (const theme of ['light', 'dark']) test(`library location and category stay explicit in ${theme}`, async ({ page }) => {
   const state = await fixture(page);
   await page.addInitScript(theme => localStorage.setItem('offgrid.theme', theme), theme);
   await page.goto('/ui/#/models');
-  const installed = page.getByRole('tab', { name: 'Installed', exact: true });
-  const discover = page.getByRole('tab', { name: 'Discover models', exact: true });
-  const background = (control: typeof installed) => control.evaluate(el => el.getAttribute('role') === 'tab' ? getComputedStyle(el).borderBottomColor : getComputedStyle(el).backgroundColor);
-  await expect(installed).toHaveAttribute('aria-selected', 'true');
-  await expect.poll(async () => (await background(installed)) !== (await background(discover))).toBe(true);
-  await installed.hover();
-  await expect.poll(async () => (await background(installed)) !== (await background(discover))).toBe(true);
-  await discover.click(); await page.mouse.move(0, 0);
-  await expect(discover).toHaveAttribute('aria-selected', 'true');
-  await expect.poll(async () => (await background(discover)) !== (await background(installed))).toBe(true);
-  const language = page.getByRole('button', { name: 'Language', exact: true });
-  const embeddings = page.getByRole('button', { name: 'Embeddings', exact: true });
-  await embeddings.click(); await page.mouse.move(0, 0);
-  await expect(embeddings).toHaveAttribute('aria-pressed', 'true');
-  await expect.poll(async () => (await background(language)) !== (await background(embeddings))).toBe(true);
-  await expect(embeddings).toHaveCSS('font-weight', '600');
-  await embeddings.hover();
-  await expect.poll(async () => (await background(language)) !== (await background(embeddings))).toBe(true);
+  const location=page.locator('.model-library-navigation [aria-current=page]');
+  await expect(location).toHaveText('Installed');
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
+  await expect(location).toHaveText('Discover models');
+  await expect(location).toBeFocused();
+  await page.locator('.model-category-filter').selectOption({label:'Embeddings'});
+  await expect(page.locator('.model-category-filter')).toHaveValue('embeddings');
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Installed', exact: true }).click();
+  await expect(location).toHaveText('Installed');
+  await expect(location).toBeFocused();
+  await expect(page.locator('.model-category-filter')).toHaveValue('embeddings');
   expect(state.mutations).toEqual([]);
 });
 
 test('all four categories keep Installed local and Discover explicit, with retained independent filters', async ({ page }) => {
   const state = await fixture(page); await page.goto('/ui/#/models');
   for (const [category, name] of [['Language', 'fixture-chat'], ['Embeddings', 'fixture-embed'], ['Speech recognition', 'recognition-fixture'], ['Speech generation', 'synthesis-fixture']]) {
-    await page.getByRole('button', { name: category, exact: true }).click();
-    await page.getByRole('tab', { name: 'Installed', exact: true }).click();
+    await page.locator('.model-category-filter').selectOption({label:category});
+    await expect(page.locator('.model-library-navigation [aria-current=page]')).toHaveText('Installed');
     const inventory = page.getByRole('region', { name: 'Installed', exact: true });
     await expect(inventory).toContainText(name); await expect(inventory).not.toContainText('must-not-be-chat');
     await expect(page.getByRole('searchbox')).toHaveCount(1);
     await page.getByRole('searchbox').fill('absent');
     await expect(inventory).toContainText('No models match this filter');
     await expect(inventory).not.toContainText('No local models');
-    await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+    await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
     await expect(page.getByText('No catalog models in this category.', { exact: false })).toBeVisible();
-    if (category === 'Language' || category === 'Embeddings') await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
+    await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
     await expect(page.getByRole('searchbox')).toHaveCount(1);
     await page.getByRole('searchbox').fill(category);
     expect(state.searches).toEqual([]);
-    await page.getByRole('tab', { name: 'Installed', exact: true }).click();
+    await page.locator('.model-library-navigation').getByRole('button', { name: 'Installed', exact: true }).click();
     await expect(page.getByRole('searchbox')).toHaveValue('absent');
     await page.getByRole('searchbox').fill('');
   }
@@ -95,15 +88,16 @@ test('offline native text packages remain visible but cannot masquerade as quali
   expect(state.mutations).toEqual([]);
 });
 
-test('navigation keeps the reviewed intent without online re-search and tabs support keyboard', async ({ page }) => {
+test('navigation keeps the reviewed intent without online re-search and supports keyboard', async ({ page }) => {
   const state = await fixture(page); await page.goto('/ui/#/models');
-  await page.getByRole('button', { name: 'Speech recognition', exact: true }).click();
-  const installed = page.getByRole('tab', { name: 'Installed', exact: true });
-  await installed.focus(); await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Discover models', exact: true })).toBeFocused();
+  await page.locator('.model-category-filter').selectOption({label:'Speech recognition'});
+  await page.getByRole('button',{name:'Discover models',exact:true}).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.model-library-navigation [aria-current=page]')).toBeFocused();
+  await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   await page.getByRole('searchbox').fill('speech'); await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'publisher/speech', exact: true })).toBeVisible();
-  await page.locator('.sidebar a[href="#/chat"]').click(); await page.locator('.sidebar a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/chat"]').click(); await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click();
   await expect(page.getByRole('searchbox')).toHaveValue('speech');
   await expect(page.getByRole('heading', { name: 'publisher/speech', exact: true })).toBeVisible();
   expect(state.searches).toEqual(['speech']); expect(state.mutations).toEqual([]);
@@ -114,10 +108,11 @@ test('non-administrators cannot initiate discovery transfers or package administ
   await page.getByRole('button', { name: 'Model actions: fixture-chat', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Model actions: fixture-chat', exact: true }).getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
   await page.keyboard.press('Escape');
-  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   await expect(page.getByText('Administrator access required', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Speech generation', exact: true }).click();
+  await page.locator('.model-category-filter').selectOption({label:'Speech generation'});
+  await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   await page.getByRole('searchbox').fill('voice');
   await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeDisabled();
   expect(state.calls).not.toContain('/api/v2/models/operations');
@@ -127,7 +122,7 @@ test('non-administrators cannot initiate discovery transfers or package administ
 test('curated legacy review keeps focus and downloads only after the explicit decision', async ({ page }) => {
   const state = await fixture(page);
   await page.route('**/v1/catalog', route => route.fulfill({ json: { models: [{ id: 'review-chat', name: 'Review chat', type: 'llm', repo: 'publisher/chat', file: 'model.Q4.gguf', size_bytes: 4096, license: 'MIT' }] } }));
-  await page.goto('/ui/#/models'); await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.goto('/ui/#/models'); await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Review chat', exact: true }) });
   const review = card.getByRole('button', { name: 'Review download', exact: true });
   await review.focus(); await page.keyboard.press('Enter');
@@ -147,8 +142,8 @@ test('curated package alternatives resolve the selected identity in place, never
     const id = route.request().postDataJSON().catalog_id; resolutions.push(id);
     return route.fulfill({ json: { id: `resolution-${id}`, preflight: { transfer_bytes: id === 'small' ? 4096 : 8192, required_free_bytes: 16384, warnings: ['Fixture runtime unavailable'] }, resolution: { manifest: manifest(id), provenance: { repository: 'publisher/voice', revision: 'r1' } } } });
   });
-  await page.goto('/ui/#/models'); await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
-  await page.getByRole('button', { name: 'Speech generation', exact: true }).click();
+  await page.goto('/ui/#/models'); await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-category-filter').selectOption({label:'Speech generation'});
   const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Voice collection', exact: true }) });
   await card.getByRole('button', { name: 'Review download' }).click();
   expect(resolutions).toEqual([]); await expect(card.getByRole('button', { name: 'Download', exact: true })).toHaveCount(0);
@@ -169,17 +164,17 @@ test('failed operations retain the exact model and safe recovery across library 
   let failRead = false;
   const operation = { id: 'operation-fixture', request_id: 'once', state: 'interrupted', bytes_done: 2048, bytes_total: 8192, retained_bytes: 2048, artifacts: [], message: 'Fixture: transfer was interrupted', provenance: { repository: 'publisher/speech', revision: 'pinned' }, target: { kind: 'package', package: { id: 'recognition-fixture', revision: 'r1', name: 'Recognition download', capabilities: ['transcription'] } } };
   await page.route('**/api/v2/models/operations', route => failRead ? route.fulfill({ status: 503, json: { error: 'Operation status offline' } }) : route.fulfill({ json: { operations: [operation] } }));
-  await page.goto('/ui/#/models'); await page.getByRole('button', { name: 'Speech recognition', exact: true }).click();
+  await page.goto('/ui/#/models'); await page.locator('.model-category-filter').selectOption({label:'Speech recognition'});
   const card = page.locator('[data-operation-id="operation-fixture"]');
   await expect(card).toContainText('recognition-fixture · r1');
   await expect(card.getByRole('status')).toContainText('Interrupted');
   await expect(card.getByRole('button', { name: 'Resume', exact: true })).toBeEnabled();
-  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   await expect(card).toBeVisible();
-  await page.locator('.sidebar a[href="#/chat"]').click(); await page.locator('.sidebar a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/chat"]').click(); await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click();
   await expect(card).toContainText('Retained data: 2 KB'); expect(state.mutations).toEqual([]);
   failRead = true;
-  await page.getByRole('tab', { name: 'Installed', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Installed', exact: true }).click();
   await refreshWorkspace(page);
   await expect(page.getByRole('alert')).toContainText('Operation status offline');
   await expect(page.getByRole('region', { name: 'Installed', exact: true })).toContainText('Matching runtime is unavailable');
@@ -216,10 +211,10 @@ test('legacy verification remains attached to its model after navigating away an
   });
   await page.goto('/ui/#/models'); await page.getByRole('button', { name: 'Model actions: fixture-chat', exact: true }).click(); await page.getByRole('button', { name: 'Verify', exact: true }).click();
   await expect(page.locator('.installed-model')).toContainText('Fixture integrity evidence');
-  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   await expect(page.getByText('Fixture integrity evidence')).toHaveCount(0);
-  await page.locator('.sidebar a[href="#/chat"]').click(); await page.locator('.sidebar a[href="#/models"]').click();
-  await page.getByRole('tab', { name: 'Installed', exact: true }).click();
+  await page.locator('.sidebar a[href="#/chat"]').click(); await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Installed', exact: true }).click();
   await expect(page.locator('.installed-model')).toContainText('Fixture integrity evidence'); expect(checks).toBe(1);
 });
 import { refreshWorkspace } from './helpers/workspace-actions';
@@ -230,16 +225,16 @@ for (const theme of ['light', 'dark']) test(`model library separates view and ca
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/ui/#/models');
   await expect(page.locator('.installed-model')).toBeVisible();
-  const categories = await page.locator('.model-category-picker').boundingBox();
+  const categories = await page.locator('.model-category-filter').boundingBox();
   const panel = await page.locator('#model-library-panel').boundingBox();
-  expect(categories!.x + categories!.width).toBeLessThan(panel!.x);
+  expect(categories!.y + categories!.height).toBeLessThanOrEqual(panel!.y);
   await page.screenshot({ path: info.outputPath(`models-installed-${theme}.png`) });
-  await page.getByRole('button', { name: 'Speech recognition', exact: true }).click();
+  await page.locator('.model-category-filter').selectOption({label:'Speech recognition'});
   await expect(page.locator('.installed-package-list')).toContainText('Matching runtime is unavailable');
   await page.screenshot({ path: info.outputPath(`models-speech-${theme}.png`) });
   await page.setViewportSize({ width: 390, height: 740 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await expect(page.getByRole('button', { name: 'Speech recognition', exact: true })).toBeInViewport();
+  await expect(page.locator('.model-category-filter')).toBeInViewport();
   await page.screenshot({ path: info.outputPath(`models-mobile-${theme}.png`), fullPage: true });
   expect(state.mutations).toEqual([]);
 });

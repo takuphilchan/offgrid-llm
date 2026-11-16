@@ -18,7 +18,7 @@ func (s *Server) attachJobKnowledge(w http.ResponseWriter, r *http.Request, requ
 	if len(ids) == 0 {
 		return true
 	}
-	if s.ragEngine == nil || !s.ragEngine.IsEnabled() || s.ragEngine.StorageError() != nil {
+	if s.ragEngine == nil || (!request.SelectedKnowledge && !s.ragEngine.IsEnabled()) || s.ragEngine.StorageError() != nil {
 		writeJobError(w, 503, "knowledge_unavailable", "Enable Knowledge before reviewing this schedule.", true)
 		return false
 	}

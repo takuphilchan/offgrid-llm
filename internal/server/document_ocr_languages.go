@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/takuphilchan/offgrid-llm/internal/documentocr"
 	"github.com/takuphilchan/offgrid-llm/internal/rag"
 )
 
@@ -38,5 +39,18 @@ func (s *Server) handleOCRLanguages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"languages": s.ragEngine.OCRLanguages(), "document_formats": s.ragEngine.DocumentParser().FormatReadiness()})
+	_ = json.NewEncoder(w).Encode(map[string]any{"languages": s.ragEngine.OCRLanguages(), "document_formats": s.ragEngine.DocumentFormatReadiness(), "unavailable_interface_locales": documentocr.Languages().UnavailableInterfaceLocales, "selection_mode": "ordered_languages", "max_languages": documentocr.MaxSelectionLanguages, "manifest_revision": documentocr.Languages().SourceRevision})
+}
+
+func documentOCRLanguage(r *http.Request) (string, error) {
+	values, explicit := r.URL.Query()["ocr_language"]
+	if !explicit {
+		return "eng", nil
+	}
+	if len(values) == 1 {
+		if _, ok := documentocr.LookupSelection(values[0]); ok {
+			return values[0], nil
+		}
+	}
+	return "", &rag.ParseError{Code: "document_ocr_language_unavailable", Message: "Choose up to three supported OCR languages. No substitute language was used."}
 }

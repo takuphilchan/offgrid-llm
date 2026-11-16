@@ -67,6 +67,15 @@ func TestVisionDownloadCompletesAllAssetsAndRepairsMissing(t *testing.T) {
 	if err != nil || model.ProjectorPath == "" {
 		t.Fatalf("missing installed vision assets: %+v %v", model, err)
 	}
+	if err := s.sessionImageReady("local-model"); err != nil {
+		t.Fatal("installed projector rejected", err)
+	}
+	if err := os.WriteFile(model.ProjectorPath, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.sessionImageReady("local-model"); err == nil {
+		t.Fatal("empty projector admitted image inference")
+	}
 	// Restart reuses the pinned bundle, even if the upstream default moves.
 	if err := s.loadDownloads(); err != nil {
 		t.Fatal(err)

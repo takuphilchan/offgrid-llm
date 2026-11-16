@@ -1533,6 +1533,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "pt-PT": {
@@ -3069,6 +3184,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "it": {
@@ -4605,6 +4835,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "ru": {
@@ -6141,6 +6486,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "uk": {
@@ -7677,6 +8137,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "tr": {
@@ -9213,6 +9788,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "zh-Hans": {
@@ -10749,6 +11439,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "zh-Hant": {
@@ -12285,6 +13090,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "ja": {
@@ -13821,6 +14741,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "ko": {
@@ -15357,6 +16392,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "id": {
@@ -16893,6 +18043,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "vi": {
@@ -18429,6 +19694,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "hi": {
@@ -19965,6 +21345,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "bn": {
@@ -21501,6 +22996,121 @@
       "6": "Control is stopping. The application stays open; review any action already dispatched.",
       "7": "Another computer session is still active. Stop it, then choose the application again.",
       "8": "Application control could not connect. Stop any previous session and choose the window again. If this repeats, reopen OffGrid Desktop."
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "ta": {
@@ -23037,6 +24647,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "th": {
@@ -24573,6 +26298,121 @@
       "permissions.0": "Read files",
       "permissions.1": "Edit files",
       "permissions.2": "Project commands"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "fil": {
@@ -26109,6 +27949,121 @@
     },
     "i18n/document-retention:save": {
       "": "Save policy"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "ur": {
@@ -27645,6 +29600,121 @@
     },
     "i18n/model-library:noMatches": {
       "": "No models match this filter."
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "fa": {
@@ -29181,6 +31251,121 @@
     },
     "i18n/workspace-management:searchDocuments": {
       "": "Search documents"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "he": {
@@ -30717,6 +32902,121 @@
     },
     "i18n/workspace-management:searchDocuments": {
       "": "Search documents"
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/conversation-input:conversationInputText": {
+      "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+    },
+    "i18n/document-navigation:copy": {
+      "outline": "Outline",
+      "coverage": "Extraction coverage",
+      "needsReview": "Needs review",
+      "figures": "Figures not interpreted",
+      "hidden": "Hidden content",
+      "blocks": "Blocks",
+      "sideBySide": "Side by side",
+      "empty": "No outline entries in this section.",
+      "unavailable": "Navigation is unavailable for this extraction."
+    },
+    "i18n/document-comparison:labels": {
+      "0": "Compare documents",
+      "1": "Before",
+      "2": "After",
+      "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+      "4": "Comparison history",
+      "5": "Source units checked",
+      "6": "Changes",
+      "7": "No text or cell changes in this section.",
+      "8": "Comparison is incomplete. Some source content needs review.",
+      "9": "Comparison unavailable. Refresh to check access and service availability.",
+      "10": "Request outcome unknown. Refresh history before trying again.",
+      "11": "Queued",
+      "12": "Running",
+      "13": "Interrupted",
+      "14": "Cancelled",
+      "15": "Failed",
+      "16": "Retained text compared",
+      "17": "Incomplete",
+      "18": "Cell changed",
+      "19": "Added",
+      "20": "Removed",
+      "21": "Swap documents",
+      "22": "Choose two documents with extracted text.",
+      "23": "No comparisons yet.",
+      "24": "Cell metadata",
+      "25": "Formula",
+      "26": "Cached result",
+      "27": "Stored value",
+      "28": "New comparison",
+      "29": "No changes on this page."
+    },
+    "i18n/document-export:labels": {
+      "0": "Export comparison",
+      "1": "Downloaded copies stay on this device even if source access is later removed."
+    },
+    "i18n/desktop-command:labels": {
+      "0": "Quick window",
+      "1": "Open full app",
+      "2": "Hide window",
+      "3": "Desktop shortcut",
+      "4": "Off",
+      "5": "This shortcut is unavailable. Choose another or use the system tray.",
+      "6": "OffGrid stays in the system tray when you close its window. Quit OffGrid to stop the local service. The shortcut works while OffGrid is running.",
+      "7": "Open quick window"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    },
+    "i18n/response-display:copy": {
+      "label": "Response display",
+      "live": "As it is generated",
+      "complete": "When complete",
+      "hint": "Live text is a draft. Document checks and runtimes without streaming may delay display."
+    },
+    "i18n/library-flow:copy": {
+      "changed": "The selection has changed. Compare again to update the results."
+    },
+    "i18n/profile-deletion:copy": {
+      "body": "Delete this profile, {jobs} saved jobs and {memory} memory entries? This cannot be undone. Shared files, exports and backups are kept.",
+      "blocked": "Deletion blocked: {jobs} active or linked jobs; {dependencies} dependent profiles or schedules."
     }
   },
   "fr": {
@@ -30753,6 +33053,48 @@
       "nomic-embed-text-v1": "Open-source embedding model, 768 dimensions, long context",
       "bge-m3": "Multilingual embedding model, 1024 dimensions, supports long context",
       "speechPackage": "Complete speech model package. Speech runtime and qualification are not included."
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
     }
   },
   "sn": {
@@ -30789,6 +33131,48 @@
       "nomic-embed-text-v1": "Open-source embedding model, 768 dimensions, long context",
       "bge-m3": "Multilingual embedding model, 1024 dimensions, supports long context",
       "speechPackage": "Complete speech model package. Speech runtime and qualification are not included."
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
     }
   },
   "ar": {
@@ -30817,6 +33201,48 @@
       "nomic-embed-text-v1": "Open-source embedding model, 768 dimensions, long context",
       "bge-m3": "Multilingual embedding model, 1024 dimensions, supports long context",
       "speechPackage": "Complete speech model package. Speech runtime and qualification are not included."
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
     }
   },
   "es": {
@@ -30845,6 +33271,48 @@
       "nomic-embed-text-v1": "Open-source embedding model, 768 dimensions, long context",
       "bge-m3": "Multilingual embedding model, 1024 dimensions, supports long context",
       "speechPackage": "Complete speech model package. Speech runtime and qualification are not included."
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
     }
   },
   "de": {
@@ -30873,6 +33341,48 @@
       "nomic-embed-text-v1": "Open-source embedding model, 768 dimensions, long context",
       "bge-m3": "Multilingual embedding model, 1024 dimensions, supports long context",
       "speechPackage": "Complete speech model package. Speech runtime and qualification are not included."
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
     }
   },
   "nd": {
@@ -30901,6 +33411,48 @@
       "nomic-embed-text-v1": "Open-source embedding model, 768 dimensions, long context",
       "bge-m3": "Multilingual embedding model, 1024 dimensions, supports long context",
       "speechPackage": "Complete speech model package. Speech runtime and qualification are not included."
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
     }
   },
   "sw": {
@@ -30929,6 +33481,48 @@
       "nomic-embed-text-v1": "Open-source embedding model, 768 dimensions, long context",
       "bge-m3": "Multilingual embedding model, 1024 dimensions, supports long context",
       "speechPackage": "Complete speech model package. Speech runtime and qualification are not included."
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
     }
   },
   "zu": {
@@ -30957,6 +33551,86 @@
       "nomic-embed-text-v1": "Open-source embedding model, 768 dimensions, long context",
       "bge-m3": "Multilingual embedding model, 1024 dimensions, supports long context",
       "speechPackage": "Complete speech model package. Speech runtime and qualification are not included."
+    },
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
+    },
+    "i18n/help-center:helpCenter": {
+      "search": "Search help",
+      "empty": "No matching help topics. Try a different word.",
+      "browse": "Browse help topics",
+      "topics": "Topics"
+    }
+  },
+  "en": {
+    "i18n/document-format-limits:limits": {
+      "xlsx": "Supported number and date formats are shown with raw values. Other formats need review. Charts and images are not interpreted; formulas are not recalculated.",
+      "pptx": "Slide text, speaker notes and tables are extracted. Images, charts and embedded objects are identified but not interpreted. Visual reading order and table headers need review.",
+      "docx": "Headers and footers are extracted as source sections. Page placement and fields need review. Images and embedded objects are not interpreted."
+    },
+    "i18n/collection-errors:copy": {
+      "unconfirmed": "Collection details could not be confirmed. Reload its audience and revision before continuing."
+    },
+    "i18n/collection-destination:copy": {
+      "destination": "Destination collection",
+      "choose": "Choose a collection",
+      "owner": "Owner",
+      "editors": "Editors",
+      "readers": "Readers",
+      "none": "None",
+      "confirm": "I have reviewed who can access this copy.",
+      "shared": "Everyone with Knowledge access in this workspace can read this collection.",
+      "copy": "A separate copy will be added to the selected collection. The original stays in this conversation.",
+      "refresh": "Reload collections",
+      "name": "New collection name",
+      "create": "Create private collection",
+      "confirmFiles": "I have reviewed who can access these files."
+    },
+    "i18n/collection-management:copy": {
+      "title": "Collections",
+      "all": "All collections",
+      "name": "Collection name",
+      "people": "People",
+      "review": "Review changes",
+      "apply": "Save changes",
+      "help": "Changes apply to every document in this collection. Downloaded copies cannot be recalled.",
+      "readOnly": "Only the collection owner can change access.",
+      "move": "Move to collection",
+      "current": "Current collection",
+      "saved": "Changes saved"
     }
   }
 }

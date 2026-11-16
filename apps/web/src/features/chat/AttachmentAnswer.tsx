@@ -4,6 +4,7 @@ import { MarkdownMessage } from '../../components/MarkdownMessage';
 import { useI18n } from '../../i18n';
 import { workflow } from '../../i18n/workflow';
 import { documentReader } from '../../i18n/document-reader';
+import { linkedEvidenceNotice } from '../../i18n/linked-evidence';
 import { useDocumentReader } from './DocumentWorkspace';
 import { resolveAttachmentCitation, type PassageRef, type Selection } from './attachment-citations';
 
@@ -19,7 +20,7 @@ export function AttachmentAnswer({content, session, selections}: {content: strin
       const passage = await api.sessionAttachmentPassage(session, ref.source.id, ref.source.revision, ref.start, ref.end, controller.signal);
       if (controller.signal.aborted) return;
       if (passage.id !== ref.source.id || passage.revision !== ref.source.revision || passage.start_byte !== ref.start || passage.end_byte !== ref.end || new TextEncoder().encode(passage.text).length !== ref.end-ref.start || !/^[a-f0-9]{64}$/.test(passage.sha256)) throw Error(workflow[locale].sourceMissing);
-      openReader?.({name: passage.name, sha256: passage.sha256, passage: passage.text, path: `/v1/sessions/${encodeURIComponent(session)}/attachments/${encodeURIComponent(passage.id)}/preview`, original: () => api.sessionAttachmentOriginal(session, passage.id)});
+      openReader?.({name: passage.name, sha256: passage.sha256, passage: passage.text, path: `/v1/sessions/${encodeURIComponent(session)}/attachments/${encodeURIComponent(passage.id)}/preview`, original: () => api.sessionAttachmentOriginal(session, passage.id), extractionRevision: ref.source.extraction_revision ?? ref.source.linked_evidence?.extraction_revision, attachment: {session, id: passage.id, revision: passage.revision}});
     } catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : messages.common.error); }
     finally { if (!controller.signal.aborted) setPending(''); }
   }, [session, openReader, locale, messages.common.error]);
@@ -27,5 +28,5 @@ export function AttachmentAnswer({content, session, selections}: {content: strin
     const ref = resolveAttachmentCitation(part, selections);
     return <Fragment key={index}>{ref && openReader ? <button type="button" className="citation-chip" title={documentReader(locale).open} aria-label={`${documentReader(locale).open}: ${ref.label}`} onClick={() => void open(ref)}><bdi>{ref.label}</bdi></button> : part}</Fragment>;
   }), [selections, openReader, locale, open]);
-  return <><MarkdownMessage content={content} renderText={renderText} />{pending && <span className="sr-only" role="status">{messages.common.loading}</span>}{error && <p role="alert" className="citation-error">{error}</p>}</>;
+  return <>{selections.some(source => source.linked_evidence?.links_complete === false) && <p className="citation-error" data-linked-evidence="incomplete">{linkedEvidenceNotice(locale)}</p>}<MarkdownMessage content={content} renderText={renderText} />{pending && <span className="sr-only" role="status">{messages.common.loading}</span>}{error && <p role="alert" className="citation-error">{error}</p>}</>;
 }

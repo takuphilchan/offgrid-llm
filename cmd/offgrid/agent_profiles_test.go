@@ -77,6 +77,47 @@ func TestProfileCommandsUseAuthenticatedRevisionBoundService(t *testing.T) {
 	}
 }
 
+func TestProfileDeletionCLIRequiresReviewAndNeverRetriesConflict(t *testing.T) {
+	token := strings.Repeat("a", 64)
+	deletes := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v2/system" {
+			w.Write([]byte(`{"product":"offgrid","capabilities":["agent-profiles-v1","agent-profile-deletion-v1"]}`))
+			return
+		}
+		if r.URL.Path == "/api/v2/agent-profiles/writer/deletion" {
+			json.NewEncoder(w).Encode(map[string]any{"revision": 3, "jobs": 2, "memory": 1, "blocked_jobs": 0, "dependencies": 0, "token": token})
+			return
+		}
+		if r.Method != "DELETE" || r.URL.Path != "/api/v2/agent-profiles/writer" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		deletes++
+		var body map[string]any
+		if json.NewDecoder(r.Body).Decode(&body) != nil || body["expected_revision"] != float64(3) || body["review_token"] != token {
+			t.Error("lost reviewed snapshot", body)
+		}
+		w.WriteHeader(http.StatusConflict)
+	}))
+	defer server.Close()
+	client, _ := serviceclient.New(server.URL, "", server.Client())
+	var out bytes.Buffer
+	if err := profileCommand(context.Background(), client, []string{"deletion-review", "writer"}, strings.NewReader(""), &out, true); err != nil || !strings.Contains(out.String(), token) {
+		t.Fatal(out.String(), err)
+	}
+	for _, args := range [][]string{{"delete", "writer"}, {"delete", "writer", "0", token}, {"delete", "writer", "3", "bad"}} {
+		if profileCommand(context.Background(), client, args, strings.NewReader(""), &out, true) == nil {
+			t.Fatal("unreviewed deletion accepted")
+		}
+	}
+	if deletes != 0 {
+		t.Fatal("invalid command mutated work")
+	}
+	if profileCommand(context.Background(), client, []string{"delete", "writer", "3", token}, strings.NewReader(""), &out, true) == nil || deletes != 1 {
+		t.Fatal("conflict hidden or replayed", deletes)
+	}
+}
+
 func TestProfileSubmissionRequiresExplicitRevisionAndCompatibleService(t *testing.T) {
 	req, _, err := parseTaskSubmission([]string{"hello", "--profile", "writer", "--profile-revision", "3", "--request-id", "stable-request"})
 	if err != nil || req.ProfileRevision != 3 || req.Model != "" {

@@ -146,6 +146,15 @@ func TestDocumentCollectionPolicyProtectsHTTPReadsAndDeletion(t *testing.T) {
 			t.Fatal("global admin permission bypassed collection editing", actor, w.Code)
 		}
 	}
+	oldText := doc.RawContent
+	doc.Extraction = nil
+	doc.RawContent = strings.Repeat("x", len(oldText))
+	if err := store.ReplaceDocumentWithChunks(doc, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if w := do("reader", "GET", paths[2], s.handleDocumentSource, users.PermissionRAG); w.Code != 200 || !strings.Contains(w.Body.String(), oldText) {
+		t.Fatal("historical evidence unavailable", w.Code, w.Body.String())
+	}
 	if _, err := store.UpdateCollection(ids["owner"], p.ID, 1, p.Name, nil, p.Editors); err != nil {
 		t.Fatal(err)
 	}

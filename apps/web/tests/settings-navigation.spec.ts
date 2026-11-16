@@ -34,6 +34,7 @@ async function fixture(page: Page) {
 }
 
 async function openTheme(page:Page,mode:'light'|'dark') {
+ await page.locator('.settings-navigation [data-section=appearance]').click();
  await page.locator('.theme-summary').nth(mode==='light'?0:1).click();
  await expect(page.getByRole('dialog',{name:'Choose a theme'})).toBeVisible();
 }
@@ -55,6 +56,7 @@ for(const [id,modes] of Object.entries(catalog.themes).filter(([id])=>Object.has
 }
 test('theme chooser supports search, keyboard, narrow layout and forced colors',async({page})=>{
  await fixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/ui/#/settings');
+ await page.locator('.settings-navigation [data-section=appearance]').click();
  await page.getByLabel('Text size',{exact:true}).selectOption('150');
  await openTheme(page,'dark');
  const dialog=page.getByRole('dialog',{name:'Choose a theme'}),search=dialog.getByRole('searchbox',{name:'Search themes'});
@@ -73,6 +75,7 @@ test('theme chooser supports search, keyboard, narrow layout and forced colors',
 test('theme chooser keeps the settings page compact and cancels previews with Escape',async({page})=>{
  await fixture(page);await page.emulateMedia({colorScheme:'dark'});await page.setViewportSize({width:1280,height:900});
  await page.goto('/ui/#/settings');
+ await page.locator('.settings-navigation [data-section=appearance]').click();
  await expect(page.locator('.theme-summary')).toHaveCount(2);await expect(page.locator('.theme-gallery')).toHaveCount(0);
  expect((await page.locator('#appearance-text-size').boundingBox())!.width).toBeLessThanOrEqual(180);
  await page.screenshot({path:test.info().outputPath('appearance-summary-wide.png')});
@@ -100,6 +103,7 @@ test('Settings retains preview language and discloses its status',async({page})=
 for (const language of ['en','ar']) test(`theme chooser remains usable at 320 by 480: ${language}`,async({page})=>{
  await fixture(page);await page.addInitScript(code=>localStorage.setItem('offgrid.locale',code),language);
  await page.setViewportSize({width:320,height:480});await page.goto('/ui/#/settings');
+ await page.locator('.settings-navigation [data-section=appearance]').click();
  await page.locator('.theme-summary').nth(1).click();
  const dialog=page.locator('dialog.theme-chooser'),body=dialog.locator('.theme-chooser-body');
  await expect(dialog).toBeVisible();
@@ -129,7 +133,7 @@ test('settings share persisted response preferences with Chat without starting i
   await expect(page.getByRole('combobox', { name: 'Maximum response tokens', exact: true })).toHaveValue('256');
   await page.goto('/ui/#/chat');
   await page.getByRole('button', { name: 'Response settings', exact: true }).click();
-  await page.locator('.response-advanced > summary').click();
+  await page.getByRole('region', { name: 'Response settings', exact: true }).locator('a[href="#/settings/responses"]').click();
   await expect(page.getByRole('combobox', { name: 'Context profile', exact: true })).toHaveValue('extended');
   await expect(page.getByRole('combobox', { name: 'Maximum response tokens', exact: true })).toHaveValue('256');
   expect(writes).toEqual([]);
@@ -189,7 +193,7 @@ for (const locale of Object.keys(settingsNavigation) as (keyof typeof settingsNa
     await search.fill('no-matching-setting-xyz');
     await expect(page.getByText(copy.empty, { exact: true })).toBeVisible();
     await search.fill('');
-    const voice = page.locator('.settings-navigation nav button').nth(2);
+    const voice = page.locator('.settings-navigation [data-section=voice]');
     await voice.focus(); await page.keyboard.press('Enter');
     await expect(voice).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.settings-content').getByRole('heading', { name: copy.sections[2], exact: true })).toBeVisible();
@@ -242,7 +246,7 @@ test('settings deep links focus the requested control',async({page})=>{
 });
 test('appearance restores corrupt storage safely and cross-tab changes update without reload',async({page})=>{
  await fixture(page); await page.addInitScript(()=>localStorage.setItem('offgrid.appearance.v1','{bad'));
- await page.emulateMedia({colorScheme:'dark'});await page.goto('/ui/#/settings');
+ await page.emulateMedia({colorScheme:'dark'});await page.goto('/ui/#/settings/appearance');
  await expect(page.locator('html')).toHaveAttribute('data-palette','offgrid');
  await page.evaluate(()=>{const key='offgrid.appearance.v1',newValue=JSON.stringify({version:1,light:'warm',dark:'forest',textSize:125,reduceMotion:true});localStorage.setItem(key,newValue);window.dispatchEvent(new StorageEvent('storage',{key,newValue}));});
  await expect(page.locator('html')).toHaveAttribute('data-palette','forest');

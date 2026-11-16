@@ -65,11 +65,11 @@ test('completed download is not retrieval readiness and setup stays compact', as
   expect((await page.locator('.knowledge-setup').boundingBox())!.height).toBeLessThan(320);
   await page.screenshot({ path: info.outputPath('knowledge-disabled.png') });
   await page.goto('/ui/#/models');
-  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   expect((await page.locator('#model-search-query').boundingBox())!.y).toBeLessThan(500);
   const card = page.locator('.catalog-card').filter({ has: page.getByRole('heading', { name: 'BGE M3', exact: true }) });
-  await page.getByRole('button', { name: 'Embeddings', exact: true }).click();
+  await page.locator('.model-category-filter').selectOption({label:'Embeddings'});
   await expect(card.getByRole('status')).toHaveText('Installed');
   await expect(card.getByRole('progressbar')).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Installed', exact: true })).toHaveCount(0);

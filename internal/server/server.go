@@ -37,48 +37,49 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	agentToolPolicy      *inference.AgentToolPolicy // Installed at startup; nil preserves constrained behavior.
-	audioMutex           sync.Mutex
-	audioEngine          *audio.Engine
-	speechPackages       *audio.PackageRuntime
-	httpServer           *http.Server
-	config               *config.Config
-	registry             *models.Registry
-	engine               inference.Engine
-	embeddingEngine      *inference.EmbeddingEngine
-	ragEngine            *rag.Engine
-	monitor              *resource.Monitor
-	systemResources      *resource.SystemResources // Stable startup snapshot used for admission, never a live-task resize signal.
-	statsTracker         *stats.Tracker
-	cache                *cache.ResponseCache
-	startTime            time.Time
-	downloadProgress     map[string]*DownloadProgress
-	downloadMutex        sync.RWMutex
-	downloadCancelFuncs  map[string]context.CancelFunc // Cancel functions for active downloads
-	downloadWorkers      sync.WaitGroup
-	modelOperations      map[string]*ModelOperation // Same coordinator and snapshot as legacy downloads.
-	downloadStateWriter  func(string, any) error    // Instance-local fault injection; nil uses durable storage.
-	modelResolutions     map[string]modelResolutionRecord
-	modelHub             *models.HuggingFaceClient
-	exportProgress       map[string]*ExportProgress
-	exportMutex          sync.RWMutex
-	modelCache           *inference.ModelCache
-	llamaProcess         inference.LlamaProcessLifecycle
-	currentModelID       string
-	currentContext       int
-	currentPort          int
-	currentGeneration    uint64
-	modelMutex           sync.Mutex
-	inferenceLifecycle   *inference.LifecycleGate
-	providerScheduler    *inference.ProviderScheduler
-	providerRegistry     *inference.ProviderRegistry
-	nativeRuntimeMu      sync.RWMutex
-	nativeInstallSealed  bool
-	nativeChatSelector   nativeChatSelector // nil until trusted runtime and platform qualification are installed
-	rateLimiter          *RateLimiter
-	inferenceRateLimiter *InferenceRateLimiter
-	sessionHandlers      *SessionHandlers
-	authMiddleware       *users.Middleware
+	documentSynthesisFactory func(string, string) documentSynthesisRuntime // Startup-owned adapter; nil uses the installed local runtime.
+	agentToolPolicy          *inference.AgentToolPolicy                    // Installed at startup; nil preserves constrained behavior.
+	audioMutex               sync.Mutex
+	audioEngine              *audio.Engine
+	speechPackages           *audio.PackageRuntime
+	httpServer               *http.Server
+	config                   *config.Config
+	registry                 *models.Registry
+	engine                   inference.Engine
+	embeddingEngine          *inference.EmbeddingEngine
+	ragEngine                *rag.Engine
+	monitor                  *resource.Monitor
+	systemResources          *resource.SystemResources // Stable startup snapshot used for admission, never a live-task resize signal.
+	statsTracker             *stats.Tracker
+	cache                    *cache.ResponseCache
+	startTime                time.Time
+	downloadProgress         map[string]*DownloadProgress
+	downloadMutex            sync.RWMutex
+	downloadCancelFuncs      map[string]context.CancelFunc // Cancel functions for active downloads
+	downloadWorkers          sync.WaitGroup
+	modelOperations          map[string]*ModelOperation // Same coordinator and snapshot as legacy downloads.
+	downloadStateWriter      func(string, any) error    // Instance-local fault injection; nil uses durable storage.
+	modelResolutions         map[string]modelResolutionRecord
+	modelHub                 *models.HuggingFaceClient
+	exportProgress           map[string]*ExportProgress
+	exportMutex              sync.RWMutex
+	modelCache               *inference.ModelCache
+	llamaProcess             inference.LlamaProcessLifecycle
+	currentModelID           string
+	currentContext           int
+	currentPort              int
+	currentGeneration        uint64
+	modelMutex               sync.Mutex
+	inferenceLifecycle       *inference.LifecycleGate
+	providerScheduler        *inference.ProviderScheduler
+	providerRegistry         *inference.ProviderRegistry
+	nativeRuntimeMu          sync.RWMutex
+	nativeInstallSealed      bool
+	nativeChatSelector       nativeChatSelector // nil until trusted runtime and platform qualification are installed
+	rateLimiter              *RateLimiter
+	inferenceRateLimiter     *InferenceRateLimiter
+	sessionHandlers          *SessionHandlers
+	authMiddleware           *users.Middleware
 	// New feature managers
 	userStore            *users.UserStore
 	quotaManager         *users.QuotaManager

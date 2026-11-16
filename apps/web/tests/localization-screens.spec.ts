@@ -8,13 +8,15 @@ test.describe.configure({mode:'parallel'});
 // These are the exact content areas reported as mixed-language, including body
 // copy and inputs, rather than a navigation-only test of the language picker.
 const routes:{route:string;messages:[string,string][]}[]=[
- {route:'agents',messages:[['i18n/agent-management:agentManagement','tools'],['i18n/agent-management:agentManagement','external'],['core','guidance.profiles'],['i18n/agent-profiles:profileSelectionPrompt','']]},
+ {route:'agents',messages:[['i18n/agent-management:agentManagement','tools'],['i18n/agent-management:agentManagement','external'],['i18n/agent-profiles:agentProfilesText','introduction'],['i18n/agent-profiles:profileSelectionPrompt','']]},
  {route:'knowledge',messages:[['i18n/workspace-management:labels','0'],['core','knowledge.add'],['i18n/knowledge-options:labels',''],['core','knowledge.empty'],['i18n/workspace-audit:libraryScope','']]},
  {route:'models',messages:[['core','models.installed'],['core','models.discover'],['core','guidance.languageModels'],['i18n/model-library:labels','3'],['i18n/model-library:labels','0'],['i18n/model-library:labels','9']]},
  {route:'activity',messages:[['core','guidance.activity'],['core','shell.work'],['i18n/agent-schedules:rows','0'],['i18n/workspace-management:labels','11']]},
- {route:'settings',messages:[['i18n/settings-navigation:settingsNavigation','descriptions.0'],['i18n/personalization:personalization','9']]},
+ {route:'settings/general',messages:[['i18n/settings-navigation:settingsNavigation','descriptions.0']]},
+ {route:'settings/appearance',messages:[['i18n/personalization:personalization','9']]},
  {route:'settings/responses',messages:[['i18n/settings-navigation:settingsNavigation','descriptions.1'],['core','chatStreaming.profile'],['core','chatStreaming.responseLimit'],['core','chatStreaming.profileHint'],['i18n/response-budget:responseBudgetHint','']]},
- {route:'settings/access',messages:[['i18n/settings-navigation:settingsNavigation','descriptions.4'],['core','settings.computerUse'],['i18n/computer-status:computerStatus','installed'],['core','shell.storage'],['i18n/workspace-management:desktopStorage',''],['core','shell.modelsPath'],['core','shell.dataPath']]}
+ {route:'settings/access',messages:[['i18n/settings-navigation:settingsNavigation','descriptions.4'],['core','settings.computerUse'],['i18n/computer-status:computerStatus','installed']]},
+ {route:'settings/storage',messages:[['core','shell.storage'],['i18n/workspace-management:desktopStorage',''],['core','shell.modelsPath'],['core','shell.dataPath']]}
 ];
 
 for(const locale of Object.keys(registry))test(`reported management screens use authored copy in ${locale}`,async({page})=>{

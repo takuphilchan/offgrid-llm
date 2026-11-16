@@ -59,8 +59,17 @@ def _transfer(client, method, path, body=None, content_type=None):
         raise OffGridError("Knowledge request was not acknowledged. Inspect its state before retrying.", code="document_outcome_unknown") from None
 
 
-def upload(client, source, name=None):
+def upload(client, source, name=None, *, collection=None, revision=None, ocr_language=None):
     from .client import OffGridError
+    if ocr_language is not None:
+        if not isinstance(ocr_language, str) or not ocr_language or collection is None:
+            raise ValueError("Select an OCR language on an explicitly reviewed collection import")
+        identity = client._request("GET", "/api/v2/system")
+        capability = "document-ocr-mixed-languages-v1" if "+" in ocr_language else "document-ocr-language-selection-v1"
+        if not isinstance(identity, dict) or capability not in identity.get("capabilities", []):
+            raise OffGridError("Upgrade the service before selecting an OCR language", code="upgrade_required")
+    if collection is not None and (not isinstance(collection, str) or not collection or type(revision) is not int or revision < 1):
+        raise ValueError("Provide the reviewed collection identity and revision")
     info = os.lstat(source)
     if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= MAX_FILE_BYTES:
         raise ValueError("Choose a regular document between 1 byte and 50 MiB")
@@ -84,12 +93,23 @@ def upload(client, source, name=None):
     media_type = mimetypes.guess_type(source)[0] or "application/octet-stream"
     header = ('--%s\r\nContent-Disposition: form-data; name="file"; filename="%s"\r\nContent-Type: %s\r\n\r\n' % (boundary, escaped, media_type)).encode("utf-8")
     body = header + data + ("\r\n--%s--\r\n" % boundary).encode()
-    with _transfer(client, "POST", "/v1/documents/ingest", body, "multipart/form-data; boundary=" + boundary) as response:
+    endpoint = "/v1/documents/ingest" if collection is None else "/v1/collections/imports?" + urlencode(dict(collection_id=collection, collection_revision=revision))
+    if ocr_language is not None:
+        endpoint += "&" + urlencode({"ocr_language": ocr_language})
+    with _transfer(client, "POST", endpoint, body, "multipart/form-data; boundary=" + boundary) as response:
         raw = response.read((1 << 20) + 1)
     try:
         result = json.loads(raw) if len(raw) <= (1 << 20) else None
     except ValueError:
         result = None
+    if collection is not None:
+        if ocr_language is not None and (not isinstance(result, dict) or result.get("ocr_language") != ocr_language):
+            raise OffGridError("OCR selection was not confirmed. Inspect saved imports before retrying.", code="document_outcome_unknown")
+        if (not isinstance(result, dict) or result.get("collection_id") != collection or
+            type(result.get("collection_revision")) is not int or result["collection_revision"] != revision or
+            result.get("state") != "accepted" or not isinstance(result.get("id"), str) or not result["id"]):
+            raise OffGridError("Collection import was not confirmed. Inspect saved imports before retrying.", code="document_outcome_unknown")
+        return result
     if not isinstance(result, dict) or result.get("success") is not True or not isinstance(result.get("document"), dict) or not result["document"].get("id"):
         raise OffGridError("Import acknowledgment is incomplete. Inspect Knowledge before retrying.", code="document_outcome_unknown")
     return result

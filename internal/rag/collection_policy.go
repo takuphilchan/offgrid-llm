@@ -20,7 +20,7 @@ var ErrCollectionConflict = errors.New("Knowledge collection changed; reload bef
 
 // CollectionPolicy supplements, never replaces, the service's Knowledge read
 // and manage permissions. Only the reserved workspace policy has shared access.
-// Private collection APIs remain disabled until all document paths enforce it.
+// Actor-level service permissions remain required in addition to this policy.
 type CollectionPolicy struct {
 	ID       string   `json:"id"`
 	Version  int      `json:"version"`
@@ -41,18 +41,18 @@ func validCollectionName(name string) bool {
 
 func canonicalCollectionMembers(members []string) ([]string, error) {
 	if len(members) > 128 {
-		return nil, fmt.Errorf("too many collection members")
+		return nil, fmt.Errorf("%w: too many members", ErrCollectionInvalid)
 	}
 	out := append([]string{}, members...)
 	sort.Strings(out)
 	for i, actor := range out {
 		if !validKnowledgeActor(actor) || i > 0 && out[i-1] == actor {
-			return nil, fmt.Errorf("invalid or duplicate collection member")
+			return nil, fmt.Errorf("%w: invalid or duplicate member", ErrCollectionInvalid)
 		}
 	}
 	encoded, _ := json.Marshal(out)
 	if len(encoded) > 40000 {
-		return nil, fmt.Errorf("collection membership exceeds storage limit")
+		return nil, fmt.Errorf("%w: membership exceeds storage limit", ErrCollectionInvalid)
 	}
 	return out, nil
 }
@@ -129,7 +129,7 @@ func (s *SQLiteStore) Collection(actor, id string) (*CollectionPolicy, error) {
 
 func (s *SQLiteStore) CreateCollection(actor, name string, readers, editors []string) (*CollectionPolicy, error) {
 	if !validKnowledgeActor(actor) || !validCollectionName(name) {
-		return nil, fmt.Errorf("invalid collection identity")
+		return nil, ErrCollectionInvalid
 	}
 	readers, err := canonicalCollectionMembers(readers)
 	if err != nil {
@@ -148,19 +148,33 @@ func (s *SQLiteStore) CreateCollection(actor, name string, readers, editors []st
 	editJSON, _ := json.Marshal(editors)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	result, err := s.db.Exec(`INSERT INTO knowledge_collections (`+collectionColumns+`) SELECT ?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM knowledge_collections)<1024`, p.ID, p.Version, p.Revision, p.Name, p.Owner, string(readJSON), string(editJSON))
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(`INSERT INTO knowledge_collections (`+collectionColumns+`) SELECT ?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM knowledge_collections)<1024`, p.ID, p.Version, p.Revision, p.Name, p.Owner, string(readJSON), string(editJSON))
 	if err != nil {
 		return nil, err
 	}
 	if n, err := result.RowsAffected(); err != nil || n != 1 {
 		return nil, fmt.Errorf("collection storage limit reached")
 	}
+	if err = recordCollectionAudit(tx, actor, p.ID, "collection_created", p.ID, p.Revision); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 
 func (s *SQLiteStore) UpdateCollection(actor, id string, revision int, name string, readers, editors []string) (*CollectionPolicy, error) {
-	if !validKnowledgeActor(actor) || id == WorkspaceCollection || revision < 1 || !validCollectionName(name) {
+	if !validKnowledgeActor(actor) || id == WorkspaceCollection {
 		return nil, ErrCollectionUnavailable
+	}
+	if revision < 1 || !validCollectionName(name) {
+		return nil, ErrCollectionInvalid
 	}
 	readers, err := canonicalCollectionMembers(readers)
 	if err != nil {
@@ -172,7 +186,12 @@ func (s *SQLiteStore) UpdateCollection(actor, id string, revision int, name stri
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	current, err := scanCollection(s.db.QueryRow(`SELECT `+collectionColumns+` FROM knowledge_collections WHERE id=?`, id))
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	current, err := scanCollection(tx.QueryRow(`SELECT `+collectionColumns+` FROM knowledge_collections WHERE id=?`, id))
 	if err != nil || current.Owner != actor {
 		return nil, ErrCollectionUnavailable
 	}
@@ -181,12 +200,18 @@ func (s *SQLiteStore) UpdateCollection(actor, id string, revision int, name stri
 	}
 	readJSON, _ := json.Marshal(readers)
 	editJSON, _ := json.Marshal(editors)
-	result, err := s.db.Exec(`UPDATE knowledge_collections SET name=?,readers=?,editors=?,revision=revision+1 WHERE id=? AND owner=? AND revision=? AND schema_version=?`, name, string(readJSON), string(editJSON), id, actor, revision, collectionPolicyVersion)
+	result, err := tx.Exec(`UPDATE knowledge_collections SET name=?,readers=?,editors=?,revision=revision+1 WHERE id=? AND owner=? AND revision=? AND schema_version=?`, name, string(readJSON), string(editJSON), id, actor, revision, collectionPolicyVersion)
 	if err != nil {
 		return nil, err
 	}
 	if n, err := result.RowsAffected(); err != nil || n != 1 {
 		return nil, ErrCollectionConflict
+	}
+	if err = recordCollectionAudit(tx, actor, id, "collection_updated", id, revision+1); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
 	}
 	return &CollectionPolicy{ID: id, Version: collectionPolicyVersion, Revision: revision + 1, Name: name, Owner: actor, Readers: readers, Editors: editors}, nil
 }

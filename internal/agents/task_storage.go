@@ -51,11 +51,14 @@ func (m *Manager) saveTask(task *Task) (saveErr error) {
 		return nil
 	}
 	defer func() {
-		if saveErr != nil {
+		if saveErr != nil && !errors.Is(saveErr, ErrProfileNotFound) {
 			m.storageErr = saveErr
 		}
 	}()
 	if err := persistTask(m.dataDir, task); err != nil {
+		if errors.Is(err, ErrProfileNotFound) {
+			return err
+		}
 		return fmt.Errorf("%w: %v", ErrRunStorage, err)
 	}
 	return nil

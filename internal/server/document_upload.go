@@ -60,10 +60,15 @@ func writeDocumentIngestError(w http.ResponseWriter, err error) {
 	var problem *rag.ParseError
 	var tooLarge *http.MaxBytesError
 	switch {
+	case errors.Is(err, rag.ErrCollectionConflict), errors.Is(err, rag.ErrCollectionInvalid):
+		writeCollectionError(w, err)
+		return
 	case errors.Is(err, rag.ErrCollectionUnavailable):
 		status, code, message = http.StatusNotFound, "document_unavailable", "The document is unavailable in this Knowledge workspace."
 	case errors.Is(err, rag.ErrImportConflict):
 		status, code, message = http.StatusConflict, "document_import_conflict", "Import state changed. Refresh its status before continuing."
+	case errors.Is(err, rag.ErrExtractionConflict):
+		status, code, message = http.StatusConflict, "document_extraction_conflict", "This collection already retains a different extraction of the original. Review the existing document before publishing another revision."
 	case errors.Is(err, context.Canceled):
 		status, code, message = http.StatusRequestTimeout, "document_cancelled", "Document import was cancelled."
 	case errors.Is(err, context.DeadlineExceeded):
@@ -72,6 +77,9 @@ func writeDocumentIngestError(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusRequestEntityTooLarge, "document_limit", "Documents must be 50 MiB or smaller."
 	case errors.As(err, &problem):
 		status, code, message = http.StatusUnprocessableEntity, problem.Code, problem.Message
+		if problem.Code == "collection_review_required" || problem.Code == "document_revision_required" {
+			status = http.StatusUpgradeRequired
+		}
 		if problem.Code == "document_limit" {
 			status = http.StatusRequestEntityTooLarge
 		}

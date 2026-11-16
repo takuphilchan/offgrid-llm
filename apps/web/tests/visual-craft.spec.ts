@@ -23,7 +23,7 @@ for(const theme of ['light','dark']) for(const locale of ['en','ar']) for(const 
       await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);
       // Floating UI belongs to the viewport, not an expanded full-page capture.
       // Wait for its entrance before recording evidence of its actual contents.
-      const overlay = name === 'popover' ? page.locator('.workspace-options-panel')
+      const overlay = name === 'popover' ? page.locator('.model-select-panel')
         : name === 'palette' ? page.locator('dialog.command-palette')
         : name === 'onboarding' ? page.locator('.onboarding') : null;
       if (overlay) await expect(overlay).toHaveCSS('opacity', '1');
@@ -60,10 +60,10 @@ for(const theme of ['light','dark']) for(const locale of ['en','ar']) for(const 
     await page.goto('/ui/#/settings'); await page.reload();
     await page.locator('.command-trigger').click(); await expect(page.locator('dialog.command-palette')).toBeVisible(); await capture('palette');
     await page.keyboard.press('Escape');
-    if(width<1024) await page.locator('.navigation-trigger').click();
-    await page.locator('.workspace-options > button').click(); await expect(page.locator('.workspace-options-panel')).toBeVisible(); await capture('popover');
+    await page.goto('/ui/#/chat');
+    await page.locator('.model-select-trigger').click(); await expect(page.locator('.model-select-panel')).toBeVisible(); await capture('popover');
     await page.keyboard.press('Escape');
-    if(width<1024) await page.keyboard.press('Escape');
+    await page.goto('/ui/#/settings');
     await page.locator('.settings-group .settings-panel button.secondary-button').first().click();
     await expect(page.locator('.onboarding')).toBeVisible(); await capture('onboarding');
     expect(state.writes.every(path=>path.startsWith('/v1/sessions'))).toBe(true);

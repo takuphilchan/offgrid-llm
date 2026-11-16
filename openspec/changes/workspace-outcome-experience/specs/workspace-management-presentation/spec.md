@@ -147,6 +147,23 @@ Tools and connections SHALL remain reachable through clearly labelled administra
 - **THEN** the draft remains available on return and the connection shows its actual status
 - **AND** connection availability alone does not grant task execution permission
 
+#### Scenario: Edit a reusable profile without accidental grants
+- **WHEN** a user selects a profile or creates a draft
+- **THEN** save/use actions are grouped with the editor heading and model selection is labelled without a stretched control
+- **AND** instruction examples edit only the draft, while optional resources remain explicit selections
+- **AND** archived profiles are identified and cannot be newly selected as delegates; existing unavailable selections remain removable
+
+#### Scenario: Recover a failed tool or connection change
+- **WHEN** a tool or MCP mutation is pending
+- **THEN** conflicting mutations are disabled until it settles
+- **AND** failure preserves the prior tool state or connection draft and exposes retry without automatic replay
+- **AND** responsive connection and tool cards retain complete boundaries and accessible controls in RTL and narrow layouts
+
+#### Scenario: Inspect external-agent setup
+- **WHEN** a user opens external-agent setup instructions
+- **THEN** service/model compatibility, host setup and workflow qualification remain distinct
+- **AND** copying never executes a command, clipboard failures appear inside the open dialog, and closing restores focus
+
 ### Requirement: Consistent public product and download identity
 The application SHALL present itself as OffGrid. Desktop release filenames SHALL
 identify the version, operating system, architecture and installation format.
@@ -176,3 +193,35 @@ Settings SHALL offer searchable General, Models & responses, Voice, Terminal, Ac
 #### Scenario: Localized navigation
 - **WHEN** Settings is used by keyboard in any supported locale, a narrow window or RTL
 - **THEN** matching settings remain reachable without clipped controls or losing search focus
+
+### Requirement: Purposeful action and preference hierarchy
+Settings SHALL distinguish destination cards from inline preferences and expose full model identities in selection menus while using readable names in compact triggers.
+
+#### Scenario: Inspect response and voice settings
+- **WHEN** a user opens Models & responses or Voice
+- **THEN** destination actions and preference rows are visually distinct, all descriptions and controls remain accessible in narrow and RTL layouts, and readiness limitations stay visible
+- **AND** inspecting or changing presentation does not load a model, start capture, download or alter an agent profile
+
+### Requirement: Editable comparison source selection
+Comparison SHALL keep its two source selectors editable alongside the result,
+resolve current extraction revisions before a new submission and retain immutable
+references when opening history.
+
+#### Scenario: Change the comparison pair
+- **WHEN** a user changes either source after a comparison finishes
+- **THEN** the old result is hidden until its matching pair is restored or a new comparison succeeds
+- **AND** one primary action starts the explicitly selected pair; source updates are revalidated before submission
+- **AND** incomplete coverage and source/export access checks remain visible and enforced
+
+### Requirement: Reviewed permanent profile deletion
+The owner SHALL be able to review and permanently delete an eligible profile and
+its associated standalone saved work and private memory in one atomic operation.
+
+#### Scenario: State changes after review
+- **WHEN** exact private-memory identities, task revisions or dependencies change after the owner reviews deletion
+- **THEN** the deletion token is rejected without partial removal and a fresh review is required
+
+#### Scenario: Active or independently retained work
+- **WHEN** a profile has active work, canonical retained work or dependent profiles, jobs or schedules
+- **THEN** deletion is blocked with a useful explanation
+- **AND** no administrative role bypasses ownership and shared files, exports and backups remain separate retention domains

@@ -1,0 +1,288 @@
+{
+  "version": 1,
+  "source_revision": "87416418657359cb625c412a48b6e1d6d41c29bd",
+  "license": "Apache-2.0",
+  "packs": [
+    {
+      "language": "eng",
+      "name": "English",
+      "interface_locales": [
+        "en"
+      ],
+      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "bytes": 4113088,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "fra",
+      "name": "Français",
+      "interface_locales": [
+        "fr"
+      ],
+      "sha256": "ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca",
+      "bytes": 1130365,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/fra.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "deu",
+      "name": "Deutsch",
+      "interface_locales": [
+        "de"
+      ],
+      "sha256": "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d",
+      "bytes": 1525436,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/deu.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "spa",
+      "name": "Español",
+      "interface_locales": [
+        "es"
+      ],
+      "sha256": "6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464",
+      "bytes": 2294433,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/spa.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "swa",
+      "name": "Kiswahili",
+      "interface_locales": [
+        "sw"
+      ],
+      "sha256": "395439d1ec308535066cbaea9b15e0e4cc81f8609170af76ab7e7e8d3ec42f3e",
+      "bytes": 2167651,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/swa.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "ara",
+      "name": "العربية",
+      "interface_locales": [
+        "ar"
+      ],
+      "sha256": "e3206d3dc87fd50c24a0fb9f01838615911d25168f4e64415244b67d2bb3e729",
+      "bytes": 1432056,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/ara.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "por",
+      "name": "Português",
+      "interface_locales": [
+        "pt-BR",
+        "pt-PT"
+      ],
+      "sha256": "c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb",
+      "bytes": 1982756,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/por.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "ita",
+      "name": "Italiano",
+      "interface_locales": [
+        "it"
+      ],
+      "sha256": "b8f89e1e785118dac4d51ae042c029a64edb5c3ee42ef73027a6d412748d8827",
+      "bytes": 2701314,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/ita.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "rus",
+      "name": "Русский",
+      "interface_locales": [
+        "ru"
+      ],
+      "sha256": "e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225",
+      "bytes": 3861738,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/rus.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "ukr",
+      "name": "Українська",
+      "interface_locales": [
+        "uk"
+      ],
+      "sha256": "d59e53e2bded32f4445f124b4b00240fcac7e8044c003ab822ccb94f0b3db59b",
+      "bytes": 3825102,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/ukr.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "tur",
+      "name": "Türkçe",
+      "interface_locales": [
+        "tr"
+      ],
+      "sha256": "7393381111e1152420fc4092cb44eef4237580d21b92bf30d7d221aad192c6b7",
+      "bytes": 4550554,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/tur.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "chi_sim",
+      "name": "简体中文",
+      "interface_locales": [
+        "zh-Hans"
+      ],
+      "sha256": "a5fcb6f0db1e1d6d8522f39db4e848f05984669172e584e8d76b6b3141e1f730",
+      "bytes": 2469156,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/chi_sim.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "chi_tra",
+      "name": "繁體中文",
+      "interface_locales": [
+        "zh-Hant"
+      ],
+      "sha256": "529c5b5797d64b126065cd55f2bb4c7fd7b15790798091b1ff259941a829330b",
+      "bytes": 2366642,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/chi_tra.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "jpn",
+      "name": "日本語",
+      "interface_locales": [
+        "ja"
+      ],
+      "sha256": "1f5de9236d2e85f5fdf4b3c500f2d4926f8d9449f28f5394472d9e8d83b91b4d",
+      "bytes": 2471260,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/jpn.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "kor",
+      "name": "한국어",
+      "interface_locales": [
+        "ko"
+      ],
+      "sha256": "6b85e11d9bbf07863b97b3523b1b112844c43e713df8b66418a081fd1060b3b2",
+      "bytes": 1677415,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/kor.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "hin",
+      "name": "हिन्दी",
+      "interface_locales": [
+        "hi"
+      ],
+      "sha256": "4c73ffc59d497c186b19d1e90f5d721d678ea6b2e277b719bee4e2af12271825",
+      "bytes": 1122751,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/hin.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "ben",
+      "name": "বাংলা",
+      "interface_locales": [
+        "bn"
+      ],
+      "sha256": "31163084c279aaebd376216f0c3d5c17ad4b5fee8db49dae79c20000b5de5964",
+      "bytes": 855841,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/ben.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "tam",
+      "name": "தமிழ்",
+      "interface_locales": [
+        "ta"
+      ],
+      "sha256": "d02fbec24be4b07e32e80d0ccfc3b6b67a3c5d61c9d0a7c8532677990912c6ec",
+      "bytes": 3237963,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/tam.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "urd",
+      "name": "اردو",
+      "interface_locales": [
+        "ur"
+      ],
+      "sha256": "62e8250ce2a994106e313a82e26a516a39e2cf159d0ce3c5b5008387fd0d555f",
+      "bytes": 1398718,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/urd.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "fas",
+      "name": "فارسی",
+      "interface_locales": [
+        "fa"
+      ],
+      "sha256": "db1c0a91208aff00d3cf1ed2c1d23f76419afd5f024688b4f71adc3f2ce4a505",
+      "bytes": 431500,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/fas.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "heb",
+      "name": "עברית",
+      "interface_locales": [
+        "he"
+      ],
+      "sha256": "11f9e43ab227f786352a50f75c94c2e9906f1baba86d93276da19da7ce0904db",
+      "bytes": 961404,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/heb.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "ind",
+      "name": "Bahasa Indonesia",
+      "interface_locales": [
+        "id"
+      ],
+      "sha256": "69786901da87ab8766c1ea7fbb10b28f2110c14da3f6c8f2735df131fba95d88",
+      "bytes": 1122661,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/ind.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "vie",
+      "name": "Tiếng Việt",
+      "interface_locales": [
+        "vi"
+      ],
+      "sha256": "79df64caf7bcfb2a27df5042ecb6121e196eada34da774956995747636d5bfa1",
+      "bytes": 531275,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/vie.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "tha",
+      "name": "ไทย",
+      "interface_locales": [
+        "th"
+      ],
+      "sha256": "294227cc2d1292b0acb28d61d4115c88252b96d466ca90b417cf4cf0c67bf07c",
+      "bytes": 1072600,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/tha.traineddata",
+      "qualification": "unverified"
+    },
+    {
+      "language": "fil",
+      "name": "Filipino",
+      "interface_locales": [
+        "fil"
+      ],
+      "sha256": "2b17f68014ab44b88b5e2334ebcd0ce0090d9af7c6fbef6fab22e0bbd9a934dd",
+      "bytes": 1841715,
+      "source_url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/fil.traineddata",
+      "qualification": "unverified"
+    }
+  ],
+  "unavailable_interface_locales": [
+    "nd",
+    "sn",
+    "zu"
+  ]
+}

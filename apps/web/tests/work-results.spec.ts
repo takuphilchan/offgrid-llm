@@ -296,7 +296,7 @@ test('unsupported continuation links to Chat without resubmitting or losing the 
   const state = await fixture(page); await page.goto(`/ui/#/agents/task/${id}`);
   await expect(page.getByRole('region', { name: 'Next step' })).toContainText('does not change or rerun');
   await page.getByRole('region',{name:'Next step'}).getByRole('link', { name: 'New chat',exact:true }).click();
-  await expect(page).toHaveURL(/#\/chat$/);
+  await expect(page).toHaveURL(/#\/chat\/new$/);
   await expect(page.locator('.composer textarea')).toHaveValue('');
   expect(state.writes).toEqual([]);
   await page.goto(`/ui/#/agents/task/${id}`);

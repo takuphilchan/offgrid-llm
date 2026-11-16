@@ -20,9 +20,10 @@ from .loading import LoadingProgress
 from .p2p import P2P
 from .conversations import Conversations
 from .errors import OffGridError
+from .session_documents import SessionDocuments
 
 
-class Sessions:
+class Sessions(SessionDocuments):
     """
     Manage conversation sessions.
     

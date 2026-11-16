@@ -28,6 +28,13 @@ func marshalLlamaRequest(req *api.ChatCompletionRequest) ([]byte, error) {
 	if req.ResponseFormat.Constrained() && len(req.Tools) > 0 {
 		return nil, &api.UnsupportedControlError{Control: "response_format with tools"}
 	}
+	prepared := *req
+	var imageErr error
+	prepared.Messages, imageErr = api.PrepareChatImages(req.Messages)
+	if imageErr != nil {
+		return nil, imageErr
+	}
+	req = &prepared
 	if !singleStepRequest(req) {
 		return json.Marshal(req)
 	}

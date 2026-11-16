@@ -64,6 +64,8 @@ export function catalogInventory(){
  }
  tables.push({id:'i18n/voice:voices',file:'i18n/voice.ts',values:{en:english,...load('i18n/voice-locales.ts','voiceLocales')}});
  tables.push({id:'desktop/presentation',file:'apps/web/public/desktop-presentation.json',values:JSON.parse(readFileSync(resolve(root,'apps/web/public/desktop-presentation.json'),'utf8'))});
+ tables.push({id:'desktop/window-controls',file:'apps/desktop/window-controls.json',values:JSON.parse(readFileSync(resolve(root,'apps/desktop/window-controls.json'),'utf8'))});
+ tables.push({id:'desktop/startup-welcome',file:'apps/desktop/startup-welcome.js',values:require(resolve(root,'apps/desktop/startup-welcome.js')).messages});
  tables.push({id:'desktop/terminal',file:'apps/desktop/terminal-translations.js',values:require(resolve(root,'apps/desktop/terminal-translations.js')).catalogs});
  const {folderTrustCopy}=require(resolve(root,'apps/desktop/folder-trust-copy.js'));
  tables.push({id:'desktop/folder-trust',file:'apps/desktop/folder-trust-copy.js',values:Object.fromEntries(legacy.map(code=>[code,folderTrustCopy(code)]))});

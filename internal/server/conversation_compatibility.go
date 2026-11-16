@@ -19,6 +19,13 @@ func (s *Server) canonicalSessionProjection(r *http.Request, name string) (*sess
 	if manifest == nil {
 		return nil, false, nil
 	}
+	deleted, err := s.agentManager.ConversationDeleted(s.controlScope(r), manifest.ConversationID)
+	if err != nil {
+		return nil, true, err
+	}
+	if deleted {
+		return nil, true, sessions.ErrSessionNotFound
+	}
 	if err := s.admissionStage("canonical_projection"); err != nil {
 		return nil, true, err
 	}
@@ -158,7 +165,15 @@ func (h *SessionHandlers) rejectCanonicalLegacyDelete(w http.ResponseWriter, r *
 		return true
 	}
 	if manifest != nil {
+		if r.URL.Query().Get("canonical_id") != "" {
+			h.agentServer.deleteCanonicalConversation(w, r, name, manifest)
+			return true
+		}
 		writeSessionError(w, sessions.ErrCanonicalConversation)
+		return true
+	}
+	if r.URL.Query().Get("canonical_id") != "" {
+		writeControlError(w, agents.ErrControlNotFound)
 		return true
 	}
 	return false

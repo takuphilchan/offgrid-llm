@@ -27,6 +27,10 @@ export async function craftFixture(page: Page, locale: string, theme: string) {
     if(r.request().method()!=='GET') state.writes.push(path);
     if(path==='/v1/documents' && state.mode==='loading') return;
     if(path==='/v1/documents' && state.mode==='error') return r.fulfill({status:503,json:{error:{message:'The document library is temporarily unavailable.'}}});
+    if(path==='/v1/collections'){
+      const collection={id:'workspace',version:1,revision:1,name:'Workspace',readers:[],editors:[]};
+      return r.fulfill({json:new URL(r.request().url()).searchParams.has('id')?collection:{collections:[collection]}});
+    }
     const bodies:Record<string,unknown>={
       '/v1/users/me':{authenticated:false,auth_required:false},
       '/api/v2/system':{product:'offgrid',version:'visual-fixture',workspace_id:'craft',api_version:2,capabilities:['task-first-agents-v2','agent-profiles-v1']},

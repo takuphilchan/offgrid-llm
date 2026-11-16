@@ -8,6 +8,12 @@ for (const theme of ['light', 'dark']) test(`capture documentation workspace (${
   test.skip(!process.env.OFFGRID_DOC_CAPTURES, 'Set OFFGRID_DOC_CAPTURES=1 to refresh documentation images.');
   await page.setViewportSize({ width: 1440, height: 900 });
   await craftFixture(page, 'en', theme);
+  await page.route('**/api/v2/system', r => r.fulfill({ json: {
+    product: 'offgrid', version: 'documentation-preview', workspace_id: 'craft', api_version: 2,
+    capabilities: ['task-first-agents-v2', 'agent-profiles-v1', 'session-files-v1',
+      'knowledge-collections-v1', 'scoped-knowledge-chat-v1', 'document-comparison-jobs-v1',
+      'document-analysis-history-v1', 'document-synthesis-candidates-v1'],
+  } }));
   const model = 'Qwen2.5-7B-Instruct-Q4_K_M';
   await page.route('**/v1/models', r => r.fulfill({ json: { data: [
     { id: model, type: 'chat', size: Math.round(4.4 * 1024 ** 3) },
@@ -31,15 +37,15 @@ for (const theme of ['light', 'dark']) test(`capture documentation workspace (${
     name: 'Community workshop', model_id: 'Qwen2.5-7B-Instruct-Q4_K_M',
     messages: [
       { role: 'user', content: 'Help me plan a one-hour introduction to local AI for our community workshop.' },
-      { role: 'assistant', content: '## A practical one-hour workshop\n\nStart with something participants can try themselves. Keep the first session focused on asking questions, working with a document, and understanding where their data is stored.\n\n| Time | Activity |\n| --- | --- |\n| 0–10 min | Introduce local AI and its limits |\n| 10–25 min | Try a question and a follow-up |\n| 25–45 min | Explore a shared sample document |\n| 45–60 min | Compare answers and discuss uncertainty |\n\n### Before the session\n\n- Install and test a model on the computers you will use.\n- Prepare a short, public sample document.\n- Pair participants so they can help each other.\n\n**A useful closing exercise:** ask everyone to identify one answer they would verify before relying on it.' },
+      { role: 'assistant', content: '## A practical one-hour workshop\n\nStart with a question, then try a sample document together.\n\n| Time | Activity |\n| --- | --- |\n| 0–10 min | Introduce local AI and its limits |\n| 10–25 min | Try a question and a follow-up |\n| 25–45 min | Explore a shared sample document |\n| 45–60 min | Compare answers and discuss uncertainty |\n\n**Before the session:** test your model and prepare a short, public sample document.' },
     ], updated_at: '2026-11-07T00:00:00Z',
   };
   await page.route('**/v1/sessions', r => r.fulfill({ json: { sessions: [session] } }));
   await page.route('**/v1/sessions/Community%20workshop', r => r.fulfill({ json: session }));
   await page.route('**/v1/documents', r => r.fulfill({ json: { documents: [
-    { id: 'workshop', name: 'Community workshop notes.txt', size: 4096, index_status: 'ready', source_retained: true, chunk_count: 4 },
-    { id: 'guide', name: 'Local AI introduction.pdf', size: 204800, index_status: 'ready', source_retained: true, chunk_count: 12 },
-    { id: 'checklist', name: 'Facilitator checklist.docx', size: 16384, index_status: 'ready', source_retained: true, chunk_count: 3 },
+    { id: 'workshop', name: 'Community workshop notes.txt', content_type: 'text/plain', collection_id: 'workspace', size: 4096, index_status: 'ready', source_retained: true, chunk_count: 4 },
+    { id: 'guide', name: 'Local AI introduction.pdf', content_type: 'application/pdf', collection_id: 'workspace', size: 204800, index_status: 'ready', source_retained: true, chunk_count: 12 },
+    { id: 'checklist', name: 'Facilitator checklist.docx', content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', collection_id: 'workspace', size: 16384, index_status: 'ready', source_retained: true, chunk_count: 3 },
   ], count: 3 } }));
   await page.goto('/ui/#/chat');
   await page.locator('.history-open').first().click();
@@ -49,6 +55,7 @@ for (const theme of ['light', 'dark']) test(`capture documentation workspace (${
   if (theme === 'dark') return;
   await page.goto('/ui/#/knowledge');
   await expect(page.locator('.knowledge-documents article')).toHaveCount(3);
+  await expect(page.getByRole('button', { name: /Compare documents/ }).first()).toBeVisible();
   await page.screenshot({ path: resolve(output, 'knowledge-library.png'), animations: 'disabled' });
   await page.goto('/ui/#/agents');
   await expect(page.locator('.profile-list-item')).toHaveCount(1);
@@ -58,7 +65,80 @@ for (const theme of ['light', 'dark']) test(`capture documentation workspace (${
   await page.goto('/ui/#/models');
   await expect(page.getByRole('region', { name: 'Installed', exact: true })).toContainText('Qwen');
   await page.screenshot({ path: resolve(output, 'models-installed.png'), animations: 'disabled' });
-  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   await expect(page.locator('.catalog-card')).toHaveCount(3);
   await page.screenshot({ path: resolve(output, 'models-discover.png'), animations: 'disabled' });
+  await page.goto('/ui/#/settings/appearance');
+  await expect(page.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible();
+  await page.screenshot({ path: resolve(output, 'settings-appearance.png'), animations: 'disabled' });
+  await page.goto('/ui/#/settings/models');
+  await expect(page.getByRole('heading', { name: 'Models & responses', exact: true })).toBeVisible();
+  await page.screenshot({ path: resolve(output, 'settings-responses.png'), animations: 'disabled' });
+});
+
+test('capture documentation document reader', async ({ page }) => {
+  test.skip(!process.env.OFFGRID_DOC_CAPTURES, 'Set OFFGRID_DOC_CAPTURES=1 to refresh documentation images.');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await craftFixture(page, 'en', 'light');
+  await page.route('**/api/v2/system', r => r.fulfill({ json: {
+    product: 'offgrid', workspace_id: 'craft', capabilities: ['session-files-v1'],
+  } }));
+  await page.route('**/v1/sessions', r => r.request().method() === 'GET'
+    ? r.fulfill({ json: { sessions: [] } }) : r.fallback());
+  const file = { id: 'file-' + 'a'.repeat(32), name: 'Workshop guide.pdf',
+    sha256: 'b'.repeat(64), revision: 'c'.repeat(64), media_type: 'application/pdf',
+    bytes: 204800, status: 'ready', error_code: '', created_at: '2026-11-16T00:00:00Z' };
+  await page.route('**/v1/sessions/*/attachments', r => r.fulfill({ json:
+    r.request().method() === 'POST' ? { attachment: file } : { attachments: [file] },
+  }));
+  await page.goto('/ui/#/chat');
+  await page.evaluate(() => document.fonts.ready);
+  // Authored demonstration page, served through the reader's normal raster API.
+  // This capture exercises presentation, not PDF extraction or model inference.
+  const raster = await page.evaluate(() => {
+    const canvas = document.createElement('canvas'); canvas.width = 720; canvas.height = 960;
+    const x = canvas.getContext('2d')!;
+    x.fillStyle = '#ffffff'; x.fillRect(0, 0, 720, 960);
+    x.fillStyle = '#667078'; x.font = '13px sans-serif';
+    x.fillText('OFFGRID / DEMONSTRATION DOCUMENT', 64, 64);
+    x.fillStyle = '#20252a'; x.font = 'bold 38px sans-serif';
+    x.fillText('Local AI, together', 64, 148);
+    x.fillStyle = '#5b636b'; x.font = '19px sans-serif';
+    x.fillText('A one-hour community workshop', 64, 186);
+    x.fillStyle = '#20252a'; x.font = 'bold 22px sans-serif';
+    x.fillText('Learn by doing', 64, 266);
+    x.font = '17px sans-serif';
+    ['Ask a question. Explore a sample document. Compare',
+      'the answer with its sources and discuss what is missing.'].forEach((line, i) => x.fillText(line, 64, 304 + i * 28));
+    x.font = 'bold 22px sans-serif'; x.fillText('Your session at a glance', 64, 402);
+    const rows = [['10 minutes', 'Local AI and its limits'], ['15 minutes', 'Questions and follow-ups'],
+      ['20 minutes', 'A document and its sources'], ['15 minutes', 'Review and discussion']];
+    rows.forEach(([time, task], i) => {
+      const y = 440 + i * 58;
+      x.fillStyle = i % 2 === 0 ? '#f1f4f6' : '#fafbfc'; x.fillRect(64, y, 592, 56);
+      x.fillStyle = '#5b636b'; x.font = '16px sans-serif'; x.fillText(time, 80, y + 35);
+      x.fillStyle = '#20252a'; x.fillText(task, 245, y + 35);
+    });
+    x.font = 'bold 22px sans-serif'; x.fillText('Before you arrive', 64, 738);
+    x.font = '17px sans-serif';
+    ['Test your model and prepare a short public document.',
+      'Bring one question whose answer you can verify.'].forEach((line, i) => x.fillText(line, 64, 778 + i * 28));
+    x.fillStyle = '#78828b'; x.font = '12px sans-serif';
+    x.fillText('Sample content for the OffGrid interface tour · 1', 64, 904);
+    return canvas.toDataURL().split(',')[1];
+  });
+  await page.route('**/attachments/*/preview*', r => new URL(r.request().url()).searchParams.has('page')
+    ? r.fulfill({ contentType: 'image/png', body: Buffer.from(raster, 'base64') })
+    : r.fulfill({ json: { name: file.name, sha256: file.sha256, format: 'pdf', pages: 1,
+      state: 'complete', units: [{ kind: 'page', index: 1, state: 'ready', source_sha256: file.sha256,
+        extractor_revision: 'documentation-fixture', text: 'Local AI, together. A one-hour community workshop.' }] } }));
+  await expect(page.locator('.composer textarea')).toBeEnabled();
+  await page.locator('.composer textarea').fill('Help me prepare for this workshop.');
+  await page.locator('input[data-attachment=files]').setInputFiles({ name: file.name,
+    mimeType: 'application/pdf', buffer: Buffer.from('%PDF-documentation-fixture') });
+  await page.getByRole('button', { name: 'Open document', exact: true }).click();
+  await expect(page.locator('.document-reader-surface img')).toBeVisible();
+  const output = resolve('../../build/documentation-captures');
+  mkdirSync(output, { recursive: true });
+  await page.screenshot({ path: resolve(output, 'document-reader.png'), animations: 'disabled' });
 });

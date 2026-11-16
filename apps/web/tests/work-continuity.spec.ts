@@ -116,7 +116,7 @@ test('linked conversation and job appear once in compact attention',async({page}
   state.rows[0].id=id;state.rows[0].title='Linked work';state.rows[0].status='interrupted';
   await page.route('**/v1/sessions/First%20conversation/turn',r=>r.fulfill({json:{turn:{id:'turn',status:'interrupted',prompt:'Linked work',job_id:id,agent:{profile_id:'profile',profile_revision:1}}}}));
   await page.goto('/ui/#/chat');await expect(page.locator('.conversation-work')).toBeVisible();
-  await page.locator('.sidebar a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click();
   const trigger=page.getByRole('button',{name:'Known work',exact:true});await expect(trigger).toContainText('Needs attention · 1');await trigger.click();
   await expect(page.locator('.known-work-list li')).toHaveCount(1);
 });
@@ -173,7 +173,7 @@ test('attention is prioritized before the bounded header preview', async ({page}
 test('completed conversations do not linger beside an unfinished task',async({page})=>{
   const state=await fixture(page);await page.goto('/ui/#/chat');
   await expect(page.locator('.message.assistant')).toContainText('First conversation');
-  await page.locator('.sidebar a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click();
   await page.getByRole('button',{name:'Known work',exact:true}).click();
   const panel=page.getByRole('region',{name:'Known work'});
   await expect(panel.getByRole('link',{name:'Keep the same task'})).toBeVisible();
@@ -304,7 +304,7 @@ test('known unfinished chat selection returns without scanning other turns or sp
   await expect(page.locator('.message.assistant')).toContainText('First conversation');
   await page.getByRole('button', { name: 'Second conversation', exact: true }).click();
   await expect(page.locator('.message.assistant')).toContainText('Second conversation');
-  await page.locator('.sidebar a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click();
   await page.getByRole('button', { name: 'Known work', exact: true }).click();
   await page.getByRole('region', { name: 'Known work' }).getByRole('button', { name: 'First conversation', exact: true }).click();
   await expect(page.locator('.message.assistant')).toContainText('First conversation');
@@ -360,7 +360,7 @@ async function durableChat(page: Page) {
 
 test('leaving a live turn detaches reads and returning reconciles saved work without cancellation or replay', async ({ page }) => {
   const { base, state } = await durableChat(page);
-  await page.locator('.sidebar a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click();
   state.completed = true;
   await page.getByRole('button', { name: 'Known work', exact: true }).click();
   await page.getByRole('region', { name: 'Known work' }).getByRole('button', { name: 'First conversation', exact: true }).click();
@@ -399,7 +399,7 @@ test('lost acknowledgment checks the accepted turn and never resubmits the promp
 
 test('unsupported turn recovery retains the draft and explicitly prevents uncertain resubmission', async ({ page }) => {
   const { base, state } = await durableChat(page);
-  await page.locator('.sidebar a[href="#/models"]').click(); state.recoverable = false;
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click(); state.recoverable = false;
   await page.getByRole('button', { name: 'Known work', exact: true }).click();
   await page.getByRole('region', { name: 'Known work' }).getByRole('button', { name: 'First conversation', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('cannot recover the previous turn');

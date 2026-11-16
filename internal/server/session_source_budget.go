@@ -95,6 +95,22 @@ func prepareChatSources(ctx context.Context, request *api.ChatCompletionRequest,
 				budget = max(minimum, min(budget-1, next))
 				continue
 			}
+		} else {
+			// Selection budgets cover excerpt data. The final representation
+			// also includes citation, coverage and evidence instructions, whose
+			// size can change independently. Bound the complete assembly rather
+			// than assuming those instructions fit a fixed overhead allowance.
+			bytes := 0
+			for _, message := range candidate.Messages {
+				bytes += len(message.StringContent()) + 32
+			}
+			if bytes > limit {
+				if budget == minimum {
+					break
+				}
+				budget = max(minimum, budget-(bytes-limit)-64)
+				continue
+			}
 		}
 		request.Messages = candidate.Messages
 		scope.turn.AttachmentSelections = sessions.AttachmentSelections(selected)

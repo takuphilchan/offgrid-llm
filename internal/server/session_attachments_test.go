@@ -16,7 +16,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
-func uploadChatFile(t *testing.T, h *SessionHandlers, name, content string) *httptest.ResponseRecorder {
+func uploadChatFile(t *testing.T, h *SessionHandlers, name, content string, query ...string) *httptest.ResponseRecorder {
 	t.Helper()
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
@@ -26,7 +26,11 @@ func uploadChatFile(t *testing.T, h *SessionHandlers, name, content string) *htt
 	}
 	_, _ = io.WriteString(f, content)
 	_ = form.Close()
-	r := httptest.NewRequest("POST", "/v1/sessions/chat/attachments", &body)
+	path := "/v1/sessions/chat/attachments"
+	if len(query) > 0 {
+		path += "?" + query[0]
+	}
+	r := httptest.NewRequest("POST", path, &body)
 	r.Header.Set("Content-Type", form.FormDataContentType())
 	w := httptest.NewRecorder()
 	h.HandleSessions(w, r)

@@ -1,44 +1,14 @@
 package server
 
 import (
-	"regexp"
-	"strings"
-
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 )
 
-// nativeDocumentIntentPattern is deliberately conservative. A negotiated
-// document provider is a capability, not a reason to inspect every selected
-// window. Keeping browser/search/control tasks on the normal observation path
-// prevents small models from choosing computer_documents simply because it is
-// available.
-var nativeDocumentIntentPattern = regexp.MustCompile(`(?i)(\bdocument(?:s)?\b|\bnotepad\b|\btext ?edit(?:or)?\b|\bword processor\b|\bspreadsheet\b|\blibreoffice\b|\bword\b|\bnew tab\b|\bselect tab\b|\btype exactly\b|\binsert text\b|\breplace (?:the )?selection\b|\bread (?:it|the document) back\b|\bcreate (?:a )?document\b|\bedit (?:the )?document\b)`)
-
-// nativeDocumentTaskIntent reports whether the user's requested outcome
-// actually needs the native document/tab protocol. It is model-context
-// routing only; dispatch still validates every document operation independently.
+// Native document discovery is language-independent. Availability is checked by
+// the negotiated provider and stage projection; exposing it neither establishes
+// user intent nor requires a call. Dispatch still verifies authority and effects.
 func nativeDocumentTaskIntent(task *agents.Task) bool {
-	if task == nil {
-		return false
-	}
-	if task.Workflow != nil {
-		for _, check := range task.Workflow.Checks {
-			if documentOutcomeKind(check.Expectation.Kind) {
-				return true
-			}
-		}
-	}
-	text := task.Prompt + "\n" + task.Config.Instructions
-	for _, instruction := range task.Instructions {
-		text += "\n" + instruction.Text
-	}
-	// Empty prompts occur in low-level projection tests and in a few internal
-	// callers that already supplied an explicit document stage. Preserve their
-	// negotiated behavior; real user tasks always carry a prompt.
-	if strings.TrimSpace(text) == "" {
-		return true
-	}
-	return nativeDocumentIntentPattern.MatchString(text)
+	return task != nil
 }
 
 func nativeDocumentOnlyToolName(name string) bool {

@@ -8,8 +8,9 @@ In Chat, the primary button offers **Talk** when the draft is empty and changes
 to **Send** when you type or attach a file. While an answer runs, **Stop** remains
 available. Talk has its own **Stop Talk** control throughout the spoken exchange.
 The quieter microphone button dictates into the editor for review; it does not
-send automatically. Voice settings and **Speak responses** are in Response
-settings. Changing settings does not start capture or playback.
+send automatically. **Speak responses** and a link to Voice settings are in
+the composer's Response settings. Model and voice selection live in
+**Settings → Voice**. Changing settings does not start capture or playback.
 
 During recording, the orb and waveform respond to microphone levels. A separate
 settling indicator means transcription is running, not that the microphone is
@@ -22,7 +23,7 @@ Three model roles are independent:
 
 | Role | Used for | Where to select it |
 | --- | --- | --- |
-| Chat/language model | Producing answers and planning agent work | Model selector beside the Chat or Agents prompt |
+| Chat/language model | Producing answers and planning agent work | Model selector beside the Chat composer; agent model in its saved profile |
 | Speech recognition (ASR) | Converting a recording into text | Voice settings → Recognition model |
 | Speech generation (TTS) | Reading an answer aloud | Voice settings → Speech model |
 
@@ -45,16 +46,16 @@ to that computer. Do not describe that configuration as on-device inference.
 
 ## Download and select speech models
 
-1. Open **Models → Speech recognition** for dictation, or **Speech generation**
-   for playback.
+1. Open **Models** and choose **Speech recognition** in **Model category** for
+   dictation, or **Speech generation** for playback.
 2. Find a catalog entry or explicitly search Hugging Face by model/publisher.
 3. Choose **Review download** on the result. Review size, required disk space,
    license and runtime availability there. Choose a variant only when the
    repository has multiple supported packages.
 4. Choose **Download** in the same card. Wait for installation and verification;
    receiving 100% of the bytes is not the final step.
-5. Open **Voice settings** inside the Chat composer footer or beside the
-   microphone in the Agents task composer. Select recognition and speech models
+5. Open **Settings → Voice**, directly or through the composer's Response
+   settings. Select recognition and speech models
    independently. If the chosen TTS profile offers voices, select a voice too.
 
 There is no need to collect individual files for a supported online package.
@@ -114,7 +115,8 @@ cancel that work. Before capture it distinguishes **Checking voice availability*
 from **Waiting for microphone permission**, with **Cancel microphone setup**
 available in both phases. After capture, **Transcribing** has a separate **Cancel
 transcription** action; it is not labelled as recording. These setup/cancellation
-labels are localized in all nine interface languages.
+labels use the shared interface translations. Linguistic review and speech-language
+qualification are separate from interface language availability.
 Changing composer context or leaving the page cancels pending
 capture/transcription and releases microphone tracks, including late permission
 results. This does not cancel an already-submitted agent task.
@@ -201,7 +203,7 @@ This preview does not provide always-on listening, wake words, full-duplex Talk,
 voice-only consequential approvals, agent progress narration, or the planned
 recording-review-to-Knowledge workflow. File transcription APIs do not establish
 that those UI workflows exist. Voice preferences, capture and playback feedback
-use all nine interface locales; technical model identities and service-provided
+use the shared interface translations; technical model identities and service-provided
 diagnostics retain their original text. Interface locale alone does not establish
 recognition-language support or native-speaker translation review.
 

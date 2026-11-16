@@ -1,33 +1,34 @@
-// Package inference provides mmap-based model warming for fast model switching.
-// This pre-loads model weights into the OS page cache, dramatically reducing
-// model switch times from 60-120s to 5-15s.
 package inference
 
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/takuphilchan/offgrid-llm/internal/resource"
 )
 
-// MmapWarmer pre-warms model files into OS page cache for faster loading.
-// This is critical for achieving <5s model switching times.
+const warmByteLimit int64 = 512 << 20
+const warmHistoryLimit = 32
+
+// MmapWarmer performs bounded speculative reads. The OS owns page-cache
+// residency; reading a file cannot guarantee that its pages remain resident.
 type MmapWarmer struct {
 	modelsDir    string
-	warmedModels sync.Map // map[string]*WarmStatus
-	warmingNow   sync.Map // map[string]bool - currently warming
-	totalWarmed  int64    // atomic counter
-	paused       int32    // atomic flag - paused during active model loading
 	mu           sync.RWMutex
+	warmedModels map[string]WarmStatus
+	busy         atomic.Bool
+	paused       atomic.Bool
+	epoch        atomic.Uint64
+	totalWarmed  atomic.Int64
+	memory       func() (*resource.SystemResources, error)
 }
 
-// WarmStatus tracks the warming status of a model
 type WarmStatus struct {
 	ModelPath   string        `json:"model_path"`
 	ModelName   string        `json:"model_name"`
@@ -35,440 +36,267 @@ type WarmStatus struct {
 	SizeMB      int64         `json:"size_mb"`
 	WarmedAt    time.Time     `json:"warmed_at"`
 	WarmTime    time.Duration `json:"warm_time"`
-	InPageCache bool          `json:"in_page_cache"`
+	InPageCache bool          `json:"in_page_cache"` // Compatibility hint: full read completed, not pinned RAM.
+	BytesRead   int64         `json:"bytes_read"`
+	Complete    bool          `json:"complete"`
 	Error       string        `json:"error,omitempty"`
+	modifiedAt  time.Time
+	sequence    int64
 }
 
-// NewMmapWarmer creates a new mmap warmer for the given models directory
 func NewMmapWarmer(modelsDir string) *MmapWarmer {
-	return &MmapWarmer{
-		modelsDir: modelsDir,
-	}
+	return &MmapWarmer{modelsDir: modelsDir, warmedModels: make(map[string]WarmStatus), memory: resource.DetectMemoryResources}
 }
-
-// Pause temporarily pauses warming operations to reduce I/O contention
-// during active model loading
-func (w *MmapWarmer) Pause() {
-	atomic.StoreInt32(&w.paused, 1)
-	log.Println("MmapWarmer paused for active model loading")
-}
-
-// Resume resumes warming operations after model loading completes
-func (w *MmapWarmer) Resume() {
-	atomic.StoreInt32(&w.paused, 0)
-	log.Println("MmapWarmer resumed")
-}
-
-// IsPaused returns whether the warmer is currently paused
-func (w *MmapWarmer) IsPaused() bool {
-	return atomic.LoadInt32(&w.paused) == 1
-}
-
-// WarmModel reads a model file into the OS page cache.
-// This makes subsequent loads by llama-server nearly instant.
-func (w *MmapWarmer) WarmModel(modelPath string) (*WarmStatus, error) {
-	// Skip if paused (active model loading in progress)
+func (w *MmapWarmer) Pause()         { w.paused.Store(true); w.epoch.Add(1) }
+func (w *MmapWarmer) Resume()        { w.paused.Store(false) }
+func (w *MmapWarmer) IsPaused() bool { return w.paused.Load() }
+func (w *MmapWarmer) begin() (uint64, error) {
+	epoch := w.epoch.Load()
 	if w.IsPaused() {
-		return nil, fmt.Errorf("warming paused during active model loading")
+		return 0, fmt.Errorf("warming paused during active model loading")
 	}
-
-	// Check if already warming
-	if _, warming := w.warmingNow.LoadOrStore(modelPath, true); warming {
-		return nil, fmt.Errorf("model %s is already being warmed", modelPath)
+	if !w.busy.CompareAndSwap(false, true) {
+		return 0, fmt.Errorf("warming already active")
 	}
-	defer w.warmingNow.Delete(modelPath)
-
-	// Check if already warmed recently (within 10 minutes)
-	if status, ok := w.warmedModels.Load(modelPath); ok {
-		ws := status.(*WarmStatus)
-		if time.Since(ws.WarmedAt) < 10*time.Minute {
-			log.Printf("Model %s already in page cache (warmed %v ago)", filepath.Base(modelPath), time.Since(ws.WarmedAt))
-			return ws, nil
-		}
+	return epoch, nil
+}
+func (w *MmapWarmer) budget() (int64, error) {
+	r, err := w.memory()
+	if err != nil || r == nil || r.TotalRAM <= 0 {
+		return 0, fmt.Errorf("cannot measure memory for speculative warming")
 	}
+	spare := r.AvailableHostMemoryMB() - max(int64(1024), r.TotalRAM/10)
+	if spare < 256 {
+		return 0, fmt.Errorf("warming skipped: insufficient memory headroom")
+	}
+	return min(warmByteLimit, (spare/4)<<20), nil
+}
 
+// warm runs only while the caller holds busy. One buffer and no producer
+// goroutine means cancellation cannot strand a sender or retain a read buffer.
+func (w *MmapWarmer) warm(path string, epoch uint64, remaining *int64, deadline time.Time) (*WarmStatus, error) {
 	start := time.Now()
-	log.Printf("Warming model into page cache: %s", filepath.Base(modelPath))
-
-	// Get file info
-	info, err := os.Stat(modelPath)
+	status := &WarmStatus{ModelPath: path, ModelName: filepath.Base(path)}
+	info, err := os.Stat(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to stat model: %w", err)
+		return nil, err
 	}
-
-	status := &WarmStatus{
-		ModelPath: modelPath,
-		ModelName: filepath.Base(modelPath),
-		SizeBytes: info.Size(),
-		SizeMB:    info.Size() / (1024 * 1024),
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("warming requires a regular model file")
 	}
-
-	// Open file for reading
-	f, err := os.Open(modelPath)
+	status.SizeBytes, status.SizeMB = info.Size(), info.Size()>>20
+	status.modifiedAt = info.ModTime()
+	if previous := w.GetStatus(path); previous != nil && previous.Error == "" &&
+		previous.SizeBytes == info.Size() && previous.modifiedAt.Equal(info.ModTime()) && time.Since(previous.WarmedAt) < 10*time.Minute {
+		return previous, nil
+	}
+	f, err := os.Open(path)
 	if err != nil {
-		status.Error = err.Error()
-		return status, err
+		return nil, err
 	}
 	defer f.Close()
-
-	// Read file in chunks to populate page cache
-	// Use smaller chunks on low-RAM systems to avoid memory pressure
-	chunkSize := 4 * 1024 * 1024 // 4MB default
-
-	// Detect available RAM and use smaller buffer for low-RAM systems
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	availableMB := int64(m.Sys-m.HeapInuse) / (1024 * 1024)
-	if availableMB < 1024 {
-		chunkSize = 1 * 1024 * 1024 // 1MB for <1GB available
-	} else if availableMB < 2048 {
-		chunkSize = 2 * 1024 * 1024 // 2MB for <2GB available
-	}
-
-	buf := make([]byte, chunkSize)
-	var totalRead int64
-
-	for {
-		// Check if paused during long reads
-		if w.IsPaused() {
-			log.Printf("Warming of %s interrupted (paused for active load)", filepath.Base(modelPath))
-			status.Error = "interrupted"
-			return status, fmt.Errorf("warming interrupted")
+	buf := make([]byte, 1<<20)
+	for status.BytesRead < status.SizeBytes {
+		if w.IsPaused() || w.epoch.Load() != epoch {
+			err = fmt.Errorf("warming interrupted")
+			break
 		}
-
-		n, err := f.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				break
+		if time.Now().After(deadline) {
+			err = fmt.Errorf("warming time budget reached")
+			break
+		}
+		if *remaining <= 0 {
+			break
+		}
+		if _, pressureErr := w.budget(); pressureErr != nil {
+			err = pressureErr
+			break
+		}
+		n, readErr := f.Read(buf[:min(int64(len(buf)), *remaining)])
+		status.BytesRead += int64(n)
+		*remaining -= int64(n)
+		if readErr != nil {
+			if readErr != io.EOF || status.BytesRead != status.SizeBytes {
+				err = fmt.Errorf("warming read failed: %w", readErr)
 			}
-			status.Error = err.Error()
-			return status, err
+			break
 		}
-		totalRead += int64(n)
-
-		// Touch the data to ensure it's in page cache
-		// This forces the OS to actually read and cache the data
-		_ = buf[0]
-		if n > 1 {
-			_ = buf[n-1]
+		if n == 0 {
+			err = io.ErrNoProgress
+			break
 		}
 	}
-
-	status.WarmTime = time.Since(start)
-	status.WarmedAt = time.Now()
-	status.InPageCache = true
-
-	// Store status
-	w.warmedModels.Store(modelPath, status)
-	atomic.AddInt64(&w.totalWarmed, 1)
-
-	// Calculate speed
-	speedMBps := float64(status.SizeMB) / status.WarmTime.Seconds()
-	log.Printf("Model %s warmed in %v (%.1f MB, %.1f MB/s)",
-		status.ModelName, status.WarmTime.Round(time.Millisecond), float64(status.SizeMB), speedMBps)
-
-	return status, nil
-}
-
-// WarmModelAsync warms a model in the background
-func (w *MmapWarmer) WarmModelAsync(modelPath string) {
-	go func() {
-		if _, err := w.WarmModel(modelPath); err != nil {
-			log.Printf("Background warm failed for %s: %v", filepath.Base(modelPath), err)
-		}
-	}()
-}
-
-// WarmAllModels warms all .gguf models in the models directory
-func (w *MmapWarmer) WarmAllModels() ([]*WarmStatus, error) {
-	var results []*WarmStatus
-	var mu sync.Mutex
-
-	// Find all .gguf files
-	var modelPaths []string
-	err := filepath.Walk(w.modelsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Skip errors
-		}
-		if !info.IsDir() && strings.HasSuffix(strings.ToLower(info.Name()), ".gguf") {
-			modelPaths = append(modelPaths, path)
-		}
-		return nil
-	})
+	status.WarmTime, status.WarmedAt = time.Since(start), time.Now()
+	if w.IsPaused() || w.epoch.Load() != epoch {
+		err = fmt.Errorf("warming interrupted")
+	}
+	status.Complete = err == nil && status.BytesRead == status.SizeBytes
+	status.InPageCache = status.Complete
 	if err != nil {
-		return nil, fmt.Errorf("failed to scan models directory: %w", err)
+		status.Error = err.Error()
 	}
-
-	if len(modelPaths) == 0 {
-		log.Println("No models found to warm")
-		return results, nil
+	if status.BytesRead > 0 {
+		w.remember(*status)
 	}
-
-	log.Printf("Warming %d models into page cache...", len(modelPaths))
-
-	// Warm models concurrently (but limit parallelism to avoid I/O saturation)
-	maxConcurrent := runtime.NumCPU()
-	if maxConcurrent > 4 {
-		maxConcurrent = 4 // Cap at 4 to avoid overwhelming disk I/O
-	}
-
-	sem := make(chan struct{}, maxConcurrent)
-	var wg sync.WaitGroup
-
-	for _, path := range modelPaths {
-		wg.Add(1)
-		go func(modelPath string) {
-			defer wg.Done()
-			sem <- struct{}{}        // Acquire
-			defer func() { <-sem }() // Release
-
-			status, _ := w.WarmModel(modelPath)
-			if status != nil {
-				mu.Lock()
-				results = append(results, status)
-				mu.Unlock()
-			}
-		}(path)
-	}
-
-	wg.Wait()
-
-	// Summary
-	var totalMB int64
-	var totalTime time.Duration
-	for _, s := range results {
-		totalMB += s.SizeMB
-		totalTime += s.WarmTime
-	}
-	log.Printf("Warmed %d models (%.1f GB total) in %v",
-		len(results), float64(totalMB)/1024, totalTime.Round(time.Second))
-
-	return results, nil
+	return status, err
 }
-
-// WarmModelsAsync warms specified models in background goroutines
-func (w *MmapWarmer) WarmModelsAsync(modelPaths []string) {
-	for _, path := range modelPaths {
-		w.WarmModelAsync(path)
-	}
-}
-
-// WarmPriorityModels warms models in priority order (default model first)
-func (w *MmapWarmer) WarmPriorityModels(defaultModel string, otherModels []string) {
-	go func() {
-		// Warm default model first (synchronously for immediate availability)
-		if defaultModel != "" {
-			defaultPath := w.findModelPath(defaultModel)
-			if defaultPath != "" {
-				log.Printf("Priority warming default model: %s", defaultModel)
-				w.WarmModel(defaultPath)
+func (w *MmapWarmer) remember(status WarmStatus) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if _, exists := w.warmedModels[status.ModelPath]; !exists && len(w.warmedModels) >= warmHistoryLimit {
+		oldest := ""
+		var sequence int64
+		for key, value := range w.warmedModels {
+			if oldest == "" || value.sequence < sequence {
+				oldest, sequence = key, value.sequence
 			}
 		}
+		delete(w.warmedModels, oldest)
+	}
+	status.sequence = w.totalWarmed.Add(1)
+	w.warmedModels[status.ModelPath] = status
+}
+func (w *MmapWarmer) WarmModel(path string) (*WarmStatus, error) {
+	epoch, err := w.begin()
+	if err != nil {
+		return nil, err
+	}
+	defer w.busy.Store(false)
+	budget, err := w.budget()
+	if err != nil {
+		return nil, err
+	}
+	return w.warm(path, epoch, &budget, time.Now().Add(30*time.Second))
+}
 
-		// Warm other models in background
-		for _, model := range otherModels {
-			modelPath := w.findModelPath(model)
-			if modelPath != "" && modelPath != defaultModel {
-				w.WarmModelAsync(modelPath)
+// FastWarmModel uses the same limits; speculative speed never bypasses pressure.
+func (w *MmapWarmer) FastWarmModel(path string) (*WarmStatus, error) { return w.WarmModel(path) }
+func (w *MmapWarmer) WarmModelAsync(path string)                     { w.WarmModelsAsync([]string{path}) }
+func (w *MmapWarmer) WarmOnDemand(path string)                       { w.WarmModelAsync(path) }
+
+// Admission happens before spawning, so repeated hover requests cannot create
+// an unbounded goroutine queue. A batch shares one byte/time budget.
+func (w *MmapWarmer) WarmModelsAsync(paths []string) {
+	epoch, err := w.begin()
+	if err != nil {
+		return
+	}
+	paths = append([]string(nil), paths[:min(len(paths), warmHistoryLimit)]...)
+	go func() {
+		defer w.busy.Store(false)
+		budget, err := w.budget()
+		if err != nil {
+			return
+		}
+		deadline := time.Now().Add(30 * time.Second)
+		for _, path := range paths {
+			if _, err := w.warm(path, epoch, &budget, deadline); err != nil || budget <= 0 {
+				return
 			}
 		}
 	}()
 }
 
-// findModelPath finds the full path for a model name
-func (w *MmapWarmer) findModelPath(modelName string) string {
-	// Try exact path first
-	if _, err := os.Stat(modelName); err == nil {
-		return modelName
+// WarmAllModels is retained for callers, but visits at most 32 files and reads
+// at most the shared budget. It does not populate RAM with an entire library.
+func (w *MmapWarmer) WarmAllModels() ([]*WarmStatus, error) {
+	epoch, err := w.begin()
+	if err != nil {
+		return nil, err
 	}
-
-	// Try in models directory
-	extensions := []string{".gguf", ".GGUF", ""}
-	for _, ext := range extensions {
-		path := filepath.Join(w.modelsDir, modelName+ext)
-		if _, err := os.Stat(path); err == nil {
+	defer w.busy.Store(false)
+	budget, err := w.budget()
+	if err != nil {
+		return nil, err
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	var results []*WarmStatus
+	err = filepath.WalkDir(w.modelsDir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if w.IsPaused() || w.epoch.Load() != epoch {
+			return fmt.Errorf("warming interrupted")
+		}
+		if time.Now().After(deadline) || len(results) >= warmHistoryLimit || budget <= 0 {
+			return filepath.SkipAll
+		}
+		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".gguf") {
+			return nil
+		}
+		status, err := w.warm(path, epoch, &budget, deadline)
+		if status != nil {
+			results = append(results, status)
+		}
+		return err
+	})
+	return results, err
+}
+func (w *MmapWarmer) WarmPriorityModels(defaultModel string, others []string) {
+	names := append([]string{defaultModel}, others[:min(len(others), warmHistoryLimit-1)]...)
+	paths := make([]string, 0, len(names))
+	for _, name := range names {
+		if name != "" {
+			if path := w.findModelPath(name); path != "" {
+				paths = append(paths, path)
+			}
+		}
+	}
+	w.WarmModelsAsync(paths)
+}
+func (w *MmapWarmer) findModelPath(name string) string {
+	for _, path := range []string{name, filepath.Join(w.modelsDir, name), filepath.Join(w.modelsDir, name+".gguf")} {
+		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
 			return path
 		}
 	}
-
-	// Search subdirectories
 	var found string
-	filepath.Walk(w.modelsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+	_ = filepath.WalkDir(w.modelsDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
 			return nil
 		}
-		base := filepath.Base(path)
-		nameWithoutExt := strings.TrimSuffix(base, filepath.Ext(base))
-		if nameWithoutExt == modelName || base == modelName {
-			found = path
-			return filepath.SkipAll
-		}
-		if strings.HasPrefix(base, modelName) && strings.HasSuffix(strings.ToLower(base), ".gguf") {
+		base := entry.Name()
+		if strings.TrimSuffix(base, filepath.Ext(base)) == name || base == name {
 			found = path
 			return filepath.SkipAll
 		}
 		return nil
 	})
-
 	return found
 }
-
-// GetStatus returns the warming status for a model
-func (w *MmapWarmer) GetStatus(modelPath string) *WarmStatus {
-	if status, ok := w.warmedModels.Load(modelPath); ok {
-		return status.(*WarmStatus)
+func (w *MmapWarmer) GetStatus(path string) *WarmStatus {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	status, ok := w.warmedModels[path]
+	if !ok {
+		return nil
 	}
-	return nil
+	return &status
 }
-
-// GetAllStatus returns warming status for all warmed models
 func (w *MmapWarmer) GetAllStatus() []*WarmStatus {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	var results []*WarmStatus
-	w.warmedModels.Range(func(key, value interface{}) bool {
-		results = append(results, value.(*WarmStatus))
-		return true
-	})
+	for _, status := range w.warmedModels {
+		copy := status
+		results = append(results, &copy)
+	}
 	return results
 }
-
-// IsWarmed checks if a model is in the page cache
-func (w *MmapWarmer) IsWarmed(modelPath string) bool {
-	if status, ok := w.warmedModels.Load(modelPath); ok {
-		ws := status.(*WarmStatus)
-		// Consider warm if done within last 30 minutes
-		return ws.InPageCache && time.Since(ws.WarmedAt) < 30*time.Minute
-	}
-	return false
+func (w *MmapWarmer) IsWarmed(path string) bool {
+	status := w.GetStatus(path)
+	return status != nil && status.Complete && time.Since(status.WarmedAt) < 10*time.Minute
 }
-
-// InvalidateCache marks a model as no longer warmed
-func (w *MmapWarmer) InvalidateCache(modelPath string) {
-	w.warmedModels.Delete(modelPath)
+func (w *MmapWarmer) InvalidateCache(path string) {
+	w.mu.Lock()
+	delete(w.warmedModels, path)
+	w.mu.Unlock()
 }
-
-// Stats returns warming statistics
 func (w *MmapWarmer) Stats() map[string]interface{} {
-	var count int
-	var totalMB int64
-	w.warmedModels.Range(func(key, value interface{}) bool {
-		count++
-		ws := value.(*WarmStatus)
-		totalMB += ws.SizeMB
-		return true
-	})
-
-	return map[string]interface{}{
-		"warmed_models":    count,
-		"total_warmed_mb":  totalMB,
-		"total_warmed_gb":  float64(totalMB) / 1024,
-		"lifetime_warmups": atomic.LoadInt64(&w.totalWarmed),
+	statuses := w.GetAllStatus()
+	var bytes int64
+	for _, s := range statuses {
+		bytes += s.BytesRead
 	}
-}
-
-// FastWarmModel uses aggressive read-ahead for faster warming on 12GB+ RAM systems.
-// This reads the file in larger chunks with concurrent I/O for maximum speed.
-func (w *MmapWarmer) FastWarmModel(modelPath string) (*WarmStatus, error) {
-	// Skip if paused
-	if w.IsPaused() {
-		return nil, fmt.Errorf("warming paused")
-	}
-
-	// Check if already warming
-	if _, warming := w.warmingNow.LoadOrStore(modelPath, true); warming {
-		return nil, fmt.Errorf("already warming")
-	}
-	defer w.warmingNow.Delete(modelPath)
-
-	// Check if recently warmed
-	if status, ok := w.warmedModels.Load(modelPath); ok {
-		ws := status.(*WarmStatus)
-		if time.Since(ws.WarmedAt) < 5*time.Minute {
-			return ws, nil // Still warm
-		}
-	}
-
-	start := time.Now()
-	log.Printf("Fast warming: %s", filepath.Base(modelPath))
-
-	info, err := os.Stat(modelPath)
-	if err != nil {
-		return nil, err
-	}
-
-	status := &WarmStatus{
-		ModelPath: modelPath,
-		ModelName: filepath.Base(modelPath),
-		SizeBytes: info.Size(),
-		SizeMB:    info.Size() / (1024 * 1024),
-	}
-
-	f, err := os.Open(modelPath)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	// Use large 16MB chunks for sequential read-ahead
-	chunkSize := 16 * 1024 * 1024
-
-	// Read with multiple concurrent readers for maximum throughput
-	numReaders := 4
-	chunksChan := make(chan int64, numReaders*2)
-	var wg sync.WaitGroup
-
-	// Producer: queue up chunks to read
-	go func() {
-		fileSize := info.Size()
-		for offset := int64(0); offset < fileSize; offset += int64(chunkSize) {
-			chunksChan <- offset
-		}
-		close(chunksChan)
-	}()
-
-	// Consumers: read chunks concurrently
-	for i := 0; i < numReaders; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			buf := make([]byte, chunkSize)
-			for offset := range chunksChan {
-				if w.IsPaused() {
-					return
-				}
-				f.ReadAt(buf, offset)
-				// Touch first and last byte to ensure in cache
-				_ = buf[0]
-				if len(buf) > 1 {
-					_ = buf[len(buf)-1]
-				}
-			}
-		}()
-	}
-
-	wg.Wait()
-
-	status.WarmTime = time.Since(start)
-	status.WarmedAt = time.Now()
-	status.InPageCache = true
-
-	w.warmedModels.Store(modelPath, status)
-	atomic.AddInt64(&w.totalWarmed, 1)
-
-	speedMBps := float64(status.SizeMB) / status.WarmTime.Seconds()
-	log.Printf("Fast warm complete: %s in %v (%.1f MB/s)",
-		status.ModelName, status.WarmTime.Round(time.Millisecond), speedMBps)
-
-	return status, nil
-}
-
-// WarmOnDemand immediately warms a model for an imminent load operation.
-// This is called when user hovers over a model in the UI.
-func (w *MmapWarmer) WarmOnDemand(modelPath string) {
-	go func() {
-		// Use fast warming for on-demand requests
-		if _, err := w.FastWarmModel(modelPath); err != nil {
-			// Fall back to normal warming
-			w.WarmModel(modelPath)
-		}
-	}()
+	return map[string]interface{}{"warmed_models": len(statuses), "total_warmed_mb": bytes >> 20, "total_warmed_gb": float64(bytes) / (1 << 30), "lifetime_warmups": w.totalWarmed.Load(), "warming": w.busy.Load()}
 }

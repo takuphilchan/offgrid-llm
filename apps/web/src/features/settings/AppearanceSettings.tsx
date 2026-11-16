@@ -2,10 +2,11 @@ import {useEffect,useRef,useState,type CSSProperties} from 'react';
 import {useI18n} from '../../i18n';
 import {personalization} from '../../i18n/personalization';
 import {themeChooser} from '../../i18n/theme-chooser';
+import {Icon} from '../../components/Icon';
 import {restoreFocus} from '../../lib/restore-focus';
 import {appearanceDefaults,applyAppearance,availablePalettes,paletteTokens,paletteLabel,readAppearance,saveAppearance,type Appearance,type Palette,type PaletteMode} from '../../appearance';
 
-function ThemeSample({id,mode}:{id:Palette;mode:PaletteMode}) {
+export function ThemeSample({id,mode}:{id:Palette;mode:PaletteMode}) {
  const t=paletteTokens(id,mode);
  const style={'--preview-bg':t['surface-0'],'--preview-panel':t['surface-1'],'--preview-fill':t['surface-2'],'--preview-text':t.text,'--preview-muted':t.muted,'--preview-accent':t.accent} as CSSProperties;
  return <span className="theme-workspace-preview" style={style} aria-hidden="true">
@@ -44,17 +45,19 @@ function ThemeChooser({initial,initialMode,onApply,onClose}:{initial:Appearance;
 }
 
 export function AppearanceSettings() {
- const {locale}=useI18n(),c=personalization[locale],copy=themeChooser[locale];
+ const {locale}=useI18n(),c=personalization[locale];
  const [value,setValue]=useState(readAppearance),[picker,setPicker]=useState<PaletteMode|null>(null),[saved,setSaved]=useState<boolean|null>(null);
  useEffect(()=>{const sync=()=>{setValue(readAppearance());setPicker(null);};window.addEventListener('offgrid-appearance',sync);return()=>{window.removeEventListener('offgrid-appearance',sync);applyAppearance();};},[]);
  function commit(next:Appearance){setSaved(saveAppearance(next));setValue(next);setPicker(null);}
  return <div className="appearance-settings" id="setting-appearance" tabIndex={-1}>
-  <div className="appearance-heading"><h3>{c[0]}</h3><p>{c[9]}</p></div>
-  <div className="theme-summaries">{(['light','dark'] as const).map(mode=><button type="button" className="theme-summary" key={mode} aria-haspopup="dialog" aria-label={`${c[mode==='light'?1:2]}: ${value[mode]==='contrast'?c[12]:paletteLabel(value[mode],mode)}`} onClick={()=>setPicker(mode)}>
-   <ThemeSample id={value[mode]} mode={mode}/><span><small>{c[mode==='light'?1:2]}</small><strong>{value[mode]==='contrast'?c[12]:paletteLabel(value[mode],mode)}</strong><span className="theme-browse-label">{copy.browse} <span aria-hidden="true">›</span></span></span>
-  </button>)}</div>
+  <p className="appearance-scope">{c[9]}</p>
+  <div className="settings-card appearance-values">
+  <div className="theme-summaries">{(['light','dark'] as const).map(mode=><div className="appearance-preference-row" key={mode}><span>{c[mode==='light'?1:2]}</span><button type="button" className="theme-summary" aria-haspopup="dialog" aria-label={c[mode==='light'?1:2]+': '+(value[mode]==='contrast'?c[12]:paletteLabel(value[mode],mode))} onClick={()=>setPicker(mode)}>
+   <ThemeSample id={value[mode]} mode={mode}/><strong>{value[mode]==='contrast'?c[12]:paletteLabel(value[mode],mode)}</strong><Icon name="chevron-down" size={16}/>
+  </button></div>)}</div>
   <div className="appearance-preference-row"><label htmlFor="appearance-text-size">{c[3]}</label><select id="appearance-text-size" value={value.textSize} onChange={event=>commit({...value,textSize:Number(event.target.value)})}>{[100,110,125,150].map(n=><option key={n} value={n}>{n}%</option>)}</select></div>
   <div className="appearance-preference-row"><label htmlFor="appearance-motion">{c[4]}</label><input id="appearance-motion" type="checkbox" checked={value.reduceMotion} onChange={event=>commit({...value,reduceMotion:event.target.checked})}/></div>
+  </div>
   <div className="appearance-footer"><p role="status">{saved===false?c[10]:saved===true?c[11]:''}</p><button type="button" className="text-button" onClick={()=>commit({...appearanceDefaults})}>{c[8]}</button></div>
   {picker&&<ThemeChooser initial={value} initialMode={picker} onApply={commit} onClose={()=>setPicker(null)}/>}
  </div>;

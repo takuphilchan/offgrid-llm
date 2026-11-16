@@ -1,22 +1,45 @@
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
-// Native Windows caption controls remain OS-owned. Reserve their unzoomed strip;
-// never give service content a close/minimize IPC or draw duplicate app branding.
+// Isolated caption controls permit a frameless Quick Access presentation without
+// replacing the trusted window or exposing window actions to service scripts.
+let compactChrome = false, captionButtons = [];
+function captionLabels(value) {
+  const labels = value?.windowControls;
+  if (Array.isArray(labels) && labels.length === 3) captionButtons.forEach((button,index) => {button.title=labels[index];button.setAttribute('aria-label',labels[index]);});
+}
 function fitNativeChrome() {
   if (process.platform !== 'win32') return;
-  document.documentElement.style.setProperty('--native-chrome-height', `${36 / webFrame.getZoomFactor()}px`);
+  document.documentElement.style.setProperty('--native-chrome-height', `${compactChrome ? 0 : 32 / webFrame.getZoomFactor()}px`);
+  document.documentElement.toggleAttribute('data-compact-chrome',compactChrome);
 }
+ipcRenderer.on('command-window-state',(_event,state)=>{compactChrome=state?.mode==='compact';fitNativeChrome();});
 window.addEventListener('DOMContentLoaded', () => {
   if (process.platform !== 'win32') return;
-  const style = document.createElement('style');
-  style.textContent = `:root { --workspace-viewport: calc(100dvh - var(--native-chrome-height, 0px)); }
+  // Trusted preload-owned sheets also work on the strict-CSP startup page.
+  // Inline <style> elements are blocked there, leaving bare caption buttons in
+  // the document flow. Keep the page CSP and the closed control boundary intact.
+  const style = new CSSStyleSheet();
+  style.replaceSync(`:root { --workspace-viewport: calc(100dvh - var(--native-chrome-height, 0px)); }
     body { padding-top: var(--native-chrome-height) !important; box-sizing: border-box; }
     #offgrid-native-chrome { position: fixed; inset: 0 0 auto; height: var(--native-chrome-height); z-index: 2147483647; background: var(--surface-0, var(--bg, Canvas)); -webkit-app-region: drag; user-select: none; }
-    @media (forced-colors: active) { #offgrid-native-chrome { background: Canvas; } }`;
-  document.head.append(style);
+    :root[data-compact-chrome] #offgrid-native-chrome { display:none; }
+    @media (forced-colors: active) { #offgrid-native-chrome { background: Canvas; } }`);
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, style];
   const strip = document.createElement('div');
-  strip.id = 'offgrid-native-chrome'; strip.setAttribute('aria-hidden', 'true');
+  strip.id = 'offgrid-native-chrome';
+  const shadow=strip.attachShadow({mode:'closed'}),captionStyle=new CSSStyleSheet();
+  captionStyle.replaceSync(':host{display:flex;justify-content:flex-end}button{width:46px;height:100%;border:0;background:transparent;color:var(--text,CanvasText);display:grid;place-items:center;-webkit-app-region:no-drag}button:hover{background:var(--surface-2,#8882)}button:last-child:hover{background:#c42b1c;color:white}button:focus-visible{outline:2px solid currentColor;outline-offset:-3px}svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1}');
+  shadow.adoptedStyleSheets = [captionStyle];
+  ['minimize','maximize','close'].forEach((action,index)=>{
+    const button=document.createElement('button');button.type='button';
+    const paths=['M1 6h10','M1.5 1.5h9v9h-9z','M1 1l10 10M11 1L1 11'];
+    button.innerHTML='<svg viewBox="0 0 12 12" aria-hidden="true"><path d="'+paths[index]+'"/></svg>';
+    button.addEventListener('click',event=>{if(event.isTrusted)void ipcRenderer.invoke('window-chrome-action',action).catch(()=>{});});
+    captionButtons.push(button);shadow.append(button);
+  });
+  captionLabels(presentation);
   document.body.append(strip);
   fitNativeChrome();
+  void ipcRenderer.invoke('command-window-status').then(state=>{compactChrome=state.mode==='compact';fitNativeChrome();}).catch(()=>{});
 });
 // Chromium can deliver resize before webFrame exposes the new zoom factor.
 // Read it on the next frame so the native caption strip never keeps old geometry.
@@ -31,7 +54,9 @@ function measureTerminalWorkspace(){
   cancelAnimationFrame(terminalFrame);
   terminalFrame=requestAnimationFrame(()=>{
     const workspace=document.querySelector('main.workspace');if(!workspace)return;
-    const r=workspace.getBoundingClientRect(),bounds={x:Math.max(0,Math.round(r.x)),y:Math.max(0,Math.round(r.y)),width:Math.max(1,Math.round(r.width)),height:Math.max(1,Math.round(innerHeight-Math.max(0,r.y)))};
+    // Preserve CSS fractions at enlarged text sizes; round once in the native
+    // layout instead of leaving a one-pixel seam under the caption strip.
+    const r=workspace.getBoundingClientRect(),bounds={x:Math.max(0,r.x),y:Math.max(0,r.y),width:Math.max(1,r.width),height:Math.max(1,innerHeight-Math.max(0,r.y))};
     const key=JSON.stringify(bounds);
     if(key!==terminalRect){terminalRect=key;void ipcRenderer.invoke('terminal-layout',bounds).catch(()=>{});
       if(terminalBackdrop)Object.assign(terminalBackdrop.style,{left:`${bounds.x}px`,top:`${bounds.y}px`,width:`${bounds.width}px`,height:`${bounds.height}px`});}
@@ -81,6 +106,24 @@ try { const value = process.argv.find(item => item.startsWith('--offgrid-present
 
 // Expose safe APIs to renderer process
 contextBridge.exposeInMainWorld('electron', {
+  commandWindowProtocol: 1,
+  getCommandWindow: () => ipcRenderer.invoke('command-window-status'),
+  openCommandWindow: () => ipcRenderer.invoke('command-window-open'),
+  expandCommandWindow: () => ipcRenderer.invoke('command-window-expand'),
+  dismissCommandWindow: () => ipcRenderer.invoke('command-window-dismiss'),
+  setCommandLayout: (layout, motion) => ipcRenderer.invoke('command-window-layout', {layout, prepared:motion?.prepared === true, reduceMotion:motion?.reduceMotion === true}),
+  onCommandTransition: callback => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('command-window-transition', listener);
+    return () => ipcRenderer.removeListener('command-window-transition', listener);
+  },
+  acknowledgeCommandTransition: value => ipcRenderer.invoke('command-window-transition-ready', {id:value?.id, reduceMotion:value?.reduceMotion === true}),
+  setCommandShortcut: shortcut => ipcRenderer.invoke('command-window-configure', {shortcut}),
+  onCommandWindow: callback => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('command-window-state', listener);
+    return () => ipcRenderer.removeListener('command-window-state', listener);
+  },
   bridgeProtocol: 1,
   terminalProtocol: 1,
   onTerminalContext: callback => {
@@ -97,7 +140,7 @@ contextBridge.exposeInMainWorld('electron', {
   getTerminalStatus: () => ipcRenderer.invoke('terminal-status'),
   presentation,
   getPresentation: () => ipcRenderer.invoke('get-presentation'),
-  setPresentation: preferences => ipcRenderer.invoke('set-presentation', preferences),
+  setPresentation: preferences => ipcRenderer.invoke('set-presentation', preferences).then(value=>{void ipcRenderer.invoke('get-presentation').then(captionLabels).catch(()=>{});return value;}),
   // Directory selection for USB transfers and file operations
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
   
@@ -153,3 +196,4 @@ contextBridge.exposeInMainWorld('electron', {
     return () => ipcRenderer.removeListener('system-theme-changed', listener);
   }
 });
+ipcRenderer.on('command-window-dismiss', () => window.dispatchEvent(new Event('offgrid-desktop-dismiss')));

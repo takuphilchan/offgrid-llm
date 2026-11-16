@@ -4,7 +4,11 @@ import { externalIntegrations } from '../src/i18n/external-integrations';
 test('registry-defined providers use one setup flow and distinguish service from host readiness', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('offgrid.onboarding.complete', 'true');
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (value: string) => { (window as unknown as { copied: string }).copied = value; } } });
+    let copyAttempts = 0;
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (value: string) => {
+      if (++copyAttempts === 1) throw new Error('Clipboard unavailable');
+      (window as unknown as { copied: string }).copied = value;
+    } } });
   });
   await page.route('**/api/v2/**', route => route.fulfill({ json: new URL(route.request().url()).pathname === '/api/v2/system'
     ? { product: 'offgrid', version: 'test', api_version: 2, workspace_id: 'integration-fixture', capabilities: ['task-first-agents-v2'] } : {} }));
@@ -26,7 +30,11 @@ test('registry-defined providers use one setup flow and distinguish service from
   await expect(page.locator('.provider-setup')).toBeVisible();
   await expect(page.getByText('{"manual":true}', { exact: true })).not.toBeVisible();
   await page.locator('.provider-command-heading button').click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
+  await expect(page.locator('.provider-command-heading button')).toHaveText('Copy');
+  await page.locator('.provider-command-heading button').click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { copied: string }).copied)).toBe('offgrid integrations configure fixture-third');
+  await expect(page.getByRole('dialog').getByRole('alert')).toHaveCount(0);
   await page.getByText('Manual configuration reference', { exact: true }).click();
   await expect(page.getByText('{"manual":true}', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');

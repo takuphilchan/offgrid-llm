@@ -271,6 +271,11 @@ The Windows job also runs `test-desktop-access.mjs` against that package: real
 preload/main access status, no consent from defaults, and keyboard scrolling at
 100%/200% Electron zoom. It uses a disposable fixture/profile and never enables
 control or submits a task.
+For Windows caption regressions, run
+`node scripts/test/test-desktop-chrome.mjs <packaged-exe>` from the repository
+root. This uses a hidden window and disposable profile to check startup's strict
+CSP, caption alignment at 100%/150%/200% zoom, and light/dark rendering. It does
+not exercise native clicks or alter the installed workspace.
 The Node tests exercise handshake/timeout/URL/IPC and lifecycle policy. CI also
 launches native unpacked Electron on Windows, Linux, macOS Intel and Apple Silicon
 against isolated fixture services and the bundled Go binary. On Windows, pass

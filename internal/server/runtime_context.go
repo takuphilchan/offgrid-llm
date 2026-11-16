@@ -76,8 +76,12 @@ func estimateContextCapacity(model *api.ModelMetadata, resources *resource.Syste
 		return 8192
 	}
 	modelMB := (model.Size + (1 << 20) - 1) >> 20
-	availableRAM := resources.AvailableRAM
+	availableRAM := resources.AvailableHostMemoryMB()
 	ramReserve := max(int64(1024), resources.TotalRAM/10)
+	// GPU VRAM cannot substitute for host process/driver commit headroom.
+	if resources.CommitMeasured && resources.AvailableCommitMB <= ramReserve {
+		return 0
+	}
 	ramBudget := availableRAM - modelMB - ramReserve
 	bestBudget := ramBudget
 	if gpuEnabled && resources.GPUAvailable && resources.GPUMemory > 0 {

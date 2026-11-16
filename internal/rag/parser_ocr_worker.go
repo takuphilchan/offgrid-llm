@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -15,7 +16,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/documentocr"
 )
 
-const ocrWorkerRevision = "tesseract-5.5.4-acfa0590d55b0762-offgrid1"
+const ocrWorkerRevision = "tesseract-5.5.4-21dd0440aa3cc3cc-offgrid2"
 const ocrEnglishSHA = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
 
 type ocrReceipt struct {
@@ -43,16 +44,30 @@ func ocrDigest(data []byte) string { sum := sha256.Sum256(data); return hex.Enco
 // This is an explicit configuration operation, never a document-directed model
 // load. Other languages need their own reviewed pack and qualification evidence.
 func (p *DocumentParser) UseOCRLanguage(language string, data []byte) error {
-	if language != "eng" || len(data) > 32<<20 || ocrDigest(data) != ocrEnglishSHA {
+	if !documentocr.ValidateModels(language, data) {
 		return &ParseError{Code: "document_ocr_language_invalid", Message: "The OCR language pack is not a supported, verified revision."}
 	}
 	p.ocrLanguage = bytes.Clone(data)
+	p.ocrLanguageID = language
+	p.ocrSetupErr = nil
 	return nil
 }
 
+func (p *DocumentParser) ocrPack() documentocr.LanguagePack {
+	language := p.ocrLanguageID
+	if language == "" {
+		language = "eng"
+	}
+	pack, _ := documentocr.LookupSelection(language)
+	return pack
+}
+
 func (p *DocumentParser) recognizePDFRaster(ctx context.Context, raster *pdfPageRaster) (*ocrPageResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if raster == nil || raster.Error != "" {
-		return nil, &ParseError{Code: "document_invalid", Message: "A verified PDF page is required before OCR."}
+		return nil, &ParseError{Code: "document_invalid", Message: "A verified document raster is required before OCR."}
 	}
 	if p.ocrWorker == "" {
 		return nil, &ParseError{Code: "document_ocr_unavailable", Message: "The packaged local OCR reader is unavailable."}
@@ -60,8 +75,22 @@ func (p *DocumentParser) recognizePDFRaster(ctx context.Context, raster *pdfPage
 	if len(p.ocrLanguage) == 0 {
 		return nil, &ParseError{Code: "document_ocr_language_missing", Message: "Install a supported OCR language pack to read scanned pages."}
 	}
-	if ocrDigest(p.ocrLanguage) != ocrEnglishSHA {
+	pack := p.ocrPack()
+	if pack.SHA256 == "" || !documentocr.ValidateModels(pack.Language, p.ocrLanguage) {
 		return nil, &ParseError{Code: "document_ocr_language_invalid", Message: "The installed OCR language pack did not pass verification."}
+	}
+	key := ocrDigest([]byte(fmt.Sprintf("ocr-page-v1\x00%s\x00%s\x00%s\x00%d\x00%d", ocrWorkerRevision, pack.SHA256, ocrDigest(raster.PNG), raster.Width, raster.Height)))
+	if p.ocrCheckpoints != nil {
+		if !documentocr.ValidCheckpointKey(raster.Page, key) {
+			return nil, documentocr.ErrCheckpointInvalid
+		}
+		raw, err := p.ocrCheckpoints.Read(raster.Page, key)
+		if err != nil {
+			return nil, err
+		}
+		if len(raw) != 0 {
+			return decodeOCRReceiptForLanguage(raw, raster, pack.SHA256)
+		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
@@ -82,7 +111,7 @@ func (p *DocumentParser) recognizePDFRaster(ctx context.Context, raster *pdfPage
 		Model       []byte `json:"model"`
 		PNG         []byte `json:"png"`
 		PNG_SHA     string `json:"png_sha256"`
-	}{1, "eng", ocrEnglishSHA, p.ocrLanguage, raster.PNG, ocrDigest(raster.PNG)})
+	}{1, pack.Language, pack.SHA256, p.ocrLanguage, raster.PNG, ocrDigest(raster.PNG)})
 	if err != nil {
 		return nil, err
 	}
@@ -102,10 +131,31 @@ func (p *DocumentParser) recognizePDFRaster(ctx context.Context, raster *pdfPage
 		}
 		return nil, &ParseError{Code: "document_ocr_failed", Message: "The local OCR worker could not finish. No OCR text was accepted."}
 	}
-	return decodeOCRReceipt([]byte(output), raster)
+	page, err := decodeOCRReceiptForLanguage([]byte(output), raster, pack.SHA256)
+	if err != nil {
+		return nil, err
+	}
+	if p.ocrCheckpoints != nil {
+		if err := p.ocrCheckpoints.Write(raster.Page, key, []byte(output)); err != nil {
+			return nil, err
+		}
+	}
+	return page, nil
+}
+
+// UseOCRCheckpoints attaches scoped persistence to this parser instance. The
+// worker receipt is validated before writes and again on every resumed read.
+func (p *DocumentParser) UseOCRCheckpoints(store documentocr.Checkpoints) {
+	if store.Read != nil && store.Write != nil {
+		p.ocrCheckpoints = &store
+	}
 }
 
 func decodeOCRReceipt(raw []byte, raster *pdfPageRaster) (*ocrPageResult, error) {
+	return decodeOCRReceiptForLanguage(raw, raster, ocrEnglishSHA)
+}
+
+func decodeOCRReceiptForLanguage(raw []byte, raster *pdfPageRaster, languageSHA string) (*ocrPageResult, error) {
 	invalid := func() (*ocrPageResult, error) {
 		return nil, &ParseError{Code: "document_parser_protocol", Message: "The local OCR reader returned invalid source evidence. No OCR text was accepted."}
 	}
@@ -122,7 +172,7 @@ func decodeOCRReceipt(raw []byte, raster *pdfPageRaster) (*ocrPageResult, error)
 	if decoder.Decode(&extra) != io.EOF {
 		return invalid()
 	}
-	if r.Protocol != 1 || r.Revision != ocrWorkerRevision || r.PNG_SHA != ocrDigest(raster.PNG) || r.LanguageSHA != ocrEnglishSHA {
+	if r.Protocol != 1 || r.Revision != ocrWorkerRevision || r.PNG_SHA != ocrDigest(raster.PNG) || r.LanguageSHA != languageSHA {
 		return invalid()
 	}
 	if r.Error != "" {

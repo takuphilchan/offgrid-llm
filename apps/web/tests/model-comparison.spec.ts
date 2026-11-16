@@ -35,12 +35,12 @@ for (const locale of Object.keys(modelComparison) as LocaleCode[]) test(`catalog
   await expect(comparison.locator('article')).toHaveCount(3);
   await page.getByRole('button',{name:modelLibrary(locale).search,exact:true}).click();
   await expect(filter).toHaveCount(0);await expect(page.locator('#model-search-query')).toBeVisible();
-  await page.getByRole('button',{name:modelLibrary(locale).curated,exact:true}).click();
+  await page.locator('#model-view-discover').click();
   await expect(page.locator('#model-search-query')).toHaveCount(0);await expect(filter).toHaveValue('model-3');
-  await page.getByRole('button',{name:modelAcquisition[locale].embeddings,exact:true}).click();
+  await page.locator('.model-category-filter').selectOption('embedding');
   await expect(comparison.locator('article')).toHaveCount(0);
   await expect(filter).toHaveValue('');
-  await page.getByRole('button',{name:modelAcquisition[locale].language,exact:true}).click();
+  await page.locator('.model-category-filter').selectOption('language');
   await expect(filter).toHaveValue('model-3');await expect(comparison.locator('article')).toHaveCount(3);
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   if(locale==='en'||locale==='ar') await page.screenshot({path:info.outputPath(`comparison-${locale}.png`),fullPage:true});

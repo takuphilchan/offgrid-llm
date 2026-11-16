@@ -4,6 +4,9 @@ import { chooseModel } from './helpers/model-choice';
 import { expect, test, type Page } from '@playwright/test';
 import { installChatJob, openAgentChat } from './fixtures/chat-job';
 import { SpeechPauseGate } from '../src/lib/speech-pause';
+import {talkText} from '../src/i18n/talk';
+import {mkdirSync} from 'node:fs';
+import {resolve} from 'node:path';
 
 test('pause detector ignores silence and a short spike, then ends a spoken utterance', () => {
   const gate = new SpeechPauseGate();
@@ -97,6 +100,22 @@ test('read aloud immediately shows preparation, stops pending work and shows act
   await page.evaluate(() => (window as any).finishSpeech(true));
   await expect(page.getByRole('alert')).toContainText('Base is unsupported');
   expect(await page.evaluate(() => (window as any).speechRequests.length)).toBe(2);
+});
+
+for(const phase of ['preparing','playing'] as const)test(`hiding desktop stops read-aloud while ${phase} and retains the draft`,async({page})=>{
+ await fixture(page);
+ await page.locator('.composer textarea').fill('Keep this draft');
+ await page.getByRole('button',{name:'Read aloud',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>(window as any).speechRequests.length)).toBe(1);
+ if(phase==='playing'){
+  await page.evaluate(()=>(window as any).finishSpeech(false));
+  await expect(page.locator('.message-speech')).toHaveAttribute('data-state','playing');
+ }
+ await page.evaluate(()=>{(window as any).paused=false;window.dispatchEvent(new Event('offgrid-desktop-dismiss'));});
+ await expect(page.getByRole('button',{name:'Read aloud',exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>(window as any).paused)).toBe(true);
+ expect(await page.evaluate(()=>(window as any).speechAborts)).toBeGreaterThan(0);
+ await expect(page.locator('.composer textarea')).toHaveValue('Keep this draft');
 });
 
 for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
@@ -276,6 +295,8 @@ test('missing speech runtime offers settings without capture or a model download
   await mic.getByRole('button', { name: 'Use microphone', exact: true }).click();
   await expect(mic).toContainText('qwen3-asr');
   await expect(mic.locator('.composer-voice-recovery > .utility-popover-panel')).toBeVisible();
+  await expect(mic.locator('.voice-settings-inline')).toHaveCount(0);
+  await mic.getByRole('link', { name: 'Voice settings', exact: true }).click();
   await expect(page.locator('.voice-settings-panel:visible')).toContainText('Re-downloading a model will not fix a missing runtime');
   await expect(page.locator('.voice-settings-panel:visible').getByRole('link', { name: 'Manage speech models' })).toHaveAttribute('href', '#/models');
   expect(downloads).toBe(0);
@@ -291,11 +312,12 @@ test('empty voice setup identifies missing models and opens the matching discove
   await page.goto('/ui/#/chat');
   const mic = page.locator('.voice-input-control[data-capture-phase]');
   await mic.getByRole('button', { name: 'Use microphone', exact: true }).click();
+  await mic.getByRole('link', { name: 'Voice settings', exact: true }).click();
   const panel = page.locator('.voice-settings-panel:visible');
   await expect(panel.getByText('No model is installed for this speech feature.')).toHaveCount(2);
   await expect(panel.getByRole('link', { name: 'Set up recognition', exact: true })).toBeVisible();
   await panel.getByRole('link', { name: 'Set up spoken responses', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Speech generation', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.model-category-filter')).toHaveValue('speech_generation');
   expect(await page.evaluate(() => (window as any).micTest.permissions)).toBe(0);
 });
 
@@ -395,9 +417,9 @@ test('late microphone permission after navigation releases tracks without starti
 
 test('dictation retains concurrent draft edits and sends the selected recognition model', async ({ page }) => {
   await microphoneFixture(page);
-  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
+  await openVoiceSetup(page);
   await chooseModel(page, 'Recognition model', 'asr-b@r2');
-  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
+  await page.evaluate(()=>{location.hash='#/chat';});
   await page.locator('.composer textarea').fill('original');
   await page.getByRole('button', { name: 'Use microphone', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
@@ -509,17 +531,20 @@ test('Talk failure preserves its transcript and does not submit another request'
   await page.evaluate(() => (window as any).micTest.finish());
   await expect.poll(() => page.evaluate(() => typeof (window as any).finishText)).toBe('function');
   await page.evaluate(() => (window as any).finishText(true));
-  await expect(page.locator('.talk-status')).toContainText('Talk paused');
+  await expect(page.locator('.talk-surface')).toContainText('Talk paused');
   await expect(page.locator('.composer textarea')).toHaveValue('spoken text');
   expect(await page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
 });
 
-test('typing exits Talk without losing text or submitting microphone audio', async ({ page }) => {
+test('Escape exits Talk, releases capture and returns to typing without submitting microphone audio', async ({ page }) => {
   await microphoneFixture(page);
   await page.getByRole('button', { name: 'Talk', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
   await page.evaluate(() => (window as any).micTest.allow());
   await expect.poll(() => page.evaluate(() => (window as any).micTest.starts)).toBe(1);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('region',{name:'Talk',exact:true})).toHaveCount(0);
+  await expect(page.locator('.composer textarea')).toBeFocused();
   await page.locator('.composer textarea').fill('Typed instead');
   await expect(page.locator('.composer textarea')).toHaveValue('Typed instead');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
@@ -568,22 +593,22 @@ test('Stop recording remains usable while a text response is generating', async 
 
 test('speech selection stays pinned across chunks when preferences change', async ({ page }, info) => {
   await microphoneFixture(page);
-  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
+  await openVoiceSetup(page);
   await chooseModel(page, 'Speech model', 'tts-a@r1');
-  await page.getByLabel('Voice', { exact: true }).selectOption('0');
+  await page.getByRole('combobox', { name: 'Voice', exact: true }).selectOption('0');
   await page.screenshot({ path: info.outputPath('voice-settings.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
+  await page.evaluate(()=>{location.hash='#/chat';});
   await openVoicePreferences(page);
   await page.getByText('Speak responses', { exact: true }).click();
   await openVoicePreferences(page);
   await expect(page.getByRole('checkbox', { name: 'Speak responses' })).toBeChecked();
   await page.locator('.composer textarea').fill('speak');
-  await page.locator('.composer-actions > button').click();
+  await page.getByRole('button',{name:'Send',exact:true}).click();
   await expect.poll(() => page.evaluate(() => typeof (window as any).emitText)).toBe('function');
   await page.evaluate(() => (window as any).emitText('First sentence. Tail'));
   await expect.poll(() => page.evaluate(() => (window as any).speechRequests.length)).toBe(1);
-  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
-  await chooseModel(page, 'Speech model', 'tts-b@r2');
+  // A preference sync must not change the identity pinned to active playback.
+  await page.evaluate(()=>{const key=Object.keys(localStorage).find(key=>key.includes(':voice-preferences:'))!;const value=JSON.stringify({...JSON.parse(localStorage.getItem(key)!),tts:'tts-b@r2'});localStorage.setItem(key,value);window.dispatchEvent(new StorageEvent('storage',{key,newValue:value}));});
   await page.evaluate(() => (window as any).finishSpeech(false));
   await expect.poll(() => page.evaluate(() => Boolean((window as any).player?.onended))).toBe(true);
   await page.evaluate(() => { (window as any).player.onended(); (window as any).finishText(); });
@@ -593,10 +618,10 @@ test('speech selection stays pinned across chunks when preferences change', asyn
 
 test('a removed explicit speech selection never falls back or opens the microphone', async ({ page }) => {
   await microphoneFixture(page);
-  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
+  await openVoiceSetup(page);
   await chooseModel(page, 'Recognition model', 'asr-b@r2');
   await chooseModel(page, 'Speech model', 'tts-b@r2');
-  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
+  await page.evaluate(()=>{location.hash='#/chat';});
   await page.route('**/v1/audio/status', route => route.fulfill({ json: { asr: { available: true }, tts: { available: true }, profiles: [] } }));
   await page.getByRole('button', { name: 'Use microphone', exact: true }).click();
   await expect(page.locator('.composer .voice-error')).toContainText('no longer installed');
@@ -611,10 +636,9 @@ test('voice settings remain visible and keyboard reachable on narrow light and d
   await page.setViewportSize({ width: 390, height: 844 });
   for (const theme of ['light', 'dark']) {
     await page.evaluate(theme => localStorage.setItem('offgrid.theme', theme), theme);
-    await page.reload();
-    const summary = page.getByRole('button', { name: 'Response settings', exact: true });
-    await summary.focus(); await page.keyboard.press('Enter');
-    const panel = page.locator('.composer-context-menu > .utility-popover-panel');
+    await page.goto('/ui/#/chat');
+    await openVoiceSetup(page);
+    const panel = page.locator('.settings-group:not([hidden])');
     await expect(panel).toBeVisible();
     // Readiness temporarily disables selectors while installed profiles load.
     await expect(page.getByRole('button', { name: 'Recognition model', exact: true })).toContainText('Recognition A');
@@ -641,14 +665,14 @@ test('voice utility remains bounded after resizing to a short viewport', async (
     const box = await panel.boundingBox();
     return !!box && box.x >= 0 && box.x + box.width <= 320 && box.y >= 0 && box.y + box.height <= 480;
   }).toBe(true);
-  await panel.getByRole('link', { name: 'Manage speech models' }).focus();
-  await expect(panel.getByRole('link', { name: 'Manage speech models' })).toBeFocused();
+  await panel.getByRole('link', { name: 'Voice settings' }).focus();
+  await expect(panel.getByRole('link', { name: 'Voice settings' })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(panel).toBeHidden();
   await expect(trigger).toBeFocused();
 });
 
-test('dismissed voice metadata is cancelled and cannot replace a reopened panel', async ({ page }) => {
+test('leaving voice settings cancels metadata and prevents stale replacement on return', async ({ page }) => {
   await fixture(page);
   await page.evaluate(() => {
     const original = window.fetch.bind(window);
@@ -661,14 +685,13 @@ test('dismissed voice metadata is cancelled and cannot replace a reopened panel'
       ] }), { headers: { 'Content-Type': 'application/json' } })) }));
     };
   });
-  const trigger = page.getByRole('button', { name: 'Response settings', exact: true });
-  await trigger.click();
+  await page.evaluate(()=>{location.hash='#/settings/voice';});
   // Development StrictMode mounts effects twice; assert the live operation,
   // not the total number of correctly cancelled development-only requests.
   await expect.poll(() => page.evaluate(() => (window as any).metadata.replies.filter((item: any) => !item.signal.aborted).length)).toBe(1);
-  await page.keyboard.press('Escape');
+  await page.evaluate(()=>{location.hash='#/chat';});
   await expect.poll(() => page.evaluate(() => (window as any).metadata.replies.every((item: any) => item.signal.aborted))).toBe(true);
-  await trigger.click();
+  await page.evaluate(()=>{location.hash='#/settings/voice';});
   await expect.poll(() => page.evaluate(() => (window as any).metadata.replies.filter((item: any) => !item.signal.aborted).length)).toBe(1);
   await page.evaluate(() => (window as any).metadata.replies.find((item: any) => !item.signal.aborted).reply('Current profile'));
   await expect(page.getByLabel('Recognition model', { exact: true })).toContainText('Current profile');
@@ -694,15 +717,15 @@ for (const surface of ['chat', 'agents']) {
     await expect(panel).toBeHidden();
     await button.click();
     await expect(button).toHaveAttribute('aria-expanded', 'true');
-    await chooseModel(page, 'Recognition model', 'asr-b@r2');
+    await expect(panel.getByRole('link',{name:'Voice settings',exact:true})).toHaveAttribute('href','#/settings/voice');
     await expect(panel).toBeVisible();
     await outside.click();
     await expect(panel).toBeHidden();
     await expect(button).toHaveAttribute('aria-expanded', 'false');
     if (surface === 'chat') { await editor.click(); await expect(editor).toBeFocused(); }
     await button.click();
-    await expect(page.getByRole('button', { name: 'Recognition model', exact: true })).toContainText('Recognition B');
-    await page.getByLabel('Speech model', { exact: true }).focus();
+    await expect(page.getByRole('button', { name: 'Recognition model', exact: true })).toHaveCount(0);
+    await panel.getByRole('link',{name:'Voice settings',exact:true}).focus();
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();
     await expect(button).toBeFocused();
@@ -735,6 +758,115 @@ async function openVoicePreferences(page: import('@playwright/test').Page) {
   const trigger = page.getByRole('button', { name: 'Response settings', exact: true });
   if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click();
 }
+
+async function openVoiceSetup(page: Page) {
+ await openVoicePreferences(page);
+ const link=page.getByRole('region',{name:'Response settings',exact:true}).getByRole('link',{name:'Voice settings',exact:true});
+ await link.focus();await page.keyboard.press('Enter');
+ await expect(page.locator('#voice-settings-title')).toBeVisible();
+}
+
+for(const locale of ['en','ar','zh-Hans'] as const) for(const theme of ['light','dark'] as const) test(`focused voice surface ${locale} ${theme}`,async({page})=>{
+ await microphoneFixture(page);await syncPreferences(page,{locale,theme});
+ await page.setViewportSize({width:720,height:740});
+ const copy=talkText(locale);
+ await page.getByRole('button',{name:copy.start,exact:true}).click();
+ const panel=page.getByRole('region',{name:copy.start,exact:true});
+ await expect(panel).toBeVisible();
+ await expect.poll(()=>page.evaluate(()=>(window as any).micTest.permissions)).toBe(1);
+ await page.evaluate(()=>(window as any).micTest.allow());
+ await expect(panel.locator('.talk-surface-copy [role=status]')).toHaveText(copy.listening);
+ await expect(panel.getByRole('button',{name:copy.stop,exact:true})).toBeVisible();
+ await expect(panel).toHaveCSS('opacity','1');
+ await expect(page.locator('.app-shell')).toBeHidden();
+ expect(await page.locator('.app-shell').evaluate(el=>(el as HTMLElement).inert)).toBe(true);
+ await expect(page.locator('.composer textarea')).toBeHidden();
+ await expect(page.locator('dialog:modal')).toHaveCount(0);
+ const dir=resolve('../../build/ui-craft/desktop-agent');mkdirSync(dir,{recursive:true});
+ await page.screenshot({path:resolve(dir,`voice-${locale}-${theme}.png`)});
+ await page.setViewportSize({width:320,height:400});
+ await expect(panel.getByRole('button',{name:copy.stop,exact:true})).toBeInViewport();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await expect(panel.locator('.talk-visual i').first()).toHaveCSS('animation-name','none');
+ await page.keyboard.press('Escape');
+ await expect(panel).toHaveCount(0);
+ await expect(page.locator('.app-shell')).toBeVisible();
+ expect(await page.locator('.app-shell').evaluate(el=>(el as HTMLElement).inert)).toBe(false);
+ await expect(page.locator('.composer textarea')).toBeVisible();
+ await expect(page.locator('.message.assistant').first()).toContainText('Hello. This is a saved response.');
+ expect(await page.evaluate(()=>(window as any).micTest.requests)).toBe(0);
+});
+
+for(const theme of ['light','dark'] as const) test(`compact voice uses one surface and bounded motion ${theme}`,async({page})=>{
+ await page.addInitScript(()=>{
+  const state={mode:'compact',shortcut:'',registered:false};
+  Object.assign(window,{electron:{isDesktop:true,getSystemTheme:async()=>'light',onThemeChange:()=>()=>{},getCommandWindow:async()=>state,onCommandWindow:()=>()=>{},setCommandLayout:async()=>state}});
+ });
+ await microphoneFixture(page);await syncPreferences(page,{locale:'en',theme});
+ await page.setViewportSize({width:420,height:540});
+ await page.getByRole('button',{name:'Talk',exact:true}).click();
+ const panel=page.locator('.talk-surface');await expect(panel).toBeVisible();
+ await page.evaluate(()=>(window as any).micTest.allow());
+ await expect(panel.locator('.talk-surface-copy [role=status]')).toHaveText('Listening');
+ await expect(panel).toHaveCSS('opacity','1');
+ const box=await panel.boundingBox();expect(box!.x).toBe(0);expect(box!.y).toBe(0);expect(box!.height).toBe(540);
+ await expect(panel).toHaveCSS('border-top-width','0px');await expect(panel).toHaveCSS('outline-style','none');
+ await expect(panel.getByRole('button',{name:'Stop Talk',exact:true})).toBeInViewport();
+ await expect(page.locator('.app-shell')).toBeHidden();
+ await expect(page.locator('dialog:modal')).toHaveCount(0);
+ const dir=resolve('../../build/ui-craft/quick-access-repair');mkdirSync(dir,{recursive:true});
+ await page.screenshot({path:resolve(dir,`voice-${theme}.png`)});
+ // Isolated visual fixture for motion inspection; no model result is implied.
+ await panel.locator('.talk-visual').evaluate(el=>el.setAttribute('data-state','thinking'));
+ await expect(panel.locator('.voice-core')).toHaveCSS('animation-name','voice-drift');
+ for(const time of [0,2500]) {
+  await panel.evaluate((el,time)=>el.getAnimations({subtree:true}).forEach(animation=>{animation.pause();animation.currentTime=time;}),time);
+  await page.screenshot({path:resolve(dir,`voice-${theme}-motion-${time}.png`)});
+ }
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await expect(panel.locator('.voice-core')).toHaveCSS('animation-name','none');
+ await page.keyboard.press('Escape');await expect(panel).toHaveCount(0);
+ await expect(page.locator('.app-shell')).toBeVisible();
+ await expect(page.locator('.composer textarea')).toBeVisible();
+ expect(await page.evaluate(()=>(window as any).micTest.requests)).toBe(0);
+});
+
+for (const theme of ['light', 'dark'] as const) test(`capture documentation full workspace voice ${theme}`, async ({ page }) => {
+ test.skip(!process.env.OFFGRID_DOC_CAPTURES, 'Set OFFGRID_DOC_CAPTURES=1 to refresh documentation images.');
+ await page.setViewportSize({ width: 1440, height: 900 });
+ await microphoneFixture(page);
+ await syncPreferences(page, { locale: 'en', theme });
+ await page.getByRole('button', { name: 'Talk', exact: true }).click();
+ const panel = page.locator('.talk-surface');
+ await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+ await page.evaluate(() => (window as any).micTest.allow());
+ await expect(panel.locator('.talk-surface-copy [role=status]')).toHaveText('Listening');
+ await expect(panel).toHaveCSS('opacity', '1');
+ await expect(page.locator('.app-shell')).toBeHidden();
+ await expect(page.locator('dialog:modal')).toHaveCount(0);
+ await page.evaluate(() => document.fonts.ready);
+ const output = resolve('../../build/documentation-captures');
+ mkdirSync(output, { recursive: true });
+ await page.screenshot({ path: resolve(output, `voice-listening-${theme}.png`), animations: 'disabled' });
+ await page.keyboard.press('Escape');
+ await expect(panel).toHaveCount(0);
+ await expect(page.locator('.composer textarea')).toBeVisible();
+ expect(await page.evaluate(() => (window as any).micTest.requests)).toBe(0);
+});
+
+test('hiding the desktop during microphone consent releases late tracks without reopening Talk',async({page})=>{
+ await microphoneFixture(page);
+ await page.getByRole('button',{name:'Talk',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>(window as any).micTest.permissions)).toBe(1);
+ await page.evaluate(()=>window.dispatchEvent(new Event('offgrid-desktop-dismiss')));
+ await expect(page.locator('.talk-surface')).toHaveCount(0);
+ await page.evaluate(()=>(window as any).micTest.allow());
+ await expect.poll(()=>page.evaluate(()=>(window as any).micTest.stops)).toBeGreaterThan(0);
+ expect(await page.evaluate(()=>(window as any).micTest.starts)).toBe(0);
+ expect(await page.evaluate(()=>(window as any).micTest.requests)).toBe(0);
+ await expect(page.getByRole('button',{name:'Talk',exact:true})).toBeVisible();
+});
 
 
 test('silence keeps the draft and reports an actionable result without sending', async ({page}) => {
@@ -777,8 +909,8 @@ test('Talk survives three replies, shows one transcription status and recovers f
     await expect.poll(() => page.evaluate(() => (window as any).micTest.starts)).toBe(turn);
     await page.getByRole('button', { name: 'Stop recording', exact: true }).click();
     await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(turn);
-    await expect(page.getByText('Transcribing\u2026', { exact: true })).toHaveCount(1);
-    await expect(page.locator('.talk-status')).toHaveCount(0);
+    await expect(page.locator('.talk-surface-copy [role=status]')).toHaveText('Transcribing');
+    await expect(page.locator('.talk-surface [role=status]:visible')).toHaveCount(1);
     await page.evaluate(() => { (window as any).emitText = null; (window as any).micTest.finish(); });
     await expect.poll(() => page.evaluate(() => typeof (window as any).emitText)).toBe('function');
     await page.evaluate(() => { (window as any).emitText('Hello again.'); (window as any).finishText(); });
@@ -868,4 +1000,68 @@ test('a real transcription disconnect still pauses Talk without retrying or send
   expect(await page.evaluate(() => (window as any).micTest.requests)).toBe(1);
   expect(await page.evaluate(() => (window as any).micTest.stops)).toBeGreaterThan(0);
   await expect(page.locator('.message.user')).toHaveCount(0);
+});
+
+for(const theme of ['light','dark'] as const) test('listening moves without synthetic audio and follows theme '+theme,async({page})=>{
+ await microphoneFixture(page);await syncPreferences(page,{locale:'en',theme});await page.setViewportSize({width:420,height:540});
+ await page.getByRole('button',{name:'Talk',exact:true}).click();await expect.poll(()=>page.evaluate(()=>(window as any).micTest.permissions)).toBe(1);await page.evaluate(()=>(window as any).micTest.allow());
+ const visual=page.locator('.talk-visual'),core=page.locator('.voice-core');await expect(visual).toHaveAttribute('data-state','listening');
+ await expect(core).toHaveCSS('animation-name','voice-drift');
+ const out=resolve('../../build/ui-craft/control-refinement');mkdirSync(out,{recursive:true});
+ const before=await core.evaluate(el=>{const a=el.getAnimations()[0];a.pause();a.currentTime=0;return getComputedStyle(el).transform;});
+ await page.screenshot({path:resolve(out,'orb-'+theme+'-0.png')});
+ const after=await core.evaluate(el=>{el.getAnimations()[0].currentTime=2400;return getComputedStyle(el).transform;});expect(after).not.toBe(before);
+ await page.screenshot({path:resolve(out,'orb-'+theme+'-2400.png')});
+ const original=await core.evaluate(el=>getComputedStyle(el).backgroundImage);
+ await page.evaluate(()=>document.documentElement.style.setProperty('--accent','#815ac0'));
+ expect(await core.evaluate(el=>getComputedStyle(el).backgroundImage)).not.toBe(original);
+ await page.screenshot({path:resolve(out,'orb-'+theme+'-violet.png')});
+ await page.evaluate(()=>document.documentElement.dataset.reduceMotion='true');await expect(core).toHaveCSS('animation-name','none');
+ await visual.evaluate(el=>(el as HTMLElement).style.setProperty('--voice-energy','1'));await expect(visual).toHaveCSS('transform','none');
+ await page.evaluate(()=>document.documentElement.dataset.reduceMotion='false');await expect(core).toHaveCSS('animation-name','voice-drift');
+ await page.emulateMedia({reducedMotion:'reduce'});await expect(core).toHaveCSS('animation-name','none');
+ await page.keyboard.press('Escape');expect(await page.evaluate(()=>(window as any).micTest.requests)).toBe(0);
+});
+
+for (const preference of ['motion','system-reduced','app-reduced'] as const) test(`quick text and voice wait for native geometry and preserve work: ${preference}`,async({page})=>{
+ await page.addInitScript(()=>{
+  const state={mode:'compact',shortcut:'',registered:false};
+  (window as any).layoutRequests=[];
+  Object.assign(window,{electron:{isDesktop:true,getSystemTheme:async()=>'light',onThemeChange:()=>()=>{},getCommandWindow:async()=>state,onCommandWindow:()=>()=>{},
+   setCommandLayout:async(layout:string,motion:unknown)=>{
+    (window as any).layoutRequests.push({layout,motion});
+    if ((window as any).holdLayout) await new Promise(resolve=>{(window as any).finishLayout=resolve;});
+    return state;
+   }
+  }});
+ });
+ await microphoneFixture(page);await page.setViewportSize({width:680,height:480});
+ if(preference==='system-reduced')await page.emulateMedia({reducedMotion:'reduce'});
+ if(preference==='app-reduced')await page.evaluate(()=>{document.documentElement.dataset.reduceMotion='true';});
+ const content=await page.locator('.message-body').allTextContents();
+ await page.evaluate(()=>{(window as any).holdLayout=true;});
+ await page.getByRole('button',{name:'Talk',exact:true}).click();
+ await expect(page.locator('html')).toHaveAttribute('data-window-transition','resizing');
+ const surface=page.locator('.talk-surface');
+ await expect(surface).toHaveCSS('opacity','0');
+ await expect(page.locator('.app-shell')).toBeHidden();
+ expect(await page.evaluate(()=>(window as any).layoutRequests.at(-1))).toEqual({layout:'voice',motion:{prepared:true,reduceMotion:preference!=='motion'}});
+ await page.setViewportSize({width:420,height:540});
+ await page.evaluate(()=>{(window as any).finishLayout();(window as any).micTest.allow();});
+ await expect(page.locator('html')).not.toHaveAttribute('data-window-transition',/./);
+ await expect(surface).toHaveCSS('opacity','1');
+ await expect(surface.getByRole('button',{name:'Stop Talk',exact:true})).toBeInViewport();
+ await expect(surface.locator('[role=status]').first()).toHaveText('Listening');
+ await page.getByRole('button',{name:'Stop Talk',exact:true}).click();
+ // Capture stops before native resizing finishes, not after a decorative fade.
+ await expect.poll(()=>page.evaluate(()=>(window as any).micTest.stops)).toBeGreaterThan(0);
+ await expect(page.locator('html')).toHaveAttribute('data-window-transition','resizing');
+ await expect(surface).toHaveCount(0);
+ await expect(page.locator('.app-shell')).toHaveCSS('opacity','0');
+ await page.setViewportSize({width:680,height:480});
+ await page.evaluate(()=>(window as any).finishLayout());
+ await expect(page.locator('html')).not.toHaveAttribute('data-window-transition',/./);
+ await expect(page.locator('.composer textarea')).toBeInViewport();
+ expect(await page.locator('.message-body').allTextContents()).toEqual(content);
+ expect(await page.evaluate(()=>(window as any).micTest.requests)).toBe(0);
 });

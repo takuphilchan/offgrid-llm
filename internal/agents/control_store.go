@@ -16,7 +16,8 @@ kind TEXT NOT NULL CHECK(kind IN ('project','conversation','work','worker','resu
 revision INTEGER NOT NULL CHECK(revision>0), event_floor INTEGER NOT NULL DEFAULT 0,
 snapshot BLOB NOT NULL, PRIMARY KEY(workspace,actor,id))`
 
-const controlSchema = `CREATE TABLE IF NOT EXISTS agent_control_records ` + controlRecordColumns + `;
+const controlSchema = `CREATE TABLE IF NOT EXISTS agent_conversation_deletions (workspace TEXT NOT NULL, actor TEXT NOT NULL, conversation_id TEXT NOT NULL, deleted_at TEXT NOT NULL, PRIMARY KEY(workspace,actor,conversation_id));
+CREATE TABLE IF NOT EXISTS agent_control_records ` + controlRecordColumns + `;
 CREATE TABLE IF NOT EXISTS agent_conversation_folders (
 workspace TEXT NOT NULL, actor TEXT NOT NULL, conversation_id TEXT NOT NULL,
 project_id TEXT NOT NULL, reference BLOB NOT NULL,
@@ -98,7 +99,7 @@ func readControlRecord(q controlReader, scope ControlScope, id, kind string) (*c
 		return nil, ErrControlNotFound
 	}
 	r := &controlRecord{ID: id, Kind: kind}
-	err := q.QueryRow(`SELECT revision,event_floor,snapshot FROM agent_control_records WHERE workspace=? AND actor=? AND id=? AND kind=?`, scope.Workspace, scope.Actor, id, kind).Scan(&r.Revision, &r.Floor, &r.Snapshot)
+	err := q.QueryRow(`SELECT revision,event_floor,snapshot FROM agent_control_records WHERE workspace=? AND actor=? AND id=? AND kind=? AND NOT EXISTS (SELECT 1 FROM agent_conversation_deletions d WHERE d.workspace=agent_control_records.workspace AND d.actor=agent_control_records.actor AND d.conversation_id=agent_control_records.id)`, scope.Workspace, scope.Actor, id, kind).Scan(&r.Revision, &r.Floor, &r.Snapshot)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrControlNotFound
 	}

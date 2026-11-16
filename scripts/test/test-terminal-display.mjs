@@ -33,6 +33,11 @@ try{
  await expect(page.locator('#commands')).toBeHidden();
  await page.getByRole('button',{name:'Terminal display',exact:true}).click();
  await expect(page.getByRole('dialog')).toBeVisible();
+ await expect(page.getByLabel('Cursor',{exact:true})).toHaveCSS('appearance','base-select');
+ await page.getByLabel('Cursor',{exact:true}).click();
+ await page.screenshot({path:join(evidence,'cursor-menu-light.png')});
+ await page.keyboard.press('Escape');
+ await expect(page.getByRole('dialog')).toBeVisible();
  await page.getByLabel('Text size',{exact:true}).selectOption('18');
  await page.getByLabel('Line spacing',{exact:true}).selectOption('1.6');
  await page.getByLabel('Cursor',{exact:true}).selectOption('bar');

@@ -40,6 +40,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 			"memory_mb":       stats.MemoryUsedMB,
 			"memory_total_mb": stats.MemoryTotalMB,
 			"memory_percent":  stats.MemoryUsagePercent,
+			"memory_measured": stats.MemoryMeasured,
 			"disk_free_gb":    stats.DiskTotalGB - stats.DiskUsedGB,
 			"disk_total_gb":   stats.DiskTotalGB,
 			"goroutines":      stats.NumGoroutines,

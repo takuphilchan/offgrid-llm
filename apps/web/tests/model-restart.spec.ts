@@ -24,7 +24,7 @@ test('interrupted package resumes its pinned source after a real service restart
   expect(again.id).toBe(accepted.id);
   await page.addInitScript(() => { localStorage.setItem('offgrid.onboarding.complete', 'true'); localStorage.setItem('offgrid.locale', 'en'); });
   await page.goto('/ui/#/models');
-  await page.getByRole('button', { name: 'Speech recognition', exact: true }).click();
+  await page.locator('.model-category-filter').selectOption({label:'Speech recognition'});
   await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
   await page.waitForTimeout(2200);
   expect((await (await request.get(`/api/v2/models/operations/${accepted.id}`)).json()).state).toBe('interrupted');

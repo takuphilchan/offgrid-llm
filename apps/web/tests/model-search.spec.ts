@@ -30,7 +30,7 @@ test('model discovery is explicit, offers large quantizations, and downloads onl
     await route.fulfill({ json: { success: true, file_name: 'model-q8-bbb.gguf' } });
   });
   await page.goto('/ui/#/models');
-  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   const search = page.getByRole('region', { name: 'Find more models' });
   await expect(search).toBeVisible();
@@ -76,7 +76,7 @@ test('complete-model services expose explicit repair without silently downloadin
     return route.fulfill({ json: { success: true } });
   });
   await page.goto('/ui/#/models');
-  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   const search = page.getByRole('region', { name: 'Find more models' });
   await search.getByRole('searchbox').fill('vision');

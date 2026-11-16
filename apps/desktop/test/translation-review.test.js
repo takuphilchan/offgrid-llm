@@ -56,6 +56,7 @@ test('every selectable language is exported with the full contextual message inv
   const pack=reviewPack(language,actual);
   assert.equal(pack.entries.length,total,language);
   assert.ok(pack.entries.some(e=>e.namespace==='desktop/terminal'));
+  assert.equal(pack.entries.filter(e=>e.namespace==='desktop/window-controls').length,3);
   assert.ok(pack.entries.some(e=>e.namespace==='desktop/folder-trust'));
   assert.ok(pack.entries.some(e=>e.namespace==='i18n/computer-experience:copy'));
  }

@@ -54,7 +54,7 @@ func TestParserReadinessDoesNotConfusePresenceWithQualification(t *testing.T) {
 }
 
 func TestParserUnsupportedContainersNeverBecomePlainText(t *testing.T) {
-	for _, ext := range []string{".doc", ".xls", ".ppt", ".odt", ".ods", ".odp", ".eml", ".msg", ".mbox", ".png", ".jpg", ".jpeg", ".tif", ".tiff"} {
+	for _, ext := range []string{".doc", ".xls", ".ppt", ".odt", ".ods", ".odp", ".eml", ".msg", ".mbox"} {
 		result, err := NewDocumentParser().Parse([]byte("valid UTF-8 but not a supported document"), "unsupported"+ext, strings.ToUpper(ext))
 		var problem *ParseError
 		if result != nil || !errors.As(err, &problem) || problem.Code != "document_unsupported_format" {
@@ -86,13 +86,20 @@ func TestParserSourceUnitsKeepOfficeOrderAndOriginalIdentity(t *testing.T) {
 		if len(result.SourceUnits) != result.PageCount {
 			t.Fatalf("lost source units: %+v", result.SourceUnits)
 		}
-		if result.State != ExtractionComplete || len(result.Warnings) == 0 || result.Warnings[0].Code != "document_text_only" {
+		scopeWarning := false
+		for _, warning := range result.Warnings {
+			scopeWarning = scopeWarning || warning.Code == "document_text_only"
+		}
+		if result.State != ExtractionComplete || !scopeWarning {
 			t.Fatalf("missing extraction scope: %+v", result)
 		}
 		for i, unit := range result.SourceUnits {
 			revision := builtinDocumentRevision
 			if ext == ".xlsx" {
 				revision = xlsxDocumentRevision
+			}
+			if ext == ".pptx" {
+				revision = pptxDocumentRevision
 			}
 			if unit.Index != i+1 || unit.SourceSHA256 != hash || unit.ExtractorRevision != revision {
 				t.Fatalf("incorrect source identity: %+v", unit)

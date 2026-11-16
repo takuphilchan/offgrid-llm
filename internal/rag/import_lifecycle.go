@@ -43,7 +43,7 @@ func (s *SQLiteStore) finishImportFailure(lease importLease, state, code string)
 func (s *SQLiteStore) stopImport(owner, id string, remove bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, err := importAccess(s.db, owner, id, true); err != nil {
+	if _, err := importAccessPolicy(s.db, owner, id, true, false); err != nil {
 		return err
 	}
 	var result sql.Result
@@ -119,7 +119,11 @@ func completeImport(tx *sql.Tx, doc *Document) error {
 	if n != 1 {
 		return ErrImportConflict
 	}
-	return nil
+	if _, err := tx.Exec(`UPDATE document_import_revisions SET history=NULL WHERE import_id=?`, lease.id); err != nil {
+		return err
+	}
+	_, err = tx.Exec(`DELETE FROM document_import_ocr_pages WHERE import_id=?`, lease.id)
+	return err
 }
 
 func (s *SQLiteStore) linkExistingImport(doc *Document, original *OriginalSource) error {

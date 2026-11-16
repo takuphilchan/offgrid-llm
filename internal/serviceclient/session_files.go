@@ -28,6 +28,28 @@ func sessionFilesPath(name string) string {
 // UploadSessionFile snapshots explicitly supplied bytes, uses only the selected
 // authenticated service, and never retries a mutation after an uncertain reply.
 func (c *Client) UploadSessionFile(ctx context.Context, name, filename string, data []byte) (sessions.Attachment, error) {
+	return c.uploadSessionFile(ctx, name, filename, data, "")
+}
+
+func (c *Client) UploadSessionFileWithOCRLanguage(ctx context.Context, name, filename string, data []byte, language string) (sessions.Attachment, error) {
+	if language == "" {
+		return sessions.Attachment{}, &Error{Code: "document_ocr_language_unavailable", Message: "Choose an explicit OCR language."}
+	}
+	identity, err := c.Identity(ctx)
+	if err != nil {
+		return sessions.Attachment{}, err
+	}
+	capability := "document-ocr-language-selection-v1"
+	if strings.Contains(language, "+") {
+		capability = "document-ocr-mixed-languages-v1"
+	}
+	if !identity.Supports(capability) {
+		return sessions.Attachment{}, &Error{Code: "upgrade_required", Message: "Upgrade the service before selecting an OCR language."}
+	}
+	return c.uploadSessionFile(ctx, name, filename, data, language)
+}
+
+func (c *Client) uploadSessionFile(ctx context.Context, name, filename string, data []byte, language string) (sessions.Attachment, error) {
 	if name == "" || filename == "" || len(filename) > 255 || strings.ContainsAny(filename, `/\`) || strings.IndexFunc(filename, unicode.IsControl) >= 0 || len(data) == 0 || int64(len(data)) > sessions.MaxAttachmentBytes {
 		return sessions.Attachment{}, &Error{Code: "attachment_limit", Message: "Choose a plain filename and a nonempty file of at most 50 MiB."}
 	}
@@ -47,7 +69,11 @@ func (c *Client) UploadSessionFile(ctx context.Context, name, filename string, d
 	transport := *c.http
 	transport.Timeout = 2 * time.Minute
 	client.http = &transport
-	response, err := client.Do(ctx, http.MethodPost, sessionFilesPath(name), form.FormDataContentType(), body)
+	endpoint := sessionFilesPath(name)
+	if language != "" {
+		endpoint += "?" + url.Values{"ocr_language": {language}}.Encode()
+	}
+	response, err := client.Do(ctx, http.MethodPost, endpoint, form.FormDataContentType(), body)
 	if err != nil {
 		return sessions.Attachment{}, err
 	}
@@ -60,6 +86,9 @@ func (c *Client) UploadSessionFile(ctx context.Context, name, filename string, d
 	}
 	digest := sha256.Sum256(data)
 	a := result.Attachment
+	if language != "" && a.OCRLanguage != language {
+		return sessions.Attachment{}, &Error{Code: "invalid_response", Message: "The OCR selection was not confirmed. Inspect the saved attachment before retrying."}
+	}
 	_, revisionErr := hex.DecodeString(a.Revision)
 	if !validAttachmentID(a.ID) || a.Name != filename || a.Bytes != int64(len(data)) || a.SHA256 != hex.EncodeToString(digest[:]) || a.Status != "ready" || len(a.Revision) != 64 || revisionErr != nil {
 		return sessions.Attachment{}, &Error{Code: "invalid_response", Message: "The uploaded source did not return matching identity and readiness. Inspect saved attachments before retrying."}

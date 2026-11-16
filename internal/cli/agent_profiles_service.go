@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,6 +24,8 @@ const agentProfilesHelp = `Reusable agents on the connected service:
   offgrid agent profiles create FILE
   offgrid agent profiles update ID REVISION FILE
   offgrid agent profiles archive ID REVISION
+  offgrid agent profiles deletion-review ID
+  offgrid agent profiles delete ID REVISION REVIEW_TOKEN
 
 FILE contains ProfileSettings JSON; use - to read stdin. No credentials belong
 in instructions. Updates/archive require the revision you reviewed; conflicts
@@ -90,7 +93,19 @@ func RunProfileServiceWithOpen(ctx context.Context, client *serviceclient.Client
 		if args[0] == "resources" {
 			path += "/resources"
 		}
-	case "show", "effective":
+	case "delete":
+		if len(args) != 4 || !ValidProfileID(args[1]) {
+			return Usage("agent profiles delete ID REVISION REVIEW_TOKEN")
+		}
+		revision, err := strconv.Atoi(args[2])
+		token, tokenErr := hex.DecodeString(args[3])
+		if err != nil || revision < 1 || tokenErr != nil || len(token) != 32 {
+			return Usage("Use the revision and token from deletion-review; deletion is permanent")
+		}
+		method, requestedID = http.MethodDelete, args[1]
+		path += "/" + url.PathEscape(requestedID)
+		body = map[string]any{"expected_revision": revision, "review_token": args[3]}
+	case "show", "effective", "deletion-review":
 		if len(args) != 2 || !ValidProfileID(args[1]) {
 			return Usage("agent profiles %s ID", args[0])
 		}
@@ -98,6 +113,9 @@ func RunProfileServiceWithOpen(ctx context.Context, client *serviceclient.Client
 		path += "/" + url.PathEscape(requestedID)
 		if args[0] == "effective" {
 			path += "/effective"
+		}
+		if args[0] == "deletion-review" {
+			path += "/deletion"
 		}
 	case "create", "update", "archive":
 		var revision int
@@ -146,11 +164,16 @@ func RunProfileServiceWithOpen(ctx context.Context, client *serviceclient.Client
 	if err := client.RequireCapability(ctx, "agent-profiles-v1"); err != nil {
 		return err
 	}
+	if args[0] == "delete" || args[0] == "deletion-review" {
+		if err := client.RequireCapability(ctx, "agent-profile-deletion-v1"); err != nil {
+			return err
+		}
+	}
 	var result json.RawMessage
 	if err := client.JSON(ctx, method, path, body, &result); err != nil {
 		return err
 	}
-	if jsonMode || args[0] == "effective" || args[0] == "resources" {
+	if jsonMode || args[0] == "effective" || args[0] == "resources" || args[0] == "deletion-review" || args[0] == "delete" {
 		// JSON encoding escapes terminal controls even in remote metadata.
 		return json.NewEncoder(stdout).Encode(result)
 	}

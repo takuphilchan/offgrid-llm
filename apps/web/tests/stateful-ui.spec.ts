@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+test.skip(!process.env.OFFGRID_E2E_URL,'Requires the disposable service wrapper, not the Vite-only fixture server.');
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('offgrid.onboarding.complete', 'true'));
 });
@@ -27,7 +29,7 @@ test('saved conversations survive reload and can be deleted', async ({ page, req
 
 test('model catalog renders real actionable entries', async ({ page }) => {
   await page.goto('/ui/#/models');
-  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   await expect(page.locator('.catalog-card').first()).toBeVisible();
   await expect(page.locator('.catalog-card .primary-button').first()).toBeEnabled();
   await expect(page.locator('.catalog-card').first()).toContainText(/Q\d/i);

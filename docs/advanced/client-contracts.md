@@ -562,3 +562,45 @@ Invalid persisted sequences and uncertain write failures fail closed. This is
 hardening of the existing run log. Agent job replay now separately uses the same
 SQLite transaction as the task snapshot, with bounded metadata compaction and
 explicit snapshot recovery. The old run log is not its authoritative replay store.
+
+
+## Canonical source input (local preview, 2026-11-15)
+
+A service advertising `conversation-source-inputs-v1` accepts attachments,
+images and Knowledge selection on the existing canonical inbox. Submit one
+`ConversationInputCommand`; keep its request identity when an acknowledgment
+is lost. `source_session` must map to the same canonical import. Every attachment
+contains its immutable `id` and `revision`; optional `page` is the original
+1-based page index, with zero meaning normal document retrieval. An unavailable
+page or revision is rejected rather than broadening the source scope.
+
+`knowledge_documents` narrows current authorized sources. `use_knowledge`
+requests current permitted retrieval. Neither field expands profile permissions.
+Images use the existing bounded SessionImage contract and installed vision
+capability; attaching a PDF does not interpret its figures automatically.
+Answers to pending questions and corrections cannot change sources.
+
+Immutable attachment upload remains available after canonical migration, while
+legacy transcript writes and generation remain blocked. Preparation and delivery
+recheck source access. Evidence selections persist with the run and project into
+compatibility reads. Request admission is not proof that inference succeeded.
+
+CLI: `offgrid session send NAME --attachment ID --page 8 --request-id ID QUESTION`.
+Use `--file PATH` to upload, `--image PATH` for an image, `--rag` for permitted
+Knowledge, or repeated `--knowledge-document ID` for explicit selection. Page
+scope requires exactly one file and a canonical conversation. Older services
+retain text-only admission and reject source operations with a capability error.
+Python's `conversations.submit_input` sends the same payload without retrying
+writes; generated TypeScript uses the additive OpenAPI schema.
+
+Services advertising `conversation-source-scopes-v1` additionally accept
+`knowledge_selections`: up to 16 entries with `document_id`, immutable extraction
+`revision`, and either a positive original `page` or 1–32 unique `block_ids`.
+These exact selections cannot be combined with `knowledge_documents` or
+`use_knowledge`. They include linked headers and exceptions, use retained text
+without requiring embeddings, and fail with `knowledge_scope_unavailable` when
+the selected revision, linked evidence or bounded context cannot be supplied.
+They never fall back to a broader search. Collection/profile access is checked
+at admission, preparation and delivery; historical revisions retain their source
+identities and remain subject to current access. CLI accepts repeatable
+`--knowledge-selection` JSON; Python uses the identical `submit_input` payload.

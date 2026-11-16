@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/takuphilchan/offgrid-llm/internal/document"
+	"github.com/takuphilchan/offgrid-llm/internal/rag"
 	"net/http"
 	"net/url"
 	"time"
@@ -12,17 +14,19 @@ import (
 )
 
 type DocumentPreview struct {
-	Name      string `json:"name"`
-	SHA256    string `json:"sha256"`
-	State     string `json:"state"`
-	ErrorCode string `json:"error_code"`
+	Evidence  *document.Coverage `json:"evidence,omitempty"`
+	Name      string             `json:"name"`
+	SHA256    string             `json:"sha256"`
+	State     string             `json:"state"`
+	ErrorCode string             `json:"error_code"`
 	Units     []struct {
-		Kind   string `json:"kind"`
-		Index  int    `json:"index"`
-		Name   string `json:"name"`
-		Text   string `json:"text"`
-		State  string `json:"state"`
-		SHA256 string `json:"source_sha256"`
+		Kind          string             `json:"kind"`
+		Index         int                `json:"index"`
+		Name          string             `json:"name"`
+		Text          string             `json:"text"`
+		State         string             `json:"state"`
+		SHA256        string             `json:"source_sha256"`
+		ImageGeometry *rag.ImageGeometry `json:"image_geometry,omitempty"`
 	} `json:"units"`
 }
 
@@ -38,7 +42,11 @@ func (c *Client) PreviewSessionFile(ctx context.Context, name string, source ses
 	transport := *c.http
 	transport.Timeout = 2 * time.Minute
 	client.http = &transport
-	err := client.JSON(bounded, http.MethodGet, sessionFilesPath(name)+"/"+source.ID+"/preview?sha256="+url.QueryEscape(source.SHA256), nil, &preview)
+	query := url.Values{"sha256": {source.SHA256}}
+	if source.Revision != "" {
+		query.Set("revision", source.Revision)
+	}
+	err := client.JSON(bounded, http.MethodGet, sessionFilesPath(name)+"/"+source.ID+"/preview?"+query.Encode(), nil, &preview)
 	if err != nil {
 		return DocumentPreview{}, err
 	}
@@ -48,6 +56,9 @@ func (c *Client) PreviewSessionFile(ctx context.Context, name string, source ses
 	for _, unit := range preview.Units {
 		if unit.SHA256 != source.SHA256 || unit.Index < 1 {
 			return DocumentPreview{}, fmt.Errorf("invalid preview source unit")
+		}
+		if g := unit.ImageGeometry; g != nil && (g.Width < 1 || g.Height < 1 || g.Width > 8192 || g.Height > 8192 || int64(g.Width)*int64(g.Height) > 16000000 || g.Orientation < 1 || g.Orientation > 8) {
+			return DocumentPreview{}, fmt.Errorf("invalid preview image geometry")
 		}
 	}
 	return preview, nil

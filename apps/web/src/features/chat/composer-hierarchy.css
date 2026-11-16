@@ -2,12 +2,12 @@
   /* The resting composer is a message bar. Setup lives in labelled utilities,
      while attachments and current authority remain part of the visible draft. */
   .chat-page .composer.composer-compact {
-    display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center; gap: 8px; padding: 10px; border-radius: 26px;
-    border-color: var(--line); box-shadow: 0 3px 16px rgb(0 0 0 / .04);
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center; gap: 8px; padding: 12px; border-radius: 24px;
+    border-color: var(--separator); box-shadow: none;
   }
-  .composer.composer-compact > .composer-input { grid-column: 2; grid-row: 1; min-width: 0; }
-  .composer.composer-compact .composer-input textarea { display: block; width: 100%; min-height: 40px; padding: 8px 4px; font-size: var(--type-body, 16px); }
+  .composer.composer-compact > .composer-input { grid-column: 1 / -1; grid-row: 1; min-width: 0; }
+  .composer.composer-compact .composer-input textarea { display: block; width: 100%; min-height: 48px; padding: 8px; font-size: var(--type-body, 16px); }
   /* The editor has one boundary: focus belongs to the enclosing composer,
      not a second bright rectangle inside the text area. */
   .chat-page .composer.composer-compact:has(textarea:focus-visible) { border-color: var(--muted); }
@@ -16,8 +16,14 @@
     .chat-page .composer.composer-compact:has(textarea:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; }
   }
   .composer.composer-compact .composer-footer { display: contents; }
-  .composer.composer-compact .composer-footer > .composer-utilities { grid-column: 1; grid-row: 1; flex-wrap: nowrap; gap: 2px; }
-  .composer.composer-compact .composer-footer > .composer-actions { grid-column: 3; grid-row: 1; display: flex; flex-wrap: nowrap; gap: 4px; margin: 0; }
+  .composer.composer-compact .composer-footer > .composer-utilities { grid-column: 1; grid-row: 2; flex-wrap: nowrap; gap: 2px; }
+  .composer.composer-compact .composer-footer > .composer-actions { grid-column: 2; grid-row: 2; display: flex; flex-wrap: nowrap; gap: 4px; margin: 0; min-width:0; }
+  .composer-actions .model-select,.composer-actions .composer-pinned-model { width:auto; max-width:190px; }
+  .composer-actions .model-select-trigger { padding:6px 8px; height:36px; font-size:var(--type-meta); }
+  .composer.composer-compact .composer-actions > .composer-pinned-model { width:auto; height:36px; max-width:190px; padding:6px 8px; border-radius:8px; }
+  .composer-pinned-model span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  @media(max-width:600px) { .composer-actions .model-select,.composer.composer-compact .composer-actions > .composer-pinned-model { max-width:120px; } }
+  @media(max-width:380px) { .composer-actions .model-select,.composer.composer-compact .composer-actions > .composer-pinned-model { max-width:86px; } }
   .composer.composer-compact .composer-actions > .talk-controls { display: flex; gap: 4px; }
   .composer.composer-compact .composer-actions .talk-control { width: auto; min-height: 40px; border: 0; border-radius: 999px; padding-inline: 10px; background: transparent; color: var(--muted); font-size: var(--type-meta); white-space: nowrap; }
   .composer.composer-compact .composer-actions .talk-toggle { display: inline-flex; align-items: center; justify-content: center; width: 40px; padding: 0; background: var(--text); color: var(--surface-1); }
@@ -26,9 +32,9 @@
   .composer.composer-compact .composer-actions .talk-toggle:hover:not(:disabled) { background: var(--text); color: var(--surface-1); opacity: .85; }
   .composer.composer-compact > .talk-status { grid-column: 1 / -1; padding-inline: 8px; color: var(--muted); font-size: var(--type-meta); }
   /* Files need a full-width reading area, not the narrow single-line input slot. */
-  .composer.composer-compact:has(.file-attachments, .image-attachments, .document-scan) > .composer-input { grid-column: 1 / -1; grid-row: 1; padding-inline: 6px; }
-  .composer.composer-compact:has(.file-attachments, .image-attachments, .document-scan) .composer-footer > .composer-utilities,
-  .composer.composer-compact:has(.file-attachments, .image-attachments, .document-scan) .composer-footer > .composer-actions { grid-row: 2; }
+  .composer.composer-compact:has(.file-attachments, .image-attachments, .attachment-preparing) > .composer-input { grid-column: 1 / -1; grid-row: 1; padding-inline: 6px; }
+  .composer.composer-compact:has(.file-attachments, .image-attachments, .attachment-preparing) .composer-footer > .composer-utilities,
+  .composer.composer-compact:has(.file-attachments, .image-attachments, .attachment-preparing) .composer-footer > .composer-actions { grid-row: 2; }
   .composer.composer-compact .composer-utilities > .utility-popover { flex: none; }
   .composer.composer-compact .composer-utilities > .utility-popover > button,
   .composer.composer-compact .composer-actions > button,
@@ -44,6 +50,8 @@
   .composer-attachments-menu button > svg { flex: 0 0 17px; color: var(--muted); }
   .composer-attachments-menu .saved-file-picker { border-block-start: 1px solid var(--separator); margin-block-start: 4px; padding-block-start: 4px; }
   .composer.composer-compact .composer-context { display: grid; gap: 10px; }
+  .composer-settings-link { display:flex; align-items:center; gap:8px; padding:8px 6px; font-size:var(--type-meta); color:var(--muted); text-decoration:none; border-radius:6px; }
+  .composer-settings-link:hover { background:var(--surface-2); color:var(--text); }
   .composer.composer-compact .composer-context .model-select { max-width: 100%; }
   .composer.composer-compact > .composer-active-context { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; padding-inline: 8px; color: var(--muted); font-size: var(--type-meta); }
   .composer.composer-compact > .chat-speech-controls { grid-column: 1 / -1; padding-inline: 8px; }

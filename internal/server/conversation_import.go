@@ -22,6 +22,13 @@ func (s *Server) bindCanonicalConversationGuard() {
 			return err
 		}
 		if manifest != nil {
+			deleted, err := s.agentManager.ConversationDeleted(agents.ControlScope{Workspace: s.workspaceID, Actor: actor}, manifest.ConversationID)
+			if err != nil {
+				return err
+			}
+			if deleted {
+				return sessions.ErrSessionNotFound
+			}
 			return sessions.ErrCanonicalConversation
 		}
 		return nil

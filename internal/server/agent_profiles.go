@@ -340,6 +340,8 @@ func attachProfileKnowledge(w http.ResponseWriter, r *http.Request, prompt strin
 
 func writeProfileError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, agents.ErrProfileDeleteBlocked):
+		writeJobError(w, 409, "profile_delete_blocked", "This profile has active, shared or independently retained work. Review its jobs, schedules and dependent profiles before deleting.", false)
 	case errors.Is(err, agents.ErrProfileNotFound):
 		writeJobError(w, 404, "profile_not_found", "Agent profile not found.", false)
 	case errors.Is(err, agents.ErrProfileConflict):
@@ -375,6 +377,34 @@ func (s *Server) handleAgentProfiles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	actor := s.agentActor(r)
+	if id != "" && action == "deletion" && r.Method == http.MethodGet {
+		review, err := s.agentManager.ReviewProfileDeletion(s.workspaceID, actor, id)
+		if err != nil {
+			writeProfileError(w, err)
+			return
+		}
+		writeJSON(w, 200, review)
+		return
+	}
+	if id != "" && action == "" && r.Method == http.MethodDelete {
+		var req struct {
+			ExpectedRevision int    `json:"expected_revision"`
+			ReviewToken      string `json:"review_token"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF {
+			writeProfileError(w, agents.ErrInvalidProfile)
+			return
+		}
+		review, err := s.agentManager.DeleteProfile(s.workspaceID, actor, id, req.ExpectedRevision, req.ReviewToken)
+		if err != nil {
+			writeProfileError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"id": id, "deleted": true, "jobs": review.Jobs, "memory": review.Memory})
+		return
+	}
 	if r.Method == http.MethodGet {
 		if id == "" {
 			profiles, err := s.agentManager.ListProfiles(s.workspaceID, actor, r.URL.Query().Get("archived") == "true")

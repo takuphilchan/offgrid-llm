@@ -6,13 +6,16 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 )
 
-func TestNativeDocumentTaskIntentRoutesOnlyDocumentRequests(t *testing.T) {
+func TestNativeDocumentDiscoveryDoesNotDependOnEnglishKeywords(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		prompt string
 		want   bool
 	}{
-		{name: "browser search", prompt: "Open Microsoft Edge and search for exactly climate news.", want: false},
+		{name: "browser search", prompt: "Open Microsoft Edge and search for exactly climate news.", want: true},
+		{name: "Chinese document", prompt: "创建一个文档", want: true},
+		{name: "Spanish document", prompt: "Crea un documento", want: true},
+		{name: "ordinary conversation", prompt: "Hello", want: true},
 		{name: "native document", prompt: "Open Notepad, create a blank document and type exactly hello.", want: true},
 		{name: "writer", prompt: "Open LibreOffice Writer and edit the document.", want: true},
 		{name: "empty internal stage", prompt: "", want: true},

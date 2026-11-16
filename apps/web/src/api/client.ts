@@ -4,8 +4,15 @@ import { notifyWorkChanged } from '../lib/work-changes';
 import type { components, operations } from './schema.generated';
 import { readSessionStream, type SessionEvent } from './session-stream';
 import { readAgentStream } from './agent-stream';
-import { conversationAPI } from './conversations';
 import { workflowText } from '../i18n/workflow';
+import { validateStructure, validateCorrection, validatePreview } from './document-structure';
+import { conversationAPI } from './conversations';
+import { collectionAPI } from './collections';
+import { analysisAPI } from './document-analyses';
+import { synthesisAPI } from './document-synthesis';
+import { compositionAPI } from './document-composition';
+import {readDocumentThumbnail} from './document-thumbnail';
+import {attachmentCorrectionAPI} from './attachment-corrections';
 
 export type Model = components['schemas']['Model'];
 export type DocumentImport = components['schemas']['DocumentImport'];
@@ -19,6 +26,8 @@ export type ModelResolution = components['schemas']['ModelResolution'];
 export type PackageDiscovery = components['schemas']['PackageDiscovery'];
 export type ModelOperation = components['schemas']['ModelOperation'];
 export type Document = components['schemas']['Document'];
+export type DocumentStructurePage = components['schemas']['DocumentStructurePage'];
+export type DocumentBlock = components['schemas']['DocumentBlock'];
 export type ChatMessage = components['schemas']['ChatMessage'];
 export type SessionMessage = components['schemas']['SessionMessage'];
 export type DocumentCitation = components['schemas']['KnowledgeSourceLocator'] & { content_hash: string };
@@ -122,6 +131,10 @@ async function request<T>(path: string, init?: RequestInit, timeout = 30_000, de
 }
 
 export const api = {
+  collections: collectionAPI(request),
+  analyses: analysisAPI(request),
+  synthesis: synthesisAPI(request),
+  composition: compositionAPI(request),
   conversations: conversationAPI(request),
   runtimeReadiness: (signal?: AbortSignal) => request<components['schemas']['InferenceRuntimeReadiness']>('/api/v2/runtime', { signal }),
   prepareRuntime: (signal: AbortSignal) => request<components['schemas']['InferenceRuntimeReadiness']>('/api/v2/runtime', { method: 'POST', body: '{}', signal }, 310_000),
@@ -182,20 +195,35 @@ export const api = {
   },
   session: (name: string) => request<ChatSession>(`/v1/sessions/${encodeURIComponent(name)}`),
   sessionAttachments: (name: string, signal?: AbortSignal) => request<{ attachments: SessionAttachment[] }>(`/v1/sessions/${encodeURIComponent(name)}/attachments`, { signal }),
-  uploadSessionAttachment: (name: string, file: File, signal?: AbortSignal) => {
+  uploadSessionAttachment: async (name: string, file: File, signal?: AbortSignal, language?: string) => {
+    if(language){const identity=await api.systemIdentity(signal);if(!identity.capabilities?.includes(language.includes('+')?'document-ocr-mixed-languages-v1':'document-ocr-language-selection-v1'))throw new APIError(clientMessage('fileUpgrade'),409);}
     const form = new FormData(); form.append('file', file, file.name);
-    return request<components['schemas']['SessionAttachmentResult']>(`/v1/sessions/${encodeURIComponent(name)}/attachments`, { method: 'POST', body: form, signal }, 120_000);
+    const result=await request<components['schemas']['SessionAttachmentResult']>(`/v1/sessions/${encodeURIComponent(name)}/attachments${language?'?'+new URLSearchParams({ocr_language:language}):''}`, { method: 'POST', body: form, signal }, 120_000);
+    if(language&&result.attachment?.ocr_language!==language)throw new APIError(clientMessage('response'),502);
+    return result;
   },
   prepareSessionAttachment: (name: string, id: string, signal?: AbortSignal, textOnly = false) => request<components['schemas']['SessionAttachmentResult']>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}/prepare${textOnly ? '?text_only=true' : ''}`, { method: 'POST', signal }, 120_000),
-  documentPreview: (path: string, signal: AbortSignal) => request<DocumentPreview>(path, { signal }, 120_000),
-  documentPage: (path: string, signal: AbortSignal) => request<Blob>(path, { signal }, 120_000, response => response.blob()),
+  documentPreview: async (path: string, signal: AbortSignal) => validatePreview(await request<DocumentPreview>(path, { signal }, 120_000)),
+  documentThumbnail: (path:string,sha:string,signal:AbortSignal)=>request<Blob>(path,{signal},120_000,response=>readDocumentThumbnail(response,sha)),
+  documentPage: (path: string, signal: AbortSignal) => request(path, { signal }, 120_000, async response => {
+    const sourceSHA256=response.headers.get('X-OffGrid-Source-SHA256');
+    const expected=new URL(path,window.location.href).searchParams.get('sha256');
+    if(sourceSHA256&&sourceSHA256!==expected)throw Error(clientMessage('response'));
+    return {blob:await response.blob(),sourceVerified:!!expected&&sourceSHA256===expected};
+  }),
   deleteSessionAttachment: (name: string, id: string) => request<{ removed: boolean }>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   sessionAttachmentOriginal: (name: string, id: string, signal?: AbortSignal) => request<Blob>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}/original`, { signal }, 120_000, response => response.blob()),
   sessionAttachmentPassage: (name: string, id: string, revision: string, start: number, end: number, signal: AbortSignal) => request<components['schemas']['AttachmentPassage']>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}/passage?${new URLSearchParams({revision, start: String(start), end: String(end)})}`, { signal }),
+  ...attachmentCorrectionAPI(request),
+  sessionAttachmentStructure: async (name: string, id: string, revision: string, extraction: string, unit: string, offset: number, signal: AbortSignal, navigationOffset = 0, corrections = false) => {
+    const value = await request<DocumentStructurePage>(`/v1/sessions/${encodeURIComponent(name)}/attachments/${encodeURIComponent(id)}/structure?${new URLSearchParams({revision, unit, offset: String(offset), limit: '100', navigation_offset: String(navigationOffset), ...(corrections?{corrections:'true'}:{})})}`, {signal});
+    if(corrections&&value.can_correct&&value.attachment_revision!==revision)throw Error(clientMessage('response'));
+    return validateStructure(value, id, extraction, offset, !corrections, navigationOffset);
+  },
   createSession: (name: string, modelID: string, signal?: AbortSignal) => request<ChatSession>('/v1/sessions', {
     method: 'POST', signal, body: JSON.stringify({ name, model_id: modelID })
   }),
-  deleteSession: (name: string, work?: 'retain' | 'stop') => request<{ success: boolean; work_retained?: boolean }>(`/v1/sessions/${encodeURIComponent(name)}${work ? `?work=${work}` : ''}`, { method: 'DELETE' }),
+  deleteSession: (name: string, work?: 'retain' | 'stop', canonical?: {id: string; revision: number}) => request<{ success: boolean; work_retained?: boolean }>(`/v1/sessions/${encodeURIComponent(name)}?${new URLSearchParams({...work?{work}:{},...canonical?{canonical_id:canonical.id,revision:String(canonical.revision)}:{}})}`, { method: 'DELETE' }),
   generateSession: (name: string, content: string, modelID: string, useKnowledgeBase: boolean, signal?: AbortSignal) => request<{ session: ChatSession; message: SessionMessage }>(`/v1/sessions/${encodeURIComponent(name)}/generate`, {
     method: 'POST', signal, body: JSON.stringify({ content, model_id: modelID, use_knowledge_base: useKnowledgeBase })
   }),
@@ -211,8 +239,8 @@ export const api = {
     return request<LinkedAgentTurn>(`/v1/sessions/${encodeURIComponent(name)}/generate`, { method: 'POST', signal, body: JSON.stringify(data) });
   },
   recoverAgentTurn: (name: string, id: string) => request<LinkedAgentTurn>(`/v1/sessions/${encodeURIComponent(name)}/turn/recover`, { method: 'POST', body: JSON.stringify({id}) }),
-  agentProfiles: async (signal?: AbortSignal) => {
-    const result = await request<{profiles: AgentProfile[] | null}>('/api/v2/agent-profiles', {signal});
+  agentProfiles: async (signal?: AbortSignal, archived=false) => {
+    const result = await request<{profiles: AgentProfile[] | null}>('/api/v2/agent-profiles'+(archived?'?archived=true':''), {signal});
     return result.profiles ?? [];
   },
   agentProfile: (id: string, revision?: number, signal?: AbortSignal) => request<AgentProfile>(`/api/v2/agent-profiles/${encodeURIComponent(id)}${revision ? `?revision=${revision}` : ''}`, {signal}),
@@ -221,6 +249,8 @@ export const api = {
   createAgentProfile: (settings: AgentProfileSettings) => request<AgentProfile>('/api/v2/agent-profiles', {method:'POST',body:JSON.stringify({settings})}),
   updateAgentProfile: (id: string, expected_revision: number, settings: AgentProfileSettings) => request<AgentProfile>(`/api/v2/agent-profiles/${encodeURIComponent(id)}`, {method:'PUT',body:JSON.stringify({expected_revision,settings})}),
   archiveAgentProfile: (id: string, expected_revision: number) => request<{id:string; archived:true}>(`/api/v2/agent-profiles/${encodeURIComponent(id)}/archive`, {method:'POST',body:JSON.stringify({expected_revision})}),
+  reviewProfileDeletion: (id:string,signal?:AbortSignal) => request<components['schemas']['AgentProfileDeletionReview']>(`/api/v2/agent-profiles/${encodeURIComponent(id)}/deletion`,{signal}),
+  deleteAgentProfile: (id:string,expected_revision:number,review_token:string) => request<{id:string;deleted:true}>(`/api/v2/agent-profiles/${encodeURIComponent(id)}`,{method:'DELETE',body:JSON.stringify({expected_revision,review_token})}),
   agentSchedules: (signal?:AbortSignal)=>request<{schedules:AgentSchedule[]}>('/api/v2/agent-schedules',{signal}),
   previewAgentSchedule: (calendar:components['schemas']['AgentCalendar'],signal?:AbortSignal)=>request<components['schemas']['AgentCalendarPreview']>(`/api/v2/agent-schedules/preview?${new URLSearchParams({zone:calendar.zone,hour:String(calendar.hour),minute:String(calendar.minute),weekdays:calendar.weekdays.join(',')})}`,{signal}),
   agentScheduleOccurrences: (id:string,signal?:AbortSignal)=>request<{occurrences:AgentScheduleOccurrence[]}>(`/api/v2/agent-schedules/${encodeURIComponent(id)}/occurrences`,{signal}),
@@ -284,8 +314,8 @@ export const api = {
     return { ...result, documents: Array.isArray(result.documents) ? result.documents : [] };
   },
   ragStatus: (signal?: AbortSignal) => request<RAGStatus>('/v1/rag/status', { signal }),
-  importSessionAttachment: (session: string, file: SessionAttachment, signal?: AbortSignal) => request<DocumentImport>('/v1/documents/imports', { method: 'POST', body: JSON.stringify({ attachment: { session, id: file.id, sha256: file.sha256 } }), signal }),
   ocrLanguages: (signal?: AbortSignal) => request<components['schemas']['OCRLanguageReadiness']>('/v1/documents/ocr-languages', { signal }),
+  chatOCRLanguages: (signal?: AbortSignal) => request<components['schemas']['OCRLanguageReadiness']>('/v1/document-ocr-languages', { signal }),
   importOCRLanguage: (language: string, file: File, signal?: AbortSignal) => request<components['schemas']['OCRLanguageReadiness']>(`/v1/documents/ocr-languages?language=${encodeURIComponent(language)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file, signal }, 60_000),
   enableRAG: (embeddingModel: string) => request<{ success: boolean; message: string }>('/v1/rag/enable', {
     method: 'POST', body: JSON.stringify({ embedding_model: embeddingModel })
@@ -416,6 +446,8 @@ export const api = {
   deleteDocument: (id: string) => request<{ success: boolean }>(`/v1/documents/delete?id=${encodeURIComponent(id)}`, { method:'DELETE' }),
   documentRetention: async (id: string) => validateRetention(await request<unknown>(`/v1/documents/retention?id=${encodeURIComponent(id)}`)),
   setDocumentRetention: async (id: string, policy: components['schemas']['DocumentRetention']) => validateRetention(await request<unknown>(`/v1/documents/retention?id=${encodeURIComponent(id)}`, {method:'PUT',body:JSON.stringify(policy)}), policy),
+  documentStructure: async (id: string, revision = '', unit = '', offset = 0, signal?: AbortSignal, relationshipOffset = 0, navigationOffset = 0) => validateStructure(await request<DocumentStructurePage>(`/v1/documents/structure?${new URLSearchParams({ id, revision, unit, offset: String(offset), limit: '100', relationship_offset: String(relationshipOffset), navigation_offset: String(navigationOffset) })}`, { signal }), id, revision, offset, false, navigationOffset),
+  correctDocument: async (document_id: string, expected_revision: string, edits: { block_id: string; expected_text_sha256: string; text: string }[]) => validateCorrection(await request<{ success: boolean; document: Document }>('/v1/documents/corrections', { method: 'POST', body: JSON.stringify({ document_id, expected_revision, edits }) }, 120_000), document_id, expected_revision),
   documentSource: (id: string, citation?: DocumentCitation, signal?: AbortSignal) => {
     const query = new URLSearchParams({ id });
     if (citation) for (const key of ['start_byte', 'end_byte', 'source_sha256', 'extractor_revision', 'content_hash'] as const) query.set(key, String(citation[key]));

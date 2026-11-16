@@ -4,6 +4,173 @@ Let people start ordinary conversations and governed tasks without navigating se
 
 ## ADDED Requirements
 
+### Requirement: Continuous workspace startup
+The desktop SHALL retain a consistent local startup surface until the initial workspace is usable or an actionable recovery screen is ready. Startup SHALL report real stages and elapsed time, with gentle brand motion that respects both system and application reduced-motion preferences.
+
+#### Scenario: Service connects before Chat is ready
+- **WHEN** the service is connected but model discovery, history, capability discovery or selected-conversation restoration is pending
+- **THEN** the loading surface remains visible and the underlying workspace is unavailable to keyboard and pointer interaction
+- **AND** it is removed only after these reads settle and the usable workspace or its recovery state has rendered
+- **AND** active generation and later background refreshes do not re-enter startup
+
+#### Scenario: Startup dependency fails
+- **WHEN** an initial read fails or the application bundle does not initialize
+- **THEN** the user receives an actionable recovery state or a local reload control
+- **AND** elapsed time and status remain available without claiming successful readiness
+
+#### Scenario: Welcoming startup feedback
+- **WHEN** startup remains in progress
+- **THEN** a larger animated OffGrid mark and gently changing welcome messages replace the small spinner and static introductory text
+- **AND** the messages use the selected interface language and remain separate from actual loading status
+- **AND** reduced motion disables movement and fades while keeping textual updates, and hidden windows or recovery suspend the rotation
+
+#### Scenario: Scrolling a focused transcript
+- **WHEN** a user scrolls with a pointer, touch or the Latest action
+- **THEN** no focus border is drawn around a message
+- **AND** keyboard entry to the transcript retains a visible focus indicator on the scroll region
+
+### Requirement: Direct setup destinations and consistent controls
+Models SHALL be directly accessible in the primary sidebar. Installed inventory,
+curated discovery and explicit online search SHALL use stable visible navigation
+across model categories without initiating transfers or searches on navigation.
+Settings SHALL use compact section navigation, preserve section deep links and
+search, and use shared themed dropdowns with keyboard and RTL support.
+
+#### Scenario: Find models and return to a setting
+- **WHEN** a user opens Models from the sidebar and switches inventory, discovery or search
+- **THEN** type and filter context remain explicit and downloads require the existing review action
+- **AND** typing a repository search does not send it until requested
+- **WHEN** a user selects a Settings section and reloads or navigates back
+- **THEN** the URL restores that section and its existing saved preferences
+
+#### Scenario: Themed dropdowns
+- **WHEN** a user opens a dropdown in a supported desktop host
+- **THEN** options, selection, keyboard focus and disabled states use the shared theme
+- **AND** RTL and constrained viewports retain usable selection controls
+- **AND** hosts without customizable-select support retain native selection behavior
+
+### Requirement: One desktop agent with compact and full presentations
+The desktop SHALL expose a configurable global shortcut and tray entry for a
+compact request surface using the same authenticated conversation, draft and
+saved work as the full workspace and CLI. Presentation changes SHALL NOT create
+a second executor, duplicate a request, confer permissions or start capture.
+Settings and source inspection SHALL remain reachable in the full workspace.
+
+#### Scenario: Summon, work and expand
+- **WHEN** a user summons OffGrid while the full window is hidden
+- **THEN** the compact input accepts text and explicit voice activation without requiring the full workspace to remain visible
+- **AND** expanding preserves the active draft, work identity and full-window geometry
+- **AND** the compact presentation grows for actual work or voice rather than showing all configuration controls at rest
+
+#### Scenario: Bounded quick access with visible model selection
+- **WHEN** Quick Access is opened from a maximized full workspace
+- **THEN** it uses bounded input geometry and cannot be maximized or freely resized
+- **AND** the current model is visible beside input actions, with pinned-profile restrictions retained
+- **AND** opening a model or attachment menu temporarily provides enough room to use it
+- **AND** expanding restores full-window geometry and native resizing without losing the draft
+
+#### Scenario: Interchangeable voice and text views
+- **WHEN** Talk is explicitly started in Quick Access or the full workspace
+- **THEN** one voice surface replaces the text view without a visible chat background, dimmed card or modal outline
+- **AND** text navigation and composition are hidden and inert while voice is active
+- **AND** leaving voice restores the same conversation, draft and focus without replaying or submitting audio
+- **AND** Stop and localized status remain visible at small sizes and reduced motion disables decorative movement
+
+#### Scenario: Dismiss, stop and quit have distinct meanings
+- **WHEN** the compact surface is dismissed or its shortcut is toggled
+- **THEN** microphone capture and playback end and drafts are retained
+- **AND** dismissal does not cancel accepted work or quit the service
+- **AND** explicit Stop and Quit retain their existing cancellation and shutdown contracts
+
+#### Scenario: Change presentation without exposing intermediate layouts
+- **WHEN** a user switches between quick text and voice or expands to the full workspace
+- **THEN** outgoing content fades before native resizing and the new view appears after its final geometry is painted
+- **AND** rapid reversal or dismissal cancels stale visual callbacks without resubmitting work, replaying audio or losing the draft
+- **AND** system and application reduced motion bypass native interpolation and decorative transitions
+- **AND** an unavailable renderer acknowledgment cannot leave the native window permanently waiting
+
+#### Scenario: Shortcut collision or unavailable service
+- **WHEN** the selected shortcut cannot be registered or the service is not ready
+- **THEN** the application reports the unavailable shortcut with a working tray fallback or shows the existing service recovery surface
+- **AND** it does not take over another application's shortcut, conceal setup errors or claim readiness
+
+### Requirement: Focused voice surface and purposeful motion
+Explicit Talk activation SHALL open a focused, keyboard-accessible surface with
+localized capture, permission, processing, playback and error states. Visual
+input energy SHALL derive from microphone measurements. Processing motion SHALL
+represent an activity state, never fabricated progress or hearing before consent.
+Reduced motion SHALL preserve all controls, status and cancellation behaviour.
+
+#### Scenario: Permission, utterance and response
+- **WHEN** a user starts Talk and microphone permission is pending
+- **THEN** the surface distinguishes pending permission from listening and remains cancellable
+- **AND** one completed utterance enters the same saved work without a second concurrent recorder
+- **AND** capture pauses during playback and resumes only while Talk remains active
+
+#### Scenario: Escape or hidden surface
+- **WHEN** the user presses Escape in Talk or hides OffGrid during permission or transcription
+- **THEN** capture is cancelled, late permission releases tracks and late transcription cannot submit a request
+- **AND** returning does not reopen the microphone automatically
+
+### Requirement: Configuration is discoverable without occupying the composer
+Models, voice profiles, response limits and desktop shortcut settings SHALL be
+available in Settings with searchable destinations. The composer SHALL retain
+only task context, attachments, input and immediate execution/playback actions.
+The model library SHALL expose an explicit browse/back journey and a compact
+category selector with independent retained filters and honest runtime readiness.
+
+#### Scenario: Configure a model or voice and return
+- **WHEN** the user follows configuration from a draft and changes a selection
+- **THEN** returning preserves the draft and selected sources without submitting work
+- **AND** local inventory is distinct from network discovery and no download begins without explicit review
+
+### Requirement: Contextual work surface without compulsory project setup
+The application SHALL prioritize entering a request and resuming recent work.
+Document workflows SHALL remain contextual to selected sources or Library rather
+than dominating the default home. A work surface SHALL present conversation, source or result
+according to the task with at most two visible content panes. Existing canonical
+identities SHALL remain authoritative; opening work SHALL NOT create a new
+executor, security workspace or mandatory project. Library and Activity SHALL
+remain discoverable independently from the assistant.
+
+#### Scenario: Quick conversation from a ready application
+- **WHEN** a user starts a conversation and sends a greeting
+- **THEN** no project, folder or execution-mode selection is required
+- **AND** one reply state and one primary Send/Stop location are presented without a duplicate prompt and Running card
+
+#### Scenario: Inspect evidence while reviewing a result
+- **WHEN** a user opens a citation from a saved result
+- **THEN** result and pinned source can be inspected together and the assistant remains reachable without a third content pane
+- **AND** switching surfaces preserves unsent text, review drafts, source position and active work identity
+
+#### Scenario: Narrow or enlarged work surface
+- **WHEN** the available width cannot support the minimum content pane widths, including at 200% zoom
+- **THEN** tabs or drawers expose the same surfaces without squeezed columns or inaccessible primary actions
+- **AND** keyboard focus, selected sources and reading position survive the transition
+
+### Requirement: Canonical source inputs and explicit page scope
+For advertised capabilities the composer SHALL submit supported text, document,
+image and Knowledge references in the same conversation through canonical
+admission. Viewed sources SHALL be distinct from selected input. A selected
+page/block scope SHALL be visible before submission and pinned to an immutable
+revision at acceptance. The server SHALL validate access and scope and recheck
+access before generation and source delivery.
+
+#### Scenario: Attach a supported source to an existing conversation
+- **WHEN** the service advertises the corresponding input capability and the user adds a permitted source then submits
+- **THEN** the original conversation receives one accepted input containing the text and validated references
+- **AND** no new conversation handoff, legacy write fallback or silent context omission occurs
+
+#### Scenario: Ask about the current page
+- **WHEN** the user pins page 8 of a source revision and submits a question then navigates to page 9
+- **THEN** accepted context and evidence receipts still identify the submitted revision and page 8
+- **AND** unread figures or missing page text remain disclosed rather than inferred from the displayed preview
+
+#### Scenario: Source unavailable or service too old
+- **WHEN** a requested capability is absent, a source revision is unavailable or access has been revoked
+- **THEN** the request fails with a specific recoverable state and retained draft/selection
+- **AND** it does not substitute another revision, change models, drop the source or bypass the canonical write guard
+
 ### Requirement: Defaults-first setup and ordinary use
 The workspace SHALL offer one guided readiness flow, preserve working selections
 and expose advanced configuration on demand. Completed setup SHALL NOT recur
@@ -112,7 +279,15 @@ navigation/theme commands constitute searching conversation or artifact content.
 - **AND** private results are disposed when the actor or workspace changes
 
 ### Requirement: Combined contextual navigation
-Chat SHALL use one 248px application/history sidebar with an explicit compact-collapse control and existing state/controllers. Below 1024px the same sidebar SHALL be a dismissible modal drawer with focus restoration. Navigation and the consolidated workspace/settings footer SHALL remain reachable independently of history scrolling. New chat SHALL precede contextual history; history row actions SHALL be available through labelled keyboard/touch-accessible controls without permanent delete-icon clutter.
+The application SHALL use one collapsible application/contextual-history sidebar
+with existing state/controllers. Width SHALL follow shared layout tokens and
+content-pane minimums rather than a fixed Chat-only geometry. When available
+width cannot support the sidebar and primary content, the same navigation SHALL
+be a dismissible drawer with focus restoration. Navigation and Settings SHALL
+remain reachable independently of history scrolling. New work/conversation entry
+SHALL precede contextual history; row actions SHALL use labelled keyboard/touch
+controls without permanent delete-icon clutter. Existing deep links SHALL resolve
+to the same saved identities through route adapters.
 
 #### Scenario: Collapse navigation during work
 - **WHEN** the user collapses and expands navigation with a draft or running task
@@ -227,6 +402,24 @@ identity SHALL survive view switching without sending or changing permissions.
 ### Requirement: Readable attachment references
 Saved attachment answers SHALL expose compact source references bound to their
 persisted extraction revision and selected ranges, without rewriting source text.
+
+#### Scenario: Compact upload and source inspection
+- **WHEN** a user adds files or opens a retained document
+- **THEN** compact attachment tiles report actual preparation state and offer source inspection without sending a request
+- **AND** page thumbnails and secondary reader controls open on demand without displacing the document canvas
+- **AND** partial extraction remains explicitly identified, failures retain recovery, and reduced motion removes decorative activity without hiding status
+
+#### Scenario: Switch documents without losing context
+- **WHEN** a user opens multiple sources in the same conversation
+- **THEN** the reader presents closable file tabs with distinct format, add, expand and split controls
+- **AND** each source retains its own revision-bound page, zoom and search while only the active reader loads a full page
+- **AND** closing a tab does not delete its attachment or submit the draft, and changing conversation scope clears open tabs
+
+#### Scenario: Inspect thumbnails without selecting another page
+- **WHEN** a user opens the filename control and scrolls through the page list
+- **THEN** the list shows vertical thumbnails in an opaque themed panel with at most four decoded thumbnail rasters and one request at a time
+- **AND** scrolling does not change the source page until a thumbnail is selected
+- **AND** keyboard navigation, expand/restore and split view retain source identity and restore focus
 
 #### Scenario: Valid retained passage
 - **WHEN** the user opens a bound citation

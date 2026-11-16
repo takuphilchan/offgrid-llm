@@ -1,3 +1,4 @@
+import {refreshWorkspace} from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 import type { AgentProfile, AgentProfileSettings } from '../src/api/client';
 import { executionPolicyText } from '../src/i18n/execution-workspace';
@@ -15,13 +16,13 @@ async function fixture(page: Page, initial = [profile('Researcher')], locale: Lo
   await page.addInitScript(locale => {
     localStorage.setItem('offgrid.locale', locale); localStorage.setItem('offgrid.onboarding.complete', 'true');
   }, locale);
-  let profiles = structuredClone(initial), conflict = false, supported = true;
+  let profiles = structuredClone(initial), conflict = false, supported = true, blocked = false, deleteConflict = false;
   const mutations: { path: string; body: any }[] = [];
   await page.route('**/health', route => route.fulfill({ json: { status: 'healthy' } }));
   await page.route(/\/(?:api\/v2|v1)\//, async route => {
     const request = route.request(), url = new URL(request.url()), path = url.pathname;
     let data: unknown = {};
-    if (path === '/api/v2/system') data = { product: 'offgrid', api_version: 2, version: 'fixture', workspace_id: 'profile-test', capabilities: supported ? ['task-first-agents-v2', 'durable-agent-events-v2', 'agent-profiles-v1'] : [] };
+    if (path === '/api/v2/system') data = { product: 'offgrid', api_version: 2, version: 'fixture', workspace_id: 'profile-test', capabilities: supported ? ['task-first-agents-v2', 'durable-agent-events-v2', 'agent-profiles-v1', 'agent-profile-deletion-v1'] : [] };
     else if (path === '/v1/system/config') data = { version: 'fixture', require_auth: false };
     else if (path === '/v1/users/me') data = { user: null, authenticated: false, guest: true };
     else if (path === '/v1/models') data = { data: [{ id: model, type: 'chat', context_window: 8192 }] };
@@ -34,23 +35,98 @@ async function fixture(page: Page, initial = [profile('Researcher')], locale: Lo
       read_docs: { name: 'read_docs', namespace: 'mcp', source: 'docs-connection', revision: 'schema-1', location: 'remote', kind: 'read', risk: 'low', description: 'Search approved documentation.' },
     } };
     else if (path.startsWith('/api/v2/agent-profiles')) {
-      const [, tail = ''] = path.split('/api/v2/agent-profiles'), [, id, action] = tail.split('/');
+      const [, tail = ''] = path.split('/api/v2/agent-profiles'), [, encodedID, action] = tail.split('/'), id = decodeURIComponent(encodedID ?? '');
       if (request.method() === 'GET') {
         const selected = profiles.find(item => item.id === id);
-        if (!id) data = { profiles: profiles.filter(item => !item.archived) };
+        if (!id) data = { profiles: profiles.filter(item => !item.archived || url.searchParams.get('archived')==='true') };
         else if (!selected) return route.fulfill({ status: 404, json: { error: 'Profile not found' } });
+        else if (action === 'deletion') data = {revision:selected.revision,jobs:2,memory:1,blocked_jobs:blocked?1:0,dependencies:0,token:'a'.repeat(64)};
         else if (action === 'effective') data = { profile: selected, ready: selected.settings.model === model, capabilities: {}, issues: selected.settings.model === model ? [] : [{kind:'model',reference:selected.settings.model,code:'model_unavailable',message:'Select an installed model.'}] };
         else data = selected;
       } else {
         const body = request.postDataJSON(); mutations.push({ path, body });
         if (conflict && request.method() === 'PUT') return route.fulfill({ status: 409, json: { error: { message: 'Revision conflict' } } });
-        if (action === 'archive') { profiles = profiles.map(item => item.id === id ? { ...item, archived: true } : item); data = { id, archived: true }; }
+        if(request.method()==='DELETE') { if(deleteConflict)return route.fulfill({status:409,json:{error:{message:'Review changed'}}}); profiles=profiles.filter(item=>item.id!==id);data={id,deleted:true}; }
+        else if (action === 'archive') { profiles = profiles.map(item => item.id === id ? { ...item, archived: true } : item); data = { id, archived: true }; }
         else { const saved = profile(id || `created-${mutations.length}`, body.settings, id ? body.expected_revision + 1 : 1); profiles = [saved, ...profiles.filter(item => item.id !== saved.id)]; data = saved; }
       }
     }
     return route.fulfill({ json: data });
   });
-  return { mutations, conflict: () => { conflict = true; }, get: () => profiles, withdraw:()=>{supported=false;} };
+  return { mutations, conflict: () => { conflict = true; }, get: () => profiles, withdraw:()=>{supported=false;}, blockDeletion:()=>{blocked=true;}, failDeletion:()=>{deleteConflict=true;} };
+}
+
+test('permanent deletion reviews archived profile work and sends the confirmed snapshot once',async({page})=>{
+ const archived={...profile('Old writer'),archived:true},f=await fixture(page,[archived]);await page.goto('/ui/#/agents/profiles');
+ await page.locator('.profile-archive-filter input').check();await page.getByRole('button',{name:/Old writer/}).click();
+ await page.locator('.profile-delete-action').click();const dialog=page.getByRole('dialog');
+ await expect(dialog).toContainText('2');await expect(dialog).toContainText('1');expect(f.mutations).toHaveLength(0);
+ await dialog.getByRole('button',{name:'Confirm delete',exact:true}).click();await expect(dialog).toHaveCount(0);
+ expect(f.mutations).toEqual([{path:'/api/v2/agent-profiles/Old%20writer',body:{expected_revision:1,review_token:'a'.repeat(64)}}]);
+ await expect(page.locator('.profile-list-item')).toHaveCount(0);
+});
+
+test('profile deletion blocks active work without deleting anything',async({page})=>{
+ const f=await fixture(page);f.blockDeletion();await page.goto('/ui/#/agents/profiles');await page.getByRole('button',{name:/Researcher/}).click();await page.locator('.profile-delete-action').click();
+ const dialog=page.getByRole('dialog');await expect(dialog.getByRole('button',{name:'Confirm delete',exact:true})).toHaveCount(0);await expect(dialog.getByRole('status')).toContainText('1');expect(f.mutations).toHaveLength(0);
+ await dialog.getByRole('button',{name:'Cancel',exact:true}).click();
+});
+
+test('profile deletion conflict requires a fresh review and never replays the request',async({page})=>{
+ const f=await fixture(page);f.failDeletion();await page.goto('/ui/#/agents/profiles');await page.getByRole('button',{name:/Researcher/}).click();await page.locator('.profile-delete-action').click();
+ const dialog=page.getByRole('dialog');await expect(dialog.getByRole('button',{name:'Confirm delete',exact:true})).toBeEnabled();
+ await dialog.getByRole('button',{name:'Confirm delete',exact:true}).click();await expect(dialog.getByRole('alert')).toBeVisible();
+ await expect(dialog.getByRole('button',{name:'Confirm delete',exact:true})).toHaveCount(0);expect(f.mutations).toHaveLength(1);
+ await dialog.getByRole('button',{name:'Refresh',exact:true}).click();await expect(dialog.getByRole('button',{name:'Confirm delete',exact:true})).toBeEnabled();expect(f.mutations).toHaveLength(1);
+ await dialog.getByRole('button',{name:'Cancel',exact:true}).click();expect(f.get()).toHaveLength(1);
+});
+
+test('archived delegates remain removable but cannot be selected again', async ({page}) => {
+  const f = await fixture(page, [profile('Coordinator', {delegates:['Old helper']}), {...profile('Old helper'), archived:true}, profile('Active helper')]);
+  await page.goto('/ui/#/agents/profiles');
+  await page.locator('.profile-archive-filter input').check();
+  await expect(page.getByRole('button', {name:/Old helper/})).toContainText('Archived');
+  await page.getByRole('button', {name:/Coordinator/}).click();
+  const editor = page.locator('.profile-editor');
+  const old = editor.getByRole('checkbox', {name:/Old helper/});
+  await expect(old).toBeChecked();
+  await expect(old).toHaveAccessibleName(`Old helper ${agentProfilesText.en.unavailable}`);
+  await old.click();
+  await expect(old).toHaveCount(0);
+  await editor.getByRole('checkbox', {name:'Active helper',exact:true}).check();
+  await editor.getByRole('button', {name:'Save agent',exact:true}).click();
+  await expect.poll(() => f.mutations.length).toBe(1);
+  expect(f.mutations[0].body.settings.delegates).toEqual(['Active helper']);
+  await page.getByRole('button', {name:/Old helper/}).click();
+  await expect(editor.getByRole('button', {name:'Save agent',exact:true})).toBeDisabled();
+  await expect(editor.getByRole('textbox', {name:'Instructions',exact:true})).toBeDisabled();
+});
+
+for (const [locale, theme, width] of [['en','light',1440],['en','dark',1440],['ar','dark',390]] as const) {
+  test(`profile editor hierarchy and keyboard examples ${locale} ${theme} ${width}`, async ({page}, info) => {
+    const f = await fixture(page, undefined, locale);
+    await page.addInitScript(theme => localStorage.setItem('offgrid.theme', theme), theme);
+    await page.setViewportSize({width, height:960});
+    await page.goto('/ui/#/agents/profiles');
+    await page.getByRole('button', {name:agentProfilesText[locale].create, exact:true}).click();
+    const editor=page.locator('.profile-editor');
+    const checkbox=page.locator('.profile-archive-filter input');
+    expect((await checkbox.boundingBox())!.width).toBeLessThanOrEqual(24);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await expect(editor.locator('.profile-primary-actions')).toBeVisible();
+    await expect(editor.locator('.profile-resource-settings')).not.toHaveAttribute('open');
+    await page.screenshot({path:info.outputPath('new-agent.png'),fullPage:true});
+    await page.emulateMedia({reducedMotion:'reduce'});
+    const example=editor.locator('.agent-example').first();
+    // Shared motion policy uses a near-zero duration to preserve transition events.
+    await expect.poll(() => example.evaluate(node => parseFloat(getComputedStyle(node).transitionDuration))).toBeLessThanOrEqual(0.001);
+    await example.focus();
+    await page.keyboard.press('Enter');
+    const instructions=editor.getByRole('textbox',{name:agentProfilesText[locale].instructions,exact:true});
+    await expect(instructions).toBeFocused();
+    await expect(instructions).toHaveValue(agentPurpose[locale].options[0][1]);
+    expect(f.mutations).toEqual([]);
+  });
 }
 
 test('profile execution ceilings are explicit configuration and do not grant a host',async({page})=>{
@@ -88,7 +164,7 @@ test('a temporary capability withdrawal cannot restore task composition over the
   const f=await fixture(page);await page.goto('/ui/#/agents');
   await page.getByRole('button',{name:/Researcher/}).click();
   await page.getByRole('textbox',{name:'Instructions',exact:true}).fill('Keep this draft.');
-  f.withdraw();await page.getByRole('button',{name:'Workspace options',exact:true}).click();await page.locator('.workspace-options-panel button[aria-busy]').click();await page.keyboard.press('Escape');
+  f.withdraw();await refreshWorkspace(page);
   await expect(page.getByRole('heading',{name:'Agent profiles',exact:true})).toBeVisible();
   await expect(page.getByRole('textbox',{name:'Instructions',exact:true})).toHaveValue('Keep this draft.');
   await expect(page.getByRole('button',{name:'Start task',exact:true})).toHaveCount(0);
@@ -238,6 +314,7 @@ test('profile editor preserves unsaved work across navigation and fits narrow an
   for (const theme of ['light', 'dark']) {
     await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
     await page.setViewportSize({ width: 1100, height: 700 });
+    await expect(page.locator('.profile-editor > .profile-actions')).toHaveCSS('position', 'static');
     await page.screenshot({ path: info.outputPath(`profiles-${theme}.png`), fullPage: true });
     await page.setViewportSize({ width: 390, height: 540 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);

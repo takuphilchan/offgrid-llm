@@ -1,0 +1,36 @@
+import {expect,test} from '@playwright/test';
+import {craftFixture} from './helpers/craft-fixture';
+import {helpCenter} from '../src/i18n/help-center';
+import {findHelpArticles,type HelpArticle} from '../src/components/help-articles';
+for(const [locale,theme,width,zoom] of [['en','light',1440,1],['en','dark',1440,1],['ar','dark',390,1],['en','light',1440,2]] as const)test('themed dropdown and input '+locale+theme+zoom,async({page},info)=>{
+ await craftFixture(page,locale,theme);await page.setViewportSize({width,height:1000});await page.goto('/ui/#/settings');
+ if(zoom===2)await page.evaluate(()=>document.documentElement.style.zoom='2');
+ const select=page.locator('#settings-language');await expect(select).toBeVisible();await select.focus();
+ expect(await select.evaluate(el=>getComputedStyle(el).appearance)).toBe('base-select');
+ expect(await select.evaluate(el=>parseFloat(getComputedStyle(el).outlineWidth))).toBeGreaterThan(0);
+ expect(await select.evaluate(el=>parseFloat(getComputedStyle(el).outlineWidth))).toBeLessThanOrEqual(2);
+ await page.keyboard.press('Space');await expect(select).toHaveJSProperty('value',locale);
+ expect(await select.evaluate(el=>el.matches(':open'))).toBe(true);
+ expect(await select.evaluate(el=>getComputedStyle(el,'::picker(select)').borderRadius)).toBe('16px');
+ await page.screenshot({path:info.outputPath('select-'+locale+'-'+theme+'-'+zoom+'.png')});
+ await page.keyboard.press('Escape');await expect(select).toHaveValue(locale);
+ await select.focus();await page.keyboard.press('Space');await page.keyboard.press('Home');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');await expect(select).toHaveValue('fr');
+ expect(await page.evaluate(()=>localStorage.getItem('offgrid.locale'))).toBe('fr');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+test('settings use nine distinct semantic icons and searchable Help keeps real script text',async({page},info)=>{
+ await craftFixture(page,'en','light');
+ await page.addInitScript(()=>{const state={mode:'full',shortcut:'CommandOrControl+Shift+Space',registered:true};(window as any).electron={platform:'win32',getSystemTheme:async()=>'light',onThemeChange:()=>()=>{},getPaths:async()=>({models:'D:/Sample/models',data:'D:/Sample/data'}),getCommandWindow:async()=>state,onCommandWindow:()=>()=>{},setCommandShortcut:async(shortcut:string)=>({...state,shortcut}),openCommandWindow:async()=>state};});
+ await page.goto('/ui/#/settings');
+ const iconElements=page.locator('.settings-navigation [data-section] svg');await expect(iconElements).toHaveCount(9);
+ const icons=await iconElements.evaluateAll(elements=>elements.map(el=>el.innerHTML));expect(new Set(icons).size).toBe(9);
+ await page.screenshot({path:info.outputPath('settings-semantic-icons.png')});
+ expect(helpCenter.ar.search).toMatch(/\p{Script=Arabic}/u);expect(helpCenter['zh-Hans'].search).toBe('搜索帮助');
+ for(const copy of Object.values(helpCenter))for(const value of Object.values(copy))expect(value).not.toMatch(/[?\uFFFD]/);
+ const items:HelpArticle[]=[{id:'test',title:'Café 日本語 हिंदी',icon:'info',sections:[],links:[]}];
+ expect(findHelpArticles(items,'CAFE')).toHaveLength(1);expect(findHelpArticles(items,'日本語')).toHaveLength(1);expect(findHelpArticles(items,'हिंदी')).toHaveLength(1);expect(findHelpArticles(items,'[')).toHaveLength(0);
+ await page.emulateMedia({forcedColors:'active'});const select=page.locator('#settings-language');await select.focus();await expect(select).toHaveCSS('appearance','auto');await expect(select).toHaveCSS('outline-width','2px');
+ await page.emulateMedia({forcedColors:'none'});await page.locator('.help-trigger').click();
+ await expect(page.locator('.help-topics button')).toHaveCount(11);
+ await page.locator('.help-topics').getByRole('button',{name:'Quick window',exact:true}).click();await expect(page.locator('.help-article')).toContainText('system tray');
+ await page.screenshot({path:info.outputPath('help-desktop.png')});
+});

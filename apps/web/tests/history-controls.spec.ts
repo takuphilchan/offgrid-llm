@@ -239,3 +239,23 @@ test('unrecoverable interrupted history can be deleted while active and uncertai
   await expect(history.locator('li')).toHaveCount(2);
   await expect(history).not.toContainText('Legacy task without checkpoint');
 });
+
+for(const cleanupFailed of [false,true])test('canonical deletion pins identity and retries cleanup '+cleanupFailed,async({page})=>{
+ const state=await fixture(page);const item=state.chats()[0];Object.assign(item,{canonical_id:'conversation-owned',control_revision:3});
+ let deleted=false,attempts=0;const queries:string[]=[];
+ await page.route('**/api/v2/conversations/conversation-owned',r=>deleted?r.fulfill({status:404,json:{error:{code:'conversation_resource_not_found',message:'Gone'}}}):r.fulfill({json:{id:'conversation-owned',revision:7}}));
+ await page.route('**/v1/sessions/Keep%20this?*',r=>{
+  if(r.request().method()!=='DELETE')return r.fallback();const url=new URL(r.request().url());queries.push(url.search);attempts++;deleted=true;
+  if(cleanupFailed&&attempts===1)return r.fulfill({status:500,json:{error:{message:'Storage cleanup could not finish'}}});
+  state.chats().splice(state.chats().indexOf(item),1);return r.fulfill({json:{success:true,work_retained:true}});
+ });
+ await page.goto('/ui/#/chat');const row=page.locator('.history-row',{hasText:'Keep this'});await row.locator('.history-item-menu').click();await page.getByRole('button',{name:'Delete conversation',exact:true}).click();
+ const dialog=page.locator('.history-delete-dialog');await dialog.getByRole('button',{name:'Confirm delete'}).click();
+ if(cleanupFailed){await expect(dialog.getByRole('alert')).toBeVisible();await dialog.locator('summary').click();await expect(dialog).toContainText('Storage cleanup could not finish');await dialog.getByRole('button',{name:'Confirm delete'}).click();}
+ await expect(dialog).toHaveCount(0);await expect(row).toHaveCount(0);
+ expect(new URLSearchParams(queries[0]).get('canonical_id')).toBe('conversation-owned');expect(new URLSearchParams(queries[0]).get('revision')).toBe('7');expect(attempts).toBe(cleanupFailed?2:1);
+});
+test('pending conversation deletion offers the actual chat without stopping work automatically',async({page})=>{
+ const state=await fixture(page);state.fail('Keep this','conversation_input_pending');await page.goto('/ui/#/chat');const row=page.locator('.history-row',{hasText:'Keep this'});await row.locator('.history-item-menu').click();await page.getByRole('button',{name:'Delete conversation',exact:true}).click();
+ const dialog=page.locator('.history-delete-dialog');await dialog.getByRole('button',{name:'Confirm delete'}).click();await expect(dialog.locator('.history-delete-recovery')).toContainText('Stop active work');await dialog.locator('.history-delete-recovery').getByRole('button',{name:'Chat',exact:true}).click();await expect(dialog).toHaveCount(0);await expect(row).toHaveClass(/active/);expect(state.calls).toEqual(['Keep this']);
+});

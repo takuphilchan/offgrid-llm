@@ -32,7 +32,7 @@ test('global feature language reaches settings, chooser, agent controls and head
  await page.locator('#settings-language').selectOption('zh-Hans');
  await expect(page.getByRole('searchbox',{name:'搜索设置'})).toBeVisible();
  await expect(page.getByRole('button',{name:'模型与回复',exact:true})).toBeVisible();
- await page.locator('.theme-summary').nth(1).click();
+ await page.goto('/ui/#/settings/appearance');await page.locator('.theme-summary').nth(1).click();
  await expect(page.getByRole('dialog',{name:'选择主题'})).toBeVisible();
  await expect(page.getByRole('searchbox',{name:'搜索主题'})).toBeVisible();
  await page.keyboard.press('Escape');
@@ -51,12 +51,12 @@ test('language switches preserve an unsent multilingual draft and update existin
  for(const [code,optionLabel] of [['fr','Options de l’espace de travail'],['ar','خيارات مساحة العمل'],['ja','ワークスペースのオプション']]){
   await changePreferences(page,{locale:code});
   await expect(page.locator('html')).toHaveAttribute('lang',code);
-  await expect(page.locator('.workspace-options > button')).toHaveAccessibleName(optionLabel);
+  await expect(page.locator('.workspace-options')).toHaveCount(0);
   await expect(page.locator('.composer textarea')).toHaveValue(draft);
  }
 });
 
-test('every language updates an already open Help dialog and preserves the unsent draft',async({page})=>{
+test('every language updates open Help and preserves the unsent draft',async({page})=>{
  await fixture(page);await page.goto('/ui/#/chat');
  const draft='Keep my words unchanged: café 日本語 مرحباً বাংলা';
  await page.locator('.composer textarea').fill(draft);
@@ -70,8 +70,8 @@ test('every language updates an already open Help dialog and preserves the unsen
   const copy=(key:string)=>entries.find(e=>e.namespace==='i18n/workspace-help:workspaceHelp'&&e.key===key)!;
   for(const key of ['help','example','chat'])expect(copy(key).coverage,language+' Help '+key).not.toBe('missing');
   await expect(page.locator('#workspace-help-title')).toHaveText(copy('help').currentText);
-  await expect(page.locator('.workspace-help-example')).toHaveText(copy('example').currentText);
-  await expect(page.locator('.workspace-help details').first().locator('p')).toHaveText(copy('chat').currentText);
+  await expect(page.locator('.help-article section:first-of-type p:nth-of-type(2)')).toHaveText(copy('example').currentText);
+  await expect(page.locator('.help-article section:first-of-type p').first()).toHaveText(copy('chat').currentText);
   await expect(page.locator('.composer textarea')).toHaveValue(draft);
  }
  await page.keyboard.press('Escape');

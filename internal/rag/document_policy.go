@@ -29,9 +29,12 @@ func (s *SQLiteStore) DocumentAccess(actor, id string, write bool) error {
 	return nil
 }
 
-// AssignDocumentCollection is currently internal only. Do not expose movement
-// until list/search/source/export/delete all enforce these bindings.
+// Internal compatibility helper. Public moves also pin both audience revisions.
 func (s *SQLiteStore) AssignDocumentCollection(actor, id, destination string, expectedRevision int) (int, error) {
+	return s.assignDocumentCollection(actor, id, destination, expectedRevision, 0, 0)
+}
+
+func (s *SQLiteStore) assignDocumentCollection(actor, id, destination string, expectedRevision, sourceRevision, destinationRevision int) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	tx, err := s.db.Begin()
@@ -55,6 +58,9 @@ func (s *SQLiteStore) AssignDocumentCollection(actor, id, destination string, ex
 	if expectedRevision != revision {
 		return 0, ErrCollectionConflict
 	}
+	if sourceRevision != 0 && source.Revision != sourceRevision || destinationRevision != 0 && target.Revision != destinationRevision {
+		return 0, ErrCollectionConflict
+	}
 	if source.ID == destination {
 		return revision, nil
 	}
@@ -64,6 +70,11 @@ func (s *SQLiteStore) AssignDocumentCollection(actor, id, destination string, ex
 	}
 	if n, err := result.RowsAffected(); err != nil || n != 1 {
 		return 0, ErrCollectionConflict
+	}
+	for _, collection := range []string{source.ID, target.ID} {
+		if err = recordCollectionAudit(tx, actor, collection, "document_moved", id, revision+1); err != nil {
+			return 0, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, err

@@ -1,0 +1,15 @@
+@layer components {
+ .collection-destination { display:grid; gap:12px; min-width:0; margin-block:20px; }
+ .collection-destination select,.collection-destination input:not([type="checkbox"]) { width:100%; min-width:0; max-width:100%; }
+ .collection-destination > button { justify-self:start; }
+ .collection-destination details > summary { cursor:pointer; width:fit-content; padding-block:8px; }
+ .collection-create { display:grid; gap:12px; padding-block:12px; }
+ .collection-create > button { justify-self:start; }
+ .collection-audience { background:var(--surface-2); border-radius:var(--radius-md); padding:16px; min-width:0; overflow-wrap:anywhere; }
+ .collection-audience dl { display:grid; gap:12px; margin-block:0 16px; }
+ .collection-audience dt { color:var(--muted); font-size:var(--type-meta); }
+ .collection-audience dd { margin:4px 0 0; }
+ .collection-audience ul { list-style:none; margin:0; padding:0; }
+ .collection-consent { display:flex; align-items:flex-start; gap:12px; cursor:pointer; }
+ .collection-consent input { flex:0 0 auto; margin-block-start:4px; }
+}

@@ -78,7 +78,7 @@ for(const theme of ['light','dark'] as const)test(`schedule review visual matrix
   const start=panel.getByRole('button',{name:copy.create,exact:true});await start.focus();await start.press('Enter');
   const editor=panel.getByRole('form',{name:copy.edit});await expect(editor.getByLabel(copy.name,{exact:true})).toBeFocused();
   await expect(editor.getByLabel(copy.time,{exact:true})).toHaveCSS('min-height','40px');
-  await expect(editor.getByLabel(copy.time,{exact:true})).toHaveCSS('border-radius','8px');
+  await expect(editor.getByLabel(copy.time,{exact:true})).toHaveCSS('border-radius','12px');
   await editor.getByLabel(copy.name,{exact:true}).fill('Reviewed report — café 日本語');await editor.getByLabel(copy.profile,{exact:true}).selectOption('reporter:2');
   await expect(editor.locator('.schedule-calendar-preview time')).toHaveCount(3);
   for(const size of [{width:1440,height:900},{width:1280,height:720},{width:390,height:844},{width:320,height:480}]){

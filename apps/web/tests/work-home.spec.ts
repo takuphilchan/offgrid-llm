@@ -1,0 +1,31 @@
+import {expect,test} from '@playwright/test';
+import {craftFixture} from './helpers/craft-fixture';
+import {workSurface} from '../src/i18n/work-surface';
+import {mkdirSync} from 'node:fs';
+import {resolve} from 'node:path';
+
+for(const [locale,theme,width] of [['en','dark',1440],['en','light',1280],['ar','dark',390],['de','light',390]] as const) test(`work home and navigation ${locale} ${theme} ${width}`,async({page})=>{
+ await craftFixture(page,locale,theme);
+ await page.setViewportSize({width,height:900});
+ await page.goto('/ui/#/home');
+ const home=page.getByRole('region',{name:workSurface(locale).home,exact:true});
+ await expect(home).toBeVisible();
+ await expect(home.locator('.work-home-actions')).toHaveCount(0);
+ await expect(page.locator('.composer textarea')).toBeEnabled();
+ const composer=await page.locator('.composer').boundingBox(),intro=await home.boundingBox();
+ expect(composer!.y).toBeGreaterThan(intro!.y+intro!.height);
+ if(width>=1024)expect(900-composer!.y-composer!.height).toBeLessThanOrEqual(32);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ const out=resolve('../../build/ui-craft/work-redesign');mkdirSync(out,{recursive:true});
+ await page.screenshot({path:resolve(out,`home-${locale}-${theme}-${width}.png`)});
+ if(width<1024)await page.locator('.navigation-trigger').click();
+ await expect(page.locator('#workspace-navigation a[href="#/models"]')).toBeVisible();
+ await page.locator('.history-open').first().click();
+ await expect(page.locator('.message.assistant')).toContainText('A quieter workspace');
+ await expect(home).toHaveCount(0);
+ await page.locator('.composer textarea').fill('Preserve this draft during navigation');
+ await page.goto('/ui/#/settings');
+ await expect(page.locator('.settings-page')).toBeVisible();
+ await page.goto('/ui/#/chat');
+ await expect(page.locator('.composer textarea')).toHaveValue('Preserve this draft during navigation');
+});

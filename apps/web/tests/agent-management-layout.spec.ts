@@ -18,6 +18,11 @@ for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
         readiness_scope: 'service_model', host_state: 'not_inspected', workflow_state: 'unverified',
       })) } });
     });
+    await page.route('**/v1/integrations/*/setup*', r => r.fulfill({json:{setup:{
+      install_command:'offgrid integrations configure hermes', verify:['offgrid integrations test hermes'],
+      config_file:'hermes.json',content:'{"provider":"offgrid"}',environment:{},
+      notes:['Copying these instructions does not run them.'],
+    }}}));
     await page.goto('/ui/#/agents/tools');
     await expect(page.getByRole('link', { name: 'Tools & MCP', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('form', { name: 'Connect', exact: true })).toHaveCount(0);
@@ -32,6 +37,15 @@ for (const width of [390, 1440]) for (const theme of ['light', 'dark']) {
     await page.locator('.provider-card summary').first().click();
     await expect(page.locator('.provider-card').first()).toContainText('32,768 / 64,000');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const setup=page.locator('.provider-card').first().getByRole('button');
+    await setup.click();
+    const dialog=page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button',{name:'Close',exact:true})).toBeFocused();
+    expect(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth)).toBe(true);
+    await page.screenshot({path:info.outputPath('external-setup.png')});
+    await page.keyboard.press('Escape');
+    await expect(setup).toBeFocused();
     expect(state.writes).toEqual([]);
   });
 }

@@ -9,6 +9,9 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/takuphilchan/offgrid-llm/internal/document"
+	"github.com/takuphilchan/offgrid-llm/internal/documentocr"
 )
 
 // DocumentParser handles parsing of various document formats
@@ -19,7 +22,10 @@ type DocumentParser struct {
 	pdfCacheDir      string // Compiled engine code only; no document data.
 	ocrWorker        string // Trusted packaged OCR worker, never from document input.
 	ocrLanguage      []byte // Explicitly configured, digest-verified offline language data.
+	ocrLanguageID    string // Empty is the legacy English selection, never locale detection.
 	ocrSetupErr      error
+	ocrCheckpoints   *documentocr.Checkpoints
+	previewOnly      bool // Read-only source inspection must never dispatch OCR.
 }
 
 // NewDocumentParser creates a new document parser
@@ -40,6 +46,7 @@ func NewDocumentParser() *DocumentParser {
 
 // ParseResult contains the extracted content and metadata
 type ParseResult struct {
+	Structure   *document.Extraction `json:"structure,omitempty"`
 	Content     string
 	ContentType string
 	Metadata    map[string]string
@@ -73,6 +80,16 @@ func (p *DocumentParser) parseContext(ctx context.Context, content []byte, filen
 		return nil, err
 	}
 	defer func() {
+		defer func() {
+			if result != nil {
+				result.bindCoverage()
+				if err == nil && result.State == ExtractionComplete && strings.TrimSpace(result.Content) != "" {
+					if structureErr := result.bindStructure(); structureErr != nil {
+						result, err = nil, classifyParseError(structureErr)
+					}
+				}
+			}
+		}()
 		if ctx.Err() != nil {
 			result, err = nil, ctx.Err()
 		}
@@ -115,7 +132,11 @@ func (p *DocumentParser) parseContext(ctx context.Context, content []byte, filen
 		return p.parsePDF(ctx, content)
 	case ".xls":
 		return nil, &ParseError{Code: "document_unsupported_format", Message: "The legacy XLS format requires a separate converter; export this workbook as XLSX or CSV before importing."}
-	case ".doc", ".ppt", ".odt", ".ods", ".odp", ".eml", ".msg", ".mbox", ".png", ".jpg", ".jpeg", ".tif", ".tiff":
+	case ".png", ".jpg", ".jpeg":
+		return p.parseImageDocument(ctx, content, ext, !p.previewOnly)
+	case ".tif", ".tiff":
+		return p.parseTIFF(ctx, content, !p.previewOnly, p.recognizePDFRaster)
+	case ".doc", ".ppt", ".odt", ".ods", ".odp", ".eml", ".msg", ".mbox":
 		return nil, &ParseError{Code: "document_unsupported_format", Message: "This format requires a dedicated local document adapter. Export its text to a supported format before importing."}
 	case ".xlsx":
 		return p.ParseXLSX(content)
@@ -342,6 +363,7 @@ func SupportedExtensions() []string {
 	return []string{
 		// Documents
 		".docx", ".pdf", ".pptx", ".xlsx", ".xls", ".txt", ".md", ".markdown", ".rtf",
+		".png", ".jpg", ".jpeg", ".tif", ".tiff",
 		// Data
 		".json", ".csv", ".xml",
 		// Web

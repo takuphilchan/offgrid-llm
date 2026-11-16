@@ -1,0 +1,17 @@
+@layer controls {
+  .action-card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr)); gap:14px; min-width:0; }
+  .action-card { display:flex; align-items:center; gap:16px; width:100%; min-width:0; padding:22px 18px; border:1px solid var(--separator); border-radius:20px; background:var(--surface-1); color:var(--text); text-align:start; text-decoration:none; box-shadow:none; cursor:pointer; transition:background 180ms ease,border-color 180ms ease,transform 180ms ease; }
+  .action-card:hover { background:color-mix(in srgb,var(--surface-2) 65%,var(--surface-1)); border-color:var(--separator); transform:translateY(-1px); }
+  .action-card:active { transform:translateY(0); }
+  .action-card:focus-visible { outline:1.5px solid var(--muted); outline-offset:3px; }
+  .action-card-icon { display:grid; place-items:center; flex:none; width:40px; height:40px; border-radius:13px; background:color-mix(in srgb,var(--accent) 7%,var(--surface-1)); color:var(--text); }
+  .action-card-copy { display:grid; gap:6px; flex:1; min-width:0; }
+  .action-card-copy strong { font-size:var(--type-body); font-weight:500; line-height:1.4; }
+  .action-card-copy>span { color:var(--muted); font-size:var(--type-meta); font-weight:400; line-height:1.5; overflow-wrap:anywhere; }
+  .action-card-arrow { flex:none; color:var(--muted); }
+  :root[dir=rtl] .action-card-arrow { transform:scaleX(-1); }
+  @media(max-width:700px) { .action-card-grid { grid-template-columns:minmax(0,1fr); } .action-card { padding:18px 16px; } }
+  @media(prefers-reduced-motion:reduce) { .action-card { transition:none; } .action-card:hover { transform:none; } }
+  :root[data-reduce-motion=true] .action-card { transition:none; transform:none; }
+  @media(forced-colors:active) { .action-card { border-color:ButtonText; } .action-card:focus-visible { outline-color:Highlight; } }
+}

@@ -1,0 +1,36 @@
+/* File references stay small; only a failed operation expands for recovery. */
+.file-attachments{list-style:none;display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px;margin:6px 0 10px;padding:0;max-width:100%}
+.file-attachments>li{position:relative;min-width:0;width:min(100%,176px);border:1px solid var(--separator);border-radius:14px;background:var(--surface-1);color:var(--text);overflow:hidden}
+.file-attachments>li:not([data-state=ready]){width:min(100%,320px)}
+.file-summary{display:block;width:100%;padding:0;text-align:start;color:inherit;border:0;background:transparent;cursor:pointer}
+.file-summary .file-type-mark{display:flex;align-items:center;justify-content:center;gap:8px;height:70px;color:var(--muted);background:color-mix(in srgb,var(--surface-2) 65%,var(--surface-1))}
+.file-type-mark>span{font-size:10px;letter-spacing:.04em;font-weight:600}
+.file-summary-copy{display:block;min-width:0;padding:9px 12px 10px}
+.file-summary strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--type-meta);font-weight:500}
+.file-summary small{display:block;margin-top:3px;color:var(--muted);font-size:var(--type-caption);line-height:1.4}
+.file-open:hover{background:var(--surface-2)}
+.file-open:focus-visible{outline:2px solid var(--muted);outline-offset:-3px;border-radius:12px}
+.file-attachments .file-remove{position:absolute;inset-block-start:5px;inset-inline-end:5px;width:26px;height:26px;min-height:26px;padding:0;border:0;border-radius:50%;background:var(--surface-1);color:var(--muted)}
+.file-attachments .file-remove:hover{color:var(--text);background:var(--surface-3)}
+.file-coverage-details{padding:0 12px 9px;font-size:var(--type-caption);color:var(--muted)}
+.file-coverage-details>summary{display:flex;align-items:center;gap:5px;min-height:26px;padding:0;border:0;background:transparent;font-size:inherit;list-style:none}
+.file-coverage-details>summary::before{display:none}
+.file-coverage-details>summary::-webkit-details-marker{display:none}
+.file-coverage-details[open]>summary{color:var(--text)}
+.file-attachments .document-coverage,.file-recovery{margin:0;font-size:var(--type-caption);line-height:1.5;overflow-wrap:anywhere}
+.file-attachments .document-coverage p{margin:6px 0}
+.file-attachments>li>.file-recovery,.file-attachments>li>.document-coverage,.file-attachments>li>.workspace-secondary{padding:0 12px 8px}
+.file-actions{display:flex;flex-wrap:wrap;gap:6px;padding:0 8px 8px}
+.file-actions:empty{display:none}
+.file-actions .text-button{font-size:var(--type-caption);min-height:32px;padding:4px 8px;white-space:normal;max-width:100%;border-radius:20px}
+.attachment-preparing{display:flex;align-items:center;gap:12px;width:min(100%,320px);min-height:64px;margin:6px 0 10px;padding:10px 14px;border:1px solid var(--separator);border-radius:14px;background:var(--surface-1);color:var(--muted)}
+.attachment-preparing-mark{flex:none;display:grid;place-items:center;width:32px}
+.attachment-preparing-copy{min-width:0;flex:1;font-size:var(--type-meta)}
+.attachment-preparing-copy bdi{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--text)}
+.attachment-preparing-copy small{display:flex;align-items:center;gap:7px;margin-top:4px;font-size:var(--type-caption)}
+.attachment-activity{display:inline-block;flex:none;width:11px;height:11px;border:1.5px solid var(--separator);border-block-start-color:var(--muted);border-radius:50%;animation:attachment-active 1s linear infinite}
+@keyframes attachment-active{to{transform:rotate(360deg)}}
+:root[data-reduce-motion=true] .attachment-activity{animation:none}
+@media(prefers-reduced-motion:reduce){.attachment-activity{animation:none}}
+@media(pointer:coarse){.file-attachments .file-remove{width:40px;height:40px}.file-actions .text-button,.file-coverage-details>summary{min-height:44px}}
+@media(forced-colors:active){.file-attachments>li,.attachment-preparing{border-color:ButtonBorder}.file-open:focus-visible{outline-color:Highlight}.attachment-activity{border-color:GrayText;border-block-start-color:CanvasText}}

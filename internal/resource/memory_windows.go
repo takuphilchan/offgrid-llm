@@ -19,12 +19,16 @@ type memoryStatusEx struct {
 	AvailableExtendedVirtual uint64
 }
 
-func detectNativeRAM() (totalMB, availableMB int64, ok bool) {
+func detectNativeMemory(res *SystemResources) bool {
 	status := memoryStatusEx{Length: uint32(unsafe.Sizeof(memoryStatusEx{}))}
 	proc := syscall.NewLazyDLL("kernel32.dll").NewProc("GlobalMemoryStatusEx")
 	result, _, _ := proc.Call(uintptr(unsafe.Pointer(&status)))
 	if result == 0 || status.TotalPhysical == 0 {
-		return 0, 0, false
+		return false
 	}
-	return int64(status.TotalPhysical >> 20), int64(status.AvailablePhysical >> 20), true
+	res.TotalRAM = int64(status.TotalPhysical >> 20)
+	res.AvailableRAM = int64(status.AvailablePhysical >> 20)
+	res.AvailableCommitMB = int64(status.AvailablePageFile >> 20)
+	res.CommitMeasured = true
+	return true
 }

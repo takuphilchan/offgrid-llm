@@ -4,6 +4,47 @@ Keep current work, meaningful progress and useful results understandable across 
 
 ## ADDED Requirements
 
+### Requirement: Durable reviewed results across work surfaces
+Document workflows SHALL expose saved results, review decisions and source
+references through the active work surface using existing analysis and review
+identities. User edits SHALL remain distinct from generated candidates, attributed
+and versioned. Regeneration SHALL NOT overwrite user edits. Reopening or switching
+presentation SHALL NOT execute work again. Exported results SHALL retain source
+revisions, coverage gaps and review status.
+
+#### Scenario: Requirements from selection through export
+- **WHEN** a user selects a policy and amendment, extracts requirements, reviews a cited exception, edits the result and exports it
+- **THEN** the result retains evidence, conditions, exceptions, source coverage and review attribution
+- **AND** reopening after restart restores the saved result and edits without rerunning extraction
+
+#### Scenario: Regeneration with unsaved or saved edits
+- **WHEN** a user requests a new generated candidate while an edited result exists
+- **THEN** the edited version remains available and the candidate is separate
+- **AND** save conflicts or uncertain acknowledgments retain the local draft and reconcile version identity before retry
+
+#### Scenario: Saved evidence is revoked
+- **WHEN** collection access is revoked after a result was saved
+- **THEN** subsequent result/evidence delivery applies current permissions and does not serve cached private content as newly authorized output
+- **AND** the interface distinguishes unavailable evidence from absence of evidence and does not claim to recall previously exported copies
+
+### Requirement: One truthful progress projection
+Compact conversation feedback and expanded task activity SHALL derive from
+existing accepted-input/job/analysis state. Ordinary replies SHALL NOT repeat
+the submitted prompt as a separate execution card. Longer workflows SHALL show
+known phases and measured units where available; unknown duration SHALL NOT be
+represented as a fabricated percentage. Request acceptance, execution and
+completion SHALL remain distinct.
+
+#### Scenario: Lost acknowledgment during a document request
+- **WHEN** the network disconnects after submission but before acceptance is known
+- **THEN** the interface preserves draft/context and reconciles the existing request identity
+- **AND** opening another surface, refreshing status or reconnecting cannot submit a duplicate executor
+
+#### Scenario: Stop while a workflow is active
+- **WHEN** the user activates the primary Stop control
+- **THEN** a stopping state appears while the service settles the request and partial outputs remain attributable
+- **AND** already performed effects are not labelled undone, and expanded details do not create a separate cancellation authority
+
 ### Requirement: Consistent bounded work summaries
 The service SHALL provide actor-authorized compact work summaries and bounded
 history pages without exporting transcripts or tool arguments for counting.
@@ -63,6 +104,13 @@ retain a labelled download path. Integrity SHALL NOT imply task correctness.
 Recovery SHALL name the affected work, retained output and appropriate safe next
 action from typed state. Child summaries SHALL show actual available status and
 deliverables while preserving parent ownership and authorized bounded observation.
+
+#### Scenario: Document selected in a canonical text conversation
+- **WHEN** a document is selected in a canonical conversation, or a stale client receives a canonical ownership conflict during upload
+- **THEN** the UI offers a localized New chat handoff and Cancel instead of exposing internal executor instructions
+- **AND** no new chat or upload occurs before the explicit handoff action when ownership is already known
+- **AND** the handoff preserves the selected files and unsent question without submitting it or changing the original conversation history
+- **AND** Send remains blocked until the choice is resolved, while cancellation preserves and focuses the draft
 
 #### Scenario: A specialist cannot complete
 - **WHEN** a child is blocked or fails while independent work remains
@@ -153,3 +201,17 @@ The owner SHALL be able to archive inactive unresolved root jobs. Archival SHALL
 #### Scenario: Explicit restoration
 - **WHEN** the owner restores an archived record
 - **THEN** its original state reappears in normal Activity without scheduling execution
+
+### Requirement: Configurable response presentation
+The client SHALL persist a scoped choice of live or completed response display,
+without changing the execution authority or evidence-validation policy.
+
+#### Scenario: Canonical stream reconnects
+- **WHEN** an eligible text response reconnects to its existing saved job
+- **THEN** the preview is bound to that job identity and recovered from its authorized snapshot without starting another executor
+- **AND** buffered mode keeps actual progress and Stop available until the completed response is ready
+
+#### Scenario: Restricted or revoked preview
+- **WHEN** source context is restricted, preview eligibility is absent or access is revoked
+- **THEN** draft preview text is withheld or cleared immediately
+- **AND** the display preference never labels provisional text as verified or bypasses a document evidence gate

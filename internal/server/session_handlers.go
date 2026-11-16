@@ -179,8 +179,12 @@ func (h *SessionHandlers) HandleSessionsList(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if h.agentServer != nil && h.agentServer.agentManager != nil {
+		visible := sessionsList[:0]
 		for i := range sessionsList {
 			projected, canonical, err := h.agentServer.canonicalSessionProjection(r, sessionsList[i].Name)
+			if errors.Is(err, sessions.ErrSessionNotFound) {
+				continue
+			}
 			if err != nil {
 				writeSessionError(w, err)
 				return
@@ -188,7 +192,9 @@ func (h *SessionHandlers) HandleSessionsList(w http.ResponseWriter, r *http.Requ
 			if canonical {
 				sessionsList[i] = *projected
 			}
+			visible = append(visible, sessionsList[i])
 		}
+		sessionsList = visible
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -276,12 +282,12 @@ func (h *SessionHandlers) HandleSessionDelete(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if current.Turn.Active() {
-		writeError(w, "Conversation has active work. Stop it before deleting.", http.StatusConflict)
+		writeErrorWithCode(w, "Conversation has active work. Stop it before deleting.", http.StatusConflict, "conversation_active_turn")
 		return
 	}
 	unlock, available := h.tryLockSession(name)
 	if !available {
-		writeError(w, "Conversation is busy. Stop generation or wait, then retry deletion.", http.StatusConflict)
+		writeErrorWithCode(w, "Conversation is busy. Stop generation or wait, then retry deletion.", http.StatusConflict, "conversation_busy")
 		return
 	}
 	defer unlock()

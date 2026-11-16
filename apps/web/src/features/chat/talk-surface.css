@@ -1,0 +1,32 @@
+.app-shell[data-voice-hidden] { visibility:hidden; pointer-events:none; }
+.talk-surface { position:fixed; inset:var(--native-chrome-height,0px) 0 0; display:flex; align-items:center; justify-content:center; margin:0; padding:0; border:0; background:var(--surface-1); color:var(--text); overflow:auto; z-index:100; }
+.talk-surface-content { display:flex; flex-direction:column; align-items:center; width:min(420px,100%); height:min(540px,var(--workspace-viewport,100dvh)); min-height:220px; padding:32px 28px 24px; box-sizing:border-box; }
+.talk-surface:focus { outline:none; }
+.talk-surface::before { content:''; position:absolute; inset:0 0 auto; height:28px; -webkit-app-region:drag; }
+.talk-visual { --voice-energy:0; --voice-pearl:color-mix(in srgb,var(--accent) 24%,var(--surface-1)); --voice-shade:color-mix(in srgb,var(--accent) 62%,var(--surface-2)); --voice-glint:color-mix(in srgb,var(--surface-1) 86%,var(--accent)); position:relative; flex:none; width:212px; height:212px; margin:8px auto 0; isolation:isolate; transform:scale(calc(1 + var(--voice-energy)*.12)); transition:transform 140ms ease-out; }
+.talk-visual i { position:absolute; display:block; pointer-events:none; }
+.talk-visual .voice-halo { inset:22px 16px 12px; border-radius:50%; background:radial-gradient(ellipse,var(--voice-shade),transparent 68%); opacity:.24; filter:blur(16px); animation:voice-halo 6s ease-in-out infinite alternate; }
+.talk-visual .voice-core { inset:20px 30px 28px; border-radius:43% 57% 52% 48% / 46% 42% 58% 54%; background:radial-gradient(ellipse at 26% 20%,var(--voice-glint),transparent 58%),radial-gradient(ellipse at 80% 76%,var(--voice-shade),transparent 64%),linear-gradient(145deg,var(--voice-pearl),var(--voice-shade)); box-shadow:inset 8px 8px 20px color-mix(in srgb,var(--surface-1) 30%,transparent); filter:blur(.5px); animation:voice-drift 6s ease-in-out infinite alternate; }
+.talk-visual .voice-light { inset:28px 83px 48px 33px; border-radius:64% 36% 45% 55%; background:linear-gradient(145deg,var(--voice-glint),transparent 80%); filter:blur(5px); opacity:.7; animation:voice-light 7s ease-in-out infinite alternate; }
+.talk-visual[data-state=listening] .voice-core { animation-duration:4.8s; }
+.talk-visual:is([data-state=thinking],[data-state=transcribing]) .voice-core { animation-duration:3.6s; }
+.talk-visual[data-state=speaking] .voice-core { animation:voice-speaking 2.4s ease-in-out infinite alternate; }
+.talk-visual[data-state=needs_attention] { opacity:.55; }
+.talk-visual[data-state=needs_attention] i { animation:none; }
+.talk-surface-copy { flex:1; display:flex; flex-direction:column; justify-content:center; text-align:center; width:100%; gap:12px; padding:20px 4px; }
+.talk-surface-copy p { margin:0; color:var(--muted); font-size:16px; line-height:1.5; text-wrap:balance; }
+.talk-surface-copy .talk-surface-error { font-size:13px; }
+.talk-surface-controls { display:flex; align-items:center; justify-content:center; flex:none; gap:12px; padding:7px; border:1px solid var(--separator); border-radius:999px; background:var(--surface-1); }
+.talk-surface-controls .voice-input-control { display:flex; align-items:center; gap:8px; }
+.talk-surface-controls .voice-button,.talk-surface-controls .voice-discard { display:grid; place-items:center; width:40px; height:40px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--text); }
+.talk-surface-controls .voice-capture-feedback,.talk-surface-controls .voice-discard { display:none; }
+.talk-surface-controls .talk-end { display:grid; place-items:center; width:40px; height:40px; padding:0; border:0; border-radius:50%; background:var(--text); color:var(--surface-1); }
+.talk-surface-controls .voice-input-control>span[role=status] { font-size:12px; }
+@keyframes voice-drift { from {transform:rotate(-12deg) translate(-4px,4px) scale(.96,1.03)} to {transform:rotate(16deg) translate(5px,-5px) scale(1.04,.97)} }
+@keyframes voice-light { from {transform:rotate(-12deg) translate(-4px,3px);opacity:.55} to {transform:rotate(20deg) translate(12px,-5px);opacity:.9} }
+@keyframes voice-halo { from {transform:scale(.92);opacity:.16} to {transform:scale(1.08);opacity:.3} }
+@keyframes voice-speaking { from {transform:rotate(-8deg) scale(.94,1.03)} to {transform:rotate(14deg) scale(1.07,.98)} }
+@media(max-height:420px){.talk-visual{width:128px;height:128px;margin:0 auto}.talk-surface-content{padding:18px}.talk-surface-copy{padding-block:8px}}
+@media(prefers-reduced-motion:reduce){.talk-surface-content,.talk-visual,.talk-visual i{animation:none!important;transform:none!important;transition:none!important}}
+:root[data-reduce-motion=true] .talk-surface-content,:root[data-reduce-motion=true] .talk-visual,:root[data-reduce-motion=true] .talk-visual i{animation:none!important;transform:none!important;transition:none!important}
+@media(forced-colors:active){.talk-visual i{filter:none;background:Canvas;box-shadow:none;border:1px solid CanvasText}.talk-surface,.talk-surface-controls{border-color:CanvasText}.talk-end{border:1px solid ButtonText!important}}

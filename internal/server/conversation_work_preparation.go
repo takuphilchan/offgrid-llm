@@ -46,9 +46,12 @@ func (s *Server) prepareConversationInputWork(ctx context.Context, scope agents.
 	}
 	command := agents.ConversationCommand{Payload: agents.ConversationCommandPayload{Input: &agents.ConversationInput{Content: input.Input.Content, Model: input.Input.Model}}}
 	response := &preparationResponse{header: http.Header{}}
-	config, model, ok := s.resolveConversationRunBeforeInput(response, request, current, command, inputID)
+	config, model, ok := s.resolveConversationRunBeforeInput(response, request, current, command, inputID, len(input.Input.KnowledgeSelections) > 0)
 	if !ok {
 		return nil, response.preparationError()
+	}
+	if err = s.attachConversationInputSources(request, current, input.Input, &config); err != nil {
+		return nil, err
 	}
 	if err = s.appendFocusedWorkContext(scope, conversation, input, &config); err != nil {
 		return nil, err

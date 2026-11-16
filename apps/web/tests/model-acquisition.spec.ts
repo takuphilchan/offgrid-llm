@@ -6,7 +6,7 @@ test.describe('complete package acquisition through a real isolated service', ()
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => { localStorage.setItem('offgrid.onboarding.complete', 'true'); if (!localStorage.getItem('offgrid.locale')) localStorage.setItem('offgrid.locale', 'en'); });
     await page.goto('/ui/#/models');
-    await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+    await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   });
   test('multiple supported variants require an explicit inline choice', async ({ page, request }) => {
     const discovered = await (await request.get('/api/v2/models/discover?repository=fixture/whisper')).json();
@@ -17,7 +17,8 @@ test.describe('complete package acquisition through a real isolated service', ()
       if (request.method() === 'POST' && request.url().endsWith('/api/v2/models/resolve')) resolutions++;
       if (request.method() === 'POST' && request.url().endsWith('/api/v2/models/operations')) installs++;
     });
-    await page.getByRole('button', { name: 'Speech recognition', exact: true }).click();
+    await page.locator('.model-category-filter').selectOption({label:'Speech recognition'});
+    await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
     await page.getByRole('searchbox').fill('whisper');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     const repo = page.locator('article.model-search-result').filter({ hasText: 'fixture/whisper' });
@@ -34,7 +35,8 @@ test.describe('complete package acquisition through a real isolated service', ()
     test(`${architecture}: discover, preview, download, verify, repair and remove`, async ({ page, request }, info) => {
       test.setTimeout(90000);
       const category = ['whisper', 'zipformer-streaming'].includes(architecture) ? 'Speech recognition' : 'Speech generation';
-      await page.getByRole('button', { name: category, exact: true }).click();
+      await page.locator('.model-category-filter').selectOption({label:category});
+      await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
       await page.getByRole('searchbox').fill(architecture);
       await page.getByRole('button', { name: 'Search', exact: true }).click();
       const repo = page.locator('article.model-search-result').filter({ hasText: `fixture/${architecture}` });
@@ -45,10 +47,10 @@ test.describe('complete package acquisition through a real isolated service', ()
       await expect(preview.getByText(/cannot run here yet/)).toBeVisible();
       await preview.getByRole('button', { name: 'Download', exact: true }).click();
       // Navigating away and back must restore operation status, not re-submit.
-      await page.getByRole('button', { name: 'Language', exact: true }).click();
-      await page.getByRole('button', { name: category, exact: true }).click();
+      await page.locator('.model-category-filter').selectOption({label:'Language'});
+      await page.locator('.model-category-filter').selectOption({label:category});
       const card = page.getByRole('region', { name: 'Installed', exact: true }).locator('article').filter({ hasText: `fixture/${architecture}` });
-      await page.getByRole('tab', { name: 'Installed', exact: true }).click();
+      await page.locator('.model-library-navigation').getByRole('button', { name: 'Installed', exact: true }).click();
       await expect(card.getByRole('button', { name: 'Verify', exact: true })).toBeVisible({ timeout: 30000 });
       await card.getByRole('button', { name: 'Verify', exact: true }).click();
       await expect(card.getByText('Integrity checked', { exact: true })).toBeVisible();
@@ -78,7 +80,7 @@ test.describe('complete package acquisition through a real isolated service', ()
     const operation = await response.json();
     await request.post(`/api/v2/models/operations/${operation.id}/cancel`);
     await expect.poll(async () => (await (await request.get(`/api/v2/models/operations/${operation.id}`)).json()).state).toBe('cancelled');
-    await page.getByRole('button', { name: 'Speech recognition', exact: true }).click();
+    await page.locator('.model-category-filter').selectOption({label:'Speech recognition'});
     const transfer = page.locator('article').filter({ has: page.getByRole('button', { name: 'Resume', exact: true }) });
     await expect(transfer).toHaveCount(1);
     await transfer.getByRole('button', { name: 'Resume', exact: true }).click();
@@ -98,12 +100,12 @@ test.describe('complete package acquisition through a real isolated service', ()
         await page.evaluate(({ locale, theme }) => { localStorage.setItem('offgrid.locale', locale); localStorage.setItem('offgrid.theme', theme); }, { locale, theme });
         await page.reload();
         await page.setViewportSize({ width: 390, height: 844 });
-        const group = page.locator('.model-category-picker');
-        await group.getByRole('button').nth(2).click();
-        await expect(group.getByRole('button').nth(2)).toHaveAttribute('aria-pressed', 'true');
+        const group = page.locator('.model-category-filter');
+        await group.selectOption('speech_recognition');
+        await expect(group).toHaveValue('speech_recognition');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         if (locale === 'ar') await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-        expect(await group.getByRole('button').allTextContents()).not.toContain('');
+        expect(await group.locator('option').allTextContents()).not.toContain('');
         if (locale === 'en' || locale === 'ar') await page.screenshot({ path: info.outputPath(`${locale}-${theme}-mobile.png`), fullPage: true });
       }
     }

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "origin": "Authored synthetic fixture; no user document content",
+  "license": "CC0-1.0",
+  "rendering": "Headless Microsoft Edge canvas, 1500x260, font request recorded per sample; platform font fallback possible",
+  "qualification": "Smoke fixtures only; not native-reviewed or representative OCR accuracy qualification",
+  "samples": [
+    {
+      "language": "chi_sim",
+      "text": "合同金额为 42 元。请核对原始记录。",
+      "font": "Microsoft YaHei",
+      "sha256": "dbf32db559565afe54bc0ff86244f0e5882af4d428962a01c4ab8933ed73a235"
+    },
+    {
+      "language": "fra",
+      "text": "Le montant total est de 42 euros.",
+      "font": "Arial",
+      "sha256": "29072f3fd3c6bdbc6731f984bcf4615e2e17773daf31e02729e126c51fba2ef9"
+    },
+    {
+      "language": "swa",
+      "text": "Malipo ya jumla ni 42.",
+      "font": "Arial",
+      "sha256": "8eff67d92ffa3aef04de275128e093b2efb0a98ea644438852035523fe74db58"
+    }
+  ]
+}

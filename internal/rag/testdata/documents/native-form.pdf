@@ -1,0 +1,51 @@
+%PDF-1.7
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R 6 0 R 7 0 R 8 0 R] /NeedAppearances true >> >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [5 0 R 6 0 R 7 0 R 8 0 R] /Contents 4 0 R /Resources << >> >>
+endobj
+4 0 obj
+<< /Length 0 >>
+stream
+
+endstream
+endobj
+5 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (Amount) /V (0017.25) /Rect [10 20 80 50] /P 3 0 R >>
+endobj
+6 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Btn /T (Approved) /V /Yes /AS /Yes /Rect [10 60 30 80] /P 3 0 R /AP << /N << /Yes 9 0 R /Off 9 0 R >> >> >>
+endobj
+7 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Btn /T (Rejected) /V /Off /AS /Off /Rect [40 60 60 80] /P 3 0 R /AP << /N << /Yes 9 0 R /Off 9 0 R >> >> >>
+endobj
+8 0 obj
+<< /Type /Annot /Subtype /Widget /FT /Tx /T (Hidden) /V (Draft) /F 2 /Rect [10 90 80 110] /P 3 0 R >>
+endobj
+9 0 obj
+<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] /Length 0 >>
+stream
+
+endstream
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000130 00000 n 
+0000000187 00000 n 
+0000000325 00000 n 
+0000000374 00000 n 
+0000000487 00000 n 
+0000000648 00000 n 
+0000000809 00000 n 
+0000000926 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+1023
+%%EOF

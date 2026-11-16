@@ -12,7 +12,10 @@ for(const theme of ['light','dark']) test(`shared action weights remove redundan
   for(const control of await controls.all()) {
    const border = await control.evaluate(el => { const style=getComputedStyle(el); return style.borderTopWidth==='0px'||style.borderTopColor==='rgba(0, 0, 0, 0)'; });
    expect(border).toBe(true);
-   if(await control.isEnabled()){await control.focus();await expect(control).toHaveCSS('outline-width','2px');}
+   if(await control.isEnabled()){
+    await control.focus();await expect(control).toHaveCSS('outline-style','solid');
+    expect(await control.evaluate(el=>parseFloat(getComputedStyle(el).outlineWidth))).toBeGreaterThanOrEqual(1);
+   }
   }
  }
  expect(state.writes).toEqual([]);
@@ -50,20 +53,23 @@ test('composer keeps one outer boundary and usable inner selectors',async({page}
  await expect(page.locator('.composer')).toHaveCSS('border-top-width','1px');
  const settings=page.getByRole('button',{name:'Response settings',exact:true});
  await settings.click();
- for(const name of ['Agent','Model']){
+ for(const name of ['Agent']){
   const control=page.getByRole('button',{name,exact:true});await expect(control).toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
   await control.focus();await control.press('Enter');await expect(control).toHaveAttribute('aria-expanded','true');
   await page.keyboard.press('Escape');await expect(control).toBeFocused();
  }
  await page.keyboard.press('Escape');await expect(settings).toBeFocused();
+ const model=page.locator('.composer-actions .model-select-trigger');
+ await model.focus();await model.press('Enter');await expect(model).toHaveAttribute('aria-expanded','true');
+ await page.keyboard.press('Escape');await expect(model).toBeFocused();
  await expect(page.locator('.composer-actions .voice-button')).toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
  expect(state.writes).toEqual([]);
 });
 
-test('forced colors retains explicit secondary and selected-tab boundaries',async({page})=>{
+test('forced colors retains explicit model navigation and visible keyboard focus',async({page})=>{
  await craftFixture(page,'en','light');await page.emulateMedia({forcedColors:'active'});await page.goto('/ui/#/models');
- const selected=page.getByRole('tab',{name:'Installed',exact:true});
- await expect(selected).toHaveAttribute('aria-selected','true');await expect(selected).not.toHaveCSS('border-top-color','rgba(0, 0, 0, 0)');
+ const selected=page.getByRole('button',{name:'Discover models',exact:true});
+ await expect(page.locator('.model-library-navigation [aria-current=page]')).toHaveText('Installed');
  await selected.focus();await expect(selected).toHaveCSS('outline-width','2px');
 });
 

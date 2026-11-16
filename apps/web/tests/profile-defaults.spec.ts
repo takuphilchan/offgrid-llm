@@ -1,3 +1,4 @@
+import {refreshWorkspace} from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { craftFixture } from './helpers/craft-fixture';
 import { agentProfilesText } from '../src/i18n/agent-profiles';
@@ -72,9 +73,7 @@ test('new profile suggestion excludes unusable runtimes and never repairs an exi
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Keep my draft');
   inventory = [{ id: 'replacement', type: 'chat', runtime_ready: true }];
-  await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
-  await page.locator('.workspace-options-panel button[aria-busy]').click();
-  await page.keyboard.press('Escape');
+  await refreshWorkspace(page);
   await expect(page.locator('.profile-editor .model-select-trigger')).toContainText('installed writing model');
   await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Keep my draft');
   await expect(page.getByRole('button', { name: 'Save agent', exact: true })).toBeDisabled();

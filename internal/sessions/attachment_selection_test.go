@@ -54,3 +54,31 @@ func TestSourceSelectionCannotBeImportedAsTrustedHistory(t *testing.T) {
 		t.Fatal("forged evidence admitted", err)
 	}
 }
+
+func TestAttachmentNaturalChineseQuestionFindsEvidence(t *testing.T) {
+	var source strings.Builder
+	for i := 0; i < 60; i++ {
+		source.WriteString(strings.Repeat("Routine archived correspondence with ordinary administrative background. ", 14))
+		if i == 23 {
+			source.WriteString("青岚项目预算为七百万元。\n\n")
+		} else {
+			source.WriteString("\n\n")
+		}
+	}
+	out, err := SelectAttachmentText([]AttachmentText{{Attachment: Attachment{Name: "policy.txt"}, Text: source.String()}}, "青岚项目预算是多少？", 4000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range out[0].Excerpts {
+		if strings.Contains(e.Text, "七百万元") {
+			found = true
+		}
+		if e.Text != source.String()[e.StartByte:e.EndByte] {
+			t.Fatal("evidence altered")
+		}
+	}
+	if !found {
+		t.Fatal("natural-language question lost relevant evidence")
+	}
+}

@@ -10,15 +10,20 @@ import (
 	"io"
 	"os"
 	"path"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/takuphilchan/offgrid-llm/internal/document"
+	"github.com/takuphilchan/offgrid-llm/internal/documentocr"
 )
 
 const MaxAttachmentBytes int64 = 50 << 20
 const maxSessionAttachmentBytes int64 = 100 << 20
 const maxAttachmentTextBytes = 16 << 20
+const maxAttachmentRecordBytes = maxAttachmentTextBytes + document.MaxCoverageBytes + 65536
 
 var ErrAttachmentUnavailable = errors.New("attachment unavailable")
 var ErrAttachmentLimit = errors.New("attachment storage limit reached")
@@ -27,20 +32,28 @@ var attachmentID = regexp.MustCompile(`^file-[a-f0-9]{32}$`)
 // Attachment is safe for lists. Original bytes and extracted text are separate
 // scoped resources, never copied into an ordinary session-list response.
 type Attachment struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	MediaType string    `json:"media_type"`
-	Bytes     int64     `json:"bytes"`
-	SHA256    string    `json:"sha256"`
-	Status    string    `json:"status"`
-	Revision  string    `json:"revision,omitempty"`
-	ErrorCode string    `json:"error_code,omitempty"`
-	Coverage  string    `json:"coverage,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ParentRevision     string             `json:"parent_revision,omitempty"`
+	CorrectionAuthor   string             `json:"correction_author,omitempty"`
+	CorrectedAt        *time.Time         `json:"corrected_at,omitempty"`
+	OCRCompletedPages  int                `json:"ocr_completed_pages,omitempty"`
+	OCRLanguage        string             `json:"ocr_language,omitempty"`
+	ExtractionRevision string             `json:"extraction_revision,omitempty"`
+	Evidence           *document.Coverage `json:"evidence,omitempty"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	MediaType          string             `json:"media_type"`
+	Bytes              int64              `json:"bytes"`
+	SHA256             string             `json:"sha256"`
+	Status             string             `json:"status"`
+	Revision           string             `json:"revision,omitempty"`
+	ErrorCode          string             `json:"error_code,omitempty"`
+	Coverage           string             `json:"coverage,omitempty"`
+	CreatedAt          time.Time          `json:"created_at"`
 }
 
 type attachmentRecord struct {
-	Schema int `json:"schema"`
+	Schema            int      `json:"schema"`
+	PreviousRevisions []string `json:"previous_revisions,omitempty"`
 	Attachment
 	Text   string `json:"text,omitempty"`
 	Parser string `json:"parser,omitempty"`
@@ -54,9 +67,13 @@ func (s *ScopedManager) attachmentRoot(name string, create bool) (*os.Root, stri
 	if err != nil {
 		return nil, "", err
 	}
+	return s.manager.attachmentRootFor(session, create)
+}
+
+func (sm *SessionManager) attachmentRootFor(session *Session, create bool) (*os.Root, string, error) {
 	key := sha256.Sum256([]byte(session.OwnerID + "\x00" + session.Name + "\x00" + session.CreatedAt.UTC().Format(time.RFC3339Nano)))
 	dir := fmt.Sprintf(".attachments/%x", key)
-	root, err := os.OpenRoot(s.manager.sessionsDir)
+	root, err := os.OpenRoot(sm.sessionsDir)
 	if err != nil {
 		return nil, "", err
 	}
@@ -91,16 +108,51 @@ func readAttachmentRecord(root *os.Root, dir, id string) (attachmentRecord, erro
 		return record, err
 	}
 	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, maxAttachmentTextBytes+65537))
-	if err != nil || len(b) > maxAttachmentTextBytes+65536 || json.Unmarshal(b, &record) != nil || record.Schema != 1 || record.ID != id {
+	b, err := io.ReadAll(io.LimitReader(f, maxAttachmentRecordBytes+1))
+	if err != nil || len(b) > maxAttachmentRecordBytes || json.Unmarshal(b, &record) != nil || record.Schema != 1 || record.ID != id {
 		return record, ErrAttachmentUnavailable
+	}
+	if err := validateAttachmentRecord(record); err != nil {
+		return record, err
+	}
+	// Progress is derived from committed page files, never trusted from JSON.
+	record.OCRCompletedPages, err = attachmentOCRPageCount(root, dir, id)
+	if err != nil {
+		return record, err
 	}
 	return record, nil
 }
 
+func validateAttachmentRecord(record attachmentRecord) error {
+	if record.Schema != 1 || !attachmentID.MatchString(record.ID) || !validAttachmentHistory(record) {
+		return ErrAttachmentUnavailable
+	}
+	if record.Status == "ready" && record.Evidence != nil {
+		data, err := json.Marshal(record.Evidence)
+		if err != nil {
+			return ErrAttachmentUnavailable
+		}
+		digest := sha256.Sum256(data)
+		if !strings.HasSuffix(record.Parser, "/coverage-"+hex.EncodeToString(digest[:8])) {
+			return ErrAttachmentUnavailable
+		}
+	} else if record.Status == "ready" && strings.Contains(record.Parser, "/coverage-") {
+		return ErrAttachmentUnavailable
+	}
+	if record.Status == "ready" && record.ExtractionRevision == "" && strings.Contains(record.Parser, "/extraction-") {
+		return ErrAttachmentUnavailable
+	}
+	if record.OCRLanguage != "" {
+		if _, ok := documentocr.LookupSelection(record.OCRLanguage); !ok {
+			return ErrAttachmentUnavailable
+		}
+	}
+	return nil
+}
+
 func writeAttachmentRecord(root *os.Root, dir string, record attachmentRecord) error {
 	b, err := json.Marshal(record)
-	if err != nil || len(b) > maxAttachmentTextBytes+65536 {
+	if err != nil || len(b) > maxAttachmentRecordBytes {
 		return ErrAttachmentLimit
 	}
 	temp := dir + "/.record-" + rand.Text()
@@ -118,11 +170,15 @@ func writeAttachmentRecord(root *os.Root, dir string, record attachmentRecord) e
 }
 
 func (s *ScopedManager) CreateAttachment(name, filename, mediaType string, data []byte) (Attachment, error) {
+	return s.CreateAttachmentWithOCRLanguage(name, filename, mediaType, data, "eng")
+}
+
+func (s *ScopedManager) CreateAttachmentWithOCRLanguage(name, filename, mediaType string, data []byte, language string) (Attachment, error) {
+	if _, ok := documentocr.LookupSelection(language); !ok {
+		return Attachment{}, ErrAttachmentUnavailable
+	}
 	s.manager.mutationMu.Lock()
 	defer s.manager.mutationMu.Unlock()
-	if err := s.checkCanonicalName(name); err != nil {
-		return Attachment{}, err
-	}
 	if filename == "" || len(filename) > 255 || strings.ContainsAny(filename, `/\`) || strings.IndexFunc(filename, unicode.IsControl) >= 0 || len(mediaType) > 128 || strings.IndexFunc(mediaType, unicode.IsControl) >= 0 || len(data) == 0 || int64(len(data)) > MaxAttachmentBytes {
 		return Attachment{}, ErrAttachmentLimit
 	}
@@ -164,6 +220,7 @@ func (s *ScopedManager) CreateAttachment(name, filename, mediaType string, data 
 	}
 	digest := sha256.Sum256(data)
 	a := Attachment{ID: "file-" + hex.EncodeToString(nonce[:]), Name: filename, MediaType: mediaType, Bytes: int64(len(data)), SHA256: hex.EncodeToString(digest[:]), Status: "uploaded", CreatedAt: time.Now().UTC()}
+	a.OCRLanguage = language
 	f, err := root.OpenFile(dir+"/"+a.ID+".bin", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return Attachment{}, err
@@ -189,12 +246,13 @@ func (s *ScopedManager) PrepareAttachmentTextOnly(name, id, text, parser string)
 	return s.prepareAttachment(name, id, text, parser+"/native-text-only", "", "native_text_only")
 }
 
-func (s *ScopedManager) prepareAttachment(name, id, text, parser, errorCode, coverage string) (Attachment, error) {
+func (s *ScopedManager) PrepareAttachmentEvidence(name, id, text, parser, errorCode, coverage string, evidence *document.Coverage) (Attachment, error) {
+	return s.prepareAttachment(name, id, text, parser, errorCode, coverage, attachmentPreparation{evidence: evidence})
+}
+
+func (s *ScopedManager) prepareAttachment(name, id, text, parser, errorCode, coverage string, preparation ...attachmentPreparation) (Attachment, error) {
 	s.manager.mutationMu.Lock()
 	defer s.manager.mutationMu.Unlock()
-	if err := s.checkCanonicalName(name); err != nil {
-		return Attachment{}, err
-	}
 	root, dir, err := s.attachmentRoot(name, false)
 	if err != nil {
 		return Attachment{}, err
@@ -210,10 +268,47 @@ func (s *ScopedManager) prepareAttachment(name, id, text, parser, errorCode, cov
 	if len(text) > maxAttachmentTextBytes || len(parser) > 128 || len(errorCode) > 128 {
 		return Attachment{}, ErrAttachmentLimit
 	}
+	details := attachmentPreparation{}
+	if len(preparation) > 0 {
+		details = preparation[0]
+	}
+	record.ExtractionRevision = ""
+	if details.structure != nil {
+		graph, err := details.structure.WithTextEnvelope(text)
+		if err != nil || graph.OriginalSHA256 != record.SHA256 {
+			return Attachment{}, ErrAttachmentUnavailable
+		}
+		if details.evidence == nil {
+			details.evidence = graph.Coverage
+		}
+		if !reflect.DeepEqual(graph.Coverage, details.evidence) {
+			return Attachment{}, ErrAttachmentUnavailable
+		}
+		if err := s.writeAttachmentStructure(root, dir, name, id, graph); err != nil {
+			return Attachment{}, err
+		}
+		record.ExtractionRevision = graph.ID
+		parser += "/" + graph.ID
+	}
+	record.Evidence = nil
+	if details.evidence != nil {
+		data, err := json.Marshal(details.evidence)
+		if err != nil || len(data) > document.MaxCoverageBytes {
+			return Attachment{}, ErrAttachmentLimit
+		}
+		var copy document.Coverage
+		if json.Unmarshal(data, &copy) != nil {
+			return Attachment{}, ErrAttachmentUnavailable
+		}
+		record.Evidence = &copy
+		digest := sha256.Sum256(data)
+		parser += "/coverage-" + hex.EncodeToString(digest[:8])
+	}
 	if errorCode != "" {
 		record.Status = "failed"
 		record.ErrorCode = errorCode
-		record.Text = text // Retain partial evidence; ReadAttachment still requires ready.
+		record.Parser = parser // Retain the pipeline identity with review-only OCR.
+		record.Text = text     // Retain partial evidence; ReadAttachment still requires ready.
 		record.Coverage = ""
 	} else {
 		if strings.TrimSpace(text) == "" || parser == "" {

@@ -45,11 +45,11 @@ test('model guidance distinguishes local files, online discovery and document se
   page.on('request', request => { if (request.method() !== 'GET') mutations.push(request.url()); });
   await page.goto('/ui/#/models');
   await expect(page.getByText(/Language models write replies/)).toBeVisible();
-  await page.getByRole('button', { name: 'Embeddings', exact: true }).click();
+  await page.locator('.model-category-filter').selectOption({label:'Embeddings'});
   await expect(page.getByText(/They do not write chat replies/)).toBeVisible();
-  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   await expect(page.getByText(/Discovery uses the internet/)).toBeVisible();
-  await page.getByRole('tab', { name: 'Installed', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Installed', exact: true }).click();
   await expect(page.getByText(/Discovery uses the internet/)).toHaveCount(0);
   expect(mutations).toEqual([]);
 });
@@ -63,8 +63,8 @@ test('language is directly discoverable in Settings and preserves the selected l
   await expect(language.locator('option')).toHaveCount(Object.keys(languageRegistry).length);
   for (const locale of ['en','fr','es','de','ar','sw','sn','nd','zu']) {
     await language.selectOption(locale);
-    const options = page.locator('.workspace-options > button');
-    await expect(options).toHaveAccessibleName(workspaceShell[locale as keyof typeof workspaceShell].options);
+    await expect(page.locator('.workspace-options')).toHaveCount(0);
+    await expect(page.locator('html')).toHaveAttribute('lang',locale);
   }
   await language.selectOption('ar');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -90,8 +90,8 @@ test('browser chrome uses the monochrome workspace identity', async ({ page, req
 test('first-run stays pending while a chat model is not available', async ({ page }) => {
   await mockWorkspace(page, false);
   await page.goto('/ui/#/chat');
-  await expect(page.getByRole('dialog', { name: 'Your AI workspace' })).toBeVisible();
-  await page.getByRole('dialog', { name: 'Your AI workspace' }).getByRole('button', { name: 'Choose a chat model' }).click();
+  await expect(page.getByRole('region', { name: 'Your AI workspace' })).toBeVisible();
+  await page.getByRole('region', { name: 'Your AI workspace' }).getByRole('button', { name: 'Choose a chat model' }).click();
   await expect(page).toHaveURL(/#\/models\/discover$/);
   expect(await page.evaluate(() => localStorage.getItem('offgrid.onboarding.complete'))).toBeNull();
   await expect(page.getByText('Download a chat model to begin working.').first()).toBeVisible();

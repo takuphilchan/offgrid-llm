@@ -53,7 +53,7 @@ func (s *Server) prepareConversationTurn(ctx context.Context, scope agents.Contr
 	}
 	command := agents.ConversationCommand{Payload: agents.ConversationCommandPayload{Input: &agents.ConversationInput{Content: input.Input.Content, Model: input.Input.Model}}}
 	response := &preparationResponse{header: http.Header{}}
-	config, model, ok := s.resolveConversationRunBeforeInput(response, request, current, command, inputID)
+	config, model, ok := s.resolveConversationRunBeforeInput(response, request, current, command, inputID, len(input.Input.KnowledgeSelections) > 0)
 	if !ok {
 		return nil, response.preparationError()
 	}
@@ -69,6 +69,9 @@ func (s *Server) prepareConversationTurn(ctx context.Context, scope agents.Contr
 	config.ComputerScope, config.ComputerApprovalMode = "", ""
 	config.NativeWorkflowVersion, config.NativeActionContractVersion = 0, 0
 	config.NativeExpectations = nil
+	if err = s.attachConversationInputSources(request, current, input.Input, &config); err != nil {
+		return nil, err
+	}
 	if err = s.appendFocusedWorkContext(scope, conversation, input, &config); err != nil {
 		return nil, err
 	}

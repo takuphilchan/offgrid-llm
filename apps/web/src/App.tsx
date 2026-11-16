@@ -1,11 +1,15 @@
+import { updateWorkspaceStartup } from './lib/workspace-startup';
+import startupTranslations from './i18n/feature-packs.json';
+import { refreshWorkspace } from './lib/workspace-refresh';
+import { workSurface } from './i18n/work-surface';
+import {CommandWindowHeader, useCommandWindow} from './components/shell/CommandWindow';
 import { personalization } from './i18n/personalization';
 import { RuntimePreparation } from './features/models/RuntimePreparation';
 import { readOnboarding, saveOnboarding } from './features/models/onboarding-state';
 import { readAppearance } from './appearance';
-import { refreshWorkspace } from './lib/workspace-refresh';
 import { TerminalContextProvider } from './lib/terminal-context';
 import { chatAvailable, initialChatModel } from './api/model-capabilities';
-import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { APIError, api, setAgentReplayScope, type Model, type PublicUser } from './api/client';
 import { WorkSearchNavigation, WorkSearchReturn } from './components/WorkSearchNavigation';
 import { CommandPalette, type CommandAction } from './components/CommandPalette';
@@ -15,7 +19,7 @@ import { ComputerActivity } from './features/agents/ComputerActivity';
 import { ChatPage } from './features/chat/ChatPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { useI18n } from './i18n';
-import { WorkspaceHeader, WorkspaceOptions } from './components/shell/WorkspaceHeader';
+import { WorkspaceHeader } from './components/shell/WorkspaceHeader';
 import { WorkspaceNavigation } from './components/shell/WorkspaceNavigation';
 import { SidebarContext } from './components/shell/SidebarSlot';
 import { navigationGroups, pageFromLocation, type Page, type ServiceHealth as Health } from './lib/navigation';
@@ -49,8 +53,11 @@ class PageBoundary extends Component<{ children: ReactNode; message: string; ret
 }
 
 export function App() {
+  const commandWindow = useCommandWindow();
+  const compactWindow = commandWindow.mode === 'compact';
   const { messages: text, locale, language } = useI18n();
   const [navigationOpen, setNavigationOpen] = useState(false);
+  useEffect(()=>{if(compactWindow)setNavigationOpen(false);},[compactWindow]);
   const navigationWasOpen = useRef(false);
   navigationWasOpen.current = navigationOpen;
   const [narrow, setNarrow] = useState(() => matchMedia('(max-width: 1023px)').matches);
@@ -76,6 +83,7 @@ export function App() {
     if (window.electron?.setPresentation) void window.electron.setPresentation({ locale:language, theme: theme.choice, appearance }).then(() => window.dispatchEvent(new CustomEvent('offgrid-preference-save',{detail:{key:'desktop-presentation',saved:true}}))).catch(() => window.dispatchEvent(new CustomEvent('offgrid-preference-save',{detail:{key:'desktop-presentation',saved:false}})));
   }, [language, theme.choice, appearance]);
   const [page, setPage] = useState<Page>(pageFromLocation);
+  const [route,setRoute]=useState(location.hash);
   const [health, setHealth] = useState<Health>('checking');
   const [models, setModels] = useState<Model[]>([]);
   const [model, setModel] = useState(() => readPreference('offgrid.model') ?? '');
@@ -85,6 +93,9 @@ export function App() {
   const [guest, setGuest] = useState(false);
   const [authRequired, setAuthRequired] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [chatInitialized, setChatInitialized] = useState(false);
+  const finishChatStartup = useCallback(() => setChatInitialized(true), []);
+  const startupFinished = useRef(false);
   const [inventoryState, setInventoryState] = useState<'checking' | 'ready' | 'failed'>('checking');
   const [inventoryError, setInventoryError] = useState('');
   const [workspaceID, setWorkspaceID] = useState('');
@@ -105,8 +116,9 @@ export function App() {
   }, [onboardingIdentity]);
   const [showCommands, setShowCommands] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const refreshLock = useRef(false);
+  useEffect(() => { setShowHelp(false); }, [route]);
+  useEffect(() => {if (route && route !== '#/' && route !== '#/chat' && route !== '#/home') setShowOnboarding(false);}, [route]);
+  useEffect(() => {if (showHelp) setShowOnboarding(false);}, [showHelp]);
   const accessRevision = useRef(0);
   const lastIdentity = useRef<{ actor: string; workspace: string; taskFirst: boolean } | null>(null);
   useEffect(() => {
@@ -115,10 +127,10 @@ export function App() {
     return () => window.removeEventListener('offgrid:unauthenticated', expired);
   }, []);
 
-  const refreshBase = useCallback(async (preserveModelSelection = false) => {
+  const refreshBase = useCallback(async (preserveModelSelection = false, persistImportPreference = preserveModelSelection) => {
     // Import is acquisition, not selection. Remember that distinction across
     // reloads too, while retaining first-launch defaults for existing clients.
-    if (preserveModelSelection) {
+    if (persistImportPreference) {
       allowInitialModel.current = false;
       writePreference('offgrid.model.autoselect', 'false');
     }
@@ -180,12 +192,27 @@ export function App() {
   }, [text.common.error]);
 
   useEffect(() => {
-    if (!window.location.hash) window.history.replaceState(null, '', '#/chat');
-    const syncPage = () => setPage(pageFromLocation());
+    if (!window.location.hash) window.history.replaceState(null, '', '#/home');
+    const syncPage = () => { setPage(pageFromLocation()); setRoute(location.hash); };
+    syncPage();
     window.addEventListener('hashchange', syncPage);
     window.addEventListener('popstate', syncPage);
     return () => { window.removeEventListener('hashchange', syncPage); window.removeEventListener('popstate', syncPage); };
   }, []);
+  // Returning from CLI work or another window refreshes data without resetting drafts.
+  useEffect(() => {
+    if (access !== 'ready') return;
+    let pending = false;
+    const resume = async () => {
+      if (document.visibilityState !== 'visible' || pending) return;
+      pending = true;
+      try { await Promise.allSettled([refreshBase(true, false), refreshWorkspace()]); }
+      finally { pending = false; }
+    };
+    window.addEventListener('focus', resume);
+    document.addEventListener('visibilitychange', resume);
+    return () => { window.removeEventListener('focus', resume); document.removeEventListener('visibilitychange', resume); };
+  }, [access, refreshBase]);
   useEffect(() => { void refreshBase(); const timer = window.setInterval(() => void api.health().then(() => setHealth('ready')).catch(() => setHealth('offline')), 15_000); return () => clearInterval(timer); }, [refreshBase]);
   useEffect(() => { if (model) writePreference('offgrid.model', model); }, [model]);
   useEffect(() => {
@@ -206,15 +233,6 @@ export function App() {
     setShowOnboarding(false);
   }, [onboardingIdentity]);
 
-  const refreshCurrentWorkspace = async () => {
-    if (refreshLock.current) return;
-    refreshLock.current = true;
-    setRefreshing(true);
-    try { await Promise.all([refreshBase(), refreshWorkspace()]); }
-    catch (reason) { setLoadError(reason instanceof Error ? reason.message : text.common.error); }
-    finally { refreshLock.current = false; setRefreshing(false); }
-  };
-
   const continueSetup = (target: 'chat' | 'models' | 'models/discover' | 'models/import') => {
     if (onboardingPending) saveOnboarding(onboardingIdentity, 'working');
     setShowOnboarding(false);
@@ -233,6 +251,18 @@ export function App() {
     { id: 'theme-dark', label: text.shell.darkTheme, group: text.shell.appearance, icon: 'settings', keywords: text.shell.theme, run: () => theme.setChoice('dark') },
     { id: 'theme-light', label: text.shell.lightTheme, group: text.shell.appearance, icon: 'settings', keywords: text.shell.theme, run: () => theme.setChoice('light') }
   ];
+  useEffect(() => {
+    if (startupFinished.current) return;
+    updateWorkspaceStartup({stage:access === 'ready' ? text.common.loading + ' · ' + text.nav.chat : text.status.checking, locale:language, startupOverrides:(startupTranslations as Record<string,Record<string,Record<string,string>>>)[language]?.['desktop/startup-welcome'], retry:text.common.retry});
+    const ready = access === 'login' || !!loadError || (access === 'ready' && (page !== 'chat' || showOnboarding || chatInitialized));
+    if (!ready) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => {
+      startupFinished.current = true;
+      updateWorkspaceStartup({ready:true});
+    }); });
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+  }, [access,loadError,page,showOnboarding,chatInitialized,text,language]);
   const commandShortcut = navigator.userAgent.includes('Mac') ? '⌘ K' : 'Ctrl K';
 
   if (access === 'checking') return <div className="boot-screen"><div className="orb"><Icon name="models" size={28} /></div><span>{loadError || text.status.checking}</span>{loadError && <button className="secondary-button" onClick={() => void refreshBase()}>{text.common.retry}</button>}</div>;
@@ -248,32 +278,32 @@ export function App() {
 
   const admin = !authRequired || authUser?.role === 'admin';
   const workspaceScope = JSON.stringify([actor, workspaceID, admin, authUser?.role]);
-  return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><TerminalContextProvider><ActiveWorkProvider taskFirst={taskFirst} compact={workSummary}><WorkSearchNavigation><SidebarContext.Provider value={{ target: historyTarget, actionTarget, close: closeNavigation }}><div className={`app-shell${collapsed && !narrow ? ' sidebar-collapsed' : ''}`}>
-    <WorkspaceNavigation page={page} health={health} open={navigationOpen} narrow={narrow} collapsed={collapsed && !narrow} onToggle={toggleSidebar} onClose={closeNavigation} historyRef={setHistoryTarget} actionRef={setActionTarget} footer={<WorkspaceOptions health={health} refreshing={refreshing} onRefresh={() => void refreshCurrentWorkspace()} username={authUser?.username} onLogout={() => void logout()} />} />
+  return <WorkspaceContext.Provider value={{ scope: actor, workspace: workspaceID, admin, knowledge: admin || authUser?.role === 'user' }}><WorkspaceDraftProvider key={workspaceScope}><TerminalContextProvider><ActiveWorkProvider taskFirst={taskFirst} compact={workSummary}><WorkSearchNavigation><SidebarContext.Provider value={{ target: historyTarget, actionTarget, close: closeNavigation }}><div className={`app-shell${collapsed && !narrow ? ' sidebar-collapsed' : ''}${compactWindow ? ' command-window' : ''}`}>
+    <WorkspaceNavigation page={page} health={health} open={navigationOpen} narrow={narrow} collapsed={collapsed && !narrow} onToggle={toggleSidebar} onClose={closeNavigation} historyRef={setHistoryTarget} actionRef={setActionTarget} />
     {narrow && navigationOpen && <button className="navigation-scrim" tabIndex={-1} aria-label={text.models.cancel} onClick={closeNavigation} />}
 
-    <main className={`workspace${page === 'chat' ? ' chat-page' : ''}`} inert={narrow && navigationOpen}>
-      <WorkspaceHeader title={text[page].title} shortcut={commandShortcut} onCommands={() => setShowCommands(true)} onHelp={()=>setShowHelp(true)} navigationOpen={navigationOpen} onNavigation={() => setNavigationOpen(true)} />
+    <main className={`workspace${page === 'chat' && !showHelp ? ' chat-page' : ''}${showHelp ? ' help-page' : ''}`} inert={!compactWindow && narrow && navigationOpen}>
+      {compactWindow ? <CommandWindowHeader/> : <WorkspaceHeader title={showHelp ? workspaceHelp[locale].help : page === 'chat' && route === '#/home' ? workSurface(locale).home : page === 'knowledge' ? workSurface(locale).library : text[page].title} shortcut={commandShortcut} onCommands={() => {setShowHelp(false);setShowCommands(true);}} onHelp={()=>setShowHelp(true)} navigationOpen={navigationOpen} onNavigation={() => setNavigationOpen(true)} />}
       {admin && <ComputerActivity key={authUser?.id ?? 'local'} />}
       {loadError && <div className="error-banner" role="alert"><span>{loadError}</span><button onClick={() => void refreshBase()}>{text.common.retry}</button></div>}
-      <section className="page-content">
+      <section className="page-content" hidden={showHelp || showOnboarding}>
         <WorkSearchReturn />
         {(page === 'chat' || page === 'agents') && <DraftRecoveryNotice />}
         <SetupHandoffProvider key={workspaceScope} refresh={refreshBase}>
         <PageBoundary key={`${page}:${workspaceScope}`} message={text.common.error} retry={text.common.retry}>
-          {page === 'chat' && <ChatPage scope={actor} models={models} model={model} setModel={setModel} onboardingPending={onboardingPending} onFirstResponse={finishOnboarding} onOpenModels={() => { window.location.hash = '#/models'; }} />}
+          {page === 'chat' && <ChatPage onInitialReady={finishChatStartup} scope={actor} models={models} model={model} setModel={setModel} onboardingPending={onboardingPending} onFirstResponse={finishOnboarding} onOpenModels={() => { window.location.hash = '#/models'; }} />}
           {page === 'knowledge' && <KnowledgePage models={models} onModelsChanged={refreshBase} onOpenModels={() => { window.location.hash = '#/models'; }} />}
           {page === 'agents' && <AgentPage models={models} model={model} />}
           {page === 'models' && <ModelsPage models={models} selected={model} setSelected={setModel} onRefresh={refreshBase} onImportRefresh={() => refreshBase(true)} onboardingPending={onboardingPending} />}
           {page === 'activity' && <ActivityPage health={health} taskFirst={taskFirst} />}
-          {page === 'settings' && <SettingsPage health={health} themeChoice={theme.choice} onThemeChange={theme.setChoice} onShowOnboarding={() => setShowOnboarding(true)} />}
+          {page === 'settings' && <SettingsPage username={authUser?.username} onLogout={() => void logout()} inSidebar={!narrow && !collapsed} health={health} themeChoice={theme.choice} onThemeChange={theme.setChoice} onShowOnboarding={() => setShowHelp(true)} />}
         </PageBoundary>
         </SetupHandoffProvider>
       </section>
-    </main>
-    {showHelp && !showOnboarding && <WorkspaceHelp close={()=>setShowHelp(false)} guide={()=>{setShowHelp(false);setShowOnboarding(true);}} />}
-    {showCommands && !showOnboarding && !showHelp && <CommandPalette workSearch={workSearch} actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
+      {showHelp && !showOnboarding && <WorkspaceHelp close={()=>setShowHelp(false)} />}
     {showOnboarding && <Onboarding key={onboardingIdentity} canPrepare={admin} health={health} inventoryState={inventoryState} inventoryError={inventoryError} chatModelCount={chatModels.length} chatReady={chatReady} suggestedModel={suggestedModel} pending={onboardingPending} onImport={admin && offlineImport ? () => continueSetup('models/import') : undefined} onAction={() => continueSetup(chatReady ? 'chat' : chatModels.length ? 'models' : 'models/discover')} onSelectSuggested={() => { setModel(suggestedModel); continueSetup('chat'); }} onRetry={refreshBase} onClose={() => { if (onboardingPending) saveOnboarding(onboardingIdentity, 'working'); setShowOnboarding(false); }} />}
+    </main>
+    {showCommands && !showOnboarding && !showHelp && <CommandPalette workSearch={workSearch} actions={commandActions} title={text.shell.quickActions} placeholder={text.shell.searchActions} empty={text.shell.noActions} closeLabel={text.models.cancel} onClose={() => setShowCommands(false)} />}
   </div></SidebarContext.Provider></WorkSearchNavigation></ActiveWorkProvider></TerminalContextProvider></WorkspaceDraftProvider></WorkspaceContext.Provider>;
 }
 
@@ -293,25 +323,12 @@ function Onboarding({ health, inventoryState, inventoryError, chatModelCount, ch
   onClose: () => void;
 }) {
   const { messages: text, locale } = useI18n();
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const element = dialog.current!;
-    const previous = document.activeElement as HTMLElement | null;
-    element.showModal();
-    return () => { element.close(); previous?.focus(); };
-  }, []);
-  const containFocus = (event: KeyboardEvent<HTMLDialogElement>) => {
-    if (event.key !== 'Tab') return;
-    const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), summary, [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(element => element.getClientRects().length > 0);
-    if (focusable.length === 0) { event.preventDefault(); event.currentTarget.focus(); return; }
-    const first = focusable[0], last = focusable[focusable.length - 1], active = document.activeElement;
-    if (event.shiftKey && (active === first || !event.currentTarget.contains(active))) { event.preventDefault(); last.focus(); }
-    else if (!event.shiftKey && (active === last || !event.currentTarget.contains(active))) { event.preventDefault(); first.focus(); }
-  };
+  const surface=useRef<HTMLElement>(null);
+  useEffect(()=>{ const previous=document.activeElement as HTMLElement|null; surface.current?.focus(); return()=>{if(previous?.isConnected)previous.focus();}; },[]);
   const checking = health === 'checking' || inventoryState === 'checking';
   const hasSuggested = pending && health === 'ready' && inventoryState === 'ready' && !!suggestedModel;
   const action = !pending ? text.onboarding.close : checking ? text.status.checking : health !== 'ready' ? text.onboarding.retryService : inventoryState === 'failed' ? text.common.retry : chatReady ? text.onboarding.startChat : hasSuggested ? `${workspaceOrder(locale).selectModel}: ${readableModelName(suggestedModel)}` : text.onboarding.chooseModel;
-  return <dialog ref={dialog} className="onboarding" aria-labelledby="onboarding-title" onKeyDown={containFocus} onCancel={event => { event.preventDefault(); onClose(); }}>
+  return <section ref={surface} tabIndex={-1} className="workspace-setup" aria-labelledby="onboarding-title" onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();onClose();}}}>
     <button className="onboarding-close icon-button" onClick={onClose} aria-label={text.onboarding.close}><Icon name="close" size={18} /></button>
     <div className="onboarding-heading"><div className="onboarding-mark"><Icon name="models" size={24} /></div><h2 id="onboarding-title">{text.onboarding.title}</h2></div>
     <p>{text.onboarding.body}</p>
@@ -328,5 +345,5 @@ function Onboarding({ health, inventoryState, inventoryError, chatModelCount, ch
       {hasSuggested && <button className="text-button" onClick={onAction}>{text.onboarding.chooseModel}</button>}
       {pending && health === 'ready' && inventoryState === 'ready' && !chatModelCount && onImport && <button className="text-button" onClick={onImport}>{modelImport(locale).title}</button>}
     </div>
-  </dialog>;
+  </section>;
 }

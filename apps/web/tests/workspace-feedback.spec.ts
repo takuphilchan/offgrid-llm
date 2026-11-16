@@ -2,6 +2,7 @@ import { openSettings } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { locales } from '../src/i18n';
 import { operationFeedback } from '../src/i18n/operation-feedback';
+import { workSurface } from '../src/i18n/work-surface';
 
 // UI contract fixtures only: no Hub downloads, microphone or native input.
 async function fixture(page: Page) {
@@ -34,9 +35,9 @@ async function fixture(page: Page) {
 
 async function models(page: Page) {
   await page.goto('/ui/#/models');
-  await page.getByRole('button', { name: 'Speech recognition', exact: true }).click();
+  await page.locator('.model-category-filter').selectOption({label:'Speech recognition'});
   await expect(page.getByRole('region', { name: 'Installed', exact: true })).toHaveAttribute('aria-busy', 'false');
-  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
 }
 
 test('search retry preserves the failed query and survives unrelated inventory polling', async ({ page }) => {
@@ -111,7 +112,7 @@ test('edited queries and category changes discard late search results without fa
   await page.getByRole('searchbox').fill('old');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect.poll(() => pending.length).toBe(2);
-  await page.getByRole('button', { name: 'Speech generation', exact: true }).click();
+  await page.locator('.model-category-filter').selectOption({label:'Speech generation'});
   await pending[1]();
   await expect(page.getByRole('heading', { name: 'fixture/stale' })).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
@@ -200,7 +201,7 @@ test('superseded Knowledge reads cannot replace readiness; selected Knowledge is
   mode = 'unavailable';
   await refreshWorkspace(page);
   await expect(page.locator('.composer > [role="status"]')).toBeVisible();
-  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
+  await page.locator('.composer-attachments-menu > button').click();
   await expect(page.getByRole('link', { name: 'Set up Knowledge' })).toBeVisible();
   await expect(knowledge).toBeChecked();
   await expect(knowledge).toBeEnabled(); // User can turn it off; never silently downgrade.
@@ -232,7 +233,7 @@ test('Settings groups preferences and service identity without claiming desktop 
   await expect(page.getByText('http://127.0.0.1:11611', { exact: true })).toBeVisible();
   await expect(page.getByText('Compatibility fixture', { exact: true })).toBeVisible();
   await expect(page.getByText('C:\\desktop-only\\models', { exact: true })).toBeHidden();
-  await page.getByRole('button', { name: 'Access & data', exact: true }).click();
+  await page.getByRole('button', { name: 'Local storage', exact: true }).click();
   await expect(page.getByText('C:\\desktop-only\\models', { exact: true })).toBeVisible();
   await expect(page.locator('.desktop-local-paths')).toContainText('not its workspace paths');
   await refreshWorkspace(page);
@@ -245,7 +246,7 @@ for (const locale of ['en', 'ar'] as const) for (const theme of ['light', 'dark'
     await page.addInitScript(({ locale, theme }) => { localStorage.setItem('offgrid.locale', locale); localStorage.setItem('offgrid.theme', theme); }, { locale, theme });
     await page.goto('/ui/#/chat');
     const copy = locales[locale].messages;
-    await expect(page.getByRole('heading', { name: copy.chat.emptyTitle, exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: workSurface(locale).welcome, exact: true })).toBeVisible();
     await expect(page.getByText(copy.chat.emptyBody, { exact: true })).toHaveCount(0);
     await expect(page.locator('.sidebar-foot')).not.toContainText('100%');
     await expect(page.getByRole('link', { name: copy.common.serviceDetails, exact: true })).toHaveCount(0);

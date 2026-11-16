@@ -38,6 +38,38 @@ func profileHTTP(s *Server, method, path string, payload any) *httptest.Response
 	return w
 }
 
+func TestProfileDeletionHTTPRequiresReviewedOwnerSnapshot(t *testing.T) {
+	s := profileFixture(t)
+	w := profileHTTP(s, "POST", "/api/v2/agent-profiles", map[string]any{"settings": agents.ProfileSettings{Name: "Disposable", Model: "model", MaxIterations: 8}})
+	if w.Code != 201 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var p agents.AgentProfile
+	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/v2/agent-profiles/" + p.ID
+	w = profileHTTP(s, "GET", path+"/deletion", nil)
+	var r agents.ProfileDeletionReview
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &r) != nil || r.Revision != 1 || len(r.Token) != 64 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	w = profileHTTP(s, "DELETE", path, map[string]any{"expected_revision": 1, "review_token": "stale"})
+	if w.Code != 409 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	w = profileHTTP(s, "DELETE", path, map[string]any{"expected_revision": r.Revision, "review_token": r.Token})
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"deleted":true`) {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	for _, suffix := range []string{"", "?revision=1", "/deletion"} {
+		w = profileHTTP(s, "GET", path+suffix, nil)
+		if w.Code != 404 {
+			t.Fatal("deleted revision visible", w.Code, w.Body.String())
+		}
+	}
+}
+
 func TestProfileAPIValidatesResourcesAndPinsAdmission(t *testing.T) {
 	s := profileFixture(t)
 	d, _ := s.toolRegistry.Capability("calculator")

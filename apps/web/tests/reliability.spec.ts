@@ -56,7 +56,7 @@ test('chat draft survives navigation and reload without leaking to another accou
   const state = await workspace(page);
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('Private Alice draft');
-  await page.locator('.sidebar a[href="#/agents"]').click();
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/agents"]').click();
   await expect(page.locator('.task-composer textarea')).toHaveCount(0);
   await page.locator('.sidebar a[href="#/chat"]').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Private Alice draft');
@@ -66,10 +66,10 @@ test('chat draft survives navigation and reload without leaking to another accou
   await page.reload();
   await expect(page.locator('.composer textarea')).toHaveValue('');
   // Alice's completed setup must not silently complete Bob's first run.
-  await expect(page.locator('dialog.onboarding')).toBeVisible();
-  await page.locator('dialog.onboarding .onboarding-close').click();
-  await expect(page.locator('dialog.onboarding')).toHaveCount(0);
-  await page.locator('.sidebar a[href="#/agents"]').click();
+  await expect(page.locator('.workspace-setup')).toBeVisible();
+  await page.locator('.workspace-setup .onboarding-close').click();
+  await expect(page.locator('.workspace-setup')).toHaveCount(0);
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/agents"]').click();
   await expect(page.locator('.task-composer textarea')).toHaveCount(0);
   state.switchUser('alice');
   await page.reload();
@@ -149,7 +149,7 @@ test('failed browser draft storage warns without discarding typed text', async (
   await page.locator('.composer textarea').fill('Do not lose this text');
   await expect(page.getByRole('alert')).toContainText(/draft/i);
   await expect(page.locator('.composer textarea')).toHaveValue('Do not lose this text');
-  await page.locator('.sidebar a[href="#/agents"]').click();
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/agents"]').click();
   await page.locator('.sidebar a[href="#/chat"]').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Do not lose this text');
 });

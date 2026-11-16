@@ -208,18 +208,15 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
   const transfers = Object.values(progress).filter(item => item.status !== 'complete' && !(view === 'discover' && discoverySource === 'curated' && filteredCatalog.some(model => `${model.id}.gguf` === item.file_name)));
   return <div className="stack models-workspace">
     {discarding && <ConfirmDialog title={categoryCopy.discard} body={`${discarding.file_name}\n\n${categoryCopy.discardConfirm}`} confirmLabel={categoryCopy.discard} confirm={discard} close={() => setDiscarding(null)} />}
-    <div className="model-library-toolbar"><LibraryNavigation view={view} change={setView} />
-    <div className="model-category-picker" role="group" aria-label={categoryCopy.category}>{categories.map(value => <button key={value} className="secondary-button" aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryCopy[value]}</button>)}</div></div>
+    <div className="model-library-toolbar"><LibraryNavigation view={view} source={discoverySource} change={(next,source)=>{setView(next);if(next==='discover')setDiscoverySources(old=>({...old,[category]:source}));}} />
+    <label className="model-category-control"><span>{categoryCopy.category}</span><select className="model-category-filter" value={category} onChange={event=>setCategory(event.target.value as ModelCategory)}>{categories.map(value=><option key={value} value={value}>{categoryCopy[value]}</option>)}</select></label></div>
     <p className="model-search-hint">{view === 'discover' ? text.guidance.discovery : category === 'language' ? text.guidance.languageModels : category === 'embeddings' ? text.guidance.embeddingModels : text.guidance.speechModels}</p>
-    <div id="model-library-panel" role="tabpanel" aria-labelledby={`model-view-${view}`} className="stack">
-    {packageMode ? <PackageModels key={category} category={category} view={view} onDiscover={discover} /> : <>
+    <div id="model-library-panel" className="stack">
+    {packageMode ? <PackageModels key={category} category={category} view={view} discoverySource={discoverySource} onDiscover={discover} /> : <>
     {confirmDelete && <ConfirmDialog title={confirmDelete} body={workflow[locale].deleteModel} close={() => setConfirmDelete('')} confirm={async () => { const item = models.find(model => model.id === confirmDelete); if (item) await remove(item); }} />}
     {needsChatModel && !importDestination && <div className="setup-guidance" role="status"><strong>{text.onboarding.chooseModel}</strong><p>{text.onboarding.modelHint}</p></div>}
     {readyForFirstChat && <div className="setup-guidance"><p>{text.onboarding.firstReplyHint}</p><a className="primary-button" href="#/chat">{text.onboarding.startChat}</a></div>}
     {admin && offlineImport && category === 'language' && importDestination && <OfflineModelImport onRefresh={onImportRefresh} />}
-    {view === 'discover' && <div className="model-discovery-sources" role="group" aria-label={text.models.discover}>
-      {(['curated', 'search'] as const).map(source => <button key={source} type="button" className="secondary-button" aria-pressed={discoverySource === source} onClick={() => setDiscoverySources(old => ({ ...old, [category]: source }))}>{modelLibrary(locale)[source]}</button>)}
-    </div>}
     {view === 'discover' && discoverySource === 'search' && (admin ? <ModelSearch key={category} bundles={bundles} category={category} models={models} progress={progress} busy={operation !== ''} download={download} cancel={cancel} /> : <p className="permission-notice">{interaction[locale].adminOnly}</p>)}
     {error && <div className="inline-error" role="alert">{error}<button disabled={loading} onClick={() => void load()}>{text.common.refresh}</button></div>}
     {progressError && <div className="inline-error" role="alert">{progressError}<button onClick={() => void load()}>{text.common.retry}</button></div>}
@@ -247,9 +244,9 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
       return <article className="catalog-card" key={item.file_name}><h3>{catalogItem?.name ?? item.file_name}</h3><ModelDownloadProgress download={item} /><div className="catalog-actions">{isActiveDownload(item) ? <button className="danger-button" disabled={!admin || operation !== ''} onClick={() => void cancel(item)}>{text.models.cancel}</button> : <button className="primary-button" disabled={!admin || operation !== '' || !source} onClick={() => { if (source) void download(source, item.enable_knowledge === true); }}>{text.models.resume}</button>}{!isActiveDownload(item) && <button className="text-button" disabled={!admin || operation !== ''} onClick={() => setDiscarding(item)}><Icon name="trash" size={16} />{categoryCopy.discard}</button>}</div></article>;
     })}</div></details>}
     {view === 'installed' && category === 'language' && <LanguagePackageModels />}
-    {admin && offlineImport && category === 'language' && !importDestination && <OfflineModelImport onRefresh={onImportRefresh} />}
+    {admin && offlineImport && category === 'language' && !importDestination && <details className="model-offline-import"><summary>{categoryCopy.advanced}</summary><OfflineModelImport onRefresh={onImportRefresh} /></details>}
     {view === 'discover' && discoverySource === 'curated' && <section className="model-section">
-      <div className="section-heading"><div><span className="eyebrow">{text.models.catalog}</span><h2>{text.models.discover}</h2></div></div>
+      <SectionHeading title={modelLibrary(locale).curated} />
       {!!sortedCatalog.length && <>
         <SearchField className="model-installed-search" label={modelComparison[locale].filter} value={catalogFilters[category] ?? ''} onChange={value => setCatalogFilters(old => ({ ...old, [category]: value }))} />
         <CatalogComparison models={compared} clear={() => setComparisons(old => ({ ...old, [category]: [] }))} />
@@ -260,7 +257,7 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
         const current = downloadFor(model, progress);
         const installed = installedCatalogModel(model, models);
         return <article className="catalog-card" key={model.id}>
-          <div className="catalog-card-top"><div className="model-glyph"><Icon name="models" /></div>{model.recommended && <span className="status-pill">{text.models.recommended}</span>}</div>
+          {model.recommended && <div className="catalog-card-top"><span className="status-pill">{text.models.recommended}</span></div>}
           <ModelIdentity model={catalogDisplay(model)} /><p>{catalogDescription(language,model.id,model.description)}</p>
           <label className="catalog-compare-choice"><input type="checkbox" checked={compared.some(item => item.id === model.id)} disabled={compared.length >= 3 && !compared.some(item => item.id === model.id)} onChange={event => setComparisons(old => ({ ...old, [category]: event.target.checked ? [...compared.map(item => item.id), model.id] : compared.filter(item => item.id !== model.id).map(item => item.id) }))} />{modelComparison[locale].choose}<span className="sr-only"> {model.name}</span></label>
           <div className="model-meta"><span>{model.parameters}</span>{model.min_ram_gb > 0 && <span>{model.min_ram_gb} GB RAM</span>}</div>

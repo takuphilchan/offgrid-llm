@@ -12,15 +12,24 @@ import { workspaceManagement } from '../../i18n/workspace-management';
 import { desktopCompatibility } from '../../i18n/desktop-compatibility';
 import { VoiceSettings } from '../../components/VoiceSettings';
 import { ComposerResponseLimits } from '../chat/ComposerOptions';
-import { readPreferences } from '../chat/chat-presentation';
-import { writePreference } from '../../lib/preferences';
-import { settingsNavigation, settingsSections, type SettingsSection } from '../../i18n/settings-navigation';
+import {useResponsePreferences} from '../chat/useResponsePreferences';
+import {responseDisplay} from '../../i18n/response-display';
+import { settingsNavigation, settingsSections, type SettingsSection as BaseSettingsSection } from '../../i18n/settings-navigation';
 import { SearchField } from '../../components/SearchField';
 import { computerStatus } from '../../i18n/computer-status';
 import './settings.css';
-import { AppearanceSettings } from './AppearanceSettings';
+import { AppearanceSettings, ThemeSample } from './AppearanceSettings';
 import { palettes, paletteLabel } from '../../appearance';
 import { personalization } from '../../i18n/personalization';
+import {DesktopCommandSettings} from './DesktopCommandSettings';
+import {desktopCommand} from '../../i18n/desktop-command';
+import { SidebarSlot } from '../../components/shell/SidebarSlot';
+import { Icon, type IconName } from '../../components/Icon';
+import { ActionCard } from '../../components/ActionCard';
+import { profileSelectionPrompt } from '../../i18n/agent-profiles';
+
+type SettingsSection = BaseSettingsSection | 'appearance' | 'shortcuts' | 'storage';
+const sectionIcons: Record<SettingsSection, IconName> = { general: 'settings', appearance: 'palette', shortcuts: 'quick-window', storage: 'drive', models: 'models', voice: 'mic', terminal: 'terminal', access: 'shield', advanced: 'info' };
 
 type Health = 'checking' | 'ready' | 'offline';
 type Details = {
@@ -31,7 +40,10 @@ type Details = {
   localComputer?: { installed: boolean };
 };
 
-export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboarding }: {
+export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboarding, inSidebar = false, username, onLogout }: {
+  inSidebar?: boolean;
+  username?: string;
+  onLogout?: () => void;
   health: Health;
   themeChoice: ThemeChoice;
   onThemeChange: (choice: ThemeChoice) => void;
@@ -40,34 +52,40 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
   const { messages: text, locale, language, available, setLocale, translationNotice } = useI18n();
   const { admin, knowledge, scope } = useWorkspace();
   const copy = settingsNavigation[locale];
+  const sectionKeys: SettingsSection[] = ['general','appearance','models','voice',...(window.electron?.setCommandShortcut ? ['shortcuts' as const] : []),'terminal','access',...(window.electron?.getPaths ? ['storage' as const] : []),'advanced'];
+  const [focusTarget,setFocusTarget] = useState<string|null>(null);
   const [section, setSection] = useState<SettingsSection>('general');
   const [query, setQuery] = useState('');
   const [unsaved, setUnsaved] = useState<string[]>([]);
   useEffect(()=>{const saved=(event:Event)=>{const {key,saved}= (event as CustomEvent<{key:string;saved:boolean}>).detail;if(key==='offgrid.appearance.v1')return;setUnsaved(keys=>saved?keys.filter(item=>item!==key):[...new Set([...keys,key])]);};window.addEventListener('offgrid-preference-save',saved);return()=>window.removeEventListener('offgrid-preference-save',saved);},[]);
   const settingTargets = [
     {id:'language',section:'general',label:text.common.language,selector:'#settings-language'},
-    {id:'theme',section:'general',label:text.shell.theme,selector:'#setting-theme button'},
-    {id:'appearance',section:'general',label:personalization[locale][0],selector:'#setting-appearance'},
-    {id:'text-size',section:'general',label:personalization[locale][3],selector:'#appearance-text-size'},
-    {id:'motion',section:'general',label:personalization[locale][4],selector:'#setting-appearance input'},
-    {id:'responses',section:'models',label:text.chatStreaming.responseLimit,selector:'#model-settings-title'},
+    {id:'theme',section:'appearance',label:text.shell.theme,selector:'#setting-theme button'},
+    {id:'appearance',section:'appearance',label:personalization[locale][0],selector:'#setting-appearance'},
+    {id:'text-size',section:'appearance',label:personalization[locale][3],selector:'#appearance-text-size'},
+    {id:'motion',section:'appearance',label:personalization[locale][4],selector:'#setting-appearance input'},
+    {id:'responses',section:'models',label:text.chatStreaming.responseLimit+' '+responseDisplay(locale).label,selector:'#model-settings-title'},
     {id:'voice',section:'voice',label:copy.sections[2],selector:'#voice-settings-title'},
     {id:'terminal',section:'terminal',label:copy.sections[3],selector:'#terminal-settings-title'},
+    {id:'quick-window',section:'shortcuts',label:desktopCommand(locale).title,selector:'#desktop-command-shortcut'},
     {id:'access',section:'access',label:copy.sections[4],selector:'#access-settings-title'},
     {id:'service',section:'advanced',label:text.settings.service,selector:'#workspace-title'}
   ] as const;
   const searchTargets = query.trim() ? settingTargets.filter(item=>item.label.toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language))) : [];
-  const revealSetting = (id: string) => {const item=settingTargets.find(item=>item.id===id); if(!item)return;setQuery('');setSection(item.section);requestAnimationFrame(()=>{const element=document.querySelector<HTMLElement>(item.selector);if(element){if(!element.matches('input,select,button'))element.tabIndex=-1;element.focus();element.scrollIntoView({block:'nearest'});}});};
+  const revealSetting = (id: string) => {
+    if(sectionKeys.includes(id as SettingsSection)){setQuery('');setFocusTarget(null);setSection(id as SettingsSection);return;}
+    const item=settingTargets.find(item=>item.id===id);if(!item)return;
+    setQuery('');setSection(item.section);setFocusTarget(item.selector);
+  };
+  useEffect(()=>{if(!focusTarget)return;const element=document.querySelector<HTMLElement>(focusTarget);if(element){if(!element.matches('input,select,button'))element.tabIndex=-1;element.focus();element.scrollIntoView({block:'nearest'});setFocusTarget(null);}},[focusTarget,section,query]);
   useEffect(()=>{const navigate=()=>{const parts=location.hash.split('/');if(parts[1]==='settings'&&parts[2])revealSetting(parts[2]);};navigate();window.addEventListener('hashchange',navigate);return()=>window.removeEventListener('hashchange',navigate);},[locale]);
   const preferencesKey = 'offgrid.chat.preferences:' + encodeURIComponent(scope);
-  const [preferences, setPreferences] = useState(() => readPreferences(preferencesKey));
-  useEffect(() => setPreferences(readPreferences(preferencesKey)), [preferencesKey]);
-  const updatePreferences = (value: typeof preferences) => { setPreferences(value); writePreference(preferencesKey, JSON.stringify(value)); };
+  const [preferences, updatePreferences] = useResponsePreferences(preferencesKey);
   const terms = [text.common.language+' '+text.shell.theme+' '+text.settings.showGuide+' '+personalization[locale].join(' ')+' '+palettes.map(id=>paletteLabel(id,'light')+' '+paletteLabel(id,'dark')).join(' '), text.chatStreaming.profile+' '+text.chatStreaming.responseLimit+' '+text.nav.models, text.nav.models, 'Aa', text.settings.computerUse+' '+text.shell.storage, text.settings.service+' '+text.settings.version+' API'];
-  const matches = settingsSections.filter((_, index) => (copy.sections[index]+' '+copy.descriptions[index]+' '+terms[index]).toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language)));
+  const sectionTitle = (key: SettingsSection) => key === 'appearance' ? personalization[locale][0] : key === 'shortcuts' ? desktopCommand(locale).title : key === 'storage' ? text.shell.storage : copy.sections[settingsSections.indexOf(key)];
+  const description = (key: SettingsSection) => key === 'appearance' ? personalization[locale][9] : key === 'shortcuts' ? desktopCommand(locale).background : key === 'storage' ? workspaceManagement(locale).desktopStorage : copy.descriptions[settingsSections.indexOf(key)];
+  const matches = sectionKeys.filter(key => (sectionTitle(key)+' '+description(key)+' '+(key === 'appearance' ? terms[0] : key === 'shortcuts' ? desktopCommand(locale).shortcut : key === 'storage' ? text.shell.modelsPath+' '+text.shell.dataPath : terms[settingsSections.indexOf(key)])+' '+settingTargets.filter(item=>item.section===key).map(item=>item.label).join(' ')).toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language)));
   const shown = (key: SettingsSection) => query.trim() ? matches.includes(key) : key === section;
-  const sectionTitle = (key: SettingsSection) => copy.sections[settingsSections.indexOf(key)];
-  const description = (key: SettingsSection) => copy.descriptions[settingsSections.indexOf(key)];
   const [details, setDetails] = useState<Details>({});
   const [error, setError] = useState('');
   const [desktopPaths, setDesktopPaths] = useState<DesktopPaths | null>(null);
@@ -116,8 +134,8 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
 
   const options: { choice: ThemeChoice; label: string }[] = [
     { choice: 'system', label: text.shell.systemTheme },
-    { choice: 'dark', label: text.shell.darkTheme },
-    { choice: 'light', label: text.shell.lightTheme }
+    { choice: 'light', label: text.shell.lightTheme },
+    { choice: 'dark', label: text.shell.darkTheme }
   ];
   const computerCopy = computerStatus[locale];
   const computerDescription = !admin ? interaction[locale].adminOnly
@@ -125,11 +143,12 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
     : details.localComputer ? (details.localComputer.installed ? computerCopy.installed : computerCopy.missing)
     : window.electron?.getComputerStatus || !details.computer ? unknown : computerCopy.idle;
 
-  return <div className="settings-page settings-workspace">
-    <aside className="settings-navigation">
+  const navigation = <div className="settings-navigation">
       <SearchField className="settings-search" label={copy.search} value={query} onChange={setQuery} />
-      <nav aria-label={text.nav.settings}>{settingsSections.map(key => <button key={key} aria-current={!query.trim() && section === key ? 'page' : undefined} onClick={() => { setQuery(''); setSection(key); }}>{sectionTitle(key)}</button>)}</nav>
-    </aside>
+      <nav aria-label={text.nav.settings}>{sectionKeys.map(key => <button key={key} data-section={key} aria-current={!query.trim() && section === key ? 'page' : undefined} onClick={() => { setQuery(''); setSection(key);location.hash=`#/settings/${key}`; }}><Icon name={sectionIcons[key]} size={17} /><span>{sectionTitle(key)}</span></button>)}</nav>
+    </div>;
+  return <div className="settings-page settings-workspace" data-context-navigation={inSidebar || undefined}>
+    {inSidebar ? <SidebarSlot>{navigation}</SidebarSlot> : navigation}
     <div className="settings-content">
     {!!unsaved.length && <p role="status">{personalization[locale][10]}</p>}
     {!!searchTargets.length && <nav className="settings-results" aria-label={copy.search}>{searchTargets.map(item=><a key={item.id} href={`#/settings/${item.id}`} onClick={()=>revealSetting(item.id)}>{item.label}</a>)}</nav>}
@@ -140,26 +159,38 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
       <SectionHeading title={sectionTitle('general')} description={description('general')} id="preferences-title" />
       <div className="settings-panel"><label htmlFor="settings-language">{text.common.language}</label><select id="settings-language" value={language} aria-describedby={translationNotice ? 'translation-notice' : undefined} onChange={event => setLocale(event.target.value as LanguageCode)}>{available.filter(item=>!item.preview).map(item => <option key={item.code} value={item.code}>{item.label}</option>)}<optgroup label={personalization[locale][5]}>{available.filter(item=>item.preview).map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</optgroup></select></div>
       {translationNotice && <p id="translation-notice" role="status" lang={language}>{translationNotice}</p>}
-      <div className="settings-panel" id="setting-theme"><h3>{text.shell.theme}</h3><div className="segmented-control" role="group" aria-label={text.shell.theme}>{options.map(option => <button key={option.choice} aria-pressed={themeChoice === option.choice} onClick={() => onThemeChange(option.choice)}>{option.label}</button>)}</div></div>
-      {shown('general') && <AppearanceSettings />}
-      <div className="settings-panel"><div><h3>{text.onboarding.title}</h3><p>{text.onboarding.body}</p></div><button className="secondary-button" onClick={onShowOnboarding}>{text.settings.showGuide}</button></div>
+      {username !== undefined && <div className="settings-panel settings-account"><strong>{username}</strong><button type="button" className="secondary-button" onClick={onLogout}>{text.auth.signOut}</button></div>}
+      <ActionCard icon="help" title={text.settings.showGuide} description={text.onboarding.body} onClick={onShowOnboarding}/>
+    </section>
+    <section hidden={!shown('appearance')} className="settings-group settings-appearance-group" aria-labelledby="appearance-title">
+      <SectionHeading title={sectionTitle('appearance')} id="appearance-title" />
+      <div className="settings-card appearance-mode-row" id="setting-theme"><h3>{text.shell.theme}</h3><div className="segmented-control theme-mode-picker" role="group" aria-label={text.shell.theme}>{options.map(option => <button key={option.choice} type="button" aria-label={option.label} title={option.label} aria-pressed={themeChoice === option.choice} onClick={() => onThemeChange(option.choice)}>
+        <span className={'mode-preview mode-preview-'+option.choice}><ThemeSample id="offgrid" mode={option.choice === 'dark' ? 'dark' : 'light'}/>{option.choice === 'system' && <ThemeSample id="offgrid" mode="dark"/>}</span>
+      </button>)}</div></div>
+      {shown('appearance') && <AppearanceSettings />}
     </section>
     <section hidden={!shown('models')} className="settings-group" aria-labelledby="model-settings-title">
-      <SectionHeading title={sectionTitle('models')} description={description('models')} id="model-settings-title" />
-      <a className="secondary-button" href="#/models">{text.nav.models}</a>
-      <ComposerResponseLimits preferences={preferences} busy={false} update={updatePreferences} expanded />
+      <SectionHeading title={sectionTitle('models')} id="model-settings-title" />
+      <div className="action-card-grid">
+        <ActionCard icon="models" title={text.nav.models} description={`${text.models.installed} · ${text.models.discover}`} href="#/models" />
+        <ActionCard icon="agents" title={text.nav.agents} description={profileSelectionPrompt[locale]} href="#/agents" />
+      </div>
+      <div className="settings-response-section"><p className="settings-scope">{description('models')}</p>
+        <ComposerResponseLimits preferences={preferences} busy={false} update={updatePreferences} presentation="settings" />
+      </div>
     </section>
     {shown('voice') && <section className="settings-group" aria-labelledby="voice-settings-title">
       <SectionHeading title={sectionTitle('voice')} description={description('voice')} id="voice-settings-title" /><VoiceSettings inline />
     </section>}
+    {shown('shortcuts') && <section className="settings-group" aria-labelledby="shortcuts-settings-title"><SectionHeading title={sectionTitle('shortcuts')} id="shortcuts-settings-title"/><DesktopCommandSettings /></section>}
+    {shown('storage') && <section className="settings-group" aria-labelledby="storage-settings-title"><SectionHeading title={sectionTitle('storage')} description={description('storage')} id="storage-settings-title"/>{desktopPaths ? <div className="settings-card desktop-local-paths"><dl><div><dt>{text.shell.modelsPath}</dt><dd>{desktopPaths.models}</dd></div><div><dt>{text.shell.dataPath}</dt><dd>{desktopPaths.data}</dd></div></dl></div> : <p role="status">{unknown}</p>}</section>}
     <section hidden={!shown('terminal')} className="settings-group" aria-labelledby="terminal-settings-title">
       <SectionHeading title={sectionTitle('terminal')} description={description('terminal')} id="terminal-settings-title" />
-      {window.electron?.openTerminal ? <button className="secondary-button" onClick={() => void window.electron!.openTerminal!().catch(reason => setError(reason instanceof Error ? reason.message : text.common.error))}>{copy.terminal}</button> : <p>{copy.browser}</p>}
+      {window.electron?.openTerminal ? <ActionCard icon="terminal" title={copy.terminal} description="OffGrid CLI" onClick={() => void window.electron!.openTerminal!().catch(reason => setError(reason instanceof Error ? reason.message : text.common.error))} /> : <p>{copy.browser}</p>}
     </section>
     <section hidden={!shown('access')} className="settings-group" aria-labelledby="access-settings-title">
       <SectionHeading title={sectionTitle('access')} description={description('access')} id="access-settings-title" />
       <div className="settings-panel"><div><h3>{text.settings.computerUse}</h3><p>{computerDescription}</p></div>{admin && !!details.computer?.active_sessions && <div className="settings-actions"><span role="status" className={details.computer.emergency_stop ? 'status-pill danger' : 'status-pill'}>{details.computer.emergency_stop ? text.settings.stopped : `${details.computer.active_sessions} ${text.settings.sessions}`}</span><button className="danger-button" disabled={stopping} onClick={() => void stopComputer()}>{stopping ? text.common.loading : text.settings.emergencyStop}</button></div>}</div>
-      {desktopPaths && <div className="desktop-local-paths"><h3>{text.shell.storage}</h3><p>{management.desktopStorage}</p><dl><div><dt>{text.shell.modelsPath}</dt><dd>{desktopPaths.models}</dd></div><div><dt>{text.shell.dataPath}</dt><dd>{desktopPaths.data}</dd></div></dl></div>}
     </section>
     <section hidden={!shown('advanced')} className="settings-group settings-about" aria-labelledby="workspace-title">
       <SectionHeading title={sectionTitle('advanced')} id="workspace-title" />

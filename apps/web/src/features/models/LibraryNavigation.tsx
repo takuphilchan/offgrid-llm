@@ -1,16 +1,13 @@
-import { useRef } from 'react';
+import {Icon, type IconName} from '../../components/Icon';
 import { useI18n } from '../../i18n';
+import {modelLibrary} from '../../i18n/model-library';
 
 export type LibraryView = 'installed' | 'discover';
-export function LibraryNavigation({ view, change }: { view: LibraryView; change: (view: LibraryView) => void }) {
-  const { messages: text } = useI18n();
-  const tabs = useRef<HTMLDivElement>(null);
-  return <div className="model-library-tabs" role="tablist" aria-label={text.models.title} ref={tabs} onKeyDown={event => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault();
-    const next = event.key === 'Home' ? 'installed' : event.key === 'End' ? 'discover' : view === 'installed' ? 'discover' : 'installed';
-    change(next); tabs.current?.querySelector<HTMLButtonElement>(`#model-view-${next}`)?.focus();
-  }}>
-    {(['installed', 'discover'] as const).map(value => <button key={value} id={`model-view-${value}`} className="secondary-button" role="tab" aria-selected={view === value} aria-controls="model-library-panel" tabIndex={view === value ? 0 : -1} onClick={() => change(value)}>{text.models[value]}</button>)}
-  </div>;
+export function LibraryNavigation({ view, source, change }: { view: LibraryView; source:'curated'|'search'; change: (view: LibraryView,source:'curated'|'search') => void }) {
+  const { messages: text,locale } = useI18n();
+  const choices=[{id:'installed',label:text.models.installed,view:'installed',source:'curated'}, {id:'discover',label:text.models.discover,view:'discover',source:'curated'}, {id:'search',label:modelLibrary(locale).search,view:'discover',source:'search'}] as const;
+  const icons:Record<string,IconName>={installed:'models',discover:'plus',search:'search'};
+  return <nav className="model-library-navigation" aria-label={text.models.title}>
+    {choices.map(choice=><button key={choice.id} id={`model-view-${choice.id}`} className="text-button" aria-current={view===choice.view&&(view==='installed'||source===choice.source)?'page':undefined} onClick={()=>change(choice.view,choice.source)}><Icon name={icons[choice.id]} size={16}/>{choice.label}</button>)}
+  </nav>;
 }

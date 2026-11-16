@@ -3,6 +3,7 @@ import { readPreference } from '../../lib/preferences';
 import { copyText } from '../../lib/clipboard';
 
 export type ChatPageProps = {
+  onInitialReady?: () => void;
   scope: string;
   models: Model[];
   model: string;
@@ -17,11 +18,11 @@ export async function copyChatMessage(key:string,content:string,copied:(key:stri
   catch(reason){ failed(reason instanceof Error?reason.message:fallback); }
 }
 
-export function readPreferences(key: string): { profile: string; maxTokens: number } {
+export function readPreferences(key: string): { profile: string; maxTokens: number; streamResponses: boolean } {
   try {
     const value = JSON.parse(readPreference(key) ?? '{}');
-    return { profile: value.profile === 'extended' ? 'extended' : 'interactive', maxTokens: [256, 1024, 4096].includes(value.maxTokens) ? value.maxTokens : 1024 };
-  } catch { return { profile: 'interactive', maxTokens: 1024 }; }
+    return { profile: value.profile === 'extended' ? 'extended' : 'interactive', maxTokens: [256, 1024, 4096].includes(value.maxTokens) ? value.maxTokens : 1024, streamResponses: value.streamResponses !== false };
+  } catch { return { profile: 'interactive', maxTokens: 1024, streamResponses: true }; }
 }
 
 export function messageText(content: ChatMessage['content']): string {

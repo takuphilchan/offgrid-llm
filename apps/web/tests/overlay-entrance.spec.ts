@@ -10,9 +10,15 @@ for (const theme of ['light', 'dark']) for (const kind of ['setup', 'palette', '
     }
     await page.goto('/ui/#/chat');
     if (kind === 'palette') await page.locator('.command-trigger').click();
-    if (kind === 'menu') await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
-    const panel = page.locator(kind === 'setup' ? 'dialog.onboarding' : kind === 'palette' ? 'dialog.command-palette' : '.workspace-options-panel');
+    if (kind === 'menu') await page.locator('.model-select-trigger').click();
+    const panel = page.locator(kind === 'setup' ? '.workspace-setup' : kind === 'palette' ? 'dialog.command-palette' : '.model-select-panel');
     await expect(panel).toBeVisible();
+    if(kind === 'setup') {
+      await expect(page.locator('dialog:modal')).toHaveCount(0);
+      await expect(panel).toHaveCSS('opacity','1');
+      expect(fixture.writes).toEqual([]);
+      return;
+    }
     const frames = await panel.evaluate(element => {
       const animation = element.getAnimations().find(item => item instanceof CSSAnimation);
       if (!animation) throw Error('Expected the actual overlay entrance animation');
@@ -24,6 +30,13 @@ for (const theme of ['light', 'dark']) for (const kind of ['setup', 'palette', '
       });
     });
     expect(frames).toEqual(['1', '1', '1']);
+    const backgroundAlpha = await panel.evaluate(element => {
+      const canvas = document.createElement('canvas'); canvas.width=canvas.height=1;
+      const context=canvas.getContext('2d')!;
+      context.fillStyle=getComputedStyle(element).backgroundColor; context.fillRect(0,0,1,1);
+      return context.getImageData(0,0,1,1).data[3];
+    });
+    expect(backgroundAlpha).toBe(255);
     expect(fixture.writes).toEqual([]);
     await page.screenshot({ path: test.info().outputPath(`${kind}-${theme}.png`), fullPage: true });
   });

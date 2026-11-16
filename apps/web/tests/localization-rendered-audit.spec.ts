@@ -42,27 +42,35 @@ for(const language of Object.keys(registry))test(`rendered text inventory: ${lan
  for(const key of ['1','2'])composed('i18n/personalization:personalization',key,text=>`${text}: OffGrid`);
  for(const name of ['Fixture ASR','Fixture TTS'])composed('i18n/voice-settings:copy','3',text=>`${text} · ${name}`);
  for(const count of [0,1])composed('core','models.installed',text=>`${text} · ${count}`);
+ for(const [namespace,first,second] of [['core','models.installed','models.discover'],['i18n/voice-settings:copy','1','2']]) {
+  const a=entries.find(e=>e.namespace===namespace&&e.key===first),b=entries.find(e=>e.namespace===namespace&&e.key===second);
+  if(!a||!b)throw new Error('Missing composed translation source: '+first);
+  catalogEntries.push({...a,key:a.key+':paired',source:a.source+' · '+b.source,currentText:a.currentText+' · '+b.currentText});
+ }
  const autonyms=['English','Français','Español','العربية','Kiswahili','ChiShona','isiNdebele','isiZulu','Deutsch',...Object.values(inventory.packs).map((pack:any)=>pack.label)];
  const fixtureBody=['Prepare a concise briefing with an example.','A quieter workspace','Keep the work readable and the next action clear. This is a saved answer with','emphasis',', a','source',', and multilingual text: café 日本語 مرحباً.','Next steps','Review the evidence.','Prepare a short briefing.','typescript','const summary = { ready: true, title: "OffGrid" }; console.log(summary); // A deliberately long line to exercise horizontal code scrolling without widening the conversation.','Item','Status','Notes','Ready','Sources','Reviewed'];
  const copy=(namespace:string,key:string)=>entries.find(e=>e.namespace===namespace&&e.key===key)!.currentText;
  // ICU coverage can differ between Node and the browser (notably sn/nd/zu).
  // Derive the known fixture date with the browser's formatter, never from UI text.
  const fixtureDate=await page.evaluate(language=>new Date('2026-10-30T00:00:00Z').toLocaleDateString(language),language);
+ const recentDate=await page.evaluate(language=>new Date('2026-10-30T00:00:00Z').toLocaleDateString(language,{month:'short',day:'numeric'}),language);
  const capture=async(name:string)=>{
   await page.waitForLoadState('networkidle');
   const route=new URL(page.url()).hash.slice(2);
-  const settingsHeadings:Record<string,string>={'settings':'preferences-title','settings/responses':'model-settings-title','settings/voice':'voice-settings-title','settings/terminal':'terminal-settings-title','settings/access':'access-settings-title','settings/service':'workspace-title'};
-  if(settingsHeadings[route])await expect(page.locator('#'+settingsHeadings[route])).toBeVisible();
+  const settingsHeadings:Record<string,string>={'settings/general':'preferences-title','settings/responses':'model-settings-title','settings/voice':'voice-settings-title','settings/terminal':'terminal-settings-title','settings/access':'access-settings-title','settings/service':'workspace-title','settings/appearance':'appearance-title'};
+  if((name===route||name===route+'/expanded'||name.startsWith('narrow/settings'))&&settingsHeadings[route])await expect(page.locator('#'+settingsHeadings[route])).toBeVisible();
   if(route==='settings/voice')await expect(page.locator('.voice-settings-inline .model-choice-trigger')).toHaveCount(2);
   if(route==='agents')await expect(page.locator('.agent-profiles')).toBeVisible();
   if(route==='knowledge')await expect(page.locator('.knowledge-workspace')).toBeVisible();
   if(route==='chat')await expect(page.locator('.composer textarea')).toBeVisible();
-  if(route.startsWith('models'))await expect(page.locator('.models-workspace')).toBeVisible();
+  if(!name.includes('help')&&route.startsWith('models'))await expect(page.locator('.models-workspace')).toBeVisible();
   const elements=classifyRendered(await page.evaluate(renderedText),catalogEntries,language,[
    ...['OffGrid','OffGrid CLI','Hugging Face','API','UI SHA-256'].map(text=>({text,reason:'Brand or protocol identifier'})),
-   ...['Researcher','Local Research','C:/fixture/models','C:/fixture/data','visual-fixture','fixture-voice · en','Fixture ASR','Fixture TTS','fixture-asr@1','fixture-tts@1','Local Research 7B Instruct Q4 K M long model name','Local-Research-7B-Instruct-Q4_K_M-long-model-name','Qwen3.5 2B','SmolLM3 3B','qwen3.5-2b','smollm3-3b','unsloth/Qwen3.5-2B-GGUF','ggml-org/SmolLM3-3B-GGUF','Fixture speech package','model-32c96ae87d3e',new URL(page.url()).origin].map(text=>({text,reason:'Isolated fixture data or stable model identifier; never translate user content'})),
+   ...['Researcher','Local Research','C:/fixture/models','C:/fixture/data','visual-fixture','fixture-voice · en','Fixture ASR','Fixture TTS','fixture-asr@1','fixture-tts@1','Local Research Q4 K M 7B','Local Research 7B Instruct Q4 K M long model name','Local-Research-7B-Instruct-Q4_K_M-long-model-name','Qwen3.5 2B','SmolLM3 3B','qwen3.5-2b','smollm3-3b','unsloth/Qwen3.5-2B-GGUF','ggml-org/SmolLM3-3B-GGUF','Fixture speech package','model-32c96ae87d3e',new URL(page.url()).origin].map(text=>({text,reason:'Isolated fixture data or stable model identifier; never translate user content'})),
    ...fixtureBody.map(text=>({text,element:'message-body',reason:'Exact saved conversation fixture text; not authored UI copy'})),
    {text:'Demo briefing',element:'history-open',reason:'Saved conversation title'},
+   {text:'Demo briefing',element:'work-home-session-name',reason:'Exact saved conversation fixture title'},
+   {text:recentDate,element:'work-home-recent',reason:'Known fixture timestamp formatted by browser Intl'},
    {text:`Demo briefing · ${fixtureDate}`,element:'history-open',reason:'Saved title and browser locale-formatted fixture date'},
    {text:fixtureDate,element:'time',reason:'Known fixture timestamp formatted by browser Intl; may contain locale-owned direction marks'},
    {text:'Prepare a demo briefing',element:'task-list-item',reason:'Saved task prompt'},
@@ -87,7 +95,7 @@ for(const language of Object.keys(registry))test(`rendered text inventory: ${lan
   }
   throw Error('Disclosure audit exceeded its bounded traversal');
  };
- const routes=['chat','agents','knowledge','activity/attention','activity/running','activity/history','activity/all','activity/archived','settings','settings/responses','settings/voice','settings/terminal','settings/access','settings/service'];
+ const routes=['home','chat','agents','knowledge','activity/attention','activity/running','activity/history','activity/all','activity/archived','settings/general','settings/appearance','settings/responses','settings/voice','settings/terminal','settings/access','settings/service'];
  for(const route of routes){
   await page.goto('/ui/#/'+route);await expect(page.locator('html')).toHaveAttribute('lang',language);
   await capture(route);await expand();await capture(route+'/expanded');
@@ -105,13 +113,13 @@ for(const language of Object.keys(registry))test(`rendered text inventory: ${lan
  for(const view of ['installed','discover']){
   await page.goto('/ui/#/models'+(view==='discover'?'/discover':''));await capture('models/'+view);
   for(let category=0;category<4;category++){
-   await page.locator('.model-category-picker button').nth(category).click();await expand();await capture(`models/${view}/${category}`);
+   await page.locator('.model-category-filter').selectOption({index:category});await expand();await capture(`models/${view}/${category}`);
   }
  }
- await page.goto('/ui/#/settings');await page.keyboard.press('Control+k');await capture('quick-actions');await page.keyboard.press('Escape');await page.locator('.help-trigger').click();await expand();await capture('help/all-topics');await page.keyboard.press('Escape');
+ await page.goto('/ui/#/settings/general');await page.keyboard.press('Control+k');await capture('quick-actions');await page.keyboard.press('Escape');await page.locator('.help-trigger').click();await expand();await capture('help/all-topics');await page.keyboard.press('Escape');
  await page.getByRole('button',{name:copy('core','settings.showGuide'),exact:true}).click();await expand();await capture('setup/expanded');
  await page.keyboard.press('Escape');await page.setViewportSize({width:390,height:844});
- for(const route of ['settings','settings/voice','models/discover']){
+ for(const route of ['settings/general','settings/voice','models/discover']){
   await page.goto('/ui/#/'+route);await expand();await capture('narrow/'+route);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'Horizontal overflow in '+language+' '+route).toBe(true);
  }

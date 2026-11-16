@@ -1,12 +1,12 @@
-/* Shared native select presentation. The browser still owns keyboard, type-ahead,
-   options, accessibility and popup placement. Only the closed control is styled. */
+/* Shared renderer + terminal selects. Preserve native forms, type-ahead and
+   keyboard semantics; capable hosts also theme the actual options popup. */
 select:not([multiple]):not([size]), #terminal-display select, #terminal-commands select {
   appearance: none;
   min-inline-size: 5rem;
-  min-block-size: 40px;
+  min-block-size: var(--select-height,40px);
   padding-inline: 12px 36px;
   padding-block: 8px;
-  font-size: var(--type-ui, 13px);
+  font-size: var(--select-font-size,var(--type-ui, 13px));
   line-height: 1.4;
   text-overflow: ellipsis;
   background-image:
@@ -20,9 +20,35 @@ select:not([multiple]):not([size]), #terminal-display select, #terminal-commands
 select:not([multiple]):not([size]):dir(rtl), #terminal-display select:dir(rtl), #terminal-commands select:dir(rtl) {
   background-position: left 12px center, left 18px center;
 }
-select:focus-visible { outline: 2px solid var(--text, var(--fg)); outline-offset: 2px; }
+select:focus-visible { outline: 1.5px solid var(--muted); outline-offset: 2px; box-shadow:none; }
 select:disabled { cursor: not-allowed; }
 @media (pointer: coarse) { select:not([multiple]):not([size]), #terminal-display select, #terminal-commands select { min-block-size: 44px; } }
+@supports (appearance:base-select) {
+  select:not([multiple]):not([size]), #terminal-display select, #terminal-commands select,
+  select:not([multiple]):not([size])::picker(select) { appearance:base-select; }
+  select:not([multiple]):not([size]), #terminal-display select, #terminal-commands select {
+    --select-surface:var(--surface-1,var(--bg,Canvas));
+    --select-hover:var(--surface-2,color-mix(in srgb,var(--fg,CanvasText) 8%,var(--bg,Canvas)));
+    --select-text:var(--text,var(--fg,CanvasText));
+    display:flex; align-items:center; gap:12px; padding-inline:12px;
+    border:1px solid var(--line); border-radius:var(--select-radius,12px);
+    color:var(--select-text); background-color:var(--select-background,var(--select-surface)); background-image:none;
+    font-weight:400; transition:background-color 140ms ease,border-color 140ms ease;
+  }
+  select:not([multiple]):not([size]):hover:not(:disabled) { background-color:var(--select-hover); border-color:var(--separator,var(--line)); }
+  select:not([multiple]):not([size]):open { border-color:var(--separator,var(--line)); }
+  select:not([multiple]):not([size])::picker-icon { content:''; flex:none; width:7px; height:7px; border-inline-end:1.5px solid currentColor; border-block-end:1.5px solid currentColor; color:var(--muted); transform:rotate(45deg) translateY(-2px); margin-inline-start:auto; }
+  select:not([multiple]):not([size]):dir(rtl)::picker-icon { transform:rotate(-45deg) translateY(-2px); }
+  select:not([multiple]):not([size])::picker(select) { min-inline-size:anchor-size(width); max-inline-size:min(36rem,calc(100vw - 24px)); max-block-size:min(22rem,50dvh); padding:6px; margin-block:6px; border:1px solid var(--separator,var(--line)); border-radius:16px; background:var(--select-surface); color:var(--select-text); box-shadow:0 12px 32px #0002,0 2px 6px #0001; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+  select:not([multiple]):not([size]) option { display:flex; align-items:center; gap:14px; min-height:38px; padding:9px 12px; border:0; border-radius:10px; background:var(--select-surface); color:var(--select-text); font:inherit; font-weight:400; line-height:1.5; white-space:normal; overflow-wrap:anywhere; cursor:pointer; }
+  select:not([multiple]):not([size]) option:checked { background:var(--select-surface); font-weight:500; }
+  select:not([multiple]):not([size]) option:not(:disabled):is(:hover,:focus-visible) { background:var(--select-hover); outline:0; }
+  select:not([multiple]):not([size]) option:disabled { color:var(--faint,var(--muted)); cursor:not-allowed; }
+  select:not([multiple]):not([size]) option::checkmark { color:var(--select-text); order:1; margin-inline-start:auto; font-size:12px; }
+  select:not([multiple]):not([size]) optgroup { padding:4px; color:var(--muted); background:transparent; font-size:var(--type-meta,13px); }
+}
+@media (prefers-reduced-motion:reduce) { select { transition:none!important; } }
+:root[data-reduce-motion=true] select { transition:none; }
 @media (forced-colors: active) {
   select:not([multiple]):not([size]), #terminal-display select, #terminal-commands select { appearance: auto; background-image: none; padding-inline-end: 12px; }
   select:focus-visible { outline: 2px solid Highlight; }

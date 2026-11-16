@@ -357,6 +357,9 @@ func putTaskTransaction(tx *sql.Tx, task *Task) error {
 	if _, err = tx.Exec(`UPDATE agent_tasks SET id=id WHERE id=?`, task.ID); err != nil {
 		return err
 	}
+	if err = rejectDeletedProfile(tx, task.Config); err != nil {
+		return err
+	}
 	var previous []byte
 	err = tx.QueryRow(`SELECT snapshot FROM agent_tasks WHERE id=?`, task.ID).Scan(&previous)
 	if err != nil && err != sql.ErrNoRows {

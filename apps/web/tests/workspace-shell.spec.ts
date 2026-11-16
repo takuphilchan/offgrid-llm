@@ -1,4 +1,4 @@
-import { openSettings, changePreferences } from './helpers/workspace-actions';
+import { openSettings, changePreferences, refreshWorkspace } from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { workspaceShell } from '../src/i18n/workspace-shell';
 import { locales, type LocaleCode } from '../src/i18n';
@@ -36,23 +36,23 @@ async function fixture(page: Page, desktop = false) {
   return state;
 }
 
-test('rail labels dismiss on activation instead of covering New chat after a click', async ({page}) => {
+test('navigation labels stay readable without covering adjacent controls', async ({page}) => {
   await fixture(page);
   const chat = page.locator('.primary-nav').getByRole('link', {name:'Chat',exact:true});
   const label = chat.locator('span');
   await chat.hover();
-  await expect(label).toHaveCSS('opacity','1');
+  await expect(label).toBeVisible();
   await expect(chat).not.toHaveAttribute('title');
   await chat.click();
   await expect(chat).toBeFocused();
-  await expect(label).toHaveCSS('opacity','0');
+  await expect(label).toBeHidden();
   await page.mouse.move(700,400);
-  await expect(label).toHaveCSS('opacity','0');
+  await expect(label).toBeHidden();
   await page.keyboard.press('Tab');
   const next = page.locator('.primary-nav .nav-link:focus');
-  await expect(next.locator('span')).toHaveCSS('opacity','1');
+  await expect(next.locator('span')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(next.locator('span')).toHaveCSS('opacity','0');
+  await expect(next.locator('span')).toBeHidden();
   await expect(next).toBeFocused();
 });
 
@@ -63,62 +63,43 @@ test('compact shell preserves a draft across navigation layout, preferences, and
   await expect(page.locator('.topbar h1')).toHaveText('Chat');
   await expect(page.locator('.workspace-kicker')).toHaveCount(0);
   expect((await page.locator('.topbar').boundingBox())!.height).toBeLessThanOrEqual(74);
-  await expect(page.locator('.sidebar')).toHaveCSS('width', '304px');
-  for (const name of ['Chat', 'Agents', 'Knowledge', 'Models', 'Activity']) {
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '340px');
+  for (const name of ['Chat', 'Library', 'Activity', 'Settings']) {
     await expect(page.locator('.sidebar').getByRole('link', { name, exact: true })).toBeVisible();
   }
   await expect(page.locator('.primary-nav').getByRole('group', { name: 'Work' }).locator('a').first()).toHaveAttribute('href', '#/chat');
-  await expect(page.locator('.primary-nav').getByRole('group', { name: 'Work' }).locator('.nav-link')).toHaveCount(3);
-  await expect(page.locator('.primary-nav').getByRole('group', { name: 'Library' }).locator('a')).toHaveCount(2);
+  await expect(page.locator('.primary-nav').getByRole('group', { name: 'Work' }).locator('.nav-link')).toHaveCount(4);
+  await expect(page.locator('.primary-nav').getByRole('group', { name: 'Library' })).toHaveCount(0);
   await expect(page.locator('.sidebar').getByRole('link', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
-  const options = page.getByRole('button', { name: 'Workspace options', exact: true });
-  await options.click();
-  await expect(page.locator('.workspace-options-panel select')).toHaveCount(0);
-  await page.keyboard.press('Escape');
+  await expect(page.locator('.workspace-options')).toHaveCount(0);
   await changePreferences(page,{theme:'light',locale:'de'});
   await expect(page.locator('html')).toHaveAttribute('data-theme','light');
   await expect(editor).toHaveValue('Keep this draft — لا ترسل');
   await page.keyboard.press('Escape');
+  const selectionPreference=await page.evaluate(()=>localStorage.getItem('offgrid.model.autoselect'));
   const before = state.reads;
-  await page.locator('.workspace-options > button').click();
-  await page.locator('.workspace-options-panel button[aria-busy]').click();
-  await page.keyboard.press('Escape');
+  await refreshWorkspace(page);
   await expect.poll(() => state.reads).toBeGreaterThan(before);
+  expect(await page.evaluate(()=>localStorage.getItem('offgrid.model.autoselect'))).toBe(selectionPreference);
   await expect(editor).toHaveValue('Keep this draft — لا ترسل');
   expect(state.writes).toEqual([]);
   await page.getByRole('button',{name:workspaceShell.de.collapse,exact:true}).click();
-  await expect(page.locator('.sidebar')).toHaveCSS('width','64px');
+  await expect(page.locator('.sidebar')).toHaveCSS('width','60px');
   await expect(page.locator('.sidebar-create .new-chat-button')).toBeInViewport();
   await expect(editor).toHaveValue('Keep this draft — لا ترسل');
   await page.getByRole('button',{name:workspaceShell.de.expand,exact:true}).click();
   await page.screenshot({ path: info.outputPath('shell-collapsed-light.png') });
   await page.reload();
-  await expect(page.locator('.sidebar')).toHaveCSS('width', '304px');
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '340px');
   await expect(editor).toHaveValue('Keep this draft — لا ترسل');
   await expect(page.locator('.navigation-trigger')).toBeHidden();
 });
 
-test('workspace and voice utilities share keyboard and outside dismissal without competing panels', async ({ page }) => {
-  await fixture(page);
-  const options = page.getByRole('button', { name: 'Workspace options', exact: true });
-  const panel = page.getByRole('region', { name: 'Workspace options', exact: true });
-  await options.focus(); await options.press('Enter');
-  await expect(options).toHaveAttribute('aria-expanded', 'true');
-  await expect(panel.getByText('Workspace tester', { exact: true })).toBeVisible();
-  await expect(panel.getByRole('button', { name: 'Sign out' })).toBeVisible();
-  await panel.getByRole('button', { name: 'Sign out' }).focus();
-  await page.keyboard.press('Escape');
-  await expect(panel).toBeHidden(); await expect(options).toBeFocused();
-  await options.click(); await page.locator('.composer textarea').click();
-  await expect(panel).toBeHidden(); await expect(page.locator('.composer textarea')).toBeFocused();
-  await page.getByRole('button', { name: 'Response settings', exact: true }).click();
-  await options.click();
-  await expect(page.getByRole('region', { name: 'Response settings', exact: true })).toBeHidden();
-  await expect(panel).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Service details', exact: true })).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await openSettings(page);
-  await expect(page).toHaveURL(/#\/settings$/); await expect(panel).toBeHidden();
+test('account actions live in General settings, not a bottom overflow',async({page})=>{
+ const state=await fixture(page);await expect(page.getByRole('button',{name:'Workspace options',exact:true})).toHaveCount(0);
+ await openSettings(page);await expect(page.locator('.settings-account')).toContainText('Workspace tester');
+ await expect(page.locator('.settings-account').getByRole('button',{name:'Sign out'})).toBeVisible();
+ await page.locator('[data-section=appearance]').click();await expect(page.locator('.settings-account')).toBeHidden();expect(state.writes).toEqual([]);
 });
 
 test('workspace preferences still synchronize through the desktop presentation bridge', async ({ page }) => {
@@ -132,29 +113,21 @@ test('workspace preferences still synchronize through the desktop presentation b
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
 
-test('every locale fits the compact mobile shell and options in light and dark', async ({ page }, info) => {
+test('every locale fits the compact mobile navigation in light and dark', async ({ page }, info) => {
+  test.setTimeout(180000); // 58 locale/theme combinations.
   await fixture(page);
   await page.setViewportSize({ width: 320, height: 480 });
   for (const theme of ['light', 'dark']) {
     for (const locale of Object.keys(locales) as LocaleCode[]) {
-      const trigger = page.locator('.workspace-options > button');
       await changePreferences(page,{locale,theme});
       await page.locator('.navigation-trigger').click();
-      await trigger.click();
-      const panel = page.getByRole('region', { name: workspaceShell[locale].options, exact: true });
-      await expect(panel).toBeVisible();
-      await expect.poll(async () => {
-        const box = await panel.boundingBox();
-        return !!box && box.x >= 0 && box.x + box.width <= 320 && box.y >= 0 && box.y + box.height <= 480;
-      }).toBe(true);
       await expect(page.locator('.mobile-nav')).toHaveCount(0);
       await expect(page.locator('.sidebar')).toBeVisible();
       for (const link of await page.locator('.sidebar .nav-link').all()) await expect(link).toBeInViewport();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       if (locale === 'ar') await page.screenshot({ path: info.outputPath(`shell-mobile-rtl-${theme}.png`) });
       await page.keyboard.press('Escape');
-      await expect(trigger).toBeFocused();
-      await page.keyboard.press('Escape');
+      await expect(page.locator('.navigation-trigger')).toBeFocused();
     }
   }
 });
@@ -176,7 +149,7 @@ test('expanded navigation remains usable in a short desktop viewport', async ({ 
   await page.screenshot({ path: info.outputPath('shell-expanded-desktop.png') });
 });
 
-test('new chat docks its editor at the bottom and gives history the remaining sidebar space', async ({ page }, info) => {
+test('new chat centers its welcome above a bottom editor while recent work scrolls independently', async ({ page }, info) => {
   const state = await fixture(page);
   await page.route('**/v1/sessions', route => route.fulfill({ json: { sessions: Array.from({ length: 80 }, (_, index) => ({
     name: `Research notes ${index + 1}`, model_id: 'local-chat-model', messages: [], updated_at: '2026-11-06T00:00:00Z',
@@ -187,7 +160,7 @@ test('new chat docks its editor at the bottom and gives history the remaining si
     for (const height of [900, 480]) {
       await page.setViewportSize({ width: 1440, height });
       await expect(page.locator('.history-row').first()).toBeVisible();
-      const heading = await page.locator('.empty-chat h2').boundingBox();
+      const heading = await page.locator('.work-home h2').boundingBox();
       const composer = await page.locator('.composer').boundingBox();
       expect(composer!.y - heading!.y - heading!.height).toBeGreaterThanOrEqual(16);
       expect(height - composer!.y - composer!.height).toBeGreaterThanOrEqual(8);
@@ -197,6 +170,8 @@ test('new chat docks its editor at the bottom and gives history the remaining si
       const rail = await page.locator('.primary-nav').boundingBox();
       const list = await history.boundingBox();
       expect(list!.x).toBeGreaterThan(rail!.x + rail!.width);
+      expect(list!.width).toBeLessThanOrEqual(280);
+      expect(list!.height).toBeGreaterThan(0);
       expect(list!.y + list!.height).toBeLessThanOrEqual(height);
       expect(await history.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
       await history.evaluate(el => { el.scrollTop = el.scrollHeight; });
@@ -222,6 +197,7 @@ test('locale recovery ignores inherited keys and accepts regional language prefe
 });
 
 test('Help topics remain keyboard reachable and localized across all UI languages', async ({ page }) => {
+  test.setTimeout(180000); // Each of the 29 languages opens, operates and closes Help.
   const state = await fixture(page);
   for (const locale of Object.keys(locales) as LocaleCode[]) {
     await page.evaluate(locale => localStorage.setItem('offgrid.locale', locale), locale);
@@ -229,11 +205,11 @@ test('Help topics remain keyboard reachable and localized across all UI language
     await page.locator('.help-trigger').click();
     const dialog = page.locator('.workspace-help');
     await expect(dialog).toBeVisible();
-    const summaries = dialog.locator('summary');
-    await expect(summaries).toHaveCount(6);
+    const summaries = dialog.locator('.help-topics button:not(.help-setup)');
+    await expect(summaries).toHaveCount(8);
     await summaries.nth(1).focus();
     await page.keyboard.press('Enter');
-    await expect(dialog.locator('details').nth(1).locator('p')).toBeVisible();
+    await expect(dialog.locator('.help-article p').first()).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog).not.toBeVisible();
     await expect(page.locator('.help-trigger')).toBeFocused();

@@ -24,7 +24,7 @@ import { catalogDescription } from '../../i18n/catalog-descriptions';
 
 const packageOf = (operation: ModelOperation) => operation.target.kind === 'package' ? operation.target.package : undefined;
 
-export function PackageModels({ category, view, onDiscover }: { category: ModelCategory; view: LibraryView; onDiscover: () => void }) {
+export function PackageModels({ category, view, discoverySource='curated', onDiscover }: { category: ModelCategory; view: LibraryView; discoverySource?:'curated'|'search'; onDiscover: () => void }) {
   const { messages: text, locale , language} = useI18n();
   const copy = modelAcquisition[locale], readiness = speechModels[locale];
   const feedback = operationFeedback(locale);
@@ -170,7 +170,7 @@ export function PackageModels({ category, view, onDiscover }: { category: ModelC
       <h2>{copy.operations}</h2>
       {availableOperations.map(o => <PackageOperation key={o.id} operation={o} disabled={!admin || busy} control={action => void perform(() => api.controlModelOperation(o.id, action)).catch(() => {})} discard={() => setConfirm({ title: copy.discard, body: copy.discardConfirm, run: () => api.controlModelOperation(o.id, 'discard') })} />)}
     </section>}
-    {view === 'discover' && <><section className="model-section" aria-label="Hugging Face">
+    {view === 'discover' && discoverySource === 'search' && <section className="model-section" aria-label="Hugging Face">
       <div className="section-heading"><h2>Hugging Face</h2></div>
       <form className="model-search-form" aria-busy={metadata.pending} onSubmit={event => { event.preventDefault(); if (!mutating && admin && query.trim()) void search(query.trim()); }}>
         <SearchField label={text.modelSearch.query} value={query} maxLength={200} onChange={value => { metadata.cancel(); setQuery(value); }} />
@@ -186,8 +186,8 @@ export function PackageModels({ category, view, onDiscover }: { category: ModelC
         }} options={discovery.choices.map(choice => ({ id: choice.id, name: choice.name, disabled: !choice.supported, details: [choice.architecture, choice.reason].filter(Boolean).join(' · ') }))} />}
         {discovery?.repository === repo.id && preview?.resolution.provenance.repository === repo.id && downloadDetails}
       </article>)}
-    </section>
-    <section className="model-section" aria-label={text.models.catalog}>
+    </section>}
+    {view === 'discover' && discoverySource === 'curated' && <section className="model-section" aria-label={text.models.catalog}>
       {catalogError && <div className="inline-error" role="alert">{catalogError}<button className="secondary-button" disabled={busy} onClick={() => void refreshCatalog()}>{feedback.refreshCatalog}</button></div>}
       <h2>{text.models.catalog}</h2>{!catalogError && !catalog.length && <p role="status">{modelLibrary(locale).emptyCatalog}</p>}<div className="catalog-grid">{catalog.map(item => <article className="catalog-card package-card" key={item.id}>
         <ModelIdentity model={packageCatalogDisplay(item)} /><p>{catalogDescription(language,item.id,item.description)}</p>
@@ -201,8 +201,7 @@ export function PackageModels({ category, view, onDiscover }: { category: ModelC
         }} options={item.variants.map(choice => ({ id: choice.id, name: choice.name, disabled: choice.target.kind !== 'package', details: [choice.size_bytes > 0 ? formatBytes(choice.size_bytes, locale) : modelLibrary(locale).unknown, choice.target.kind === 'package' ? `${choice.target.package.id}@${choice.target.package.revision}` : '', choice.readiness?.issue].filter(Boolean).join(' · ') }))} />}
         {!discovery && catalogReview === item.id && downloadDetails}
       </article>)}</div>
-    </section>
-    </>}
+    </section>}
     <SpeechPackages importOnly onChanged={load} />
     {confirm && <ConfirmDialog title={confirm.title} body={confirm.body} confirmLabel={confirm.title === copy.discard ? copy.discard : confirm.title.startsWith(copy.repair) ? copy.repair : undefined} close={() => setConfirm(null)} confirm={async () => { await perform(confirm.run); }} />}
   </>;

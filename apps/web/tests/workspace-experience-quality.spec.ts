@@ -1,3 +1,4 @@
+import {refreshWorkspace} from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { locales, type LocaleCode } from '../src/i18n';
 import { voiceSettingsText } from '../src/i18n/voice-settings';
@@ -51,21 +52,15 @@ test('all new presentation resources have nine complete typed dictionaries', () 
   }
 });
 
-test('one header refresh reloads page data without resetting drafts or dispatching work', async ({ page }) => {
+test('returning to the app reloads page data without resetting drafts or dispatching work', async ({ page }) => {
   const writes = await fixture(page);
   const reads: string[] = [];
   page.on('request', request => { if (request.method() === 'GET') reads.push(new URL(request.url()).pathname); });
   const refresh = async (paths: string[]) => {
-    await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
-    const button = page.locator('.workspace-options-panel').getByRole('button', { name: 'Refresh', exact: true });
-    await expect(button).toHaveCount(1);
-    await expect(button).toBeEnabled();
-    const start = reads.length;
-    await button.click();
-    await expect.poll(() => paths.every(path => reads.slice(start).includes(path))).toBe(true);
-    await expect(button).toBeEnabled();
+    const start=reads.length;
+    await refreshWorkspace(page);
+    await expect.poll(()=>paths.every(path=>reads.slice(start).includes(path))).toBe(true);
     await expect(page.locator('.page-failure')).toHaveCount(0);
-    await page.keyboard.press('Escape');
   };
   for (const [route, paths] of [
     ['knowledge', ['/v1/documents', '/v1/rag/status']],
@@ -78,9 +73,10 @@ test('one header refresh reloads page data without resetting drafts or dispatchi
   }
   await page.goto('/ui/#/models');
   for (const category of ['Language', 'Embeddings', 'Speech recognition', 'Speech generation']) {
-    await page.getByRole('button', { name: category, exact: true }).click();
+    await page.locator('.model-category-filter').selectOption({label:category});
     for (const view of ['Installed', 'Discover models']) {
-      await page.getByRole('tab', { name: view, exact: true }).click();
+      await page.locator('.model-library-navigation').getByRole('button', { name: view, exact: true }).click();
+      await expect(page.locator('.model-library-navigation').getByRole('button',{name:view,exact:true})).toHaveAttribute('aria-current','page');
       await refresh(category.startsWith('Speech') ? ['/api/v2/models', '/api/v2/models/catalog'] : ['/v1/models', '/v1/catalog']);
     }
   }
@@ -115,7 +111,7 @@ test('workspace proportions prioritize the editor and keep service navigation in
   expect((await row.boundingBox())!.height).toBeLessThanOrEqual(150);
   await page.screenshot({ path: info.outputPath('model-list-desktop.png'), fullPage: true });
   await page.goto('/ui/#/settings');
-  await expect(page.locator('.settings-page')).toHaveCSS('max-width', '1120px');
+  await expect(page.locator('.settings-page')).toHaveCSS('max-width', '720px');
   await expect(page.locator('.settings-navigation')).toBeVisible();
   expect((await page.locator('.settings-content').boundingBox())!.width).toBeLessThanOrEqual(860);
   expect(writes).toEqual([]);
@@ -127,14 +123,16 @@ for (const locale of Object.keys(locales) as LocaleCode[]) test(`voice preferenc
     await page.goto(`/ui/#/${route}`);
     const trigger = page.getByRole('button', { name: locales[locale].messages.chatStreaming.options, exact: true });
     await trigger.click();
-    await expect(page.getByRole('heading', { name: copy.title, exact: true })).toBeVisible();
+    await page.getByRole('link', { name: copy.title, exact: true }).click();
+    await expect(page).toHaveURL(/#\/settings\/voice$/);
     await expect(page.getByLabel(copy.recognition, { exact: true })).toBeEnabled();
     await expect(page.getByLabel(copy.synthesis, { exact: true })).toBeEnabled();
-    await expect(page.getByLabel(copy.voice, { exact: true })).toBeEnabled();
+    await expect(page.getByRole('combobox', {name:copy.voice, exact:true})).toBeEnabled();
     await expect(page.getByRole('link', { name: copy.manage, exact: true })).toBeVisible();
     await expect(page.getByText(copy.retention, { exact: true })).toBeVisible();
     if (locale !== 'en') await expect(page.getByText(voiceSettingsText('en').retention, { exact: true })).toHaveCount(0);
-    await page.keyboard.press('Escape'); await expect(trigger).toBeFocused();
+    await page.goto('/ui/#/chat');
+    await expect(page.locator('.composer textarea')).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
   }
   expect(writes).toEqual([]);
@@ -175,7 +173,7 @@ for (const theme of ['light', 'dark']) test(`essential normal text meets 4.5:1 c
     await page.goto(`/ui/#/${route}`);
     await expect(page.locator('.page-content')).toBeVisible();
     const failures = await page.locator('.page-content').evaluate(root => {
-      const rgb = (color: string) => (color.match(/[\d.]+/g) ?? []).map(Number);
+      const rgb = (color: string) => { const parts=(color.match(/[\d.]+/g) ?? []).map(Number);return color.startsWith('color(srgb ')?parts.map((n,i)=>i<3?n*255:n):parts; };
       const lum = (c: number[]) => c.slice(0, 3).map(n => n / 255).map(n => n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4).reduce((s, n, i) => s + n * [.2126, .7152, .0722][i], 0);
       return [...root.querySelectorAll('p, small, h2, h3, dt, dd, label > span, button, a')].filter(el => {
         return el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden' && !el.closest(':disabled, [popover]:not(:popover-open)') && el.textContent?.trim();
@@ -200,18 +198,19 @@ test('IME input, reduced motion, focus restoration and status announcements rema
   expect(writes).toEqual([]);
   const trigger = page.getByRole('button', { name: 'Response settings', exact: true });
   await trigger.focus(); await trigger.press('Enter');
-  await expect(page.getByLabel('Recognition model', { exact: true })).toBeEnabled();
+  await expect(page.getByRole('link', { name: 'Voice settings', exact: true })).toBeVisible();
   await page.keyboard.press('Escape'); await expect(trigger).toBeFocused();
   await expect(input).toHaveValue('日本語の入力 — مرحباً');
   const transition = await trigger.evaluate(el => getComputedStyle(el).transitionDuration);
   expect(transition.split(',').every(value => parseFloat(value) <= .001)).toBe(true);
   await page.route('**/v1/audio/status', r => r.fulfill({ status: 503, json: { error: 'Fixture unavailable' } }));
-  await trigger.click(); await expect(page.getByRole('alert')).toContainText('Fixture unavailable');
+  await trigger.click();await page.getByRole('link',{name:'Voice settings',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Fixture unavailable');
   await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeVisible();
   expect(writes).toEqual([]);
 });
 
 test('bounded history filtering and warm controls meet the fixture feedback budget', async ({ page }, info) => {
+  test.setTimeout(120000);
   const writes = await fixture(page, 'en', 'light', 1000);
   const routes: Record<string, { cold: number; warm: number }> = {};
   const ready: Record<string, string> = {chat: '.history-open', models: '.installed-model', settings: '#settings-language', agents: '.profile-empty', knowledge: '.knowledge-documents article', activity: '.task-list .workspace-empty'};

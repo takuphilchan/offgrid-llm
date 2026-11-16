@@ -32,7 +32,7 @@ test('saved replies do not verify a newly prepared installation', async ({ page 
  await craftFixture(page, 'en', 'light');
  await page.addInitScript(() => { localStorage.removeItem('offgrid.onboarding.complete'); localStorage.removeItem('offgrid.onboarding.stage'); });
  await page.goto('/ui/');
- await expect(page.getByRole('dialog')).toBeVisible();
+ await expect(page.locator('.workspace-setup')).toBeVisible();
  await expect(page.locator('.onboarding-connection')).toContainText('Service ready');
  expect(await page.evaluate(() => localStorage.getItem('offgrid.onboarding.complete'))).not.toBe('true');
 });
@@ -44,17 +44,17 @@ test('setup completion is isolated by workspace and account', async ({ page }) =
  await page.route('**/v1/users/me', route => route.fulfill({ json: { authenticated: true, auth_required: true, user: { id: actor, role: 'admin' } } }));
  await page.goto('/ui/');
  await expect(page.locator('.composer textarea')).toBeVisible();
- await expect(page.getByRole('dialog')).toHaveCount(0);
+ await expect(page.locator('.workspace-setup')).toHaveCount(0);
  workspace = 'second';
  await page.reload();
- await expect(page.getByRole('dialog')).toBeVisible();
- await page.getByRole('dialog').locator('.onboarding-close').click();
+ await expect(page.locator('.workspace-setup')).toBeVisible();
+ await page.locator('.workspace-setup').locator('.onboarding-close').click();
  await page.reload();
  await expect(page.locator('.composer textarea')).toBeVisible();
- await expect(page.getByRole('dialog')).toHaveCount(0);
+ await expect(page.locator('.workspace-setup')).toHaveCount(0);
  actor = 'another-owner';
  await page.reload();
- await expect(page.getByRole('dialog')).toBeVisible();
+ await expect(page.locator('.workspace-setup')).toBeVisible();
 });
 
 test('cancelling engine preparation permits retry and never marks setup complete', async ({ page }) => {

@@ -2,7 +2,7 @@
 @layer base {
   :root {
     color-scheme: dark;
-    font-family: 'IBM Plex Sans Variable', 'IBM Plex Sans Arabic', sans-serif;
+    font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, 'IBM Plex Sans Variable', 'IBM Plex Sans Arabic', sans-serif;
     font-size: 16px;
     --mono: 'IBM Plex Mono', ui-monospace, monospace;
     --surface-0: #101011;
@@ -100,6 +100,9 @@
     50% { opacity: 1; }
   }
 }
+
+/* Preferences apply before any lazily loaded settings screen is visited. */
+:root[data-reduce-motion=true] *, :root[data-reduce-motion=true] *::before, :root[data-reduce-motion=true] *::after {animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
 
 /* BEGIN GENERATED TONAL GRADIENTS */
 @layer base {

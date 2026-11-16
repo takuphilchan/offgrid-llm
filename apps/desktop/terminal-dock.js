@@ -6,7 +6,7 @@ const {validateWorkspaceBounds,terminalBounds}=require('./terminal-layout');
 const {createContextDelivery}=require('./terminal-context-delivery');
 const terminalTranslations=require('./terminal-translations');
 
-function createTerminalDock({electron,window,host,cli,service,presentation}){
+function createTerminalDock({electron,window,host,cli,service,presentation,showMessage}){
   const {WebContentsView,ipcMain,dialog,clipboard}=electron;
   const text=key=>terminalTranslations.text(presentation().locale,key);
   const url=pathToFileURL(path.join(__dirname,'terminal.html')).href;
@@ -14,12 +14,12 @@ function createTerminalDock({electron,window,host,cli,service,presentation}){
   const emit=value=>{if(view&&!view.webContents.isDestroyed())view.webContents.send('terminal-event',value);};
   const sessions=new TerminalSessions({host,runner:process.execPath,worker:path.join(__dirname,'terminal-worker.js'),cli,service,
     choose:async()=>{const result=await dialog.showOpenDialog(window,{title:text('Choose a local terminal folder'),properties:['openDirectory']});return result.canceled?null:result.filePaths[0];},
-    confirm:async r=>(await dialog.showMessageBox(window,{type:'question',title:text('Close terminal?'),message:text('Stop this terminal and its running commands?'),detail:r.cwd,buttons:[text('Cancel'),text('Stop and close')],defaultId:0,cancelId:0})).response===1,
+    confirm:async r=>(await (showMessage || dialog.showMessageBox.bind(dialog))(window,{type:'question',title:text('Close terminal?'),message:text('Stop this terminal and its running commands?'),detail:r.cwd,buttons:[text('Cancel'),text('Stop and close')],defaultId:0,cancelId:0})).response===1,
     send:emit});
   function layout(){
     if(window.isDestroyed())return {};
     const [width,height]=window.getContentSize();
-    const bounds=terminalBounds(workspaceBounds,width,height,window.webContents.getZoomFactor(),process.platform==='win32'?36:0);
+    const bounds=terminalBounds(workspaceBounds,width,height,window.webContents.getZoomFactor(),process.platform==='win32'?32:0);
     view?.setBounds(bounds);view?.setVisible(visible&&!overlay);
     window.webContents.send('terminal-visibility',visible);emit({type:'layout',visible});return bounds;
   }

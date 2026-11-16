@@ -7,6 +7,9 @@ Manages document ingestion and RAG (Retrieval-Augmented Generation).
 import os
 from urllib.parse import urlencode, urlsplit
 from typing import Dict, List, Optional
+from .collections import Collections
+from .document_analyses import DocumentAnalyses
+from .document_synthesis import DocumentSynthesis
 
 
 class KnowledgeBase:
@@ -21,6 +24,9 @@ class KnowledgeBase:
     
     def __init__(self, client):
         self._client = client
+        self.collections = Collections(client)
+        self.analyses = DocumentAnalyses(client)
+        self.synthesis = DocumentSynthesis(client)
     
     def status(self) -> dict:
         """
@@ -34,6 +40,29 @@ class KnowledgeBase:
     def retention(self, doc_id: str) -> dict:
         """Read the current document retention revision without changing it."""
         return self._retention_response(self._client._request("GET", "/v1/documents/retention?" + urlencode({"id": doc_id})))
+
+    def structure(self, doc_id: str, *, revision: str = "", unit: str = "", offset: int = 0, limit: int = 100, relationship_offset: int = 0, navigation_offset: int = 0) -> dict:
+        """Read a bounded block page. Pin its revision on subsequent pages."""
+        if not doc_id or type(offset) is not int or not 0 <= offset <= 200000 or type(limit) is not int or not 1 <= limit <= 200 or type(relationship_offset) is not int or not 0 <= relationship_offset <= 400000 or type(navigation_offset) is not int or not 0 <= navigation_offset <= 200000:
+            raise ValueError("Invalid structure pagination")
+        query = dict(id=doc_id, revision=revision, unit=unit, offset=offset, limit=limit, relationship_offset=relationship_offset, navigation_offset=navigation_offset)
+        result = self._client._request("GET", "/v1/documents/structure?" + urlencode(query))
+        if not isinstance(result, dict) or (result.get("navigation_offset", 0) != navigation_offset or navigation_offset > 0 and not isinstance(result.get("navigation"), list)) or result.get("document_id") != doc_id or not result.get("revision") or (revision and result["revision"] != revision) or result.get("offset") != offset or not isinstance(result.get("blocks"), list) or len(result["blocks"]) > limit:
+            raise ValueError("Structure response does not match the requested revision")
+        return result
+
+    def correct(self, doc_id: str, *, expected_revision: str, edits: List[Dict]) -> dict:
+        """Publish exact leaf corrections once; author is the authenticated actor."""
+        if not doc_id or not expected_revision or not isinstance(edits, list) or not 1 <= len(edits) <= 256:
+            raise ValueError("Provide a document, expected revision and corrections")
+        for edit in edits:
+            if not isinstance(edit, dict) or set(edit) != {"block_id", "expected_text_sha256", "text"} or any(not isinstance(edit[key], str) for key in edit):
+                raise ValueError("Each edit requires block_id, expected_text_sha256 and text")
+        result = self._client._request("POST", "/v1/documents/corrections", dict(document_id=doc_id, expected_revision=expected_revision, edits=edits), retry=False)
+        saved = result.get("document") if isinstance(result, dict) else None
+        if not isinstance(saved, dict) or result.get("success") is not True or saved.get("id") != doc_id or not saved.get("extraction_revision") or saved["extraction_revision"] == expected_revision:
+            raise ValueError("Correction was not confirmed. Inspect the active revision before retrying.")
+        return saved
 
     @staticmethod
     def _retention_response(value: dict) -> dict:
@@ -128,18 +157,33 @@ class KnowledgeBase:
         """Read the most recent 100 imports owned by this authenticated actor."""
         return self._client._request("GET", "/v1/documents/imports").get("imports", [])
 
-    def import_attachment(self, session: str, attachment_id: str, sha256: str) -> Dict:
+    def import_attachment(self, session: str, attachment_id: str, sha256: str, *, collection_id: str, collection_revision: int, revision: str = "") -> Dict:
         """Explicitly copy a Chat source to a saved Knowledge import; no indexing.
 
         Requires source access and Knowledge management permission. Call
         retry_import with the returned ID to index; mutations are not retried.
         """
         import re
+        from urllib.parse import urlencode
+        if not collection_id or type(collection_revision) is not int or collection_revision < 1:
+            raise ValueError("Review the destination collection and provide its current revision")
         if not session or not re.fullmatch(r"file-[a-f0-9]{32}", attachment_id) or not re.fullmatch(r"[a-f0-9]{64}", sha256):
             raise ValueError("A session, attachment ID and exact source SHA-256 are required")
-        return self._client._request("POST", "/v1/documents/imports", {
-            "attachment": {"session": session, "id": attachment_id, "sha256": sha256}
+        if revision:
+            if not re.fullmatch(r"[a-f0-9]{64}", revision):
+                raise ValueError("Provide the exact attachment revision")
+            identity = self._client._request("GET", "/api/v2/system")
+            if "session-document-corrections-v1" not in identity.get("capabilities", []):
+                raise ValueError("Update the service to preserve corrected attachments")
+        path = "/v1/collections/imports?" + urlencode(dict(collection_id=collection_id, collection_revision=collection_revision))
+        result = self._client._request("POST", path, {
+            "attachment": {"session": session, "id": attachment_id, "sha256": sha256, **({"revision": revision} if revision else {})}
         }, retry=False)
+        if (not isinstance(result, dict) or not result.get("id") or not result.get("state") or
+            result.get("sha256") != sha256 or result.get("collection_id") != collection_id or
+            type(result.get("collection_revision")) is not int or result["collection_revision"] != collection_revision):
+            raise ValueError("Attachment publication was not confirmed. Inspect saved imports before continuing.")
+        return result
 
     def ocr_languages(self) -> Dict:
         """Read language installation and runtime readiness separately."""

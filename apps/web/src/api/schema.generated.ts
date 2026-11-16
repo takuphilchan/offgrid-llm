@@ -1110,10 +1110,14 @@ export interface paths {
     "/v1/sessions/{name}/attachments/{attachment_id}/preview": {
         parameters: {
             query?: {
+                /** @description Pin retained attachment text to this published revision. Images remain the immutable original. Omit to inspect the current revision. */
+                revision?: string;
                 /** @description Expected original digest; mismatch rejects delivery. */
                 sha256?: string;
-                /** @description Render this PDF page as PNG; omit for structured native source units. */
+                /** @description Render a PDF page or single PNG/JPEG image (page 1) as PNG; omit for source units with retained OCR text. */
                 page?: number;
+                /** @description With page */
+                thumbnail?: boolean;
             };
             header?: never;
             path: {
@@ -1148,6 +1152,76 @@ export interface paths {
         };
         /** @description Owner-scoped exact UTF-8 passage from a pinned extraction revision, after original digest verification. Maximum 256 KiB. Does not infer a page number or verify a model claim. */
         get: operations["getSessionAttachmentPassage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{name}/attachments/{attachment_id}/structure": {
+        parameters: {
+            query: {
+                /** @description Pinned attachment revision */
+                revision: string;
+                unit?: string;
+                offset?: number;
+                limit?: number;
+                relationship_offset?: number;
+                navigation_offset?: number;
+                /** @description Explicitly request owner editing controls for the current revision. Historical revisions remain read-only. */
+                corrections?: boolean;
+            };
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Owner-scoped, digest-verified structured inspection of the retained private source. Read-only by default; corrections=true exposes editing only to the owner for the current revision. Does not reparse or publish to Knowledge. Legacy sources without retained structure return unavailable. Response is no-store. */
+        get: operations["getSessionAttachmentStructure"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{name}/attachments/{attachment_id}/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Owner-only correction; publishes a derived revision while preserving originals and historical citations. */
+        post: operations["correctSessionAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{name}/attachments/{attachment_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Bounded revision metadata under current source access, newest first. */
+        get: operations["getSessionAttachmentRevisions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1252,6 +1326,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/document-ocr-languages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read-only OCR readiness for authenticated Chat users. No pack installation or document content access. */
+        get: operations["getChatOCRLanguages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/ocr-languages": {
         parameters: {
             query?: never;
@@ -1307,6 +1398,293 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/document-analyses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description With id, return owner-private status and source-unit accounting under current access to every source. Without id, list bounded owner-private history, omitting jobs with inaccessible sources. Refresh pagination after concurrent additions or deletions. Complete means retained text/cell traversal finished without recorded extraction gaps; it does not certify visual or semantic interpretation. */
+        get: operations["getDocumentAnalysis"];
+        put?: never;
+        /** @description Creates an owner-private durable comparison of two exact Knowledge extraction revisions. Requires Knowledge read permission and current access to both sources. No model or embedding download is needed. Other analysis workflows return 501 in this build. Reuse request_key only with identical ordered sources; inspect status after an uncertain response. */
+        post: operations["createDocumentAnalysis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Bounded deterministic differences for one committed unit pair. Interrupted work may expose completed checkpoints with its incomplete job status. Source access is rechecked. Repeated or unmatched text is represented as removals/additions, not guessed semantic equivalence. */
+        get: operations["getDocumentAnalysisResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Opens a server-retained change citation under current access to both documents. Validates revision, unit, block, UTF-8 range and SHA-256. Returns at most 256 KiB of text with explicit truncation; formulas and external references are never executed. */
+        get: operations["getDocumentAnalysisSource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export a finished comparison with exact evidence and coverage
+         * @description Requires current access to both pinned sources and ownership of the job. Returns an all-or-nothing UTF-8 artifact, limited to 8 MiB, with its SHA-256. JSON is an ordered array of typed records; CSV includes explicit evidence columns and exact metadata JSON; Markdown uses inert fenced source text. All source pairs, changes, unresolved gaps and revision references are retained. Incomplete extraction remains incomplete. CSV formula-like display cells are apostrophe-prefixed; metadata_json retains exact text. Exported copies have separate retention and cannot be recalled by source deletion or access revocation. A content-free preparation event is audited; it does not prove the client saved a file. No inference model is invoked.
+         */
+        get: operations["exportDocumentAnalysis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/synthesis/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export draft summary or requirements candidates for review
+         * @description Requires current access to all pinned sources and ownership of the job. Returns an all-or-nothing UTF-8 artifact, limited to 8 MiB, with its SHA-256. JSON is an ordered array of typed records; CSV includes explicit evidence columns and exact metadata JSON; Markdown uses inert fenced source text. All source units, candidates, conditions, exceptions and gaps are retained. Exact citations do not certify model claims. Human review decisions and attribution are included separately from model verification. CSV formula-like display cells are apostrophe-prefixed; metadata_json retains exact text. Exported copies have separate retention and cannot be recalled by source deletion or access revocation. A content-free preparation event is audited; it does not prove the client saved a file. No inference model is invoked.
+         */
+        get: operations["exportDocumentSynthesis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/synthesis/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the latest human review of a pinned draft section */
+        get: operations["getDocumentSynthesisReview"];
+        put?: never;
+        /**
+         * Append a human review revision without changing model output
+         * @description Requires the private analysis owner and current access to all sources. Pins batch identity and response digest. expected_revision provides optimistic concurrency; zero is an unreviewed section. Checked sections require a keep or exclude decision for every candidate. Notes are limited to 2048 UTF-8 bytes each. At most 256 revisions per section and 8 MiB per job are retained. Records the authenticated author and time. Review does not certify complete extraction or independent semantic accuracy. Read after an uncertain write; do not automatically replay. History follows source retention and holds.
+         */
+        post: operations["saveDocumentSynthesisReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/synthesis/compositions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read private composition status or paginated history for one analysis */
+        get: operations["getDocumentCompositions"];
+        put?: never;
+        /**
+         * Compose a summary from pinned section drafts and human review revisions
+         * @description Summary analyses only. Explicit installed local model and language. No tools, remote services or downloads. Current source access is checked before preparation and at every checkpoint. Excluded candidates are never model inputs. Durable bounded merges preserve original-source links and omitted-input gaps. New prose requires semantic review; input review decisions do not approve it. An owner-scoped request_key is idempotent. After an uncertain write inspect history before retrying. Changed reviews stop further merges; completed historical reports remain readable with reviews_current false. Source deletion and legal holds cover derived reports.
+         */
+        post: operations["createDocumentComposition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/synthesis/compositions/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export a bounded draft summary with original candidates, review snapshots and gaps */
+        get: operations["exportDocumentComposition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/synthesis/compositions/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a bounded draft report with coverage gaps */
+        get: operations["getDocumentCompositionReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/synthesis/compositions/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read up to eight original-source candidates for a composed section */
+        get: operations["getDocumentCompositionEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/synthesis/compositions/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel private work, including after source revocation */
+        post: operations["cancelDocumentComposition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/synthesis/compositions/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume the first uncommitted merge with the same pinned model and reviews */
+        post: operations["retryDocumentComposition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Stops the owner's job without deleting committed evidence. An owner may cancel after losing source access; no source details are returned. Repeated cancellation is harmless. */
+        post: operations["cancelDocumentAnalysis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Resumes queued, interrupted, failed or cancelled work after its last committed unit checkpoint. Current access to every source is required. Never replays completed jobs. */
+        post: operations["retryDocumentAnalysis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/structure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read a verified immutable extraction under current collection access. Pin revision while paginating. Text and metadata are bounded and omissions explicit. Does not run extraction or download dependencies. */
+        get: operations["getDocumentStructure"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Requires Knowledge management and collection write access. Publishes an attributed child revision and replacement index atomically. Original bytes and older citations remain unchanged. Reuses embeddings only for identical text under the configured index identity. Author comes from authentication. Do not retry automatically after an unknown outcome; inspect the active revision first. */
+        post: operations["correctDocumentExtraction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/source": {
         parameters: {
             query?: never;
@@ -1335,6 +1713,111 @@ export interface paths {
         put?: never;
         /** @description Requested knowledge requires rag permission in addition to chat. Disabled/failed retrieval returns 503 and no matching evidence returns 422 before inference or streaming begins. Turn off use_knowledge_base explicitly to request an ordinary answer. */
         post: operations["createChatCompletion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/synthesis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read an owner-private candidate analysis, or history without id. Current source membership is checked; completed traversal remains awaiting_review, not an approved answer. */
+        get: operations["getDocumentSynthesis"];
+        put?: never;
+        /** @description Explicit local-model candidate summary or requirements traversal. Requires Chat and Knowledge permissions. No downloads or tools; immutable model/runtime identity, current source access, exact prompt counting and durable batch receipts. Semantic support and full-document qualification are separate. */
+        post: operations["createDocumentSynthesis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/synthesis/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description At most two validated batch receipts. Raw model responses are private and never returned. Source quote identity is checked, not semantic entailment. */
+        get: operations["getDocumentSynthesisResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/document-analyses/synthesis/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Explicitly resume from the last committed batch with the original model identity. Cancel uses the existing document-analyses/cancel endpoint. No automatic inference replay. */
+        post: operations["retryDocumentSynthesis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List readable collections, read one policy, or page its owner-only audit. Global administrative permission does not grant private membership. */
+        get: operations["getCollections"];
+        /** @description Owner-only replacement of name and membership. Both member lists must be explicit; stale revisions never retry automatically. The legacy workspace collection is immutable. */
+        put: operations["updateCollection"];
+        /** @description Create a private collection owned by the authenticated actor. Sharing is a separate revision-checked update. */
+        post: operations["createCollection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/collections/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Accept an original into an explicitly reviewed collection. This distinct route prevents older services silently importing into the shared workspace. Never fall back to the legacy import route. Retry processing through the returned durable import identity. */
+        post: operations["acceptCollectionImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/collection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDocumentCollection"];
+        /** @description Move a document using the reviewed binding and both audience revisions. A private source requires its collection owner; the destination requires write access. No source bytes or extraction revisions change. */
+        put: operations["moveDocumentCollection"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1712,7 +2195,8 @@ export interface paths {
         get: operations["getAgentProfile"];
         put: operations["updateAgentProfile"];
         post?: never;
-        delete?: never;
+        /** @description Atomically delete an owned profile, its revisions, deletable standalone work and private profile memory after reviewing the current snapshot. Active work, canonical conversation work, schedules and dependent profiles or jobs block deletion. Shared files and backups remain separate retention domains. */
+        delete: operations["deleteAgentProfile"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1731,6 +2215,24 @@ export interface paths {
         put?: never;
         /** @description Finish accepted linkage or attach an already saved canonical result. This operation does not resume inference, grant access or replay tools. */
         post: operations["recoverSessionJobTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/agent-profiles/{id}/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["reviewAgentProfileDeletion"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2197,640 +2699,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        InferenceAdmissionStatus: {
-            policy: string;
-            /** @description Requests admitted before acquiring provider-family and runtime resources; not a count of active generations. */
-            admitted: number;
-            capacity: number;
-            foreground_queued: number;
-            background_queued: number;
-            queue_capacity: number;
-        };
-        WorkControlCommand: {
-            request_id: string;
-            target_id: string;
-            /** Format: int64 */
-            expected_revision: number;
-            /** @enum {string} */
-            kind: "stop" | "pause" | "correct" | "continue";
-            payload: {
-                /** @description Required only for correct. No budget is replenished. */
-                instruction?: string;
-            };
-        };
-        ConversationPreferences: {
-            model?: string;
-            profile_id?: string;
-            profile_revision?: number;
-            restrictions?: components["schemas"]["AgentResourceRestrictions"];
-            delegation?: boolean;
-        };
-        CanonicalConversation: {
-            pending_question?: components["schemas"]["ConversationQuestion"];
-            /**
-             * Format: int64
-             * @description Version of explicit project/folder selection. Ordinary messages do not advance it; late access approval preserves a newer selection.
-             */
-            context_revision?: number;
-            /** @description False when migrated browser-only configuration has no persisted evidence. */
-            configuration_known: boolean;
-            id: string;
-            /** Format: int64 */
-            revision: number;
-            project_id: string;
-            title: string;
-            preferences: components["schemas"]["ConversationPreferences"];
-            focused_work_id?: string;
-            /** Format: date-time */
-            created_at: string;
-        };
-        /** @description Read-only projection of the focused work's pending primary clarification. Observation never answers or resumes work. */
-        ConversationQuestion: {
-            id: string;
-            work_id: string;
-            run_id: string;
-            content: string;
-        };
-        CanonicalConversationPage: {
-            items: components["schemas"]["CanonicalConversation"][];
-            next_cursor?: string;
-            has_more: boolean;
-        };
-        ConversationProject: {
-            id: string;
-            /** Format: int64 */
-            revision: number;
-            name: string;
-            default: boolean;
-            preferences: components["schemas"]["ConversationPreferences"];
-            resources?: components["schemas"]["ProjectResourceReference"][];
-            /** @description SHA-256 of the accepted project TOML bytes. Absent after an explicit service preference edit. */
-            configuration_digest?: string;
-            /** @description Opaque host/folder identity. Project membership grants no access. */
-            folder_identity?: string;
-            /**
-             * @description Explicit service edits survive later folder refreshes.
-             * @enum {string}
-             */
-            configuration_source?: "file" | "service";
-        };
-        ProjectResourceReference: {
-            /** @enum {string} */
-            kind: "skill" | "knowledge" | "connection" | "instructions";
-            id: string;
-            /** @description Skill revision number */
-            revision?: string;
-            required?: boolean;
-        };
-        ResourceResolution: {
-            kind: string;
-            id: string;
-            revision?: string;
-            required?: boolean;
-            selected: boolean;
-            reason: string;
-        };
-        ProjectCommand: {
-            request_id: string;
-            /** @description Empty only for create_project. */
-            target_id: string;
-            /** Format: int64 */
-            expected_revision: number;
-            /** @enum {string} */
-            kind: "create_project" | "configure_project";
-            payload: {
-                name: string;
-                /** @description Version 1 UTF-8 project configuration */
-                configuration_toml?: string;
-                preferences?: components["schemas"]["ProjectPreferences"];
-                resources?: components["schemas"]["ProjectResourceReference"][];
-            };
-        };
-        UserDefaultValues: {
-            model?: string;
-            delegation?: boolean;
-        };
-        UserPreferences: {
-            /** @constant */
-            id: "user-defaults";
-            /** Format: int64 */
-            revision: number;
-            preferences: components["schemas"]["UserDefaultValues"];
-        };
-        UserPreferencesCommand: {
-            request_id: string;
-            /** @constant */
-            target_id: "user-defaults";
-            /** Format: int64 */
-            expected_revision: number;
-            /** @constant */
-            kind: "configure_user_preferences";
-            payload: components["schemas"]["UserDefaultValues"];
-        };
-        ProjectPreferences: {
-            model?: string;
-            delegation?: boolean;
-            /** @description Empty compatibility field only. Project preferences cannot grant or widen authority. */
-            restrictions?: Record<string, never>;
-        };
-        ConversationWorkItem: {
-            id: string;
-            /** Format: int64 */
-            revision: number;
-            project_id: string;
-            /** Format: int64 */
-            project_revision: number;
-            objective: string;
-            acceptance: string[];
-            run_id: string;
-            /** @description Ordered retained execution attempts. run_id identifies the current attempt; prior outcomes are not rewritten. */
-            run_ids?: string[];
-            status: string;
-            instruction_version: number;
-            control_epoch: number;
-            result_reference?: string;
-            /** @description Completion does not imply independent verification. */
-            independently_verified: boolean;
-            worker_policy?: components["schemas"]["WorkerPolicy"];
-        };
-        /** @description Service-owned resource policy pinned at work admission; never an authority grant. Absent on older work, which retains version 1 defaults. */
-        WorkerPolicy: {
-            /** @enum {integer} */
-            version: 1;
-            max_sessions: number;
-            max_active: number;
-            /** @enum {integer} */
-            max_depth: 1;
-            initial_model_calls: number;
-        };
-        ConversationCommand: {
-            request_id: string;
-            /** @description Empty only when creating or importing a conversation. */
-            target_id: string;
-            /** Format: int64 */
-            expected_revision: number;
-            /** @enum {string} */
-            kind: "create_conversation" | "import_conversation" | "configure_conversation" | "rename_conversation" | "select_project" | "use_project_folder" | "clear_project_folder" | "link_work" | "focus_work" | "create_work";
-            payload: {
-                title?: string;
-                /** @description Required only for import_conversation with empty target and revision zero. Imports an owned inactive legacy session transactionally and retains its original files. */
-                legacy_name?: string;
-                /** @description link_work attaches owned accessible work and focuses it. focus_work requires an existing link; omit work_id to clear focus. Neither command dispatches or copies grants. */
-                work_id?: string;
-                project_id?: string;
-                /** @description Required only for use_project_folder. Resolves a live approved host and imports safe fixed-path project metadata. Does not create authority or rewrite existing work. */
-                folder?: components["schemas"]["ExecutionReference"];
-                preferences?: components["schemas"]["ConversationPreferences"];
-                input?: {
-                    content: string;
-                    model?: string;
-                    acceptance?: string[];
-                };
-            };
-        };
-        ConversationCommandReceipt: {
-            input?: components["schemas"]["ConversationInboxEntry"];
-            user_preferences?: components["schemas"]["UserPreferences"];
-            request_id: string;
-            target_id: string;
-            /** Format: int64 */
-            revision: number;
-            /** Format: int64 */
-            event_cursor: number;
-            conversation?: components["schemas"]["CanonicalConversation"];
-            work?: components["schemas"]["ConversationWorkItem"];
-            project?: components["schemas"]["ConversationProject"];
-            worker?: components["schemas"]["WorkerSession"];
-            message?: components["schemas"]["WorkerMessage"];
-            import?: components["schemas"]["ConversationImportManifest"];
-        };
-        ConversationInboxInput: {
-            /** @description Required for answer intent. Exact saved primary clarification identity; never authorizes host access. Omit for other intents. */
-            question_id?: string;
-            content: string;
-            model?: string;
-            /** @enum {string} */
-            intent?: "message" | "correction" | "new_work" | "answer";
-            /** @description Omitted uses current focus. Empty string selects unbound conversation input. */
-            focused_work_id?: string;
-            /** @enum {string} */
-            origin?: "typed" | "dictation" | "steering";
-        };
-        /** @description Preview text-input envelope. Acceptance is independent of inference readiness. Answer intent binds an exact primary clarification and records its mailbox/history/continuation transaction without another model turn. Host approvals retain their existing access controls. */
-        ConversationInputCommand: {
-            request_id: string;
-            target_id: string;
-            /** Format: int64 */
-            expected_revision: number;
-            /** @constant */
-            kind: "submit_input";
-            payload: components["schemas"]["ConversationInboxInput"];
-        };
-        ConversationInputControlCommand: {
-            request_id: string;
-            /** @description Input identity. */
-            target_id: string;
-            /**
-             * Format: int64
-             * @description Current containing-conversation revision.
-             */
-            expected_revision: number;
-            /** @enum {string} */
-            kind: "stop" | "continue" | "revalidate";
-            payload: {
-                /** @description Required and positive for revalidate; must match the current focused work instruction version. Otherwise omit or use zero. */
-                instruction_version?: number;
-            };
-        };
-        ConversationInboxEntry: {
-            question?: components["schemas"]["ConversationQuestion"];
-            /** @description Derived decision and result references withheld because actor or source access changed. Original user input and control state remain inspectable. */
-            context_unavailable?: boolean;
-            /** Format: date-time */
-            stopped_at?: string;
-            /** Format: date-time */
-            hold_released_at?: string;
-            /** Format: date-time */
-            revalidated_at?: string;
-            revalidated_instruction_version?: number;
-            decision?: components["schemas"]["ConversationDecision"];
-            decision_issue?: components["schemas"]["ConversationDecisionIssue"];
-            delivery_issue?: {
-                code: string;
-                message: string;
-                /** Format: date-time */
-                retry_at: string;
-            };
-            id: string;
-            /** Format: int64 */
-            sequence: number;
-            conversation_id: string;
-            /** Format: int64 */
-            conversation_revision: number;
-            request_id: string;
-            work_id?: string;
-            instruction_version?: number;
-            input: components["schemas"]["ConversationInboxInput"];
-            /** @description Work admitted from this input. The original work_id still identifies the input's previous focus. */
-            created_work_id?: string;
-            state: string;
-            run_id?: string;
-            /** Format: date-time */
-            accepted_at: string;
-            /** Format: date-time */
-            delivered_at?: string;
-            /** Format: date-time */
-            settled_at?: string;
-            run_status?: string;
-            result_reference?: string;
-            /** @enum {string} */
-            incorporation?: "answered" | "correction" | "new_work" | "worker_answer";
-            /** Format: date-time */
-            applied_at?: string;
-            applied_instruction_version?: number;
-        };
-        /** @description Durable foreground proposal. Only applied_at and applied_instruction_version confirm incorporation; a reply or recorded proposal alone does not. */
-        ConversationDecision: {
-            /** @enum {string} */
-            kind: "answered" | "correction" | "new_work";
-            /** @description Current work instruction version for a correction; otherwise zero. */
-            instruction_version: number;
-            /** @description Required only for new_work. A proposed acceptance condition; the objective remains the exact accepted user input. */
-            expected_result?: string;
-        };
-        ConversationDecisionIssue: {
-            code: string;
-            message: string;
-            /** Format: date-time */
-            retry_at: string;
-        };
-        ConversationInboxPage: {
-            items: components["schemas"]["ConversationInboxEntry"][];
-            /** Format: int64 */
-            next_cursor: number;
-            has_more: boolean;
-        };
-        ConversationImportManifest: {
-            /** @constant */
-            version: 1;
-            legacy_name: string;
-            conversation_id: string;
-            source_sha256: string;
-            /** @constant */
-            authority: "agent_control_store";
-            configuration_known: boolean;
-            legacy_run_ids: string[] | null;
-            /** Format: date-time */
-            imported_at: string;
-        };
-        WorkerSession: {
-            question?: components["schemas"]["WorkerQuestion"];
-            id: string;
-            /** Format: int64 */
-            revision: number;
-            work_id: string;
-            root_run_id: string;
-            current_run_id: string;
-            run_ids: string[];
-            assignment_version: number;
-            assignment: {
-                goal: string;
-                expected_result: string;
-                /**
-                 * @description Assignment execution mode. Older stored assignments may omit it.
-                 * @enum {string}
-                 */
-                mode?: "research" | "edit" | "test";
-                /** @description Recorded delegation rationale when supplied; absent for legacy assignments. */
-                reason?: string;
-                tools: string[] | null;
-                depends_on: string[] | null;
-                instruction_version: number;
-                model_calls: number;
-                profile_id?: string;
-            };
-            status: string;
-            stopped: boolean;
-            closed: boolean;
-            result_reference?: string;
-        };
-        WorkerCommand: {
-            request_id: string;
-            target_id: string;
-            /** Format: int64 */
-            expected_revision: number;
-            /** @enum {string} */
-            kind: "message" | "stop" | "close" | "continue" | "answer";
-            payload: {
-                /** @description Required for message */
-                content?: string;
-                /** @description Required only for answer; identifies the exact pending question. */
-                question_id?: string;
-            };
-        };
-        WorkerQuestion: {
-            id: string;
-            worker_id: string;
-            run_id: string;
-            content: string;
-            instruction_version: number;
-            assignment_version: number;
-            /** @enum {string} */
-            state: "pending" | "answered";
-            /** Format: date-time */
-            requested_at: string;
-            /** @description Accepted answer's mailbox identity; consult its state for delivery and application. */
-            answer_message_id?: string;
-        };
-        WorkerMessage: {
-            question_id?: string;
-            id: string;
-            worker_id: string;
-            run_id: string;
-            content: string;
-            /** @enum {string} */
-            state: "accepted" | "delivered" | "applied" | "abandoned";
-            instruction_version: number;
-            /** Format: date-time */
-            accepted_at: string;
-            /** Format: date-time */
-            delivered_at?: string;
-            /** Format: date-time */
-            applied_at?: string;
-            /** Format: date-time */
-            abandoned_at?: string;
-            resolution_reason?: string;
-        };
-        WorkerMessagePage: {
-            items: components["schemas"]["WorkerMessage"][];
-            /** Format: int64 */
-            next_cursor: number;
-            has_more: boolean;
-        };
-        WorkChange: {
-            id: string;
-            work_id: string;
-            run_id: string;
-            worker_run_id: string;
-            /** @enum {string} */
-            kind: "proposal" | "candidate";
-            state: string;
-            /** Format: int64 */
-            instruction_version: number;
-            /** Format: int64 */
-            control_epoch: number;
-            current: boolean;
-            operation_count: number;
-            validation_state: string;
-            validation_count: number;
-            integration_id?: string;
-            integrated_count: number;
-            available: boolean;
-            limitation?: string;
-        };
-        ConversationResultPage: {
-            id: string;
-            run_id: string;
-            work_id?: string;
-            worker_id?: string;
-            conversation_id?: string;
-            instruction_version: number;
-            control_epoch: number;
-            status: string;
-            independently_verified: boolean;
-            evidence_steps: number[];
-            content: string;
-            offset: number;
-            next_offset: number;
-            total_bytes: number;
-            complete: boolean;
-        };
-        WorkChangeList: {
-            items: components["schemas"]["WorkChange"][];
-            next_cursor: string;
-            has_more: boolean;
-        };
-        WorkFileVersion: {
-            kind: string;
-            /** Format: int64 */
-            bytes: number;
-            mode: number;
-            sha256?: string;
-        };
-        WorkFileChange: {
-            path: string;
-            kind: string;
-            base?: components["schemas"]["WorkFileVersion"];
-            result?: components["schemas"]["WorkFileVersion"];
-        };
-        WorkValidationCheck: {
-            id: string;
-            state: string;
-            exit_code?: number;
-            request_digest: string;
-            receipt_digest: string;
-        };
-        WorkFileReceipt: {
-            ordinal: number;
-            path: string;
-            operation: string;
-            state: string;
-            dispatched: boolean;
-            original_retained: boolean;
-            displaced_digest?: string;
-            result_digest?: string;
-            error?: string;
-        };
-        WorkChangeContent: {
-            sha256: string;
-            /** Format: int64 */
-            bytes: number;
-            /** Format: int64 */
-            offset: number;
-            /** Format: byte */
-            data: string;
-        };
-        /** @description Observed retained content. Unconfirmed files do not prove a replacement occurred. Reads never restore files or settle uncertain work. */
-        WorkRecoveryFile: {
-            id: string;
-            path: string;
-            /** @enum {string} */
-            role: "displaced" | "unconfirmed";
-            /** Format: int64 */
-            bytes: number;
-            sha256?: string;
-            limitation?: string;
-        };
-        WorkChangeDetail: {
-            change: components["schemas"]["WorkChange"];
-            /** @enum {string} */
-            view: "files" | "validation" | "integration" | "recovery" | "content" | "preserved";
-            files?: components["schemas"]["WorkFileChange"][];
-            checks?: components["schemas"]["WorkValidationCheck"][];
-            receipts?: components["schemas"]["WorkFileReceipt"][];
-            recovery?: components["schemas"]["WorkRecoveryFile"][];
-            content?: components["schemas"]["WorkChangeContent"];
-            /** Format: int64 */
-            next_offset?: number;
-            conflict_path?: string;
-            error?: string;
-        };
-        EffectiveConversationPreferences: {
-            /** @description Observed availability of the saved folder reference. No grant is restored by inspection. */
-            folder?: {
-                session: string;
-                available: boolean;
-                reason: string;
-            };
-            /** Format: int64 */
-            user_preferences_revision?: number;
-            project_id: string;
-            /** Format: int64 */
-            project_revision: number;
-            resources: components["schemas"]["ResourceResolution"][];
-            configuration_known: boolean;
-            model: string;
-            delegation: boolean;
-            profile_id?: string;
-            profile_revision?: number;
-            restrictions: components["schemas"]["AgentResourceRestrictions"];
-            provenance: {
-                [key: string]: string;
-            };
-        };
-        ControlEventPage: {
-            events: {
-                /** Format: int64 */
-                cursor: number;
-                target_id: string;
-                /** Format: int64 */
-                revision: number;
-                kind: string;
-                /** Format: date-time */
-                recorded_at: string;
-                payload: {
-                    [key: string]: unknown;
-                };
-            }[];
-            /** Format: int64 */
-            next_cursor: number;
-            has_more: boolean;
-            history_gap: boolean;
-            snapshot?: components["schemas"]["CanonicalConversation"] | components["schemas"]["ConversationWorkItem"] | components["schemas"]["WorkerSession"];
-        };
-        AgentConversationConfiguration: {
-            /** @enum {integer} */
-            version: 1;
-            profile: components["schemas"]["AgentProfile"] | null;
-            model: string;
-            restrictions: components["schemas"]["AgentResourceRestrictions"];
-        };
-        /** @description Run accounting. Root attempts inherit prior root charges; do not sum attempts. Child allocations include pending reservations and retained spent slots. Context preparation is part of the inference allowance, not an additional time charge. */
-        TaskResourceUsage: {
-            model_call_limit: number;
-            model_calls: number;
-            child_call_allocations: number;
-            /** @description Service-observed invocation accounting; does not measure a process after its start invocation returns. Legacy reservations are conservative, not measured historical tool calls. */
-            tools?: {
-                version: number;
-                calls_per_decision: number;
-                /** Format: int64 */
-                per_call_ns: number;
-                reserved_calls: number;
-                legacy_reserved_calls: number;
-                /** Format: int64 */
-                charged_ns: number;
-                /** Format: int64 */
-                measured_ns: number;
-                unsettled_calls: number;
-            };
-            /** @description Owned-process supervised elapsed time, not CPU time. Start reservations remain charged until authenticated terminal timing is received. Missing legacy timing does not mean zero usage. Invocation and process timings overlap and must not be summed as elapsed latency. */
-            processes?: {
-                version: number;
-                /** Format: int64 */
-                per_decision_ns: number;
-                starts_per_decision: number;
-                reserved_starts: number;
-                legacy_reserved_starts: number;
-                /** Format: int64 */
-                charged_ns: number;
-                /** Format: int64 */
-                measured_ns: number;
-                unsettled_starts: number;
-            };
-            /** @description Root work reservation for private worker copies in logical file bytes, not physical disk allocation or an OS quota. Unknown preparation retains its full reservation; only confirmed artifact release refunds it. Measurements are last observed retained content, not a live disk scan. */
-            storage?: {
-                version: number;
-                /** Format: int64 */
-                limit_bytes: number;
-                /** Format: int64 */
-                charged_bytes: number;
-                retained_copies: number;
-                /** Format: int64 */
-                measured_bytes: number;
-                unmeasured_copies: number;
-            };
-            /** @description Absent for historical runs without input accounting; absence does not mean zero usage. */
-            input?: {
-                window: number;
-                /** Format: int64 */
-                charged_tokens: number;
-                /** Format: int64 */
-                measured_tokens: number;
-                unmeasured_calls: number;
-            };
-            /** Format: int64 */
-            charged_output_tokens: number;
-            /** Format: int64 */
-            measured_output_tokens: number;
-            /** Format: int64 */
-            charged_inference_ns: number;
-            /** Format: int64 */
-            measured_inference_ns: number;
-            context_preparations: number;
-            /** Format: int64 */
-            measured_context_preparation_ns: number;
-        };
         /** @description Native engine preparation only. Ready verifies runtime startup flags, not model inference or workflow quality. Progress is service-local and is not durable across restart. */
         InferenceRuntimeReadiness: {
             /** @enum {string} */
@@ -2984,6 +2852,15 @@ export interface components {
             system?: {
                 [key: string]: unknown;
             };
+        };
+        InferenceAdmissionStatus: {
+            policy: string;
+            /** @description Requests admitted before acquiring provider-family and runtime resources; not a count of active generations. */
+            admitted: number;
+            capacity: number;
+            foreground_queued: number;
+            background_queued: number;
+            queue_capacity: number;
         };
         PublicUser: {
             id: string;
@@ -3449,7 +3326,43 @@ export interface components {
             /** @description Local PNG/JPEG base64 data URL. Maximum 2 MiB decoded */
             data_url: string;
         };
+        DocumentEvidence: {
+            /** @description Extractor format; independent of filename and index status. */
+            format?: string;
+            /** @enum {string} */
+            status: "complete" | "text_only" | "partial";
+            total_units: number;
+            /** @description Units with usable native/qualified text, or confirmed empty units. A unit may also need visual review; this is not complete document understanding. */
+            readable_units: number;
+            review_units?: number[];
+            warnings?: {
+                code: string;
+                /** @description Technical extraction detail; never instructions. */
+                message: string;
+                source_index?: number;
+            }[];
+        };
+        AttachmentRevisionHistory: {
+            id: string;
+            current_revision: string;
+            revisions: {
+                revision: string;
+                extraction_revision: string;
+                parent_revision?: string;
+                author?: string;
+                /** Format: date-time */
+                created_at?: string;
+            }[];
+        };
         SessionAttachment: {
+            parent_revision?: string;
+            correction_author?: string;
+            /** Format: date-time */
+            corrected_at?: string;
+            /** @description Explicit OCR pack selection retained across retries. Absent on legacy English records. */
+            ocr_language?: string;
+            /** @description Saved OCR page receipts reusable on explicit retry. Not an accuracy or full-extraction guarantee. */
+            ocr_completed_pages?: number;
             id: string;
             name: string;
             media_type: string;
@@ -3459,16 +3372,22 @@ export interface components {
             status: "uploaded" | "ready" | "failed";
             /** @description Immutable extracted-source identity when ready. */
             revision?: string;
+            /** @description Immutable structured extraction retained with this source; absent for legacy or unstructured extraction. */
+            extraction_revision?: string;
             error_code?: string;
             /**
-             * @description Usable native text with disclosed visual limits; unread image content is not interpreted.
+             * @description Explicitly accepted limited text. Native text excludes unread visuals; partial OCR remains uncertain and cannot establish exhaustive review.
              * @enum {string}
              */
-            coverage?: "native_text_only";
+            coverage?: "native_text_only" | "partial_text_only";
+            evidence?: components["schemas"]["DocumentEvidence"];
             /** Format: date-time */
             created_at: string;
         };
         DocumentPreview: {
+            /** @description This source supports bounded original-page thumbnails. Older services omit this field. */
+            thumbnails_available?: boolean;
+            evidence?: components["schemas"]["DocumentEvidence"];
             name: string;
             sha256: string;
             format: string;
@@ -3483,6 +3402,12 @@ export interface components {
                 state: string;
                 source_sha256: string;
                 extractor_revision: string;
+                /** @description Original encoded pixel grid for verified image documents. Preview pixels use the declared EXIF orientation; absent for unsupported geometry. */
+                image_geometry?: {
+                    width: number;
+                    height: number;
+                    orientation: number;
+                };
             }[];
         };
         SessionAttachmentReference: {
@@ -3519,6 +3444,9 @@ export interface components {
         };
         /** @description Exact source revision and UTF-8 extracted-text byte ranges supplied for this answer. Excerpts are not a complete document review. */
         AttachmentSelection: {
+            /** @description Retained structured extraction identity */
+            extraction_revision?: string;
+            linked_evidence?: components["schemas"]["AttachmentLinkedEvidence"];
             id: string;
             revision: string;
             name: string;
@@ -3527,7 +3455,37 @@ export interface components {
             total_bytes: number;
             ranges: number[][];
         };
+        /** @description Explicit structural dependencies in this saved attachment selection. Complete links do not imply complete extraction, exhaustive review or answer correctness. Absent on legacy sources. */
+        AttachmentLinkedEvidence: {
+            extraction_revision: string;
+            links_complete: boolean;
+            required_spans?: {
+                start_byte: number;
+                end_byte: number;
+            }[];
+            omitted_blocks?: string[];
+            limit_reached?: boolean;
+        };
+        /** @description Structural links supplied with this excerpt, independent of extraction coverage and answer correctness. */
+        EvidenceReceipt: {
+            extraction_revision: string;
+            block_ids?: string[];
+            group_id: string;
+            required_chunks?: string[];
+            /** @description Known linked block identities not included by bounded expansion. May be capped; limit_reached remains true. */
+            omitted_blocks?: string[];
+            /** @description False if explicit linked context was omitted or truncated. Never a full-document review guarantee. */
+            links_complete: boolean;
+            limit_reached?: boolean;
+        };
         KnowledgePassage: {
+            /**
+             * @description Retrieval method
+             * @enum {string}
+             */
+            retrieval_mode?: "hybrid" | "semantic" | "lexical";
+            evidence_receipt?: components["schemas"]["EvidenceReceipt"];
+            evidence?: components["schemas"]["DocumentEvidence"];
             source?: components["schemas"]["KnowledgeSourceLocator"];
             document_id: string;
             name: string;
@@ -3548,9 +3506,589 @@ export interface components {
             source_sha256: string;
             extractor_revision: string;
         };
+        WorkControlCommand: {
+            request_id: string;
+            target_id: string;
+            /** Format: int64 */
+            expected_revision: number;
+            /** @enum {string} */
+            kind: "stop" | "pause" | "correct" | "continue";
+            payload: {
+                /** @description Required only for correct. No budget is replenished. */
+                instruction?: string;
+            };
+        };
+        ConversationPreferences: {
+            model?: string;
+            profile_id?: string;
+            profile_revision?: number;
+            restrictions?: components["schemas"]["AgentResourceRestrictions"];
+            delegation?: boolean;
+        };
+        CanonicalConversation: {
+            pending_question?: components["schemas"]["ConversationQuestion"];
+            /**
+             * Format: int64
+             * @description Version of explicit project/folder selection. Ordinary messages do not advance it; late access approval preserves a newer selection.
+             */
+            context_revision?: number;
+            /** @description False when migrated browser-only configuration has no persisted evidence. */
+            configuration_known: boolean;
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            project_id: string;
+            title: string;
+            preferences: components["schemas"]["ConversationPreferences"];
+            focused_work_id?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @description Read-only projection of the focused work's pending primary clarification. Observation never answers or resumes work. */
+        ConversationQuestion: {
+            id: string;
+            work_id: string;
+            run_id: string;
+            content: string;
+        };
+        CanonicalConversationPage: {
+            items: components["schemas"]["CanonicalConversation"][];
+            next_cursor?: string;
+            has_more: boolean;
+        };
+        ConversationProject: {
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            name: string;
+            default: boolean;
+            preferences: components["schemas"]["ConversationPreferences"];
+            resources?: components["schemas"]["ProjectResourceReference"][];
+            /** @description SHA-256 of the accepted project TOML bytes. Absent after an explicit service preference edit. */
+            configuration_digest?: string;
+            /** @description Opaque host/folder identity. Project membership grants no access. */
+            folder_identity?: string;
+            /**
+             * @description Explicit service edits survive later folder refreshes.
+             * @enum {string}
+             */
+            configuration_source?: "file" | "service";
+        };
+        ProjectResourceReference: {
+            /** @enum {string} */
+            kind: "skill" | "knowledge" | "connection" | "instructions";
+            id: string;
+            /** @description Skill revision number */
+            revision?: string;
+            required?: boolean;
+        };
+        ResourceResolution: {
+            kind: string;
+            id: string;
+            revision?: string;
+            required?: boolean;
+            selected: boolean;
+            reason: string;
+        };
+        ProjectCommand: {
+            request_id: string;
+            /** @description Empty only for create_project. */
+            target_id: string;
+            /** Format: int64 */
+            expected_revision: number;
+            /** @enum {string} */
+            kind: "create_project" | "configure_project";
+            payload: {
+                name: string;
+                /** @description Version 1 UTF-8 project configuration */
+                configuration_toml?: string;
+                preferences?: components["schemas"]["ProjectPreferences"];
+                resources?: components["schemas"]["ProjectResourceReference"][];
+            };
+        };
+        UserDefaultValues: {
+            model?: string;
+            delegation?: boolean;
+        };
+        UserPreferences: {
+            /** @constant */
+            id: "user-defaults";
+            /** Format: int64 */
+            revision: number;
+            preferences: components["schemas"]["UserDefaultValues"];
+        };
+        UserPreferencesCommand: {
+            request_id: string;
+            /** @constant */
+            target_id: "user-defaults";
+            /** Format: int64 */
+            expected_revision: number;
+            /** @constant */
+            kind: "configure_user_preferences";
+            payload: components["schemas"]["UserDefaultValues"];
+        };
+        ProjectPreferences: {
+            model?: string;
+            delegation?: boolean;
+            /** @description Empty compatibility field only. Project preferences cannot grant or widen authority. */
+            restrictions?: Record<string, never>;
+        };
+        ConversationWorkItem: {
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            project_id: string;
+            /** Format: int64 */
+            project_revision: number;
+            objective: string;
+            acceptance: string[];
+            run_id: string;
+            /** @description Ordered retained execution attempts. run_id identifies the current attempt; prior outcomes are not rewritten. */
+            run_ids?: string[];
+            status: string;
+            instruction_version: number;
+            control_epoch: number;
+            result_reference?: string;
+            /** @description Completion does not imply independent verification. */
+            independently_verified: boolean;
+            worker_policy?: components["schemas"]["WorkerPolicy"];
+        };
+        /** @description Service-owned resource policy pinned at work admission; never an authority grant. Absent on older work, which retains version 1 defaults. */
+        WorkerPolicy: {
+            /** @enum {integer} */
+            version: 1;
+            max_sessions: number;
+            max_active: number;
+            /** @enum {integer} */
+            max_depth: 1;
+            initial_model_calls: number;
+        };
+        ConversationCommand: {
+            request_id: string;
+            /** @description Empty only when creating or importing a conversation. */
+            target_id: string;
+            /** Format: int64 */
+            expected_revision: number;
+            /** @enum {string} */
+            kind: "create_conversation" | "import_conversation" | "configure_conversation" | "rename_conversation" | "select_project" | "use_project_folder" | "clear_project_folder" | "link_work" | "focus_work" | "create_work";
+            payload: {
+                title?: string;
+                /** @description Required only for import_conversation with empty target and revision zero. Imports an owned inactive legacy session transactionally and retains its original files. */
+                legacy_name?: string;
+                /** @description link_work attaches owned accessible work and focuses it. focus_work requires an existing link; omit work_id to clear focus. Neither command dispatches or copies grants. */
+                work_id?: string;
+                project_id?: string;
+                /** @description Required only for use_project_folder. Resolves a live approved host and imports safe fixed-path project metadata. Does not create authority or rewrite existing work. */
+                folder?: components["schemas"]["ExecutionReference"];
+                preferences?: components["schemas"]["ConversationPreferences"];
+                input?: {
+                    content: string;
+                    model?: string;
+                    acceptance?: string[];
+                };
+            };
+        };
+        ConversationCommandReceipt: {
+            input?: components["schemas"]["ConversationInboxEntry"];
+            user_preferences?: components["schemas"]["UserPreferences"];
+            request_id: string;
+            target_id: string;
+            /** Format: int64 */
+            revision: number;
+            /** Format: int64 */
+            event_cursor: number;
+            conversation?: components["schemas"]["CanonicalConversation"];
+            work?: components["schemas"]["ConversationWorkItem"];
+            project?: components["schemas"]["ConversationProject"];
+            worker?: components["schemas"]["WorkerSession"];
+            message?: components["schemas"]["WorkerMessage"];
+            import?: components["schemas"]["ConversationImportManifest"];
+        };
+        ConversationAttachment: {
+            id: string;
+            revision: string;
+            /** @description One-based page in the pinned extraction. Zero selects document retrieval. */
+            page?: number;
+        };
+        /** @description Explicit page or block selection in an immutable Knowledge extraction. Exactly one scope is required; this cannot be combined with broad Knowledge retrieval. */
+        ConversationKnowledgeSelection: {
+            document_id: string;
+            revision: string;
+            page?: number;
+            block_ids?: string[];
+        };
+        ConversationInboxInput: {
+            knowledge_selections?: components["schemas"]["ConversationKnowledgeSelection"][];
+            /** @description Owning session whose canonical manifest matches this conversation. */
+            source_session?: string;
+            attachments?: components["schemas"]["ConversationAttachment"][];
+            images?: components["schemas"]["SessionImage"][];
+            knowledge_documents?: string[];
+            /** @description Retrieve from currently permitted Knowledge within effective resource restrictions. */
+            use_knowledge?: boolean;
+            /** @description Required for answer intent. Exact saved primary clarification identity; never authorizes host access. Omit for other intents. */
+            question_id?: string;
+            content: string;
+            model?: string;
+            /** @enum {string} */
+            intent?: "message" | "correction" | "new_work" | "answer";
+            /** @description Omitted uses current focus. Empty string selects unbound conversation input. */
+            focused_work_id?: string;
+            /** @enum {string} */
+            origin?: "typed" | "dictation" | "steering";
+        };
+        /** @description Durable input envelope. Source inputs require conversation-source-inputs-v1 and are validated before acceptance. Inference starts separately. Answer intent binds an exact primary clarification; host approvals retain their existing access controls. */
+        ConversationInputCommand: {
+            request_id: string;
+            target_id: string;
+            /** Format: int64 */
+            expected_revision: number;
+            /** @constant */
+            kind: "submit_input";
+            payload: components["schemas"]["ConversationInboxInput"];
+        };
+        ConversationInputControlCommand: {
+            request_id: string;
+            /** @description Input identity. */
+            target_id: string;
+            /**
+             * Format: int64
+             * @description Current containing-conversation revision.
+             */
+            expected_revision: number;
+            /** @enum {string} */
+            kind: "stop" | "continue" | "revalidate";
+            payload: {
+                /** @description Required and positive for revalidate; must match the current focused work instruction version. Otherwise omit or use zero. */
+                instruction_version?: number;
+            };
+        };
+        ConversationInboxEntry: {
+            question?: components["schemas"]["ConversationQuestion"];
+            /** @description Derived decision and result references withheld because actor or source access changed. Original user input and control state remain inspectable. */
+            context_unavailable?: boolean;
+            /** Format: date-time */
+            stopped_at?: string;
+            /** Format: date-time */
+            hold_released_at?: string;
+            /** Format: date-time */
+            revalidated_at?: string;
+            revalidated_instruction_version?: number;
+            decision?: components["schemas"]["ConversationDecision"];
+            decision_issue?: components["schemas"]["ConversationDecisionIssue"];
+            delivery_issue?: {
+                code: string;
+                message: string;
+                /** Format: date-time */
+                retry_at: string;
+            };
+            id: string;
+            /** Format: int64 */
+            sequence: number;
+            conversation_id: string;
+            /** Format: int64 */
+            conversation_revision: number;
+            request_id: string;
+            work_id?: string;
+            instruction_version?: number;
+            input: components["schemas"]["ConversationInboxInput"];
+            /** @description Work admitted from this input. The original work_id still identifies the input's previous focus. */
+            created_work_id?: string;
+            state: string;
+            run_id?: string;
+            /** Format: date-time */
+            accepted_at: string;
+            /** Format: date-time */
+            delivered_at?: string;
+            /** Format: date-time */
+            settled_at?: string;
+            run_status?: string;
+            result_reference?: string;
+            /** @enum {string} */
+            incorporation?: "answered" | "correction" | "new_work" | "worker_answer";
+            /** Format: date-time */
+            applied_at?: string;
+            applied_instruction_version?: number;
+        };
+        /** @description Durable foreground proposal. Only applied_at and applied_instruction_version confirm incorporation; a reply or recorded proposal alone does not. */
+        ConversationDecision: {
+            /** @enum {string} */
+            kind: "answered" | "correction" | "new_work";
+            /** @description Current work instruction version for a correction; otherwise zero. */
+            instruction_version: number;
+            /** @description Required only for new_work. A proposed acceptance condition; the objective remains the exact accepted user input. */
+            expected_result?: string;
+        };
+        ConversationDecisionIssue: {
+            code: string;
+            message: string;
+            /** Format: date-time */
+            retry_at: string;
+        };
+        ConversationInboxPage: {
+            items: components["schemas"]["ConversationInboxEntry"][];
+            /** Format: int64 */
+            next_cursor: number;
+            has_more: boolean;
+        };
+        ConversationImportManifest: {
+            /** @constant */
+            version: 1;
+            legacy_name: string;
+            conversation_id: string;
+            source_sha256: string;
+            /** @constant */
+            authority: "agent_control_store";
+            configuration_known: boolean;
+            legacy_run_ids: string[] | null;
+            /** Format: date-time */
+            imported_at: string;
+        };
+        WorkerSession: {
+            question?: components["schemas"]["WorkerQuestion"];
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            work_id: string;
+            root_run_id: string;
+            current_run_id: string;
+            run_ids: string[];
+            assignment_version: number;
+            assignment: {
+                goal: string;
+                expected_result: string;
+                /**
+                 * @description Assignment execution mode. Older stored assignments may omit it.
+                 * @enum {string}
+                 */
+                mode?: "research" | "edit" | "test";
+                /** @description Recorded delegation rationale when supplied; absent for legacy assignments. */
+                reason?: string;
+                tools: string[] | null;
+                depends_on: string[] | null;
+                instruction_version: number;
+                model_calls: number;
+                profile_id?: string;
+            };
+            status: string;
+            stopped: boolean;
+            closed: boolean;
+            result_reference?: string;
+        };
+        WorkerCommand: {
+            request_id: string;
+            target_id: string;
+            /** Format: int64 */
+            expected_revision: number;
+            /** @enum {string} */
+            kind: "message" | "stop" | "close" | "continue" | "answer";
+            payload: {
+                /** @description Required for message */
+                content?: string;
+                /** @description Required only for answer; identifies the exact pending question. */
+                question_id?: string;
+            };
+        };
+        WorkerQuestion: {
+            id: string;
+            worker_id: string;
+            run_id: string;
+            content: string;
+            instruction_version: number;
+            assignment_version: number;
+            /** @enum {string} */
+            state: "pending" | "answered";
+            /** Format: date-time */
+            requested_at: string;
+            /** @description Accepted answer's mailbox identity; consult its state for delivery and application. */
+            answer_message_id?: string;
+        };
+        WorkerMessage: {
+            question_id?: string;
+            id: string;
+            worker_id: string;
+            run_id: string;
+            content: string;
+            /** @enum {string} */
+            state: "accepted" | "delivered" | "applied" | "abandoned";
+            instruction_version: number;
+            /** Format: date-time */
+            accepted_at: string;
+            /** Format: date-time */
+            delivered_at?: string;
+            /** Format: date-time */
+            applied_at?: string;
+            /** Format: date-time */
+            abandoned_at?: string;
+            resolution_reason?: string;
+        };
+        WorkerMessagePage: {
+            items: components["schemas"]["WorkerMessage"][];
+            /** Format: int64 */
+            next_cursor: number;
+            has_more: boolean;
+        };
+        WorkChange: {
+            id: string;
+            work_id: string;
+            run_id: string;
+            worker_run_id: string;
+            /** @enum {string} */
+            kind: "proposal" | "candidate";
+            state: string;
+            /** Format: int64 */
+            instruction_version: number;
+            /** Format: int64 */
+            control_epoch: number;
+            current: boolean;
+            operation_count: number;
+            validation_state: string;
+            validation_count: number;
+            integration_id?: string;
+            integrated_count: number;
+            available: boolean;
+            limitation?: string;
+        };
+        ConversationResultPage: {
+            id: string;
+            run_id: string;
+            work_id?: string;
+            worker_id?: string;
+            conversation_id?: string;
+            instruction_version: number;
+            control_epoch: number;
+            status: string;
+            independently_verified: boolean;
+            evidence_steps: number[];
+            content: string;
+            offset: number;
+            next_offset: number;
+            total_bytes: number;
+            complete: boolean;
+        };
+        WorkChangeList: {
+            items: components["schemas"]["WorkChange"][];
+            next_cursor: string;
+            has_more: boolean;
+        };
+        WorkFileVersion: {
+            kind: string;
+            /** Format: int64 */
+            bytes: number;
+            mode: number;
+            sha256?: string;
+        };
+        WorkFileChange: {
+            path: string;
+            kind: string;
+            base?: components["schemas"]["WorkFileVersion"];
+            result?: components["schemas"]["WorkFileVersion"];
+        };
+        WorkValidationCheck: {
+            id: string;
+            state: string;
+            exit_code?: number;
+            request_digest: string;
+            receipt_digest: string;
+        };
+        WorkFileReceipt: {
+            ordinal: number;
+            path: string;
+            operation: string;
+            state: string;
+            dispatched: boolean;
+            original_retained: boolean;
+            displaced_digest?: string;
+            result_digest?: string;
+            error?: string;
+        };
+        WorkChangeContent: {
+            sha256: string;
+            /** Format: int64 */
+            bytes: number;
+            /** Format: int64 */
+            offset: number;
+            /** Format: byte */
+            data: string;
+        };
+        /** @description Observed retained content. Unconfirmed files do not prove a replacement occurred. Reads never restore files or settle uncertain work. */
+        WorkRecoveryFile: {
+            id: string;
+            path: string;
+            /** @enum {string} */
+            role: "displaced" | "unconfirmed";
+            /** Format: int64 */
+            bytes: number;
+            sha256?: string;
+            limitation?: string;
+        };
+        WorkChangeDetail: {
+            change: components["schemas"]["WorkChange"];
+            /** @enum {string} */
+            view: "files" | "validation" | "integration" | "recovery" | "content" | "preserved";
+            files?: components["schemas"]["WorkFileChange"][];
+            checks?: components["schemas"]["WorkValidationCheck"][];
+            receipts?: components["schemas"]["WorkFileReceipt"][];
+            recovery?: components["schemas"]["WorkRecoveryFile"][];
+            content?: components["schemas"]["WorkChangeContent"];
+            /** Format: int64 */
+            next_offset?: number;
+            conflict_path?: string;
+            error?: string;
+        };
+        EffectiveConversationPreferences: {
+            /** @description Observed availability of the saved folder reference. No grant is restored by inspection. */
+            folder?: {
+                session: string;
+                available: boolean;
+                reason: string;
+            };
+            /** Format: int64 */
+            user_preferences_revision?: number;
+            project_id: string;
+            /** Format: int64 */
+            project_revision: number;
+            resources: components["schemas"]["ResourceResolution"][];
+            configuration_known: boolean;
+            model: string;
+            delegation: boolean;
+            profile_id?: string;
+            profile_revision?: number;
+            restrictions: components["schemas"]["AgentResourceRestrictions"];
+            provenance: {
+                [key: string]: string;
+            };
+        };
+        ControlEventPage: {
+            events: {
+                /** Format: int64 */
+                cursor: number;
+                target_id: string;
+                /** Format: int64 */
+                revision: number;
+                kind: string;
+                /** Format: date-time */
+                recorded_at: string;
+                payload: {
+                    [key: string]: unknown;
+                };
+            }[];
+            /** Format: int64 */
+            next_cursor: number;
+            has_more: boolean;
+            history_gap: boolean;
+            snapshot?: components["schemas"]["CanonicalConversation"] | components["schemas"]["ConversationWorkItem"] | components["schemas"]["WorkerSession"];
+        };
         AgentSelection: {
             id: string;
             revision: number;
+        };
+        AgentConversationConfiguration: {
+            /** @enum {integer} */
+            version: 1;
+            profile: components["schemas"]["AgentProfile"] | null;
+            model: string;
+            restrictions: components["schemas"]["AgentResourceRestrictions"];
         };
         /** @description May only narrow the pinned profile. Omitted fields inherit; explicit empty lists disable that resource category. Instructions cannot widen these restrictions. */
         AgentResourceRestrictions: {
@@ -3669,7 +4207,515 @@ export interface components {
                 finish_reason?: string | null;
             }[];
         };
+        AnalysisSourceRef: {
+            document_id: string;
+            revision: string;
+            /** @description Required for retained originals; omitted only for legacy text. */
+            original_sha256?: string;
+        };
+        AnalysisCitation: {
+            source: number;
+            revision: string;
+            unit_id: string;
+            block_id?: string;
+            span: components["schemas"]["DocumentSpan"];
+            text_sha256: string;
+        };
+        AnalysisUnitPair: {
+            before_unit?: string;
+            after_unit?: string;
+            /** @enum {string} */
+            alignment: "sheet_name" | "position" | "unmatched";
+        };
+        DocumentAnalysisExport: {
+            analysis_id: string;
+            /** @enum {string} */
+            format: "json" | "csv" | "markdown";
+            /** @description At most 8 MiB of UTF-8 content */
+            content: string;
+            sha256: string;
+        };
+        DocumentCompositionRequest: {
+            request_key: string;
+            analysis_id: string;
+            model: string;
+            language: string;
+        };
+        DocumentComposition: {
+            id: string;
+            analysis_id: string;
+            plan_id: string;
+            source_plan_id: string;
+            model: components["schemas"]["SynthesisModelIdentity"];
+            /** @enum {string} */
+            state: "queued" | "running" | "interrupted" | "cancelled" | "failed" | "awaiting_review";
+            attempt: number;
+            completed_steps: number;
+            total_steps: number;
+            reviews_current: boolean;
+            error_code?: string;
+            created_at: string;
+            updated_at: string;
+        };
+        DocumentCompositionHistory: {
+            analysis_id: string;
+            items: components["schemas"]["DocumentComposition"][];
+            next_offset: number | null;
+        };
+        CompositionSection: {
+            text: string;
+            contributors: number;
+            /** @constant */
+            verification: "source_identity_only";
+        };
+        CompositionGapCount: {
+            code: string;
+            count: number;
+        };
+        DocumentCompositionReport: {
+            composition: components["schemas"]["DocumentComposition"];
+            source_units: number;
+            sections: components["schemas"]["CompositionSection"][];
+            gaps: components["schemas"]["CompositionGapCount"][];
+            extraction_gaps: components["schemas"]["CompositionGapCount"][];
+            candidate_gaps: components["schemas"]["CompositionGapCount"][];
+            unrepresented_batches: number;
+            /** @constant */
+            semantic_review_required: true;
+        };
+        CompositionInput: {
+            id: string;
+            batch: number;
+            batch_id: string;
+            candidate_index: number;
+            candidate_sha256: string;
+            review_revision: number;
+            /** @enum {string} */
+            decision: "keep" | "unreviewed";
+            section_checked: boolean;
+        };
+        CompositionEvidenceItem: {
+            input: components["schemas"]["CompositionInput"];
+            candidate: components["schemas"]["SynthesisCandidate"];
+        };
+        DocumentCompositionEvidence: {
+            composition_id: string;
+            plan_id: string;
+            section: number;
+            offset: number;
+            total: number;
+            items: components["schemas"]["CompositionEvidenceItem"][];
+            next_offset: number | null;
+        };
+        SynthesisDecision: {
+            /** @enum {string} */
+            decision: "unreviewed" | "keep" | "exclude";
+            /** @description At most 2048 UTF-8 bytes */
+            note: string;
+        };
+        SynthesisReviewRequest: {
+            id: string;
+            batch: number;
+            batch_id: string;
+            response_sha256: string;
+            expected_revision: number;
+            section_checked: boolean;
+            decisions: components["schemas"]["SynthesisDecision"][];
+        };
+        SynthesisReview: {
+            analysis_id: string;
+            batch: number;
+            batch_id: string;
+            response_sha256: string;
+            revision: number;
+            section_checked: boolean;
+            decisions: components["schemas"]["SynthesisDecision"][];
+            /** @description Empty only for unsaved revision zero */
+            author: string;
+            /** @description UTC RFC3339 timestamp or empty for revision zero */
+            updated_at: string;
+        };
+        SynthesisModelIdentity: {
+            model_id: string;
+            model_sha256: string;
+            runtime: {
+                name: string;
+                revision: string;
+                sha256?: string;
+            };
+            language: string;
+            context_tokens: number;
+            response_tokens: number;
+            /** @constant */
+            protocol: "document-synthesis-candidates-v1";
+        };
+        SynthesisGap: {
+            source: number;
+            unit_id?: string;
+            code: string;
+        };
+        DocumentSynthesis: {
+            id: string;
+            model: components["schemas"]["SynthesisModelIdentity"];
+            primary_bytes: number;
+            /** @enum {string} */
+            state: "queued" | "running" | "interrupted" | "cancelled" | "failed" | "awaiting_review";
+            attempt: number;
+            completed_batches: number;
+            completed_units: number;
+            unit_cursor: number;
+            next_byte: number;
+            review_required: boolean;
+            error_code?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            plan: {
+                id: string;
+                /** @constant */
+                version: "document-analysis-v1";
+                /** @enum {string} */
+                workflow: "summary" | "requirements";
+                sources: components["schemas"]["AnalysisSourceRef"][];
+                gaps: components["schemas"]["SynthesisGap"][];
+                units: {
+                    ordinal: number;
+                    source: number;
+                    unit_id: string;
+                    span: components["schemas"]["DocumentSpan"];
+                    blocks: number;
+                }[];
+            };
+        };
+        SynthesisQuote: {
+            text: string;
+            citation: components["schemas"]["AnalysisCitation"];
+        };
+        SynthesisCandidate: {
+            text: string;
+            /** @constant */
+            verification: "source_identity_only";
+            evidence: components["schemas"]["SynthesisQuote"][];
+            conditions: components["schemas"]["SynthesisQuote"][];
+            exceptions: components["schemas"]["SynthesisQuote"][];
+        };
+        SynthesisReceipt: {
+            /**
+             * @description Absent on historical receipts using literal numeric validation; old decisions are preserved.
+             * @enum {string}
+             */
+            validation?: "source-values-v2";
+            /** @enum {string} */
+            method: "model" | "empty_source";
+            batch_id: string;
+            model_identity: string;
+            unit_ordinal: number;
+            primary: components["schemas"]["DocumentSpan"];
+            end_of_unit: boolean;
+            prompt_tokens: number;
+            response_sha256: string;
+            result: {
+                batch_id: string;
+                candidates: components["schemas"]["SynthesisCandidate"][];
+                gaps: components["schemas"]["SynthesisGap"][];
+                no_findings_reported: boolean;
+                semantic_review_required: boolean;
+            };
+        };
+        DocumentSynthesisResults: {
+            analysis_id: string;
+            offset: number;
+            next_offset: number | null;
+            total_batches: number;
+            receipts: components["schemas"]["SynthesisReceipt"][];
+        };
+        DocumentSynthesisHistory: {
+            next_offset: number | null;
+            analyses: {
+                id: string;
+                /** @enum {string} */
+                state: "queued" | "running" | "interrupted" | "cancelled" | "failed" | "awaiting_review";
+                documents: string[];
+                /** Format: date-time */
+                created_at: string;
+                /** Format: date-time */
+                updated_at: string;
+            }[];
+        };
+        DocumentAnalysisHistory: {
+            next_offset: number | null;
+            analyses: {
+                id: string;
+                /** @enum {string} */
+                state: "queued" | "running" | "interrupted" | "cancelled" | "failed" | "complete" | "incomplete";
+                documents: string[];
+                /** Format: date-time */
+                created_at: string;
+                /** Format: date-time */
+                updated_at: string;
+            }[];
+        };
+        DocumentAnalysis: {
+            id: string;
+            /** @enum {string} */
+            state: "queued" | "running" | "interrupted" | "cancelled" | "failed" | "complete" | "incomplete";
+            attempt: number;
+            completed_steps: number;
+            completed_units: number;
+            review_required: boolean;
+            error_code?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            pairs: components["schemas"]["AnalysisUnitPair"][];
+            plan: {
+                id: string;
+                /** @constant */
+                version: "document-analysis-v1";
+                /** @constant */
+                workflow: "comparison";
+                sources: components["schemas"]["AnalysisSourceRef"][];
+                units: {
+                    ordinal: number;
+                    source: number;
+                    unit_id: string;
+                    span: components["schemas"]["DocumentSpan"];
+                    blocks: number;
+                }[];
+                gaps: {
+                    source: number;
+                    unit_id?: string;
+                    code: string;
+                }[];
+            };
+        };
+        /** @description At most 512 UTF-8 bytes from the start of a validated source citation. A preview never replaces the full citation. */
+        AnalysisPreview: {
+            text: string;
+            span: components["schemas"]["DocumentSpan"];
+            text_sha256: string;
+            truncated: boolean;
+        };
+        DocumentAnalysisResults: {
+            analysis_id: string;
+            step: number;
+            offset: number;
+            next_offset: number | null;
+            total_changes: number;
+            /** @description Optional bounded source previews in the same order as result.changes. Older services may omit them. */
+            previews?: {
+                before?: components["schemas"]["AnalysisPreview"];
+                after?: components["schemas"]["AnalysisPreview"];
+            }[];
+            result: {
+                pair: components["schemas"]["AnalysisUnitPair"];
+                unchanged_lines: number;
+                before_lines: number;
+                after_lines: number;
+                compared_cells: number;
+                ambiguous_cells: number;
+                changes: {
+                    /** @enum {string} */
+                    kind: "text_removed" | "text_added" | "cell_modified" | "cell_removed" | "cell_added";
+                    before?: components["schemas"]["AnalysisCitation"];
+                    after?: components["schemas"]["AnalysisCitation"];
+                }[];
+            };
+        };
+        DocumentAnalysisControl: {
+            id: string;
+        };
+        DocumentAnalysisAccepted: {
+            /** @constant */
+            accepted: true;
+        };
+        DocumentWarning: {
+            code: string;
+            message: string;
+            source_index?: number;
+        };
+        DocumentSpan: {
+            start_byte: number;
+            end_byte: number;
+        };
+        DocumentNavigationEntry: {
+            block_id: string;
+            unit_id: string;
+            /** @description Block offset within this source unit; open with unit and the same immutable revision. */
+            block_offset: number;
+            kind: string;
+            /** @description At most 256 UTF-8 bytes of retained text; not a generated summary. */
+            title: string;
+            heading_level?: number;
+            needs_review: boolean;
+        };
+        DocumentUnit: {
+            id: string;
+            /** @enum {string} */
+            kind: "page" | "slide" | "sheet" | "section";
+            index: number;
+            name?: string;
+            span: components["schemas"]["DocumentSpan"];
+            state: string;
+            parser_revision: string;
+            hidden?: boolean;
+            merged_ranges?: string[];
+            block_count?: number;
+            review_blocks?: number;
+            figure_blocks?: number;
+            /** @description Merged-range metadata exceeds this bounded reader projection; retained in the immutable extraction. */
+            metadata_omitted?: boolean;
+        };
+        DocumentBlock: {
+            /** @description Native tracked alternatives and provenance, excluded from current searchable text. */
+            revisions?: {
+                id: string;
+                /** @enum {string} */
+                kind: "insertion" | "deletion" | "move_from" | "move_to" | "properties";
+                text: string;
+                author?: string;
+                date?: string;
+            }[];
+            form_field?: {
+                label?: string;
+                options?: {
+                    index: number;
+                    label: string;
+                    selected: boolean;
+                }[];
+                name: string;
+                value: string;
+                /** @enum {string} */
+                kind: "unknown" | "button" | "checkbox" | "radio" | "combo" | "list" | "text" | "signature";
+                checked?: boolean;
+                hidden?: boolean;
+                /** @description PDF user-space left, bottom, right, top in points; not screen coordinates. */
+                native_bounds?: number[];
+            };
+            id: string;
+            unit_id: string;
+            /** @enum {string} */
+            kind: "heading" | "paragraph" | "list" | "table" | "row" | "cell" | "footnote" | "endnote" | "form_field" | "figure" | "caption" | "header" | "footer";
+            span: components["schemas"]["DocumentSpan"];
+            /** @enum {string} */
+            method: "native" | "ocr" | "mixed" | "legacy" | "review" | "model";
+            heading_level?: number;
+            review_state?: string;
+            source_part?: string;
+            figure?: {
+                kind: string;
+                /** @description Internal original-package part identity; never a filesystem path or a fetched URL. */
+                part?: string;
+                relationship_id?: string;
+                external?: boolean;
+                name?: string;
+                title?: string;
+                /** @description Authored alternative text */
+                description?: string;
+            };
+            table?: {
+                rows: number;
+                columns: number;
+                /** @description Formatting flag only; does not establish semantic headers. */
+                first_row_style?: boolean;
+                first_column_style?: boolean;
+            };
+            text: string;
+            /** @description SHA-256 of the complete exact block text; never a hash of its truncated preview. */
+            text_sha256: string;
+            truncated: boolean;
+            editable: boolean;
+            /** @description Oversized cell/warning metadata is omitted from this bounded projection. */
+            metadata_omitted: boolean;
+            warnings?: components["schemas"]["DocumentWarning"][];
+            bounds?: {
+                x: number;
+                y: number;
+                width: number;
+                height: number;
+                /** @enum {string} */
+                unit: "points" | "pixels" | "normalized";
+            };
+            cell?: {
+                reference: string;
+                row_span?: number;
+                column_span?: number;
+                horizontal_merge?: boolean;
+                vertical_merge?: boolean;
+                value_type?: string;
+                value?: string;
+                display?: string;
+                number_format?: string;
+                number_format_id?: number;
+                /** @description Stored text or a deterministic format projection; unrendered retains the raw value and does not claim original display fidelity. */
+                display_state?: string;
+                /** @enum {string} */
+                date_system?: "1900" | "1904";
+                formula?: string;
+                formula_type?: string;
+                formula_reference?: string;
+                shared_formula_index?: number;
+                /** @description Cell holding the shared formula definition; relative references are not evaluated or silently rewritten. */
+                formula_anchor?: string;
+                cached_value?: string;
+                result_state?: string;
+                merged_range?: string;
+                hidden?: boolean;
+                hidden_reasons?: ("sheet" | "row" | "column")[];
+            };
+        };
+        DocumentRelationship: {
+            from: string;
+            to: string;
+            /** @enum {string} */
+            kind: "parent" | "heading_for" | "header_for" | "footnote_for" | "caption_for" | "notes_for" | "continuation" | "alternative";
+        };
+        DocumentRuntimeIdentity: {
+            name: string;
+            revision: string;
+            sha256?: string;
+        };
+        DocumentStructurePage: {
+            attachment_revision?: string;
+            document_id: string;
+            revision: string;
+            parent_revision?: string;
+            parsers?: components["schemas"]["DocumentRuntimeIdentity"][];
+            language_packs?: components["schemas"]["DocumentRuntimeIdentity"][];
+            /** @description Some runtime identities exceeded the bounded reader projection. */
+            provenance_omitted?: boolean;
+            original_sha256?: string;
+            format: string;
+            method: string;
+            author?: string;
+            /** Format: date-time */
+            created_at?: string;
+            coverage?: components["schemas"]["DocumentEvidence"];
+            units: components["schemas"]["DocumentUnit"][];
+            blocks: components["schemas"]["DocumentBlock"][];
+            relationships: components["schemas"]["DocumentRelationship"][];
+            total_blocks: number;
+            offset: number;
+            next_offset: number | null;
+            relationship_offset: number;
+            next_relationship_offset: number | null;
+            total_relationships: number;
+            navigation?: components["schemas"]["DocumentNavigationEntry"][];
+            navigation_offset?: number;
+            next_navigation_offset?: number | null;
+            total_navigation?: number;
+            can_correct: boolean;
+        };
         Document: {
+            /** @description Current access collection; informational only */
+            collection_id?: string;
+            /** @description Current document binding revision */
+            collection_revision?: number;
+            /** @description Immutable structured extraction identity. Absent for legacy records until explicitly rebuilt. */
+            extraction_revision?: string;
+            evidence?: components["schemas"]["DocumentEvidence"];
             id: string;
             name: string;
             content_type: string;
@@ -3692,6 +4738,8 @@ export interface components {
             attachment: {
                 session: string;
                 id: string;
+                /** @description Pins the extraction copied with its correction ancestry. */
+                revision?: string;
                 sha256: string;
             };
         };
@@ -3707,7 +4755,58 @@ export interface components {
             /** @description Prevents document deletion */
             legal_hold: boolean;
         };
+        KnowledgeCollection: {
+            id: string;
+            /** @enum {integer} */
+            version: 1;
+            revision: number;
+            name: string;
+            /** @description Absent for the legacy shared workspace collection. */
+            owner?: string;
+            readers: string[];
+            editors: string[];
+        };
+        CollectionUpdate: {
+            expected_revision: number;
+            name: string;
+            readers: string[];
+            editors: string[];
+        };
+        DocumentCollection: {
+            document_id: string;
+            revision: number;
+            collection: components["schemas"]["KnowledgeCollection"];
+        };
+        CollectionMove: {
+            document_id: string;
+            expected_revision: number;
+            expected_source_revision: number;
+            destination_id: string;
+            expected_destination_revision: number;
+        };
+        CollectionAuditEvent: {
+            /** Format: int64 */
+            sequence: number;
+            actor: string;
+            action: string;
+            /** @description Opaque collection */
+            subject: string;
+            revision: number;
+            /** Format: date-time */
+            created_at: string;
+        };
         DocumentImport: {
+            /** @description Immutable extraction accepted for attachment publication; retained after indexing. Absent for imports awaiting extraction. */
+            extraction_revision?: string;
+            /** @description OCR pack selection retained across retries and restarts. */
+            ocr_language?: string;
+            /** @description Saved OCR page receipts reusable on explicit retry. Not an accuracy or full-extraction guarantee. */
+            ocr_completed_pages?: number;
+            evidence?: components["schemas"]["DocumentEvidence"];
+            /** @description Retained destination; does not itself confer membership. */
+            collection_id?: string;
+            /** @description Reviewed audience revision for explicit collection imports; absent on legacy imports. */
+            collection_revision?: number;
             id: string;
             name: string;
             sha256: string;
@@ -3757,6 +4856,12 @@ export interface components {
             document_formats?: components["schemas"]["DocumentFormatReadiness"][];
         };
         OCRLanguageReadiness: {
+            /** @enum {string} */
+            selection_mode?: "single_language" | "ordered_languages";
+            max_languages?: number;
+            manifest_revision?: string;
+            /** @description Interface languages with no pinned OCR pack; never substituted. */
+            unavailable_interface_locales?: string[];
             languages: {
                 language: string;
                 name: string;
@@ -3764,6 +4869,10 @@ export interface components {
                 /** @enum {string} */
                 state: "missing" | "invalid" | "installed_verified";
                 qualification: string;
+                interface_locales?: string[];
+                /** Format: uri */
+                source_url?: string;
+                bytes?: number;
             }[];
             document_formats: components["schemas"]["DocumentFormatReadiness"][];
         };
@@ -3986,6 +5095,14 @@ export interface components {
             label: string;
             content: string;
         };
+        AgentProfileDeletionReview: {
+            revision: number;
+            jobs: number;
+            memory: number;
+            blocked_jobs: number;
+            dependencies: number;
+            token: string;
+        };
         AgentProfileSettings: {
             name: string;
             description?: string;
@@ -4145,6 +5262,72 @@ export interface components {
                 tools: string[];
             };
         };
+        /** @description Run accounting. Root attempts inherit prior root charges; do not sum attempts. Child allocations include pending reservations and retained spent slots. Context preparation is part of the inference allowance, not an additional time charge. */
+        TaskResourceUsage: {
+            model_call_limit: number;
+            model_calls: number;
+            child_call_allocations: number;
+            /** @description Service-observed invocation accounting; does not measure a process after its start invocation returns. Legacy reservations are conservative, not measured historical tool calls. */
+            tools?: {
+                version: number;
+                calls_per_decision: number;
+                /** Format: int64 */
+                per_call_ns: number;
+                reserved_calls: number;
+                legacy_reserved_calls: number;
+                /** Format: int64 */
+                charged_ns: number;
+                /** Format: int64 */
+                measured_ns: number;
+                unsettled_calls: number;
+            };
+            /** @description Owned-process supervised elapsed time, not CPU time. Start reservations remain charged until authenticated terminal timing is received. Missing legacy timing does not mean zero usage. Invocation and process timings overlap and must not be summed as elapsed latency. */
+            processes?: {
+                version: number;
+                /** Format: int64 */
+                per_decision_ns: number;
+                starts_per_decision: number;
+                reserved_starts: number;
+                legacy_reserved_starts: number;
+                /** Format: int64 */
+                charged_ns: number;
+                /** Format: int64 */
+                measured_ns: number;
+                unsettled_starts: number;
+            };
+            /** @description Root work reservation for private worker copies in logical file bytes, not physical disk allocation or an OS quota. Unknown preparation retains its full reservation; only confirmed artifact release refunds it. Measurements are last observed retained content, not a live disk scan. */
+            storage?: {
+                version: number;
+                /** Format: int64 */
+                limit_bytes: number;
+                /** Format: int64 */
+                charged_bytes: number;
+                retained_copies: number;
+                /** Format: int64 */
+                measured_bytes: number;
+                unmeasured_copies: number;
+            };
+            /** @description Absent for historical runs without input accounting; absence does not mean zero usage. */
+            input?: {
+                window: number;
+                /** Format: int64 */
+                charged_tokens: number;
+                /** Format: int64 */
+                measured_tokens: number;
+                unmeasured_calls: number;
+            };
+            /** Format: int64 */
+            charged_output_tokens: number;
+            /** Format: int64 */
+            measured_output_tokens: number;
+            /** Format: int64 */
+            charged_inference_ns: number;
+            /** Format: int64 */
+            measured_inference_ns: number;
+            context_preparations: number;
+            /** Format: int64 */
+            measured_context_preparation_ns: number;
+        };
         TaskContext: {
             window: number;
             /** @description Conservative byte-based estimate */
@@ -4271,6 +5454,8 @@ export interface components {
             };
         };
         AgentRunResponse: {
+            /** @description Whether the current generating snapshot may be displayed as provisional response text. Never a verified or completed answer. Absent or false means wait for committed output. Source workflows and computer actions remain buffered. */
+            response_preview_allowed?: boolean;
             /** @description Stable work identity */
             work_id?: string;
             schedule?: components["schemas"]["AgentScheduleOrigin"];
@@ -6668,6 +7853,10 @@ export interface operations {
             query?: {
                 /** @description Retain linked jobs in the inspector or request stopping before deletion. */
                 work?: "retain" | "stop";
+                /** @description Explicit migrated conversation identity. Required with revision to delete a canonical conversation; legacy writers remain fenced. */
+                canonical_id?: string;
+                /** @description Current canonical conversation revision. Concurrent changes return 409. A repeated deletion with the same identity finishes retained file cleanup. */
+                revision?: number;
             };
             header?: never;
             path: {
@@ -6723,7 +7912,10 @@ export interface operations {
     };
     uploadSessionAttachment: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Ordered pinned pack IDs joined by +, up to three; encode + as %2B in URLs. Single selection requires document-ocr-language-selection-v1; mixed selection requires document-ocr-mixed-languages-v1. Retained across prepare retries. */
+                ocr_language?: string;
+            };
             header?: never;
             path: {
                 name: components["parameters"]["SessionName"];
@@ -6849,10 +8041,14 @@ export interface operations {
     getSessionAttachmentPreview: {
         parameters: {
             query?: {
+                /** @description Pin retained attachment text to this published revision. Images remain the immutable original. Omit to inspect the current revision. */
+                revision?: string;
                 /** @description Expected original digest; mismatch rejects delivery. */
                 sha256?: string;
-                /** @description Render this PDF page as PNG; omit for structured native source units. */
+                /** @description Render a PDF page or single PNG/JPEG image (page 1) as PNG; omit for source units with retained OCR text. */
                 page?: number;
+                /** @description With page */
+                thumbnail?: boolean;
             };
             header?: never;
             path: {
@@ -6863,7 +8059,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Source units or bounded PDF page */
+            /** @description Source units or bounded PDF/image page */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6908,6 +8104,105 @@ export interface operations {
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    getSessionAttachmentStructure: {
+        parameters: {
+            query: {
+                /** @description Pinned attachment revision */
+                revision: string;
+                unit?: string;
+                offset?: number;
+                limit?: number;
+                relationship_offset?: number;
+                navigation_offset?: number;
+                /** @description Explicitly request owner editing controls for the current revision. Historical revisions remain read-only. */
+                corrections?: boolean;
+            };
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded immutable block and relationship page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentStructurePage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    correctSessionAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expected_revision: string;
+                    extraction_revision: string;
+                    edits: {
+                        block_id: string;
+                        expected_text_sha256: string;
+                        text: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Published correction receipt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionAttachmentResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+        };
+    };
+    getSessionAttachmentRevisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: components["parameters"]["SessionName"];
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retained revision history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentRevisionHistory"];
+                };
+            };
+            404: components["responses"]["Error"];
         };
     };
     getSessionAttachmentOriginal: {
@@ -7114,6 +8409,27 @@ export interface operations {
             409: components["responses"]["Error"];
         };
     };
+    getChatOCRLanguages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pinned language catalog, installation states and explicit unsupported interface locales */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OCRLanguageReadiness"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
     getOCRLanguages: {
         parameters: {
             query?: never;
@@ -7194,6 +8510,12 @@ export interface operations {
     prepareDocumentImport: {
         parameters: {
             query?: {
+                /** @description Explicit pinned pack ID on initial acceptance only; retries retain the saved selection. */
+                ocr_language?: string;
+                /** @description Explicit destination on acceptance. Requires collection_revision. Mandatory for JSON attachment publication; omission retains legacy workspace behavior only for multipart uploads. New clients use /v1/collections/imports. */
+                collection_id?: string;
+                /** @description Reviewed destination audience; checked at acceptance and publication. */
+                collection_revision?: number;
                 id?: string;
                 action?: "retry" | "cancel";
             };
@@ -7234,6 +8556,8 @@ export interface operations {
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+            /** @description Attachment publication requires destination audience review (collection_review_required). Upgrade the client; do not fall back to shared publication. */
+            426: components["responses"]["Error"];
             /** @description Reader/import queue unavailable (document_busy) or packaged reader unavailable. Inspect saved state; no automatic replay. */
             503: components["responses"]["Error"];
         };
@@ -7319,6 +8643,818 @@ export interface operations {
             503: components["responses"]["Error"];
         };
     };
+    getDocumentAnalysis: {
+        parameters: {
+            query?: {
+                id?: string;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current durable status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentAnalysis"] | components["schemas"]["DocumentAnalysisHistory"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    createDocumentAnalysis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    request_key: string;
+                    /** @enum {string} */
+                    workflow: "comparison";
+                    sources: components["schemas"]["AnalysisSourceRef"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Durable job accepted or its existing status returned; completion is separate. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentAnalysis"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    getDocumentAnalysisResults: {
+        parameters: {
+            query: {
+                id: string;
+                step?: number;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of committed differences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentAnalysisResults"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    getDocumentAnalysisSource: {
+        parameters: {
+            query: {
+                id: string;
+                step: number;
+                change: number;
+                side: "before" | "after";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verified retained source text and optional native cell metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        analysis_id: string;
+                        document_id: string;
+                        citation: components["schemas"]["AnalysisCitation"];
+                        text: string;
+                        truncated: boolean;
+                        cell?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    exportDocumentAnalysis: {
+        parameters: {
+            query: {
+                id: string;
+                format: "json" | "csv" | "markdown";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verified export artifact; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        analysis_id: string;
+                        /** @enum {string} */
+                        format: "json" | "csv" | "markdown";
+                        /** @description Complete UTF-8 artifact */
+                        content: string;
+                        sha256: string;
+                    };
+                };
+            };
+            /** @description Invalid ID or format */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Job or current source access unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Comparison traversal has not finished */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Export concurrency or artifact size limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Export could not be prepared */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exportDocumentSynthesis: {
+        parameters: {
+            query: {
+                id: string;
+                format: "json" | "csv" | "markdown";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verified export artifact; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        analysis_id: string;
+                        /** @enum {string} */
+                        format: "json" | "csv" | "markdown";
+                        /** @description Complete UTF-8 artifact */
+                        content: string;
+                        sha256: string;
+                    };
+                };
+            };
+            /** @description Invalid ID or format */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Job or current source access unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Candidate traversal has not finished */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Export concurrency or artifact size limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Export could not be prepared */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getDocumentSynthesisReview: {
+        parameters: {
+            query: {
+                id: string;
+                batch: number;
+                /** @description Zero selects the latest review; a positive value selects an immutable historical review */
+                revision?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current review or revision zero with unreviewed decisions; no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SynthesisReview"];
+                };
+            };
+            /** @description Private analysis or current source access unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    saveDocumentSynthesisReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SynthesisReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved review; no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SynthesisReview"];
+                };
+            };
+            /** @description Invalid decision or pinned identity */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Private analysis or source access unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale review revision or unfinished traversal */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Review storage limit reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getDocumentCompositions: {
+        parameters: {
+            query?: {
+                id?: string;
+                analysis_id?: string;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Status when id is supplied, otherwise history for analysis_id; no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentComposition"] | components["schemas"]["DocumentCompositionHistory"];
+                };
+            };
+            /** @description Private analysis or current source access unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createDocumentComposition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentCompositionRequest"];
+            };
+        };
+        responses: {
+            /** @description Authenticated bounded response; no-store */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentComposition"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Private analysis or current source access unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unfinished traversal */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Capacity limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exportDocumentComposition: {
+        parameters: {
+            query: {
+                id: string;
+                format: "json" | "csv" | "markdown";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description At most 8 MiB of content with SHA-256; source access rechecked; export audit recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentAnalysisExport"];
+                };
+            };
+            /** @description Private analysis or current source access unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Composition not finished */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Export size or concurrency limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getDocumentCompositionReport: {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authenticated bounded response; no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCompositionReport"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Private analysis or current source access unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unfinished traversal */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Capacity limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getDocumentCompositionEvidence: {
+        parameters: {
+            query: {
+                id: string;
+                section: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authenticated bounded response; no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCompositionEvidence"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Private analysis or current source access unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unfinished traversal */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Capacity limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancelDocumentComposition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentAnalysisControl"];
+            };
+        };
+        responses: {
+            /** @description Authenticated bounded response; no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentAnalysisAccepted"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Private analysis or current source access unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unfinished traversal */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Capacity limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    retryDocumentComposition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentAnalysisControl"];
+            };
+        };
+        responses: {
+            /** @description Authenticated bounded response; no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentAnalysisAccepted"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Private analysis or current source access unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unfinished traversal */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Capacity limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancelDocumentAnalysis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentAnalysisControl"];
+            };
+        };
+        responses: {
+            /** @description Cancellation accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentAnalysisAccepted"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    retryDocumentAnalysis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentAnalysisControl"];
+            };
+        };
+        responses: {
+            /** @description Resume accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentAnalysisAccepted"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    getDocumentStructure: {
+        parameters: {
+            query: {
+                id: string;
+                revision?: string;
+                unit?: string;
+                offset?: number;
+                limit?: number;
+                relationship_offset?: number;
+                navigation_offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revision-pinned block page; relationship pagination refers to links touching this block page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentStructurePage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    correctDocumentExtraction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    document_id: string;
+                    expected_revision: string;
+                    edits: {
+                        block_id: string;
+                        expected_text_sha256: string;
+                        /** @description Complete replacement for a leaf block. Parent edits cannot remove linked evidence. Request body is limited to 2 MiB. */
+                        text: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description New extraction and index published */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        document: components["schemas"]["Document"];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
     getDocumentSource: {
         parameters: {
             query: {
@@ -7326,8 +9462,10 @@ export interface operations {
                 format?: "text" | "original" | "preview";
                 /** @description Expected original digest for preview requests. */
                 sha256?: string;
-                /** @description PDF page for format=preview; omit for structured source units. */
+                /** @description PDF page or PNG/JPEG image (page 1) for format=preview; omit for source units. */
                 page?: number;
+                /** @description With page and format=preview */
+                thumbnail?: boolean;
                 /** @description UTF-8 byte offset of a saved citation. Supply all five citation fields together; text format only. */
                 start_byte?: number;
                 /** @description Exclusive UTF-8 byte offset. Passage size is at most 800000 bytes. */
@@ -7394,6 +9532,310 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Error"];
             422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    getDocumentSynthesis: {
+        parameters: {
+            query?: {
+                id?: string;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Candidate job or authorized history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSynthesis"] | components["schemas"]["DocumentSynthesisHistory"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    createDocumentSynthesis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    request_key: string;
+                    /** @enum {string} */
+                    workflow: "summary" | "requirements";
+                    sources: components["schemas"]["AnalysisSourceRef"][];
+                    model: string;
+                    language: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted candidate traversal */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSynthesis"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    getDocumentSynthesisResults: {
+        parameters: {
+            query: {
+                id: string;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Candidate sections with exact source quotes and disclosed gaps */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSynthesisResults"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    retryDocumentSynthesis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        accepted: true;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    getCollections: {
+        parameters: {
+            query?: {
+                id?: string;
+                view?: "audit";
+                after?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized policies or at most 100 audit events after the given sequence */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCollection"] | {
+                        collections: components["schemas"]["KnowledgeCollection"][];
+                    } | {
+                        events: components["schemas"]["CollectionAuditEvent"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    updateCollection: {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated policy, committed atomically with its audit entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCollection"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    createCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Private collection created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCollection"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    acceptCollectionImport: {
+        parameters: {
+            query: {
+                /** @description Ordered pinned pack IDs joined by +, up to three; encode + as %2B in URLs. Single selection requires document-ocr-language-selection-v1; mixed selection requires document-ocr-mixed-languages-v1. */
+                ocr_language?: string;
+                collection_id: string;
+                collection_revision: number;
+            };
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentAttachmentImport"];
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Original retained under the reviewed audience; extraction has not started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentImport"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    getDocumentCollection: {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current binding and audience policy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCollection"];
+                };
+            };
+            404: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    moveDocumentCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionMove"];
+            };
+        };
+        responses: {
+            /** @description Confirmed document binding */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCollection"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             503: components["responses"]["Error"];
         };
     };
@@ -8215,6 +10657,41 @@ export interface operations {
             409: components["responses"]["Error"];
         };
     };
+    deleteAgentProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expected_revision: number;
+                    review_token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Deletion committed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        /** @constant */
+                        deleted: true;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
     recoverSessionJobTurn: {
         parameters: {
             query?: never;
@@ -8254,6 +10731,29 @@ export interface operations {
                 };
             };
             503: components["responses"]["Error"];
+        };
+    };
+    reviewAgentProfileDeletion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped deletion counts and optimistic review token; no mutation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentProfileDeletionReview"];
+                };
+            };
+            404: components["responses"]["Error"];
         };
     };
     getEffectiveAgentProfile: {

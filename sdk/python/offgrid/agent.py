@@ -215,6 +215,23 @@ class AgentProfiles:
         return self._client._request("POST", f"/api/v2/agent-profiles/{quote(profile_id, safe='')}/archive",
                                      {"expected_revision": expected_revision}, retry=False)
 
+    def deletion_review(self, profile_id: str) -> Dict:
+        """Inspect counts and blockers without deleting anything."""
+        self._client._require_capability("agent-profile-deletion-v1")
+        return self._client._request("GET", f"/api/v2/agent-profiles/{quote(profile_id, safe='')}/deletion")
+
+    def delete(self, profile_id: str, *, expected_revision: int, review_token: str) -> Dict:
+        """Delete reviewed standalone work and private memory atomically.
+
+        Active/linked work and dependencies block deletion. Shared files and
+        backups are retained. A conflict requires a new explicit review.
+        """
+        if type(expected_revision) is not int or expected_revision < 1 or not isinstance(review_token, str) or len(review_token) != 64 or any(c not in "0123456789abcdef" for c in review_token):
+            raise ValueError("Use the revision and token from deletion_review")
+        self._client._require_capability("agent-profile-deletion-v1")
+        return self._client._request("DELETE", f"/api/v2/agent-profiles/{quote(profile_id, safe='')}",
+                                     {"expected_revision": expected_revision, "review_token": review_token}, retry=False)
+
 
 class MCP:
     """

@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -13,6 +14,11 @@ import (
 
 // AgentConfig configures agent behavior.
 type AgentConfig struct {
+	AttachmentSession           string                                `json:"attachment_session,omitempty"`
+	InputAttachments            []api.ConversationAttachment          `json:"input_attachments,omitempty"`
+	AttachmentSelections        json.RawMessage                       `json:"attachment_selections,omitempty"`
+	InputEvidence               string                                `json:"input_evidence,omitempty"`
+	InputImages                 []api.SessionImage                    `json:"input_images,omitempty"`
 	ResultIdentityVersion       int                                   `json:"result_identity_version,omitempty"`
 	WorkerPolicy                *api.WorkerPolicy                     `json:"worker_policy,omitempty"`
 	WorkerQuestionsVersion      int                                   `json:"worker_questions_version,omitempty"`

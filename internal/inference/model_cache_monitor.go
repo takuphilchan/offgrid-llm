@@ -116,6 +116,9 @@ func (mc *ModelCache) SetAutoRestart(enable bool) {
 
 // StopMonitor cancels restarts and waits for the process monitor to exit.
 func (mc *ModelCache) StopMonitor() {
+	if mc.mmapWarmer != nil {
+		mc.mmapWarmer.Pause()
+	}
 	if mc.stopMonitor == nil {
 		return
 	}

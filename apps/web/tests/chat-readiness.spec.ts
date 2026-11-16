@@ -1,3 +1,4 @@
+import {refreshWorkspace} from './helpers/workspace-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { craftFixture } from './helpers/craft-fixture';
 import { chatReadiness } from '../src/i18n/chat-readiness';
@@ -22,7 +23,7 @@ for (const method of ['close', 'escape'] as const) {
   test(`declining first-use setup survives reload without claiming completion: ${method}`, async ({ page }) => {
     const state = await setup(page, '', true);
     await page.goto('/ui/');
-    const guide = page.getByRole('dialog');
+    const guide = page.locator('.workspace-setup');
     await expect(guide).toBeVisible();
     if (method === 'escape') await page.keyboard.press('Escape');
     else await guide.locator('.onboarding-close').click();
@@ -39,7 +40,7 @@ test('first-use inventory failure offers retry rather than model installation', 
   const state = await setup(page, 'saved-model', true);
   state.fail();
   await page.goto('/ui/');
-  const guide = page.getByRole('dialog');
+  const guide = page.locator('.workspace-setup');
   await expect(guide).toContainText('Inventory unavailable');
   await expect(guide.getByRole('button', { name: 'Choose a chat model' })).toHaveCount(0);
   await expect(guide).not.toContainText(chatReadiness.en.setup);
@@ -50,16 +51,13 @@ test('first-use inventory failure offers retry rather than model installation', 
   expect(state.fixture.writes).toEqual([]);
 });
 
-async function refresh(page: Page) {
-  await page.getByRole('button', { name: 'Workspace options' }).click();
-  await page.locator('.workspace-options-panel').getByRole('button', { name: 'Refresh', exact: true }).click();
-}
+async function refresh(page: Page) { await refreshWorkspace(page); }
 
 test('first-use excludes failed runtimes and offers a setup action without downloads', async ({ page }) => {
   const state = await setup(page, '', true);
   state.models([{ id: 'broken-runtime', type: 'chat', runtime_ready: false }]);
   await page.goto('/ui/');
-  const guide = page.getByRole('dialog');
+  const guide = page.locator('.workspace-setup');
   await expect(guide.getByRole('button', { name: 'Choose a chat model' })).toBeVisible();
   await expect(guide.getByRole('button', { name: 'Start your first chat' })).toHaveCount(0);
   await expect(guide).toContainText(chatReadiness.en.setup);
@@ -71,17 +69,17 @@ test('first-use with no usable model opens reviewed discovery without starting a
   const state = await setup(page, '', true);
   state.models([{ id: 'broken-runtime', type: 'chat', runtime_ready: false }]);
   await page.goto('/ui/');
-  await page.getByRole('dialog').getByRole('button', { name: 'Choose a chat model' }).click();
+  await page.locator('.workspace-setup').getByRole('button', { name: 'Choose a chat model' }).click();
   await expect(page).toHaveURL(/#\/models\/discover$/);
-  await expect(page.getByRole('tab', { name: 'Discover models' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('button', { name: 'Curated suggestions' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.model-library-navigation [aria-current=page]')).toHaveText('Discover models');
+  await expect(page.getByRole('searchbox', {name:'Filter catalog models'})).toBeVisible();
   expect(state.fixture.writes).toEqual([]);
 });
 
 test('first-use preserves an unavailable saved choice even when an alternative exists', async ({ page }) => {
   const state = await setup(page, 'saved-model', true);
   await page.goto('/ui/');
-  await expect(page.getByRole('dialog').getByRole('button', { name: 'Choose a chat model' })).toBeVisible();
+  await expect(page.locator('.workspace-setup').getByRole('button', { name: 'Choose a chat model' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('offgrid.model'))).toBe('saved-model');
   expect(state.fixture.writes).toEqual([]);
 });
@@ -89,7 +87,7 @@ test('first-use preserves an unavailable saved choice even when an alternative e
 test('first-use prioritizes an installed alternative only through explicit selection', async ({ page }, info) => {
   const state = await setup(page, 'saved-model', true);
   await page.goto('/ui/');
-  const guide = page.getByRole('dialog');
+  const guide = page.locator('.workspace-setup');
   await expect(guide.getByRole('button', { name: 'Select model: working model' })).toBeVisible();
   await expect(guide.locator('.primary-button')).toHaveText('Select model: working model');
   await expect(guide.getByRole('button', { name: 'Choose a chat model' })).toBeVisible();
@@ -115,14 +113,16 @@ for (const locale of ['en', 'ar'] as LocaleCode[]) {
     const state = await setup(page, 'saved-model', true, locale);
     await page.setViewportSize({ width: 320, height: 480 });
     await page.goto('/ui/');
-    const guide = page.getByRole('dialog');
+    const guide = page.locator('.workspace-setup');
     await expect(guide.locator('.primary-button')).toBeEnabled();
     await guide.locator('.primary-button').focus();
     await expect(guide.locator('.primary-button')).toBeInViewport();
     await page.keyboard.press('Tab');
     await expect(guide.locator('.onboarding-actions .text-button')).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(guide.locator('.onboarding-close')).toBeFocused();
+    // Setup is an inline surface, not a modal focus trap. Its close control
+    // remains reachable by keyboard without trapping the rest of the workspace.
+    await guide.locator('.onboarding-close').focus();
+    await expect(guide.locator('.onboarding-close')).toBeInViewport();
     expect(await guide.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath(`first-use-${locale}.png`) });
@@ -159,7 +159,7 @@ test('inventory failure does not replace a working model or expose setup again',
   await page.locator('.composer textarea').fill('Retain this draft');
   state.fail(); await refresh(page);
   await expect(page.locator('.error-banner')).toContainText('Inventory unavailable');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('.workspace-setup')).toHaveCount(0);
   await expect(page.locator('.composer textarea')).toHaveValue('Retain this draft');
   expect(await page.evaluate(() => localStorage.getItem('offgrid.model'))).toBe('working-model');
 });

@@ -79,3 +79,25 @@ func (s *ScopedManager) MigrateSnapshot(name string, commit func(*Session, []byt
 	}
 	return commit(&current, data)
 }
+
+// DeleteCanonical commits the service-owned deletion fence before removing its
+// retained legacy projection. A failed cleanup leaves the file for explicit retry.
+// The callback must authenticate the canonical identity and revision atomically.
+func (s *ScopedManager) DeleteCanonical(name string, commit func() error) error {
+	s.manager.mutationMu.Lock()
+	defer s.manager.mutationMu.Unlock()
+	if _, err := s.loadOwned(name); err != nil && !errors.Is(err, ErrSessionNotFound) {
+		return err
+	}
+	if commit == nil {
+		return ErrAccessDenied
+	}
+	if err := commit(); err != nil {
+		return err
+	}
+	err := s.manager.deleteFiles(name)
+	if errors.Is(err, ErrSessionNotFound) {
+		return nil
+	}
+	return err
+}

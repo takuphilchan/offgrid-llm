@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -530,7 +531,7 @@ func (m *Manager) saveTaskBatch(tasks []*Task) (saveErr error) {
 		return nil
 	}
 	defer func() {
-		if saveErr != nil {
+		if saveErr != nil && !errors.Is(saveErr, ErrProfileNotFound) {
 			m.storageErr = saveErr
 		}
 	}()

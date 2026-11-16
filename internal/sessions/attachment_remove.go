@@ -10,8 +10,11 @@ import (
 // removal never follows links or recurses into an unexpected directory. A crash
 // leaves the conversation in place for explicit retry, not a successful delete.
 func (sm *SessionManager) removeConversationFiles(name string) error {
-	scope := sm.WithAccess(Access{All: true})
-	root, dir, err := scope.attachmentRoot(name, false)
+	current, err := sm.Load(name)
+	if err != nil {
+		return err
+	}
+	root, dir, err := sm.attachmentRootFor(current, false)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -85,6 +88,9 @@ func (s *ScopedManager) DeleteAttachment(name, id string) error {
 		return err
 	}
 	if err := root.Remove(dir + "/" + id + ".bin"); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := removeAttachmentStructure(root, dir, id); err != nil {
 		return err
 	}
 	return root.Remove(tombstone)

@@ -16,19 +16,22 @@ import (
 	"time"
 )
 
-const pdfWorkerRevision = "pdfium-8057-0001cb839e62425b-offgrid4"
+const pdfWorkerRevision = "pdfium-8057-0001cb839e62425b-offgrid5"
 
 // SourceUnit retains an actual engine-reported position and extraction state.
 // A locator without its digest/revision is not a citation to a stable source.
 type SourceUnit struct {
-	Cells             []SourceCell `json:"cells,omitempty"` // Relative UTF-8 spans inside Text for worksheets.
-	Kind              string       `json:"kind"`
-	Index             int          `json:"index"`
-	Name              string       `json:"name,omitempty"`
-	Text              string       `json:"text"`
-	State             string       `json:"state"`
-	SourceSHA256      string       `json:"source_sha256"`
-	ExtractorRevision string       `json:"extractor_revision"`
+	FormFields        []PDFFormField `json:"form_fields,omitempty"`
+	Hidden            bool           `json:"hidden,omitempty"`
+	MergedRanges      []string       `json:"merged_ranges,omitempty"`
+	Cells             []SourceCell   `json:"cells,omitempty"` // Relative UTF-8 spans inside Text for worksheets.
+	Kind              string         `json:"kind"`
+	Index             int            `json:"index"`
+	Name              string         `json:"name,omitempty"`
+	Text              string         `json:"text"`
+	State             string         `json:"state"`
+	SourceSHA256      string         `json:"source_sha256"`
+	ExtractorRevision string         `json:"extractor_revision"`
 }
 
 type pdfWorkerReceipt struct {
@@ -36,9 +39,10 @@ type pdfWorkerReceipt struct {
 	Revision string `json:"revision"`
 	SHA256   string `json:"sha256"`
 	Pages    []struct {
-		Page  int    `json:"page"`
-		Text  string `json:"text"`
-		State string `json:"state"`
+		Fields []PDFFormField `json:"fields,omitempty"`
+		Page   int            `json:"page"`
+		Text   string         `json:"text"`
+		State  string         `json:"state"`
 	} `json:"pages"`
 	Error string `json:"error"`
 }
@@ -184,6 +188,11 @@ func (p *DocumentParser) decodePDFWorker(output, source []byte) (*ParseResult, e
 		if (page.State == "ready" || page.State == "native_text_with_visuals") && strings.TrimSpace(page.Text) == "" {
 			return invalid()
 		}
+		unit := SourceUnit{Kind: "page", Index: page.Page, Text: page.Text, State: page.State, SourceSHA256: receipt.SHA256, ExtractorRevision: receipt.Revision}
+		if err := appendPDFFields(&unit, page.Fields); err != nil {
+			return invalid()
+		}
+		page.Text = unit.Text
 		if int64(text.Len()+len(page.Text)+1) > p.maxExtractedSize {
 			return nil, &ParseError{Code: "document_limit", Message: "Extracted PDF text exceeds the supported limit."}
 		}
@@ -198,7 +207,10 @@ func (p *DocumentParser) decodePDFWorker(output, source []byte) (*ParseResult, e
 		if page.State == "ocr_required" {
 			result.Warnings = append(result.Warnings, ExtractionWarning{Code: "document_ocr_required", SourceIndex: page.Page, Message: "This page contains visual content that needs local OCR; native text alone may be incomplete."})
 		}
-		result.SourceUnits = append(result.SourceUnits, SourceUnit{Kind: "page", Index: page.Page, Text: page.Text, State: page.State, SourceSHA256: receipt.SHA256, ExtractorRevision: receipt.Revision})
+		result.SourceUnits = append(result.SourceUnits, unit)
+		if len(unit.FormFields) > 0 {
+			result.Warnings = append(result.Warnings, ExtractionWarning{Code: "document_form_review", SourceIndex: page.Page, Message: "Native form values are retained separately from page text. Hidden fields, labels and signatures need review; calculations and signature authenticity were not checked."})
+		}
 	}
 	result.Content = strings.TrimSpace(text.String())
 	result.WordCount = countWords(result.Content)

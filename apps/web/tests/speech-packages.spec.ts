@@ -23,7 +23,7 @@ test('real service imports, verifies and removes a package without making it a c
   await page.addInitScript(() => { localStorage.setItem('offgrid.onboarding.complete', 'true'); localStorage.setItem('offgrid.locale', 'en'); });
   try {
     await page.goto('/ui/#/models');
-    await page.getByRole('button', { name: 'Speech recognition', exact: true }).click();
+    await page.locator('.model-category-filter').selectOption({label:'Speech recognition'});
     await page.getByText('Advanced · offline import', { exact: true }).click();
     const section = page.locator('details').filter({ has: page.getByText('Advanced · offline import', { exact: true }) });
     await section.getByLabel('Choose a package folder').setInputFiles(directory);

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import {refreshWorkspace} from './helpers/workspace-actions';
 
 const run = 'run-' + 'd'.repeat(32);
 async function fixture(page: Page, locale = 'en') {
@@ -81,14 +82,13 @@ test('workspace and actor changes dispose search results and return state', asyn
  await page.getByRole('option',{name:'Archived demo café'}).click();
  await expect(page.getByRole('button',{name:'Back to previous view'})).toBeVisible();
  state.workspace='search-two';state.actor='bob';
- await page.getByRole('button',{name:'Workspace options',exact:true}).click();
- await page.getByRole('button',{name:'Refresh',exact:true}).click();
+ await refreshWorkspace(page);
  await expect(page.getByRole('button',{name:'Back to previous view'})).toHaveCount(0);
- await expect(page.locator('dialog.onboarding')).toBeVisible();
- await page.locator('dialog.onboarding .onboarding-close').click();
- await expect(page.locator('dialog.onboarding')).toHaveCount(0);
+ await expect(page.locator('.workspace-setup')).toBeVisible();
+ await page.locator('.workspace-setup .onboarding-close').click();
+ await expect(page.locator('.workspace-setup')).toHaveCount(0);
  await search(page,'slow');await expect.poll(()=>state.queries).toContain('slow');await page.keyboard.press('Escape');
- await page.getByRole('button',{name:'Workspace options',exact:true}).click();
+ await page.locator('.sidebar-foot a[href="#/settings"]').click();
  await page.getByRole('button',{name:'Sign out',exact:true}).click();
  await expect(page.getByRole('dialog')).toHaveCount(0);
  await page.waitForTimeout(1100);await expect(page.getByText('Stale private result')).toHaveCount(0);

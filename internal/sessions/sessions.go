@@ -345,6 +345,10 @@ func (sm *SessionManager) delete(name string) error {
 	} else if err = sm.checkCanonical(current); err != nil {
 		return err
 	}
+	return sm.deleteFiles(name)
+}
+
+func (sm *SessionManager) deleteFiles(name string) error {
 	filePath, err := sm.sessionFilePath(name)
 	if err != nil {
 		return err

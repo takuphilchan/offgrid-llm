@@ -52,8 +52,12 @@ func (s *Server) handleDocumentSource(w http.ResponseWriter, r *http.Request) {
 			writeErrorWithCode(w, "A complete text citation is required to view this passage.", 400, "document_citation_invalid")
 			return
 		}
-		content, err := doc.ReadSourcePassage(start, end, query.Get("source_sha256"), query.Get("extractor_revision"), query.Get("content_hash"))
+		resolved, content, err := view.ReadSourcePassage(doc.ID, start, end, query.Get("source_sha256"), query.Get("extractor_revision"), query.Get("content_hash"))
 		if err != nil {
+			if errors.Is(err, rag.ErrCollectionUnavailable) {
+				writeError(w, "Document not found", 404)
+				return
+			}
 			writeErrorWithCode(w, "This source no longer matches the saved citation. The original answer has not been changed.", 409, "document_citation_stale")
 			return
 		}
@@ -63,7 +67,7 @@ func (s *Server) handleDocumentSource(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Document not found", 404)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"document": doc, "content": content, "truncated": false, "citation_verified": true})
+		json.NewEncoder(w).Encode(map[string]any{"document": resolved, "content": content, "truncated": false, "citation_verified": true})
 		return
 	}
 	if r.URL.Query().Get("format") == "original" {
@@ -90,10 +94,14 @@ func (s *Server) handleDocumentSource(w http.ResponseWriter, r *http.Request) {
 			writeOriginalSourceError(w, err, "Original file is unavailable.")
 			return
 		}
+		revision := ""
+		if len(doc.SourceRanges) > 0 {
+			revision = doc.SourceRanges[0].Revision
+		}
 		serveDocumentPreview(w, r, s.ragEngine.DocumentParser(), source.Name, source.Bytes, func() bool {
 			current, err := view.Original(doc.ID)
 			return err == nil && current.SHA256 == source.SHA256 && view.CanReadDocument(doc.ID)
-		})
+		}, retainedImageText{digest: source.SHA256, text: doc.RawContent, coverage: doc.ExtractionCoverage(), revision: revision, ranges: doc.SourceRanges})
 		return
 	}
 	if format := r.URL.Query().Get("format"); format != "" && format != "text" {

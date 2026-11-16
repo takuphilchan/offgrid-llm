@@ -5,12 +5,11 @@ for (const locale of ['en', 'ar']) for (const width of [320, 390, 768, 1440]) te
   const state = await craftFixture(page, locale, 'light');
   await page.setViewportSize({ width, height: 900 });
   await page.goto('/ui/#/chat');
-  await page.locator('.composer-context-menu > button').click();
   const trigger = page.locator('.model-select-trigger');
   await expect(trigger).toBeVisible();
-  const errors = await page.locator('.composer-context-menu > .utility-popover-panel').evaluate(composer => {
+  const errors = await page.locator('.composer').evaluate(composer => {
     const box = composer.getBoundingClientRect();
-    const controls = [...composer.querySelectorAll<HTMLButtonElement>('.composer-context > .utility-popover > button, .model-select-trigger')].filter(node => node.getClientRects().length);
+    const controls = [...composer.querySelectorAll<HTMLButtonElement>('.composer-actions > button, .composer-actions .model-select-trigger')].filter(node => node.getClientRects().length);
     const problems: string[] = [];
     for (const [index, control] of controls.entries()) {
       const rect = control.getBoundingClientRect();
@@ -23,6 +22,8 @@ for (const locale of ['en', 'ar']) for (const width of [320, 390, 768, 1440]) te
     return problems;
   });
   expect(errors).toEqual([]);
+  const label=trigger.locator('.model-label-regular:visible,.model-label-narrow:visible');
+  expect(await label.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
   await trigger.click();
   await expect(page.locator('.model-select-panel')).toBeVisible();
   expect(state.writes).toEqual([]);
@@ -37,7 +38,6 @@ test('model picker searches exact identifiers, shows actual readiness and preser
   ];
   await page.route('**/v1/models', r => r.fulfill({ json: { data: models } }));
   await page.goto('/ui/#/chat');
-  await page.locator('.composer-context-menu > button').click();
   const picker = page.getByRole('button', { name: 'Model', exact: true });
   await picker.click();
   await expect(page.getByRole('searchbox', { name: 'Filter installed models' })).toBeFocused();
@@ -49,7 +49,7 @@ test('model picker searches exact identifiers, shows actual readiness and preser
   await page.keyboard.press('ArrowDown');
   await expect(page.locator('.model-select-panel').getByRole('option')).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(picker).toContainText('Meta Llama 3.1 8B Instruct');
+  await expect(picker).toContainText('Llama 3.1 8B');
   await expect(picker).toBeFocused();
   await expect(picker).toHaveAttribute('aria-expanded', 'false');
   expect(state.writes).toEqual([]);
@@ -65,7 +65,6 @@ for(const locale of ['en','ar']) for(const theme of ['light','dark']) test(`mode
   await page.route('**/v1/models',r=>r.fulfill({json:{data:models}}));
   await page.setViewportSize({width:locale==='ar'?390:1280,height:640});
   await page.goto('/ui/#/chat');
-  await page.locator('.composer-context-menu > button').click();
   const trigger=page.locator('.model-select-trigger');await trigger.click();
   const panel=page.locator('.model-select-panel'),search=panel.getByRole('searchbox'),list=panel.getByRole('listbox');
   await expect(search).toBeFocused();
@@ -99,7 +98,6 @@ for (const locale of ['en', 'ar']) test(`model picker fits narrow ${locale} and 
   await page.route('**/v1/models', r => r.fulfill({ json: { data: ['Q4_K_M', 'Q8_0'].map(quant => ({ id: `Qwen2.5-7B-Instruct-${quant}`, type: 'chat' })) } }));
   await page.setViewportSize({ width: 390, height: 640 });
   await page.goto('/ui/#/chat');
-  await page.locator('.composer-context-menu > button').click();
   await page.locator('.model-select-trigger').click();
   await expect(page.locator('.model-select-panel').getByRole('option')).toHaveCount(2);
   await expect(page.locator('.model-select-panel').getByRole('option').first()).toContainText('Q4_K_M');
@@ -110,4 +108,17 @@ for (const locale of ['en', 'ar']) test(`model picker fits narrow ${locale} and 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.screenshot({ path: info.outputPath(`model-picker-${locale}.png`), fullPage: true, animations: 'disabled' });
   expect(state.writes).toEqual([]);
+});
+
+for(const locale of ['en','ar']) test('enlarged text keeps model and input actions separate: '+locale,async({page})=>{
+ await craftFixture(page,locale,'light');
+ await page.addInitScript(()=>localStorage.setItem('offgrid.appearance.v1',JSON.stringify({version:1,light:'offgrid',dark:'offgrid',textSize:150,reduceMotion:true})));
+ await page.route('**/v1/models',r=>r.fulfill({json:{data:[{id:'MistralSmall-24B-Instruct-Q4_K_M',type:'chat'}]}}));
+ await page.setViewportSize({width:320,height:800});await page.goto('/ui/#/chat');
+ await expect(page.locator('.model-select-trigger')).toBeVisible();
+ const controls=await page.locator('.composer-footer').evaluate(el=>{
+ const buttons=Array.from(el.querySelectorAll('button')).filter(b=>b.getClientRects().length);const parent=el.closest('.composer')!.getBoundingClientRect();
+ return buttons.flatMap((button,i)=>{const r=button.getBoundingClientRect();const errors=[];if(r.left<parent.left-1||r.right>parent.right+1)errors.push({outside:button.getAttribute('aria-label'),r:r.toJSON(),parent:parent.toJSON()});for(const other of buttons.slice(i+1)){const n=other.getBoundingClientRect();if(Math.min(r.right,n.right)-Math.max(r.left,n.left)>1&&Math.min(r.bottom,n.bottom)-Math.max(r.top,n.top)>1)errors.push({overlap:[button.getAttribute('aria-label'),other.getAttribute('aria-label')]});}return errors;});
+ });await page.screenshot({path:test.info().outputPath('enlarged-model.png')});expect(controls).toEqual([]);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

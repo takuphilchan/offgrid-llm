@@ -8,7 +8,8 @@ for (const width of [390, 1440]) for (const locale of ['en', 'ar']) test(`messag
   const composer = page.locator('.composer'), editor = composer.locator('textarea');
   await expect(editor).toBeVisible();
   const box = await composer.boundingBox();
-  expect(box!.height).toBeLessThan(width === 390 ? 145 : 100);
+  expect(box!.height).toBeLessThan(145);
+  await expect(composer.locator('.composer-actions .model-select-trigger')).toBeVisible();
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(width);
   await expect(composer.locator('.chat-agent-selector > button')).not.toBeVisible();

@@ -1,6 +1,39 @@
 # OffGrid Python Client
 
+## Durable document comparison
+
+`client.kb.analyses.compare(request_key, sources)` creates a revision-pinned
+comparison of two ordered Knowledge sources. Each source contains `document_id`,
+`revision` and `original_sha256` (omit the digest only for legacy text). Use
+`.get(id)`, `.results(id, step, offset=0, limit=100)`,
+`.source(id, step, change, "before")`, `.cancel(id)` and `.retry(id)` to inspect,
+open citations and resume checkpoints. Mutations are never retried automatically.
+Exact text/cell differences are not model interpretations; extraction gaps remain
+explicit. Both source collections must remain accessible. Summary and requirements
+processors are not yet available through this resource.
+
+`.list(offset=0, limit=20)` reads bounded private history under current access to
+both sources. Follow `next_offset`, including on empty filtered pages. Refresh
+after concurrent additions or deletions. Results may include `previews`, containing
+up to 512 UTF-8 bytes per citation side; the SDK checks their bounds and hashes.
+
+`.export(id, format="json")` returns `analysis_id`, `format`, `content` and
+`sha256` after checking the artifact identity, size and digest. Supported formats
+are `json`, `csv` and `markdown`; the caller chooses where to save `content` as
+UTF-8. Only finished traversals export, and incomplete extraction remains disclosed.
+Exports retain all changed passages, source references and gaps, with an 8 MiB
+artifact limit. Downloaded copies have separate retention from their sources.
+
 Python client library for [OffGrid LLM](https://github.com/takuphilchan/offgrid-llm) - Run AI models completely offline.
+
+## Private document structure
+
+`client.sessions.attachment_structure(name, attachment_id, revision=source_revision)`
+reads the retained private extraction without publishing it to Knowledge. Optional
+`unit`, `offset`, `limit`, `relationship_offset` and `navigation_offset` select bounded pages. Supply
+the attachment's source revision; the response reports its separate extraction
+revision and read-only blocks. Legacy sources without a graph report unavailable.
+The SDK rejects mismatched source/pagination and unexpected editable receipts.
 
 ## Installation
 
@@ -118,6 +151,22 @@ response = client.chat("Hello!")
 
 ### Session Management
 
+The optional conversation preview also provides service-owned input through
+`client.conversations.submit_input(request_id, conversation_id, expected_revision,
+payload)`. The payload contains `content` and optional `model`, `intent`,
+`focused_work_id`, and `origin`. New admission requires the service's conversation
+preview flag. Keep the same request identity and payload when retrying; mutation
+methods do not automatically retry with a new identity.
+
+Use `conversations.inputs(...)` or `conversations.input(...)` to observe state.
+`conversations.input_command(request_id, conversation_id, input_id,
+expected_revision, kind, payload)` supports `stop`, `continue`, and `revalidate`.
+The revision is the current conversation revision. Input Stop withdraws an
+unapplied request; it does not stop other work. Continue resumes the existing
+interrupted attempt without resetting its budget. Revalidation requires
+`payload={"instruction_version": current_work_version}`. These preview methods
+do not replace the existing session APIs below or approve host access.
+
 ```python
 # Sessions preserve conversation context on the server
 sessions = client.sessions
@@ -200,6 +249,25 @@ client.models.export_usb("Llama-3.2-3B-Instruct-Q4_K_M", "/media/usb")
 
 ### Knowledge Base (RAG)
 
+Services with `knowledge-collections-v1` also expose `client.kb.collections`:
+
+```python
+collection = client.kb.collections.create("Department records")  # private
+current = client.kb.collections.get(collection["id"])
+pending = client.kb.collections.import_file(current["id"], current["revision"], "policy.docx")
+client.kb.retry_import(pending["id"])
+# Sharing requires the owner, an inspected revision, and explicit user-ID lists:
+updated = client.kb.collections.update(current["id"], expected_revision=current["revision"],
+    name=current["name"], readers=["AUTHENTICATED_READER_ID"], editors=[])
+```
+
+`collections.document(document_id)` reads the binding and audience;
+`collections.move(...)` requires the binding revision, source audience revision,
+destination ID and destination audience revision. These operations do not retry
+mutations. Private uploads use the distinct collection route and never fall back
+to shared ingestion. Native Python execution of this addition remains unverified
+in the implementation environment; see the collection evidence report.
+
 Configure Knowledge once in the app with an installed embedding model, or call
 `client.kb.enable(embedding_model="YOUR_INSTALLED_MODEL_ID")`. File imports use
 that existing index; they do not silently enable search or choose another model.
@@ -224,12 +292,15 @@ Mutations are never automatically retried after an ambiguous response. Restarted
 in-flight imports remain interrupted until explicitly retried.
 
 To reuse a saved Chat source, explicitly call
-`client.kb.import_attachment(session, attachment_id, sha256)`. This copies the
+`client.kb.import_attachment(session, attachment_id, sha256, collection_id=collection["id"], collection_revision=collection["revision"])`.
+First inspect that collection's owner, readers and editors with `client.kb.collections.get(ID)`.
+This copies the
 exact retained original into a pending import, checks conversation access as
 well as Knowledge management permission, and does not start indexing. Inspect
 the returned record before calling `retry_import(record["id"])`. Repeating the
 same acceptance returns the same owned import; no mutation is automatically
-retried. Publication shares the copy under the workspace's Knowledge policy.
+retried. Publication shares the copy under the reviewed collection's policy.
+The service rejects older clients that omit destination review with HTTP 426.
 Deleting that copy does not remove the conversation attachment.
 
 ```python
@@ -615,6 +686,21 @@ declared checks, provenance, remaining work and evidence-step references; absent
 or unknown versions do not certify a result. No new runner or permission path is
 introduced. Native task-first execution and job exports use the service APIs;
 the legacy Python run method does not itself enable task-wide desktop access.
+
+## Structured document review
+
+`client.kb.structure(document_id, revision="", unit="", offset=0, limit=100,
+relationship_offset=0, navigation_offset=0)` reads retained extraction blocks, navigation targets and per-unit coverage counts. Pin the returned
+`revision` when following block and relationship cursors. A truncated block is
+not editable; its `text_sha256` still hashes the complete text.
+
+`client.kb.correct(document_id, expected_revision=revision, edits=[{
+"block_id": block_id, "expected_text_sha256": digest, "text": corrected_text}])`
+publishes an attributed derived revision through the authenticated service.
+Originals and earlier citation identities are retained. Existing collection
+permissions and the configured embedding model still apply. Requests are not
+automatically retried. After a timeout or unconfirmed receipt, inspect the latest
+structure before deciding whether another correction is needed.
 
 ## License
 

@@ -89,3 +89,49 @@ func TestConversationCLIScriptedIntent(t *testing.T) {
 		}
 	}
 }
+
+func TestCanonicalCLIPageAndKnowledgeSnapshot(t *testing.T) {
+	item := sessions.Attachment{ID: "file-" + strings.Repeat("a", 32), Name: "policy.pdf", Bytes: 20, SHA256: strings.Repeat("c", 64), Status: "ready", Revision: strings.Repeat("b", 64)}
+	var received api.ConversationInputCommand
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/system":
+			json.NewEncoder(w).Encode(map[string]any{"product": "offgrid", "capabilities": []string{"conversation-source-inputs-v1", "conversation-source-scopes-v1", "session-files-v1"}})
+		case "/v1/sessions/Notes":
+			json.NewEncoder(w).Encode(sessions.Session{Name: "Notes", CanonicalID: "conversation", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+		case "/v1/sessions/Notes/attachments":
+			json.NewEncoder(w).Encode(map[string]any{"attachments": []sessions.Attachment{item}})
+		case "/api/v2/conversations/conversation":
+			json.NewEncoder(w).Encode(api.Conversation{ID: "conversation", Revision: 4})
+		case "/api/v2/conversations/conversation/inputs":
+			if r.Method == "GET" {
+				json.NewEncoder(w).Encode(api.ConversationInboxPage{Items: []api.ConversationInboxEntry{}})
+				return
+			}
+			received = api.ConversationInputCommand{}
+			if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+				t.Error(err)
+			}
+			json.NewEncoder(w).Encode(api.ConversationCommandReceipt{Input: &api.ConversationInboxEntry{ID: "input-one", Input: received.Payload, State: "accepted"}})
+		default:
+			t.Error("unexpected request", r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer service.Close()
+	client, _ := serviceclient.New(service.URL, "", nil)
+	if err := RunPlainConversationTurn(context.Background(), client, []string{"send", "Notes", "--attachment", item.ID, "--page", "8", "--knowledge-document", "policy", "--request-id", "page-once", "Explain this page"}, &bytes.Buffer{}, true); err != nil {
+		t.Fatal(err)
+	}
+	if received.RequestID != "page-once" || received.Payload.SourceSession != "Notes" || len(received.Payload.Attachments) != 1 || received.Payload.Attachments[0].Page != 8 || received.Payload.Attachments[0].Revision != item.Revision || len(received.Payload.KnowledgeDocuments) != 1 {
+		t.Fatal(received)
+	}
+	selection := `{"document_id":"policy","revision":"extraction-original","block_ids":["exception"]}`
+	if err := RunPlainConversationTurn(context.Background(), client, []string{"send", "Notes", "--knowledge-selection", selection, "--request-id", "block-once", "Explain this exception"}, &bytes.Buffer{}, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(received.Payload.KnowledgeSelections) != 1 || received.Payload.KnowledgeSelections[0].BlockIDs[0] != "exception" || received.Payload.KnowledgeSelections[0].Revision != "extraction-original" || len(received.Payload.KnowledgeDocuments) != 0 {
+		t.Fatal(received)
+	}
+
+}

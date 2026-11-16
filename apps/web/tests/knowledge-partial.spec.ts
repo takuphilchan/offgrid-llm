@@ -3,12 +3,13 @@ import { craftFixture } from './helpers/craft-fixture';
 import { knowledgePartial } from '../src/i18n/knowledge-partial';
 import { workflow } from '../src/i18n/workflow';
 import { readFile } from 'node:fs/promises';
+import { documentEvidenceNotice } from '../src/i18n/document-evidence';
 
 for (const locale of ['en','fr','de','es','ar','sw','sn','nd','zu'] as const) test(`partial PDF review stays explicit and private: ${locale}`, async ({ page }, info) => {
  const state = await craftFixture(page, locale, 'light'), copy = knowledgePartial(locale);
  await page.route('**/api/v2/system', route => route.fulfill({ json: { product: 'offgrid', workspace_id: 'craft', capabilities: ['document-imports-v1'] } }));
  const digest = 'a'.repeat(64);
- const item = { id: 'partial', name: 'mixed.pdf', sha256: digest, bytes: 100, state: 'needs_input', error_code: 'document_ocr_required', review_available: true, attempt: 1 };
+ const item = { id: 'partial', name: 'mixed.pdf', sha256: digest, bytes: 100, state: 'needs_input', error_code: 'document_ocr_required', review_available: true, attempt: 1, evidence: {format:'pdf',status:'partial',total_units:2,readable_units:1,review_units:[2]} };
  let revoked = false, mutations = 0;
  await page.route('**/v1/documents/imports*', route => {
   if (route.request().method() !== 'GET') mutations++;
@@ -23,6 +24,7 @@ for (const locale of ['en','fr','de','es','ar','sw','sn','nd','zu'] as const) te
  });
  await page.setViewportSize({ width: 390, height: 844 });
  await page.goto('/ui/#/knowledge');
+ await expect(page.locator('.knowledge-import-recovery [data-extraction-coverage="partial"]')).toHaveText(documentEvidenceNotice(locale));
  const view = page.locator('.knowledge-import-recovery').getByRole('button', { name: workflow[locale].viewSource });
  await view.click();
  const dialog = page.getByRole('dialog');

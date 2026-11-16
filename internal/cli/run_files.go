@@ -182,6 +182,11 @@ func DocumentCoverageNotice(saved *sessions.Session) string {
 		return ""
 	}
 	for _, selection := range last.AttachmentSelections {
+		if selection.LinkedEvidence != nil && !selection.LinkedEvidence.LinksComplete {
+			return "Source coverage: linked headings, table headers or exceptions were omitted. Inspect the source before relying on the answer; this is not a complete review."
+		}
+	}
+	for _, selection := range last.AttachmentSelections {
 		if selection.Mode == "excerpts" {
 			return "Source coverage: selected document passages, not a complete review. Open the source to inspect the full text."
 		}

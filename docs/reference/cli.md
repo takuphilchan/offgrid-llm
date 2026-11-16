@@ -574,10 +574,30 @@ offgrid kb list
 offgrid kb add ./notes.txt
 offgrid kb search "What are the main decisions?"
 offgrid kb original DOCUMENT_ID --output ./source-copy.pdf
+offgrid kb structure DOCUMENT_ID --limit 100
+offgrid kb structure DOCUMENT_ID --revision EXTRACTION_REVISION --unit UNIT_ID --offset 100
+offgrid kb correct ./review.json
+offgrid kb compare ./comparison.json
+offgrid kb analyses 0 20
+offgrid kb analysis ANALYSIS_ID
+offgrid kb analysis-results ANALYSIS_ID STEP [OFFSET [LIMIT]]
+offgrid kb analysis-source ANALYSIS_ID STEP CHANGE before
+offgrid kb cancel-analysis ANALYSIS_ID
+offgrid kb retry-analysis ANALYSIS_ID
+offgrid kb collections
+offgrid kb create-collection "Department records"
+offgrid kb collection COLLECTION_ID
+offgrid kb collection-audit COLLECTION_ID --after 0
+offgrid kb import-collection COLLECTION_ID REVIEWED_REVISION ./policy.docx
+offgrid kb import-collection COLLECTION_ID REVIEWED_REVISION ./scan.tiff --ocr-language fra
+offgrid kb import-collection COLLECTION_ID REVIEWED_REVISION ./bilingual.png --ocr-language chi_sim+fra
+offgrid kb document-collection DOCUMENT_ID
+offgrid kb update-collection COLLECTION_ID ./audience-review.json
+offgrid kb move-document ./move-review.json
 offgrid kb imports
 offgrid kb import-status IMPORT_ID
 offgrid kb review-import IMPORT_ID
-offgrid kb import-attachment SESSION FILE_ID SHA256
+offgrid kb import-attachment SESSION FILE_ID SHA256 COLLECTION_ID REVIEWED_REVISION
 offgrid kb retry-import IMPORT_ID
 offgrid kb cancel-import IMPORT_ID
 offgrid kb remove-import IMPORT_ID
@@ -588,6 +608,138 @@ offgrid kb disable
 checks its size and digest, and creates a new file without overwriting an existing
 path. Legacy documents may retain only extracted text; they report an unavailable
 original instead of reconstructing one.
+
+New collections are private. `kb collection` shows authenticated user IDs and the
+current revision; global administrator status does not override membership.
+`kb update-collection` takes explicit `expected_revision`, `name`, `readers` and
+`editors` in its JSON file, including empty member arrays. Only the collection
+owner can change sharing. `kb move-document` takes `document_id`,
+`expected_revision` (the binding revision), `expected_source_revision`,
+`destination_id` and `expected_destination_revision`, all from the policies you
+reviewed. Conflicts and unknown outcomes are never automatically retried.
+
+`kb import-collection` retains a regular file under its reviewed audience and
+returns an import ID. Run `kb retry-import ID` to process it. If the audience
+changes, publication is blocked; review again and accept a new import. The
+dedicated collection endpoint never falls back to an older service's shared
+upload. Legacy `kb add` still targets the shared workspace. Attachment publication
+requires an explicit destination and reviewed revision, including for `workspace`.
+
+`kb structure` reads immutable extracted blocks, their exact text hashes and
+source-unit identities. Follow `next_offset` with the same `revision`; related
+blocks use a separate `next_relationship_offset` (`--relationship-offset`).
+Navigation uses `--navigation-offset` and `next_navigation_offset`; keep the same revision and unit filter. Open entries with their unit and within-unit block offset. None of these cursors is an original-file page count. Legacy records without retained structured
+revisions report unavailable; a missing structure is not silently reconstructed.
+
+`kb compare` creates a durable deterministic comparison; it does not generate a
+policy interpretation. The request file contains a unique `request_key` and two
+ordered `sources` (before, after), each with `document_id`, immutable `revision`
+and `original_sha256` from structure inspection. Omit the digest only for legacy
+text without an original. Reusing a key with different sources conflicts.
+Use `analysis` to inspect completion and source-coverage gaps. `STEP` is a zero-based
+unit-pair index in `pairs`; `CHANGE` is an absolute change index within that step.
+Results paginate up to 100 changes. Source opening validates exact retained
+citations and reports truncation for text exceeding 256 KiB. Use `after` for the
+other side. Cancellation preserves committed steps; retry resumes them. Unknown
+or partial extraction never becomes a complete-review guarantee. Both source
+collections must remain accessible. Summary/requirements workflows and comparison
+interpretation are not implemented by these commands.
+
+`kb analyses [OFFSET [LIMIT]]` lists owner-private comparison history under current
+access to both source documents. The default page contains at most 20 summaries;
+follow `next_offset` even if a page is empty after source revocation. Refresh the
+list after concurrent additions/deletions. Result pages include bounded verified
+source previews when supported; these excerpts do not replace their full citations.
+
+`offgrid kb analysis-export ID json|csv|markdown --output NEW_FILE` exports a
+finished comparison, including source revisions, exact changed text/cells and
+unresolved coverage gaps. The client verifies the complete artifact before
+creating a new file; existing files are never overwritten. Outputs over 8 MiB
+fail without a partial export. CSV protects formula-like display cells and retains
+exact values in its metadata column. Exported files have their own retention;
+later source deletion or revocation does not remove downloaded copies.
+
+To prepare local summary or requirements drafts, create a regular request file
+(maximum 16 KiB) and run `offgrid kb synthesise REQUEST.json`:
+
+```json
+{
+  "request_key": "my-review-1",
+  "workflow": "requirements",
+  "sources": [{"document_id": "DOCUMENT_ID", "revision": "EXTRACTION_REVISION"}],
+  "model": "INSTALLED_CHAT_MODEL_ID",
+  "language": "en"
+}
+```
+
+Include `original_sha256` in each source when the original is retained; obtain
+the pinned identity with `offgrid kb structure DOCUMENT_ID`. Use `kb syntheses`
+for history, `kb synthesis ID` for progress, and `kb synthesis-results ID [OFFSET]`
+for draft claims and exact quotations. `kb retry-synthesis ID` resumes explicitly
+after the last committed batch; `kb cancel-analysis ID` stops either job type.
+These jobs finish in `awaiting_review`: checked source identity does not certify
+the model's interpretation or exhaustive review of unread material.
+
+To compose finished summary drafts, save `request_key`, `analysis_id`, installed
+`model` and `language` in a JSON file and run `offgrid kb compose-summary REQUEST.json`.
+Use `kb compositions ANALYSIS_ID [OFFSET]` for history, `kb composition ID` for
+progress, `kb composition-report ID` for the draft, and
+`kb composition-evidence ID SECTION [OFFSET]` for original quotations. Section
+indexes are zero-based. `kb cancel-composition ID` and `kb retry-composition ID`
+control durable work; changed input reviews require a new composition.
+`kb composition-export ID json|csv|markdown --output NEW_FILE` retains original
+candidates, review snapshots and gaps without overwriting an existing file.
+Python parity is available at `client.kb.synthesis.compositions`; its tests are
+authored but were not executed in this development environment.
+
+`offgrid kb synthesis-export ID json|csv|markdown --output NEW_FILE` saves a
+review artifact, including conditions, exceptions, source revisions and gaps.
+CSV has a row per draft candidate. The same 8 MiB limit, digest verification,
+no-overwrite behavior and separate export retention apply. Python clients expose
+the corresponding operations through `client.kb.synthesis`; local Python
+execution remains unqualified in the current implementation evidence.
+
+Read a section review with `offgrid kb synthesis-review ID BATCH [REVISION]`.
+Omit `REVISION` (or use zero) for the latest revision; positive revisions expose
+immutable history. To save, put the following in a regular JSON file and run
+`offgrid kb save-synthesis-review REVIEW.json`:
+
+```json
+{
+  "id": "ANALYSIS_ID",
+  "batch": 0,
+  "batch_id": "BATCH_ID_FROM_RESULTS",
+  "response_sha256": "RESPONSE_SHA256_FROM_RESULTS",
+  "expected_revision": 0,
+  "section_checked": true,
+  "decisions": [{"decision": "keep", "note": "Checked the condition and exception."}]
+}
+```
+
+Provide one decision per candidate in result order. Supported decisions are
+`keep`, `exclude` and `unreviewed`; a checked section cannot have unreviewed
+candidates. Notes are limited to 2,048 UTF-8 bytes each. A stale revision is
+rejected; read the saved review after an uncertain response before retrying.
+Human review never overwrites model output or clears extraction gaps. CSV adds
+`human_decision` and `review_note` beside each original candidate. Python exposes
+`client.kb.synthesis.review(id, batch, revision=0)` and `save_review(request)`.
+
+`kb correct` reads a regular JSON file no larger than 2 MiB:
+
+```json
+{
+  "document_id": "DOCUMENT_ID",
+  "expected_revision": "EXTRACTION_REVISION",
+  "edits": [{"block_id": "BLOCK_ID", "expected_text_sha256": "FULL_BLOCK_SHA256", "text": "Corrected exact text"}]
+}
+```
+
+Use the revision and complete block hash from `kb structure`. Only editable leaf
+blocks can be corrected. The server records the authenticated author and time;
+clients cannot supply an author. Corrections preserve original bytes and older
+citations. The existing index model must be available. A stale revision fails
+without overwriting newer work. A timeout or invalid receipt is not confirmation
+that nothing happened: read the latest structure before deciding whether to retry.
 
 Failed multipart uploads remain saved for explicit recovery. `kb imports` lists
 your most recent 100 import records; `retry-import` processes the saved bytes
@@ -600,10 +752,12 @@ commands.
 
 `kb import-attachment` explicitly copies an existing conversation attachment into
 a pending Knowledge import without uploading it again. Supply its exact saved
-source digest and inspect the returned state before using `retry-import` to
+source digest, destination collection ID and reviewed policy revision. Inspect the returned state before using `retry-import` to
 index it. Both conversation access and Knowledge management permission apply.
-The original stays in Chat; the published copy uses the workspace's Knowledge
+The original stays in Chat; the published copy uses the selected collection's
 access policy. Ordinary Chat attachments are never automatically published.
+Older clients that omit this review receive HTTP 426 (`collection_review_required`)
+from the service. Inspect the collection with `kb collection ID` before submitting.
 
 Install the embedding model first. `kb remove DOCUMENT_ID` deletes that indexed
 document; `kb clear --yes` removes all documents available to the operation.
@@ -695,9 +849,51 @@ inside `steps[].tool_result`; that does not undo earlier launches or input.
 Use explicit `agent resume` only for a resumable interrupted task. Genuine
 uncertain input still requires inspection, not another submission.
 
+Private document inspection uses
+`offgrid session attachment-structure NAME ID REVISION [BLOCK_OFFSET] [RELATIONSHIP_OFFSET] [NAVIGATION_OFFSET]`.
+Use the source revision from `offgrid --json session attachments NAME`. The command returns
+bounded JSON blocks and relationships with a separate extraction revision, never
+publishes to Knowledge and cannot correct private sources. Missing structure is
+an explicit error. Saved-answer coverage notices distinguish selected passages
+from omitted linked headers or exceptions.
+
 [External agents](../guides/external-agents.md),
 [appliance planning](../setup/appliance.md), and [audit](../guides/audit.md) have
 separate guides. Audio needs optional installed components. LoRA registration is
 not a training workflow; P2P and native
 computer control have separate preview/qualification boundaries. Consult the
 [capability map](../guides/features.md) before treating their presence as readiness.
+
+### Explicit Library passage selection
+
+For an explicit Library passage in a canonical conversation, use
+`offgrid session send NAME --knowledge-selection '{"document_id":"ID","revision":"REVISION","block_ids":["BLOCK"]}' QUESTION`.
+Use `"page":8` instead of `block_ids` for an original PDF page. This requires
+`conversation-source-scopes-v1`; an unavailable revision or passage is rejected
+without broadening the search. Do not combine this option with `--rag` or
+`--knowledge-document`. The service remains the access and evidence authority.
+
+### Private attachment extraction revisions
+
+Ready conversation attachments retain immutable structured extraction revisions.
+Only the conversation owner can correct current text. Use
+`offgrid session attachment-revisions NAME ID` to inspect published history and
+`offgrid session correct-attachment NAME ID REVIEW.json` to submit a correction.
+The bounded JSON file contains `expected_revision` (attachment revision),
+`extraction_revision`, and `edits` with `block_id`,
+`expected_text_sha256` and replacement `text`. Obtain these from the pinned
+structure response. A conflict requires inspection; an uncertain save must not
+be replayed blindly. Original bytes and earlier citations remain unchanged.
+
+To publish a selected revision explicitly, use
+`offgrid kb import-attachment SESSION FILE_ID SHA256 COLLECTION_ID REVIEWED_REVISION ATTACHMENT_REVISION`.
+The destination audience is still reviewed separately. Corrected attachments
+require an explicit revision and a compatible service. Acceptance preserves
+the selected extraction and its ancestors; indexing is a separate explicit
+`retry-import` operation. The import receipt's `extraction_revision` identifies
+accepted evidence. Existing Knowledge content is not silently replaced when
+the same original already exists with another extraction.
+
+### Canonical source scope
+
+On services advertising `conversation-source-inputs-v1`, `offgrid session send NAME --attachment ID --page 8 --request-id ID QUESTION` pins exactly one retained file page. `--file PATH`, `--image PATH`, `--rag`, and repeated `--knowledge-document ID` use the same canonical admission path. Unsupported capabilities, stale revisions and unavailable pages fail explicitly; they do not silently start a different conversation. See [client contracts](../advanced/client-contracts.md#canonical-source-input-local-preview-2026-11-15).

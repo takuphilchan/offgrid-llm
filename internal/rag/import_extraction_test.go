@@ -29,6 +29,9 @@ func TestPartialImportReviewPersistenceScopeRetryAndDeletion(t *testing.T) {
 	if err = s.saveImportExtraction(lease, parsed); err != nil {
 		t.Fatal(err)
 	}
+	if err = s.saveImportCoverage(lease, parsed); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = s.ImportExtraction("alice", r.ID); !errors.Is(err, ErrImportNotFound) {
 		t.Fatal("active extraction exposed", err)
 	}
@@ -41,6 +44,10 @@ func TestPartialImportReviewPersistenceScopeRetryAndDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
+	listed, err := s.Import("alice", r.ID)
+	if err != nil || listed.Evidence == nil || listed.Evidence.Status != "partial" || listed.Evidence.ReadableUnits != 1 || len(listed.Evidence.ReviewUnits) != 1 {
+		t.Fatalf("lost independent coverage on restart: %+v %v", listed, err)
+	}
 	got, err := s.ImportExtraction("alice", r.ID)
 	if err != nil || got.Units[0].Text != parsed.SourceUnits[0].Text || got.Units[1].State != "ocr_partial" {
 		t.Fatal(got, err)

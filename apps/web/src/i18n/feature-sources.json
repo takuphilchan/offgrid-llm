@@ -127,8 +127,113 @@
     "cancel": "Cancel",
     "details": "Technical details"
   },
+  "i18n/document-review:labels": {
+    "title": "Review extracted text",
+    "note": "Corrections create a new revision. Original files and earlier citations are retained.",
+    "edit": "Correct text",
+    "save": "Save correction",
+    "draft": "Your correction",
+    "base": "Current extracted text",
+    "outcome": "Save not confirmed. Your draft is retained. Inspect the latest text before trying again.",
+    "load": "Load latest revision",
+    "rebase": "Use this revision as the base",
+    "saved": "Correction saved",
+    "readOnly": "This revision is read-only.",
+    "incomplete": "This excerpt is incomplete and cannot be edited here.",
+    "revision": "Extraction revision",
+    "unavailable": "Structured text is unavailable. Try loading it again.",
+    "same": "The latest revision already contains this text.",
+    "units": "Source section",
+    "cancel": "Cancel edit",
+    "all": "All sections"
+  },
+  "i18n/document-evidence:limited": {
+    "": "Some document content has not been interpreted. Review the source before relying on a complete answer."
+  },
+  "i18n/document-format-limits:limits": {
+    "docx": "Headers, footers, images and embedded objects are not read. Rendered page numbers are unavailable.",
+    "xlsx": "Number and date formatting, charts and images are not interpreted. Formulas are not recalculated.",
+    "pptx": "Speaker notes, charts, images and embedded documents are not interpreted."
+  },
+  "i18n/linked-evidence:notice": {
+    "": "Some linked evidence was omitted. This excerpt may be missing a heading, table header or exception; inspect the source before relying on it."
+  },
+  "i18n/image-metadata:notice": {
+    "": "This image contains multiple frames or unreadable orientation data. Export a still PNG/JPEG in the correct orientation, then attach it again."
+  },
   "i18n/conversation-input:conversationInputText": {
     "": "This conversation currently accepts text. Document, image and additional Knowledge selection are not enabled here yet. Your draft is retained."
+  },
+  "i18n/document-comparison:labels": {
+    "0": "Compare documents",
+    "1": "Before",
+    "2": "After",
+    "3": "Compare retained text and cells. Unread content and visual meaning are not assessed.",
+    "4": "Comparison history",
+    "5": "Source units checked",
+    "6": "Changes",
+    "7": "No text or cell changes in this section.",
+    "8": "Comparison is incomplete. Some source content needs review.",
+    "9": "Comparison unavailable. Refresh to check access and service availability.",
+    "10": "Request outcome unknown. Refresh history before trying again.",
+    "11": "Queued",
+    "12": "Running",
+    "13": "Interrupted",
+    "14": "Cancelled",
+    "15": "Failed",
+    "16": "Retained text compared",
+    "17": "Incomplete",
+    "18": "Cell changed",
+    "19": "Added",
+    "20": "Removed",
+    "21": "Swap documents",
+    "22": "Choose two documents with extracted text.",
+    "23": "No comparisons yet.",
+    "24": "Cell metadata",
+    "25": "Formula",
+    "26": "Cached result",
+    "27": "Stored value",
+    "28": "New comparison",
+    "29": "No changes on this page."
+  },
+  "i18n/document-export:labels": {
+    "0": "Export comparison",
+    "1": "Downloaded copies stay on this device even if source access is later removed."
+  },
+  "i18n/document-synthesis:labels": {
+    "0": "Analyse documents",
+    "1": "Summary",
+    "2": "Requirements",
+    "3": "Create draft",
+    "4": "Draft needs review",
+    "5": "AI-generated draft. Check every claim against its sources. Unread content is not included.",
+    "6": "Source passages",
+    "7": "Conditions",
+    "8": "Exceptions",
+    "9": "No candidate text in this section.",
+    "10": "Analysis history"
+  },
+  "i18n/document-synthesis-review:labels": {
+    "0": "Your review",
+    "1": "Not reviewed",
+    "2": "Keep",
+    "3": "Exclude",
+    "4": "Review notes",
+    "5": "I checked this section and its sources.",
+    "6": "Save review",
+    "7": "Review saved",
+    "8": "Save not confirmed. Reload the saved review before trying again.",
+    "9": "Reload saved review",
+    "10": "Review history",
+    "11": "Export draft"
+  },
+  "i18n/document-composition:labels": {
+    "0": "Summary report",
+    "1": "Compose summary",
+    "2": "Source reviews have changed. Create a new summary to include them.",
+    "3": "Merges completed",
+    "4": "Source sections not represented",
+    "5": "Section drafts"
   },
   "i18n/work-changes:labels": {
     "0": "Changes",
@@ -162,10 +267,51 @@
     "1": "Download retained file",
     "2": "Review these copies before restoring a file. Unconfirmed copies may contain staged changes."
   },
+  "i18n/ocr-choice:labels": {
+    "0": "OCR language",
+    "1": "Applies to newly added files. Saved files keep their original language selection.",
+    "2": "Close",
+    "3": "No OCR pack available"
+  },
+  "i18n/ocr-progress:labels": {
+    "0": "OCR pages saved: {count}. Retry reuses saved pages."
+  },
+  "i18n/document-thumbnails:labels": {
+    "0": "Pages"
+  },
+  "i18n/ocr-mixed:labels": {
+    "0": "Additional language",
+    "1": "Add language",
+    "2": "Remove language",
+    "3": "Choose up to three languages present in the document. The first is the primary language.",
+    "4": "Selected languages installed. OCR remains experimental; review extracted text."
+  },
   "i18n/conversation-input-mode:conversationInputModeText": {
     "label": "Send as",
     "answer": "Answer the question",
     "message": "Message about this work",
     "newWork": "New task"
+  },
+  "i18n/word-revisions:labels": {
+    "0": "Tracked changes",
+    "1": "Formatting changes"
+  },
+  "i18n/work-surface:labels": {
+    "0": "Home",
+    "1": "Library",
+    "2": "Ask about this page",
+    "3": "What would you like to work on?",
+    "4": "Ask about this selection",
+    "5": "This selection is unavailable or too large. Select less text or check source access. Your draft is retained."
+  },
+  "i18n/document-chrome:labels": {
+    "0": "Expand document",
+    "1": "Restore document view"
+  },
+  "i18n/help-center:helpCenter": {
+    "search": "Search help",
+    "empty": "No matching help topics. Try a different word.",
+    "browse": "Browse help topics",
+    "topics": "Topics"
   }
 }

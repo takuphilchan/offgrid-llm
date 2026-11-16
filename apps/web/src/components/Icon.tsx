@@ -1,8 +1,26 @@
 import type { ReactNode } from 'react';
 
-export type IconName = 'power' | 'warning' | 'image' | 'folder' | 'terminal' | 'arrow-up' | 'arrow-down' | 'download' | 'chevron-left' | 'chevron-right' | 'file' | 'sliders' | 'help' | 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings' | 'send' | 'upload' | 'refresh' | 'plus' | 'trash' | 'check' | 'copy' | 'search' | 'menu' | 'close' | 'mic' | 'waveform' | 'stop' | 'speaker' | 'more' | 'sidebar';
+export type IconName = 'browser' | 'calculator' | 'archive' | 'edit' | 'expand' | 'contract' | 'plug' | 'external' | 'tool' | 'palette' | 'quick-window' | 'shield' | 'drive' | 'info' | 'compare' | 'file-search' | 'collections' | 'home' | 'power' | 'warning' | 'image' | 'folder' | 'terminal' | 'arrow-up' | 'arrow-down' | 'download' | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'file' | 'sliders' | 'help' | 'chat' | 'knowledge' | 'agents' | 'models' | 'activity' | 'settings' | 'send' | 'upload' | 'refresh' | 'plus' | 'trash' | 'check' | 'copy' | 'search' | 'menu' | 'close' | 'mic' | 'waveform' | 'stop' | 'speaker' | 'more' | 'sidebar';
 
 const paths: Record<IconName, string[]> = {
+  browser: ['M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z', 'M3 8h18M7 5.5h.01M10 5.5h.01', 'm8 13 3 2-3 2M14 17h3'],
+  calculator: ['M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z', 'M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15v4M8 19h.01M12 19h.01'],
+  archive: ['M3 3h18v5H3zM5 8v13h14V8M10 12h4'],
+  edit: ['m16 3 5 5-12 12-6 1 1-6L16 3z', 'm13 6 5 5'],
+  expand: ['M8 3H3v5M16 21h5v-5'],
+  contract: ['M3 8h5V3M21 16h-5v5'],
+  plug: ['M8 2v5M16 2v5M5 7h14v3a7 7 0 0 1-14 0V7z','M12 17v5'],
+  external: ['M14 3h7v7M21 3l-9 9','M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5'],
+  tool: ['M14 6a5 5 0 0 0-6 6l-5 5a2.8 2.8 0 0 0 4 4l5-5a5 5 0 0 0 6-6l-3 3-4-4 3-3z'],
+  palette: ['M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1.4-3.4 1.5 1.5 0 0 1 1.1-2.6H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8z', 'M7.5 10h.01M10 6.5h.01M15 7h.01M17.5 10.5h.01'],
+  'quick-window': ['M9 8V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3', 'M5 9h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z', 'M6 13h6M6 17h3'],
+  shield: ['M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7l-9-4z', 'm8 12 3 3 5-6'],
+  drive: ['M6 4h12l3 10v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4L6 4z', 'M3 14h18M7 17h.01M11 17h.01'],
+  info: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20', 'M12 11v6M12 7h.01'],
+  compare: ['M8 3H4v18h4M16 3h4v18h-4', 'M7 8h10m-3-3 3 3-3 3M17 16H7m3-3-3 3 3 3'],
+  'file-search': ['M13 2H5v20h14v-3M13 2v5h6l-6-5z', 'M19 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z', 'm18 15 3 3'],
+  collections: ['M2 8h7l2 2h9v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8z', 'M6 5h7l2 2h7v10', 'M10 2h7l2 2h3'],
+  home: ['M3 10l9-7 9 7','M5 9v12h5v-7h4v7h5V9'],
   power: ['M12 2v10', 'M6 5a9 9 0 1 0 12 0'],
   warning: ['M12 3 2 21h20L12 3z', 'M12 9v5', 'M12 17h.01'],
   image: ['M3 3h18v18H3z', 'M3 16l6-6 5 5 3-3 4 4', 'M16 7h.01'],
@@ -14,6 +32,7 @@ const paths: Record<IconName, string[]> = {
   download: ['M12 3v12m-5-5 5 5 5-5', 'M5 16v5h14v-5'],
   'chevron-left': ['M15 5 8 12l7 7'],
   'chevron-right': ['M9 5 16 12l-7 7'],
+  'chevron-down': ['M5 9l7 7 7-7'],
   file: ['M14 2H5v20h14V7l-5-5z', 'M14 2v5h5', 'M8 12h8M8 16h6'],
   sliders: ['M4 7h3m6 0h7M4 17h9m6 0h1', 'M7 4h6v6H7zM13 14h6v6h-6z'],
   help: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20', 'M9 9a3 3 0 0 1 6 0c0 2-3 2-3 5', 'M12 18h.01'],

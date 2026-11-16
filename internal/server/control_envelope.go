@@ -8,10 +8,15 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/jsonwire"
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 func decodeControlEnvelope(w http.ResponseWriter, r *http.Request, target any) error {
-	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 128<<10))
+	limit := int64(128 << 10)
+	if _, ok := target.(*api.ConversationInputCommand); ok {
+		limit = api.MaxSessionImageRequestBytes
+	}
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if err != nil || jsonwire.Validate(raw) != nil {
 		return agents.ErrControlCommand
 	}

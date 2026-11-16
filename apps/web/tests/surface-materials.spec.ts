@@ -7,15 +7,14 @@ for (const theme of ['light', 'dark']) for (const locale of ['en', 'ar']) for (c
   test(`floating material stays legible, bounded and flat when requested: ${theme} ${locale} ${width}`, async ({ page }, info) => {
     const state = await craftFixture(page, locale, theme);
     await page.setViewportSize({ width, height: 700 });
-    await page.goto('/ui/#/settings');
-    if (width < 1024) await page.locator('.navigation-trigger').click();
-    const trigger = page.locator('.workspace-options > button');
+    await page.goto('/ui/#/chat');
+    const trigger = page.locator('.model-select-trigger');
     await trigger.click();
-    const panel = page.locator('.workspace-options-panel');
+    const panel = page.locator('.model-select-panel');
     await expect(panel).toHaveCSS('opacity', '1');
     await panel.evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished)));
-    await expect(panel).toHaveCSS('background-image', /linear-gradient/);
-    await expect(panel).toHaveCSS('backdrop-filter', 'blur(12px)');
+    await expect(panel).toHaveCSS('background-image', 'none');
+    await expect(panel).toHaveCSS('backdrop-filter', 'none');
     const geometry = await panel.boundingBox();
     expect(geometry!.x).toBeGreaterThanOrEqual(0);
     expect(geometry!.y).toBeGreaterThanOrEqual(0);
@@ -40,7 +39,7 @@ for (const theme of ['light', 'dark']) for (const locale of ['en', 'ar']) for (c
     await page.emulateMedia({ contrast: 'no-preference', forcedColors: 'active' }); await opaque();
     await page.emulateMedia({ forcedColors: 'none', reducedMotion: 'reduce' });
     await expect(panel).toHaveCSS('animation-name', 'none');
-    await expect(panel).toHaveCSS('backdrop-filter', 'blur(12px)');
+    await expect(panel).toHaveCSS('backdrop-filter', 'none');
     await page.keyboard.press('Escape');
     await expect(trigger).toBeFocused();
     expect(state.writes).toEqual([]);
@@ -91,7 +90,7 @@ test('primary hover preserves text opacity and modal material preserves keyboard
   await expect(send).toHaveCSS('background-image', 'none');
   await page.locator('.command-trigger').click();
   const palette = page.locator('dialog.command-palette');
-  await expect(palette).toHaveCSS('backdrop-filter', 'blur(12px)');
+  await expect(palette).toHaveCSS('backdrop-filter', 'none');
   for (let i = 0; i < 16; i++) {
     await page.keyboard.press('Tab');
     expect(await palette.evaluate(el => el.contains(document.activeElement))).toBe(true);

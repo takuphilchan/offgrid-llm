@@ -53,6 +53,17 @@ func newCodedServiceError(status int, code, message string, cause error) error {
 	return &serviceError{status: status, code: code, message: message, cause: cause}
 }
 
+func modelLoadError(cause error) error {
+	if err := inferenceContextError(cause); err != nil {
+		return err
+	}
+	err := newServiceError(http.StatusServiceUnavailable, "Model could not be loaded; check runtime availability and logs", cause).(*serviceError)
+	if err.code == "" {
+		err.code = "model_load_failed"
+	}
+	return err
+}
+
 func inferenceContextError(cause error) *serviceError {
 	if errors.Is(cause, context.DeadlineExceeded) {
 		return &serviceError{status: http.StatusGatewayTimeout, code: "inference_timeout", message: "Inference deadline expired; the request was not replayed", cause: cause}
@@ -126,6 +137,11 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 	}
 	if hasImage && (native || metadata.ProjectorPath == "") {
 		return nil, newCodedServiceError(http.StatusUnprocessableEntity, "vision_projector_unavailable", "the selected model has no installed vision projector; no image was sent to inference", nil)
+	}
+	if hasImage {
+		if err := s.sessionImageReady(request.Model); err != nil {
+			return nil, err
+		}
 	}
 	if native && request.ResponseFormat.Constrained() {
 		return nil, newCodedServiceError(http.StatusBadRequest, "unsupported_parameter", "response_format is not qualified for the selected native provider", nil)

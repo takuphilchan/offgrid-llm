@@ -87,6 +87,9 @@ func importConversationTransaction(tx *sql.Tx, scope ControlScope, input Convers
 		return nil, err
 	}
 	if previous != nil {
+		if _, err := readControlRecord(tx, scope, previous.ConversationID, "conversation"); err != nil {
+			return nil, err
+		}
 		if previous.SourceSHA256 != digest {
 			return nil, ErrRunConflict
 		}
@@ -150,7 +153,7 @@ func (m *Manager) ImportedConversationSource(scope ControlScope, id string) ([]b
 	defer db.Close()
 	var data []byte
 	var digest string
-	err = db.QueryRow(`SELECT source,source_digest FROM agent_conversation_imports WHERE workspace=? AND actor=? AND conversation_id=?`, scope.Workspace, scope.Actor, id).Scan(&data, &digest)
+	err = db.QueryRow(`SELECT source,source_digest FROM agent_conversation_imports WHERE workspace=? AND actor=? AND conversation_id=? AND NOT EXISTS (SELECT 1 FROM agent_conversation_deletions d WHERE d.workspace=agent_conversation_imports.workspace AND d.actor=agent_conversation_imports.actor AND d.conversation_id=agent_conversation_imports.conversation_id)`, scope.Workspace, scope.Actor, id).Scan(&data, &digest)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

@@ -44,13 +44,13 @@ func TestDocumentAttachmentImportScopeIdentityAndCLI(t *testing.T) {
 	}
 	mw := users.NewMiddleware(us)
 	mw.SetRequireAuth(true)
-	handler := mw.Wrap(users.RequirePermission(users.PermissionRAGManage)(http.HandlerFunc(s.handleDocumentImports)))
+	handler := mw.Wrap(users.RequirePermission(users.PermissionRAGManage)(http.HandlerFunc(s.handleCollectionImport)))
 	body := func(digest string) []byte {
 		data, _ := json.Marshal(map[string]any{"attachment": map[string]string{"session": "private", "id": a.ID, "sha256": digest}})
 		return data
 	}
 	request := func(token string, data []byte) *httptest.ResponseRecorder {
-		r := httptest.NewRequest("POST", "/v1/documents/imports", bytes.NewReader(data))
+		r := httptest.NewRequest("POST", "/v1/collections/imports?collection_id=workspace&collection_revision=1", bytes.NewReader(data))
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
@@ -95,7 +95,7 @@ func TestDocumentAttachmentImportScopeIdentityAndCLI(t *testing.T) {
 	server := httptest.NewServer(handler)
 	defer server.Close()
 	client, _ := serviceclient.New(server.URL, key, server.Client())
-	result, err := cli.RunKnowledgeService(context.Background(), client, []string{"import-attachment", "private", a.ID, a.SHA256}, nil, io.Discard, true)
+	result, err := cli.RunKnowledgeService(context.Background(), client, []string{"import-attachment", "private", a.ID, a.SHA256, "workspace", "1"}, nil, io.Discard, true)
 	if err != nil || result.(map[string]any)["id"] != record.ID {
 		t.Fatal("CLI duplicated or lost source", result, err)
 	}

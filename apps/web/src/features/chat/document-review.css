@@ -1,0 +1,48 @@
+.document-review { min-width:0; padding-block:8px; }
+.document-review p { margin-block:8px; }
+.document-review>.workspace-secondary:first-child { font-size:var(--type-meta); line-height:1.5; margin-block:0 16px; max-width:72ch; }
+.document-review>label { max-width:36rem; margin-block:12px; font-size:var(--type-meta); }
+.document-review>p[role=status] { font-size:var(--type-meta); color:var(--muted); }
+.document-review label { display:grid; gap:8px; }
+.document-review select { width:100%; min-width:0; }
+.document-review-revision { margin-block:12px; font-size:var(--type-meta); }
+.document-review-revision p { overflow-wrap:anywhere; }
+.document-review-blocks { padding:24px; list-style:none; display:grid; gap:24px; background:var(--surface-1); border:1px solid var(--separator); border-radius:var(--radius-md); }
+.document-review-blocks>li { margin:0; padding:0; min-width:0; width:100%; max-width:72ch; margin-inline:auto; }
+.document-review-blocks>li>.text-button { margin-block-start:8px; font-size:var(--type-meta); color:var(--muted); }
+.document-review-blocks>li>p:first-child { margin-block-start:0; font-size:var(--type-meta); color:var(--muted); }
+.document-review pre { font-family:inherit; white-space:pre-wrap; overflow-wrap:anywhere; margin:0; line-height:1.6; }
+.document-review nav { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
+.document-correction { display:grid; gap:12px; padding:16px; border:1px solid var(--line); border-radius:var(--radius-md); margin-block:16px; }
+.document-correction textarea { min-height:160px; resize:vertical; width:100%; font:inherit; }
+.document-correction > div { display:flex; gap:8px; flex-wrap:wrap; }
+.document-correction h4 { margin:0; }
+.document-review-tabs { display:flex; flex-wrap:wrap; align-self:flex-start; gap:4px; padding:3px; margin-block:0 12px; background:var(--surface-2); border-radius:var(--radius-md); }
+.document-review-tabs button { font-size:var(--type-meta); padding:7px 12px; }
+.document-review-tabs [aria-pressed=true] { background:var(--surface-1); color:var(--text); box-shadow:0 1px 3px #0001; }
+.document-review-scroll { flex:1; min-height:0; overflow:auto; }
+.document-reader [hidden] { display:none !important; }
+.document-reader-content { display:contents; }
+
+.document-structure-navigation { display:flex; flex-wrap:wrap; align-items:start; gap:8px 24px; margin-block:12px; font-size:var(--type-meta); }
+.document-structure-navigation>details[open] { flex-basis:100%; }
+.document-structure-navigation summary { cursor:pointer; padding-block:8px; }
+.document-unit-coverage { list-style:none; padding:0; max-height:240px; overflow:auto; }
+.document-unit-coverage li { display:flex; gap:8px 16px; flex-wrap:wrap; align-items:center; padding-block:8px; }
+.document-unit-coverage span,.document-outline small { font-size:var(--type-meta); color:var(--muted); }
+.document-unit-coverage [data-review-needed] { color:var(--text); }
+.document-outline { max-height:280px; overflow:auto; padding-inline-start:24px; }
+.document-outline button { text-align:start; overflow-wrap:anywhere; max-width:100%; }
+.document-outline small { display:block; }
+.document-review-blocks [data-selected] { outline:2px solid var(--text); outline-offset:-2px; }
+.document-review-blocks>li[data-selected] { padding:12px; border-radius:var(--radius-sm); }
+@media(max-width:480px){.document-review-blocks{padding:16px;gap:20px}.document-review-tabs{margin-block-end:8px}}
+@media(forced-colors:active){.document-review-tabs [aria-pressed=true]{outline:1px solid Highlight;outline-offset:-2px}}
+.document-block-location { font-size:var(--type-meta); color:var(--muted); }
+
+.document-revision-alternatives{margin-block:var(--space-3,12px);color:var(--muted)}
+.document-revision-alternatives>ol{list-style:none;padding:0;display:grid;gap:16px}
+.document-revision-alternatives li{min-width:0}
+.document-revision-meta{display:grid;gap:4px;margin-block-end:8px;font-size:var(--type-meta);overflow-wrap:anywhere}
+.document-revision-meta strong{color:var(--text)}
+.document-revision-alternatives>summary{cursor:pointer;padding-block:8px}

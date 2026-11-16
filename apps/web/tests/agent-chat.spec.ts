@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import {refreshWorkspace} from './helpers/workspace-actions';
 import { agentProfilesText } from '../src/i18n/agent-profiles';
 import { workspaceHelp } from '../src/i18n/workspace-help';
 import { conversationWorkText } from '../src/i18n/conversation-work';
@@ -52,6 +53,7 @@ test('desktop folder UI invokes only an access enum, pins the native grant and s
   await page.route('**/api/v2/system',route=>route.fulfill({json:{product:'offgrid',api_version:2,version:'fixture',workspace_id:'chat-agent-fixture',capabilities:['agent-profiles-v1','agent-conversations-v1','native-execution-preview-v1']}}));
   await page.route('**/api/v2/execution/workspaces',async route=>route.fulfill({json:{protocol:1,workspaces:await page.evaluate(()=> (window as any).executionFixture.state==='ready')?[resource]:[]}}));
   await page.goto('/ui/#/chat');await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:'Agent',exact:true}).click();await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');await page.locator('.composer-attachments-menu > button').click();
   await page.getByRole('button',{name:'Workspace',exact:true}).click();
   const panel=page.locator('.execution-workspace-panel');
   await expect(panel.getByRole('combobox',{name:executionNativeText.en.access})).toBeVisible();
@@ -62,7 +64,7 @@ test('desktop folder UI invokes only an access enum, pins the native grant and s
   await expect(panel).toContainText(executionWorkspaceText.en.local);
   await panel.getByRole('combobox').selectOption('edit');
   const choose=panel.getByRole('button',{name:executionNativeText.en.choose,exact:true});
-  expect((await choose.boundingBox())!.width).toBeLessThan((await panel.boundingBox())!.width-50);
+  expect((await choose.boundingBox())!.width).toBeLessThan((await panel.boundingBox())!.width-32);
   await page.screenshot({path:info.outputPath('desktop-workspace-picker.png')});
   await page.getByRole('button',{name:executionNativeText.en.choose,exact:true}).click();
   await expect(page.getByRole('radio',{name:/desktop fixture/})).toBeChecked();
@@ -102,13 +104,14 @@ test('approved execution selection is observation-only and pins one canonical su
   await page.goto('/ui/#/chat');
   await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:'Agent',exact:true}).click();
   await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');await page.locator('.composer-attachments-menu > button').click();
   const selector=page.getByRole('button',{name:'Workspace',exact:true});await selector.click();
   await page.getByRole('radio',{name:/fixture host/}).check();await page.keyboard.press('Escape');await expect(selector).toBeFocused();
   expect(f.submissions).toHaveLength(0);expect(grants).toBe(0);
   connected=false;await selector.click();await expect(page.getByText(executionWorkspaceText.en.unavailable,{exact:true})).toBeVisible();await page.keyboard.press('Escape');
   await page.locator('.composer textarea').fill('List the approved folder.');await page.locator('.composer-actions').getByRole('button',{name:'Send',exact:true}).click();
   expect(f.submissions).toHaveLength(0);
-  connected=true;await selector.click();await page.getByRole('radio',{name:/fixture host/}).check();await page.keyboard.press('Escape');
+  connected=true;await page.locator('.composer-attachments-menu > button').click();await selector.click();await page.getByRole('radio',{name:/fixture host/}).check();await page.keyboard.press('Escape');
   await page.locator('.composer-actions').getByRole('button',{name:'Send',exact:true}).click();
   await expect.poll(()=>f.submissions.length).toBe(1);expect(f.submissions[0].execution).toEqual(reference);expect(grants).toBe(0);
   await page.reload();expect(f.submissions).toHaveLength(1);
@@ -118,6 +121,7 @@ for(const locale of Object.keys(executionWorkspaceText) as LocaleCode[]) test(`e
   await fixture(page);await page.addInitScript(value=>localStorage.setItem('offgrid.locale',value),locale);
   await page.setViewportSize({width:390,height:844});await page.goto('/ui/#/chat');
   await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:agentProfilesText[locale].selector,exact:true}).click();await page.getByRole('radio',{name:/Writer Write with evidence/}).check();await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');await page.locator('.composer-attachments-menu > button').click();
   const copy=executionWorkspaceText[locale];await page.getByRole('button',{name:copy.label,exact:true}).click();await expect(page.getByText(copy.unsupported,{exact:true})).toBeVisible();
   await expect(page.getByRole('radio',{name:copy.none,exact:true})).toBeChecked();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
@@ -175,6 +179,29 @@ async function fixture(page: Page, startStatus?: string, computer = false) {
   });
   return { submissions, commands, deletes, setMessages:(messages:any[])=>{if(conversation)conversation.messages=messages;}, setStatus:(value:string,fields:any={})=>{status=value;extra=fields;cursor++;}, complete:(saved=true)=>{status='completed';cursor++;if(saved)commit();}, unsupported:()=>{supported=false;}, profile:(settings:any)=>{selectedProfile={...selectedProfile,settings:{...selectedProfile.settings,...settings}};}, identity:(nextWorkspace:string,nextActor='')=>{workspace=nextWorkspace;actor=nextActor;conversation=null;} };
 }
+
+test('small upward scroll stays put when output grows and Latest resumes following', async ({page}) => {
+  const f=await fixture(page,'completed');
+  f.setMessages(Array.from({length:18},(_,i)=>({role:i%2?'assistant':'user',content:`Message ${i}: ${'content '.repeat(30)}`})));
+  await page.setViewportSize({width:1280,height:800});
+  await page.goto('/ui/#/chat');
+  const pane=page.locator('.conversation');
+  const distance=()=>pane.evaluate(el=>el.scrollHeight-el.clientHeight-el.scrollTop);
+  await expect.poll(distance).toBeLessThan(2);
+  await pane.hover(); await page.mouse.wheel(0,-48);
+  await expect.poll(distance).toBeGreaterThan(30);
+  const pausedAt=await pane.evaluate(el=>el.scrollTop);
+  await page.evaluate(()=>{
+    const growth=document.createElement('div');growth.style.height='220px';growth.textContent='Streaming answer continues';
+    document.querySelector('.conversation-content')?.append(growth);
+  });
+  await expect.poll(()=>pane.evaluate(el=>el.scrollTop)).toBe(pausedAt);
+  await expect(page.locator('.chat-latest')).toBeVisible();
+  await page.locator('.chat-latest').click();
+  await expect.poll(distance).toBeLessThan(2);
+  await pane.focus(); await page.keyboard.press('Home');
+  await expect.poll(()=>pane.evaluate(el=>el.scrollTop)).toBe(0);
+});
 
 test('Chat follows growing activity without scrolling the page or stealing a manual scroll-up', async ({page}) => {
   const f=await fixture(page,'completed');
@@ -510,11 +537,10 @@ test('profile and tool choices do not leak into another workspace or actor',asyn
     await page.locator('.composer-context-menu > button').click();await page.getByRole('button',{name:'Agent',exact:true}).click();
     await page.getByRole('radio',{name:/Writer Write with evidence/}).check(); await page.keyboard.press('Escape');
     f.identity(workspace,actor);
-    await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
-    await page.getByRole('region', { name: 'Workspace options', exact: true }).getByRole('button',{name:'Refresh',exact:true}).click();
+    await refreshWorkspace(page);
     // Each new workspace/actor has its own setup state. Wait for that identity
     // transition, then dismiss setup before inspecting its agent selection.
-    const onboarding=page.locator('dialog.onboarding');
+    const onboarding=page.locator('.workspace-setup');
     await expect(onboarding).toBeVisible();
     await onboarding.locator('.onboarding-close').click();
     await expect(onboarding).toHaveCount(0);
@@ -592,10 +618,11 @@ test('Chat resource popovers keep separated rows, fields and recovery actions', 
   const voice=page.getByRole('button',{name:'Response settings',exact:true}); if(await voice.getAttribute('aria-expanded')!=='true') await voice.click();
   const voicePanel=page.getByRole('region',{name:'Response settings',exact:true});
   await expect.poll(()=>voicePanel.evaluate(el=>el.getAnimations().every(animation=>animation.playState==='finished'))).toBe(true);
-  const alert=voicePanel.getByRole('alert'); await expect(alert).toBeVisible();
+  await voicePanel.getByRole('link',{name:'Voice settings',exact:true}).click();
+  const alert=page.locator('.voice-settings-inline').getByRole('alert'); await expect(alert).toBeVisible();
   const gap=await alert.evaluate(el=>el.querySelector('button')!.getBoundingClientRect().top-el.querySelector('small')!.getBoundingClientRect().bottom);
   expect(gap).toBeGreaterThanOrEqual(12);
-  await page.keyboard.press('Escape'); await expect(voice).toBeFocused();
+  await page.goto('/ui/#/chat');
   expect(f.submissions).toEqual([]); expect(f.commands).toEqual([]);
 });
 

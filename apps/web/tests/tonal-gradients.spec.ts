@@ -3,13 +3,13 @@ import { craftFixture } from './helpers/craft-fixture';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-for (const theme of ['light', 'dark']) test(`tonal gradients preserve contrast and flatten completely: ${theme}`, async ({ page, browser }, info) => {
+for (const theme of ['light', 'dark']) test(`quiet surfaces preserve contrast across display preferences: ${theme}`, async ({ page, browser }, info) => {
   await craftFixture(page, 'en', theme);
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('A test draft');
   const treatments=['.chat-workspace .composer'];
   await expect(page.locator('.app-shell > .sidebar')).toHaveCSS('background-image','none');
-  for (const selector of treatments) await expect(page.locator(selector)).toHaveCSS('background-image', /linear-gradient/);
+  for (const selector of treatments) await expect(page.locator(selector)).toHaveCSS('background-image', 'none');
   await expect(page.locator('.composer-actions > button:last-child')).toHaveCSS('background-image', 'none');
   await expect(page.locator('.composer-actions .voice-button')).toHaveCSS('background-image','none');
   const contrast = await page.evaluate(() => {
@@ -48,7 +48,7 @@ for (const theme of ['light', 'dark']) test(`tonal gradients preserve contrast a
   for(const selector of treatments) await expect(page.locator(selector)).toHaveCSS('background-image','none');
   await expect(page.locator('html')).toHaveCSS('--gradient-progress','none');
   await page.emulateMedia({forcedColors:'none',reducedMotion:'reduce'});
-  await expect(page.locator('.composer')).toHaveCSS('background-image',/linear-gradient/);
+  await expect(page.locator('.composer')).toHaveCSS('background-image','none');
   await page.locator('.composer-actions > button:last-child').focus();
   await expect(page.locator('.composer-actions > button:last-child')).toBeFocused();
 });

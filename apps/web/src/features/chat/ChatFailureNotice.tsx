@@ -9,8 +9,9 @@ export function ChatFailureNotice({ error, code, action, chooseModel, openSettin
   const capacity = code === 'insufficient_runtime_capacity';
   const busy = code === 'inference_busy';
   const vision = code === 'vision_projector_unavailable';
+  const load = code === 'model_load_failed';
   const context = code === 'context_exceeded' || code === 'attachment_context_limit';
-  return <ScopedNotice kind="error" action={context && openSettings ? <button className="secondary-button" onClick={openSettings}>{text.chatStreaming.options}</button> : capacity || vision ? <button className="secondary-button" onClick={chooseModel}>{vision ? text.nav.models : text.onboarding.chooseModel}</button> : busy ? undefined : action}>
-    {capacity || busy ? <>{capacity ? chatRecovery[locale] : chatBusyRecovery[locale]}<details><summary>{presentation[locale].details}</summary><p>{error}</p></details></> : error}
+  return <ScopedNotice kind="error" action={context && openSettings ? <button className="secondary-button" onClick={openSettings}>{text.chatStreaming.options}</button> : capacity || vision || load ? <button className="secondary-button" onClick={chooseModel}>{vision ? text.nav.models : text.onboarding.chooseModel}</button> : busy ? undefined : action}>
+    {capacity || busy || load ? <>{load ? `${text.chat.model} · ${text.recovery.failed}` : capacity ? chatRecovery[locale] : chatBusyRecovery[locale]}<details><summary>{presentation[locale].details}</summary><p>{error}</p></details></> : error}
   </ScopedNotice>;
 }

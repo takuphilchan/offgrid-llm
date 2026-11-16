@@ -3,27 +3,44 @@ const byId = id => document.getElementById(id);
 const bridge = window.electron;
 let actionPending = false;
 let preferences = bridge?.presentation;
+const welcome = window.OffGridStartupWelcome?.create(byId('startup-welcome'), preferences?.locale, preferences?.startupOverrides);
 let lastState;
+const started = performance.now();
+const clock = setInterval(() => { byId('startup-elapsed').textContent = new Intl.NumberFormat(document.documentElement.lang || 'en', { style:'unit', unit:'second', unitDisplay:'short' }).format(Math.floor((performance.now()-started)/1000)); }, 1000);
+window.addEventListener('pagehide', () => { clearInterval(clock); welcome?.dispose(); }, {once:true});
 const t = key => preferences?.copy?.[key] ?? key;
 function applyPresentation(value) {
   preferences = value;
+  welcome?.setLocale(value.locale,value.startupOverrides);
   document.documentElement.lang = value.locale;
   document.documentElement.dir = value.direction === 'rtl' || value.locale === 'ar' ? 'rtl' : 'ltr';
   document.documentElement.dataset.theme = value.effectiveTheme;
+  document.documentElement.dataset.reduceMotion = String(value.appearance?.reduceMotion === true);
+  // Reuse the selected app palette even before the service UI is available.
+  for (const [name,token] of Object.entries({bg:'surface-0',panel:'surface-1',text:'text',muted:'muted',line:'line',button:'text','on-button':'surface-1'})) {
+    const color=value.palette?.[token];
+    if (typeof color==='string' && /^#[0-9a-f]{6}$/i.test(color)) document.documentElement.style.setProperty(`--${name}`,color);
+    else document.documentElement.style.removeProperty(`--${name}`);
+  }
   for (const node of document.querySelectorAll('[data-copy]')) node.textContent = t(node.dataset.copy);
   document.title = 'OffGrid';
   if (lastState) render(lastState);
 }
 if (preferences) applyPresentation(preferences);
 if (bridge?.getPresentation) void bridge.getPresentation().then(applyPresentation).catch(() => {});
+if (bridge?.onThemeChange && bridge?.getPresentation) {
+  const unsubscribe=bridge.onThemeChange(()=>void bridge.getPresentation().then(applyPresentation).catch(()=>{}));
+  window.addEventListener('pagehide',unsubscribe,{once:true});
+}
 
 function render(state) {
   lastState = state;
   const busy = ['checking', 'starting'].includes(state.state);
   const ready = state.state === 'ready';
+  document.documentElement.dataset.startupState = busy || ready || state.autoReconnect ? 'loading' : 'recovery';
   const recoveryKind = state.code === 'bundle_inconsistent' ? 'bundleRepair' : state.state === 'incompatible' ? (state.canOpenBrowser ? 'serviceUpdate' : 'addressConflict') : null;
   document.title = 'OffGrid';
-  byId('status-title').textContent = t(({ checking: 'checking', starting: 'starting', ready: 'ready', incompatible: 'incompatible', unavailable: 'unavailable', error: 'attention', offline: 'unavailable' })[state.state] || 'checking');
+  byId('status-title').textContent = t(({ checking: 'checking', starting: 'starting', ready: 'opening', incompatible: 'incompatible', unavailable: 'unavailable', error: 'attention', offline: 'unavailable' })[state.state] || 'checking');
   byId('status-text').hidden = busy || ready;
   byId('status-text').textContent = t(ready ? 'ready' : 'guidance');
   if (recoveryKind) {
@@ -37,7 +54,8 @@ function render(state) {
   }
   byId('technical-reason').hidden = !state.reason;
   byId('technical-reason').textContent = state.reason || '';
-  byId('indicator').classList.toggle('idle', !busy && !state.autoReconnect);
+  welcome?.setPaused(!busy && !ready && !state.autoReconnect);
+  byId('startup-elapsed').hidden = !(busy || ready || state.autoReconnect);
   byId('desktop-version').textContent = state.desktopVersion || '—';
   byId('service-version').textContent = state.version || t(busy ? 'checking' : 'unknown');
   byId('address').textContent = state.url || '—';

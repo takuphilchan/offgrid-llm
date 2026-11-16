@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
+
+	"github.com/takuphilchan/offgrid-llm/internal/document"
 )
 
 // ParseDOCX reads body content in document order. It never regex-recovers invalid
@@ -19,16 +22,44 @@ func (p *DocumentParser) ParseDOCX(content []byte) (*ParseResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	text, err := extractDOCXBody(data, p.maxExtractedSize)
+	structure := &wordStructure{}
+	data, tracked, err := p.docxNotes(pkg, data, structure)
 	if err != nil {
 		return nil, err
 	}
-	if text == "" {
-		return nil, &ParseError{Code: "document_empty", Message: "This document has no readable body text."}
+	styles, err := wordStyleLevels(pkg)
+	if err != nil {
+		return nil, err
+	}
+	structure.styles = styles
+	text, err := extractDOCXBody(data, p.maxExtractedSize, structure)
+	if err != nil {
+		return nil, err
 	}
 	result := &ParseResult{Content: text, ContentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-		WordCount: countWords(text), Metadata: map[string]string{"format": "docx", "limitations": "Body text and tables only; rendered page numbers, headers, notes, deleted text and drawing content are not available."}}
+		WordCount: countWords(text), Metadata: map[string]string{"format": "docx", "limitations": "Body text, tables, referenced notes, headers and footers. Page placement and fields are not recalculated; drawings and embedded objects are not interpreted."}}
+	if tracked {
+		result.Metadata["tracked_changes"] = "present_current_text_only"
+		result.Metadata["limitations"] += " Tracked changes are present; current text is searchable and revision alternatives are retained separately for review."
+		result.Warnings = append(result.Warnings, ExtractionWarning{Code: "document_tracked_changes", SourceIndex: 1, Message: "Tracked changes are present. Current visible text is searchable; revision alternatives are retained separately for review. Historical formatting is not rendered."})
+	}
 	bindSourceUnits(result, content)
+	// The collector's positions already account for leading/trailing trim.
+	if text != "" {
+		if err := structure.finish(text, result); err != nil {
+			return nil, err
+		}
+	} else {
+		result.SourceUnits[0].State = "empty"
+		result.Structure = &document.Extraction{SourceKind: "original_file", OriginalSHA256: result.Metadata["source_sha256"], Format: "docx", Method: "native", Parsers: []document.RuntimeIdentity{{Name: "offgrid-document-parser", Revision: docxDocumentRevision}}, Units: []document.Unit{{ID: "section-1", Kind: "section", Index: 1, State: "empty", ParserRevision: docxDocumentRevision}}}
+		result.Structure.Blocks = structure.attachRevisions(nil, "")
+	}
+	if err := p.appendWordMargins(pkg, data, content, result, styles); err != nil {
+		return nil, err
+	}
+	if result.Content == "" {
+		return nil, &ParseError{Code: "document_empty", Message: "This document has no readable text."}
+	}
 	return result, nil
 }
 
@@ -36,7 +67,15 @@ func wordName(name xml.Name) bool {
 	return name.Space == "http://schemas.openxmlformats.org/wordprocessingml/2006/main" || name.Space == "http://purl.oclc.org/ooxml/wordprocessingml/main"
 }
 
-func extractDOCXBody(data []byte, limit int64) (string, error) {
+func extractDOCXBody(data []byte, limit int64, collectors ...*wordStructure) (string, error) {
+	return extractWordPart(data, limit, "document", collectors...)
+}
+
+func extractWordPart(data []byte, limit int64, root string, collectors ...*wordStructure) (string, error) {
+	var structure *wordStructure
+	if len(collectors) > 0 {
+		structure = collectors[0]
+	}
 	d := xml.NewDecoder(bytes.NewReader(data))
 	out := parserOutput{limit: limit}
 	depth, bodyDepth, bodyCount, roots := 0, 0, 0, 0
@@ -47,10 +86,24 @@ func extractDOCXBody(data []byte, limit int64) (string, error) {
 			if roots != 1 || depth != 0 || bodyCount != 1 {
 				return "", fmt.Errorf("invalid Word document structure")
 			}
-			return strings.TrimSpace(out.String()), nil
+			raw := out.String()
+			if structure != nil {
+				trim := len(raw) - len(strings.TrimLeftFunc(raw, unicode.IsSpace))
+				structure.leadingTrim = trim
+				for i := range structure.blocks {
+					structure.blocks[i].Span.Start -= trim
+					structure.blocks[i].Span.End -= trim
+				}
+			}
+			return strings.TrimSpace(raw), nil
 		}
 		if err != nil {
 			return "", err
+		}
+		if structure != nil {
+			if err := structure.revisionToken(token, depth, out.Len()); err != nil {
+				return "", err
+			}
 		}
 		var text string
 		switch t := token.(type) {
@@ -73,8 +126,11 @@ func extractDOCXBody(data []byte, limit int64) (string, error) {
 			}
 			if depth == 1 {
 				roots++
-				if roots != 1 || !wordName(t.Name) || t.Name.Local != "document" {
+				if roots != 1 || !wordName(t.Name) || t.Name.Local != root {
 					return "", fmt.Errorf("invalid Word document root")
+				}
+				if root != "document" {
+					bodyDepth, bodyCount = 1, 1
 				}
 			}
 			if skipDepth > 0 || !wordName(t.Name) {
@@ -90,8 +146,11 @@ func extractDOCXBody(data []byte, limit int64) (string, error) {
 			if bodyDepth == 0 {
 				continue
 			}
+			if structure != nil {
+				structure.start(t, depth, out.Len())
+			}
 			switch t.Name.Local {
-			case "del", "drawing", "pict", "object", "txbxContent":
+			case "del", "moveFrom", "drawing", "pict", "object", "txbxContent", "sectPrChange", "pPrChange", "rPrChange", "tblPrChange", "trPrChange", "tcPrChange":
 				skipDepth = depth
 			case "t":
 				textDepth = depth
@@ -102,6 +161,9 @@ func extractDOCXBody(data []byte, limit int64) (string, error) {
 			}
 		case xml.EndElement:
 			if bodyDepth > 0 && skipDepth == 0 && wordName(t.Name) {
+				if structure != nil {
+					structure.end(t, depth, out.Len())
+				}
 				switch t.Name.Local {
 				case "p", "tr":
 					text = "\n"

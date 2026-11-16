@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/inference"
+	"github.com/takuphilchan/offgrid-llm/internal/textsearch"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
@@ -19,6 +20,7 @@ type Engine struct {
 
 	retention         retentionRunner
 	imports           importExecution
+	analyses          importExecution
 	mu                sync.RWMutex
 	ingestMu          ingestionGate
 	store             Store // Interface for vector store
@@ -78,7 +80,7 @@ type indexMetadataStore interface {
 }
 
 const (
-	chunkerVersion = "adaptive-v2"
+	chunkerVersion = "structured-v3"
 	parserVersion  = "document-parser-v1"
 )
 
@@ -94,6 +96,9 @@ func NewEngine(embeddingEngine *inference.EmbeddingEngine, dataDir string) *Engi
 	} else {
 		store = sqliteStore
 		if recoveryErr := sqliteStore.RecoverImports(); recoveryErr != nil {
+			err = recoveryErr
+		}
+		if recoveryErr := sqliteStore.RecoverAnalyses(); recoveryErr != nil {
 			err = recoveryErr
 		}
 	}
@@ -120,6 +125,7 @@ func (e *Engine) StorageError() error { return e.storageErr }
 func (e *Engine) Close() error {
 	e.stopRetention()
 	e.closeImports()
+	e.closeAnalyses()
 	_ = e.ingestMu.acquire(context.Background()) // Requests have drained before close.
 	defer e.ingestMu.release()
 	if e.store != nil {
@@ -412,6 +418,15 @@ func (e *Engine) ReindexDocument(ctx context.Context, documentID string) (*Docum
 }
 
 func (e *Engine) buildDocumentIndex(ctx context.Context, doc *Document, content string) ([]*Chunk, [][]float32, int, error) {
+	if doc.Extraction == nil && doc.ExtractionRevision != "" {
+		if store, ok := e.store.(*SQLiteStore); ok {
+			var err error
+			doc.Extraction, err = store.extraction(doc.ID, doc.ExtractionRevision)
+			if err != nil {
+				return nil, nil, 0, err
+			}
+		}
+	}
 	chunker := e.chunker
 	if e.autoTuneChunks {
 		opts, analysis := AutoTuneChunkingOptions(content)
@@ -541,10 +556,20 @@ func (e *Engine) search(ctx context.Context, query string, opts SearchOptions, e
 	if e.reranking && len(results) > opts.TopK {
 		results = e.mmrRerank(results, embeddings[0], opts.TopK, 0.7)
 	}
+	if opts.IncludeContent {
+		results, err = e.expandEvidence(ctx, results)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	ragContext := &RAGContext{
-		Query:   query,
-		Results: results,
+		Query:         query,
+		Results:       results,
+		RetrievalMode: "hybrid",
+	}
+	if len(textsearch.QueryTerms(query)) == 0 {
+		ragContext.RetrievalMode = "semantic"
 	}
 	ragContext.FormatContext()
 

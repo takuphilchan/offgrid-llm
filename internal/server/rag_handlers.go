@@ -41,9 +41,10 @@ type SearchRequest struct {
 
 // SearchResponse is the response for search
 type SearchResponse struct {
-	Query   string             `json:"query"`
-	Results []rag.SearchResult `json:"results"`
-	Context string             `json:"context,omitempty"`
+	RetrievalMode string             `json:"retrieval_mode,omitempty"`
+	Query         string             `json:"query"`
+	Results       []rag.SearchResult `json:"results"`
+	Context       string             `json:"context,omitempty"`
 }
 
 // DocumentListResponse is the response for listing documents
@@ -93,7 +94,7 @@ func (s *Server) handleRAGStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	formats := rag.NewDocumentParser().FormatReadiness()
 	if s.ragEngine != nil {
-		formats = s.ragEngine.DocumentParser().FormatReadiness()
+		formats = s.ragEngine.DocumentFormatReadiness()
 	}
 	if s.ragEngine == nil {
 		json.NewEncoder(w).Encode(RAGStatusResponse{
@@ -215,6 +216,10 @@ func (s *Server) handleDocumentIngest(w http.ResponseWriter, r *http.Request) {
 		doc, err = s.handleFileUpload(r)
 	} else {
 		// Handle JSON text ingestion
+		if r.URL.Query().Has("collection_id") || r.URL.Query().Has("collection_revision") {
+			writeErrorWithCode(w, "Use a file import with a reviewed collection destination for private text.", 400, "collection_invalid")
+			return
+		}
 		var req IngestTextRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -354,9 +359,10 @@ func (s *Server) handleDocumentSearch(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(SearchResponse{
-		Query:   req.Query,
-		Results: ragContext.Results,
-		Context: ragContext.Context,
+		RetrievalMode: ragContext.RetrievalMode,
+		Query:         req.Query,
+		Results:       ragContext.Results,
+		Context:       ragContext.Context,
 	})
 }
 

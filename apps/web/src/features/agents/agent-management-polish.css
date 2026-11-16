@@ -1,0 +1,92 @@
+@layer controls {
+  .agent-management-page { width:100%; max-width:1200px; margin-inline:auto; gap:24px; }
+  .task-management.agent-navigation { gap:6px; border:0; padding-block:4px 8px; }
+  .task-management.agent-navigation>a { display:inline-flex; gap:8px; align-items:center; border:0; border-radius:999px; padding:10px 14px; }
+  .task-management.agent-navigation>a[aria-current=page] { background:var(--surface-2); }
+  .agent-management-page .workspace-section-heading { gap:20px; align-items:center; }
+  .agent-management-page .workspace-section-heading p { max-width:68ch; }
+  .agent-management-page .runtime-panel { padding-block:12px; }
+  .agent-management-page .connector-panel { display:block; }
+  .agent-management-page .connector-panel form { max-width:560px; padding:24px; margin-block:20px 0; border:1px solid var(--separator); border-radius:20px; background:var(--surface-1); }
+  .agent-management-page .connector-panel form :is(input,select) { font-size:14px; min-height:42px; }
+  .agent-management-page .connector-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .agent-management-page .connector-list article { grid-template-columns:40px minmax(0,1fr) auto; border:1px solid var(--separator); border-radius:18px; padding:16px; gap:12px; }
+  .agent-management-page .connector-list small { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0; }
+  .agent-management-page .connector-list i { flex:none; }
+  .agent-management-page .connector-list h3 { font-size:14px; font-weight:500; }
+  .agent-management-page .connector-address { overflow-wrap:anywhere; font-size:12px; }
+  .agent-management-page .connector-remove { min-width:32px; width:32px; border-radius:999px; }
+  .agent-management-page .connection-success { padding:12px 16px; border-radius:12px; background:var(--surface-2); font-size:13px; color:var(--text); }
+  .agent-management-page .tool-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; max-height:none; overflow:visible; }
+  .agent-management-page .tool-list article { grid-template-columns:40px minmax(0,1fr) auto; align-items:start; padding:18px; border:1px solid var(--separator); border-radius:18px; gap:12px; }
+  .agent-management-page .tool-list h3 { margin:0; font-size:14px; line-height:1.5; overflow-wrap:anywhere; font-weight:500; }
+  .agent-management-page .tool-list p { margin-block:6px 10px; font-size:13px; line-height:1.6; }
+  .agent-management-page .tool-list small { overflow-wrap:anywhere; }
+  .agent-management-page .tool-list .switch { margin-block-start:2px; }
+  .tool-glyph,.provider-glyph,.connector-glyph { display:grid; place-items:center; width:40px; height:40px; border-radius:13px; background:var(--surface-2); color:var(--muted); flex:none; }
+  .agent-management-page .provider-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr)); gap:16px; }
+  .agent-management-page .provider-card { border:1px solid var(--separator); border-radius:22px; padding:24px; background:var(--surface-1); display:flex; flex-direction:column; gap:20px; }
+  .provider-card>header { display:flex; align-items:start; gap:14px; }
+  .agent-management-page .provider-card>header h3 { margin:0 0 6px; font-size:17px; }
+  .agent-management-page .provider-card p { margin:0; font-size:13px; line-height:1.65; }
+  .agent-management-page .provider-model { display:flex; gap:8px; align-items:center; }
+  .provider-model svg { flex:none; }
+  .provider-model span { overflow-wrap:anywhere; }
+  .agent-management-page .provider-card .provider-readiness { border-radius:14px; padding:14px; background:var(--surface-2); }
+  .provider-readiness-label { display:flex; gap:8px; align-items:center; color:var(--text); }
+  .provider-readiness-label svg { flex:none; color:var(--muted); }
+  .agent-management-page .provider-card .provider-host-note { margin-block-start:10px; color:var(--muted); }
+  .provider-card footer { margin-block-start:auto; }
+  .provider-card footer button { display:inline-flex; align-items:center; gap:12px; border-radius:999px; }
+  .agent-profiles { width:100%; }
+  .profile-library-header { margin-block:8px 24px; }
+  .profile-library-header p { max-width:72ch; }
+  .profile-library-list { padding:12px; border-radius:20px; background:color-mix(in srgb,var(--surface-2) 50%,var(--surface-1)); }
+  .profile-library-list .profile-search { max-width:100%; }
+  .profile-list-item { padding:12px; border:0; border-radius:12px; transition:background-color 140ms ease; }
+  .profile-list-item:hover { background:var(--surface-2); }
+  .profile-list-item span { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .profile-archived-label { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; }
+  .profile-editor { padding:8px 4px; max-width:760px; gap:20px; }
+  .profile-editor-heading { justify-content:space-between; align-items:center; }
+  .profile-editor-heading>div:first-child { display:grid; gap:6px; }
+  .profile-primary-actions { display:flex; flex-wrap:wrap; gap:8px; }
+  .profile-primary-actions button,.profile-actions button { display:inline-flex; align-items:center; justify-content:center; gap:8px; border-radius:999px; }
+  .profile-basics { padding:24px; border:1px solid var(--separator); border-radius:20px; gap:24px; }
+  .profile-basics .agent-purpose { gap:12px; }
+  .profile-model-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; min-width:0; font-size:14px; }
+  .profile-model-row>span { display:inline-flex; gap:8px; align-items:center; }
+  .profile-model-row .model-select { width:auto; max-width:min(100%,24rem); }
+  .profile-model-row .model-select-trigger { justify-content:space-between; border-radius:999px; padding:10px 14px; }
+  .profile-fields textarea { min-height:10rem; line-height:1.7; }
+  .agent-purpose-examples { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr)); gap:8px; }
+  .agent-example { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; text-align:start; gap:8px; padding:12px; border:1px solid var(--separator); border-radius:14px; background:var(--surface-1); color:var(--text); font-size:13px; line-height:1.5; transition:background-color 140ms ease; }
+  .agent-example:hover:not(:disabled) { background:var(--surface-2); }
+  .agent-example>svg { color:var(--muted); }
+  .profile-resource-settings,.profile-advanced { padding:6px 20px; border:1px solid var(--separator); border-radius:18px; }
+  .profile-editor>.profile-actions { border:0; gap:8px; margin-block-start:0; }
+  .profile-actions .text-button { font-size:13px; color:var(--muted); }
+  .profile-actions .profile-delete-action:hover { color:var(--red); }
+  .profile-archive-filter { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); padding:12px 10px 4px; }
+  .profile-delete-action { margin-inline-start:auto; }
+  .profile-empty { align-content:center; gap:12px; }
+  @container agent-management (max-width:720px) {
+    .agent-management-page .tool-list,.agent-management-page .connector-list { grid-template-columns:1fr; }
+    .profile-library-layout { grid-template-columns:minmax(0,1fr); }
+    .profile-library-list ul { max-height:12rem; }
+  }
+  @media(max-width:720px) {
+    .agent-management-page .tool-list,.agent-management-page .connector-list { grid-template-columns:1fr; }
+    .agent-management-page .connector-list article { grid-template-columns:36px minmax(0,1fr) auto; }
+    .profile-basics { padding:16px; }
+    .task-management.agent-navigation { gap:2px; }
+    .task-management.agent-navigation>a { padding:8px 10px; font-size:13px; }
+    .agent-management-page .provider-card { padding:18px; }
+    .agent-management-page .workspace-section-heading { align-items:start; }
+    .agent-management-page .connector-panel form { padding:16px; }
+    .profile-primary-actions { width:100%; }
+    .profile-delete-action { margin-inline-start:0; }
+  }
+  @media(prefers-reduced-motion:reduce) { .profile-list-item,.agent-example { transition:none; } }
+  :root[data-reduce-motion=true] :is(.profile-list-item,.agent-example) { transition:none; }
+}

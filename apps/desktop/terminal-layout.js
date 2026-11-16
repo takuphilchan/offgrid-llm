@@ -1,7 +1,7 @@
 'use strict';
 function validateWorkspaceBounds(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key=>!['x','y','width','height'].includes(key)) ||
-      !['x','y','width','height'].every(key=>Number.isInteger(value[key])&&value[key]>=0&&value[key]<=20000) || !value.width || !value.height) throw Error('terminal_invalid_bounds');
+      !['x','y','width','height'].every(key=>typeof value[key]==='number'&&Number.isFinite(value[key])&&value[key]>=0&&value[key]<=20000) || !value.width || !value.height) throw Error('terminal_invalid_bounds');
   return {...value};
 }
 function terminalBounds(rect, width, height, zoom=1, captionHeight=0) {

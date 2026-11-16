@@ -101,7 +101,7 @@ test('legacy restoration is explicit, copy-only, one-time, and never submits or 
   await expect(page.getByText('Old private question', { exact: true })).toHaveCount(0);
   await restore.click();
   await expect(page.locator('.composer textarea')).toHaveValue('Old private question');
-  await page.locator('.sidebar a[href="#/agents"]').click();
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/agents"]').click();
   await expect(page.locator('.task-composer')).toHaveCount(0);
   expect(await page.evaluate(()=>localStorage.getItem('offgrid.draft.v1:alice:agent-task:'))).toBe('Old task draft');
   await page.reload();
@@ -177,7 +177,7 @@ test('unidentified service keeps session-memory drafts without loading or persis
   await expect(page.getByRole('button', { name: 'Restore previous drafts here' })).toHaveCount(0);
   await expect(page.locator('.composer textarea')).toHaveValue('');
   await page.locator('.composer textarea').fill('Memory only');
-  await page.locator('.sidebar a[href="#/models"]').click();
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click();
   await page.locator('.sidebar a[href="#/chat"]').click();
   await expect(page.locator('.composer textarea')).toHaveValue('Memory only');
   expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('offgrid.draft.memory:')))).toEqual([]);

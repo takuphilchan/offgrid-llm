@@ -6,7 +6,6 @@ import { voiceText, voiceSilenceText } from '../i18n/voice';
 import { operationFeedback } from '../i18n/operation-feedback';
 import { spokenProse, stopSpeechEvent } from '../lib/response-speech';
 import { selectSpeech, SpeechSetupRequired, useVoicePreferences } from '../lib/voice-preferences';
-import { VoiceSettings } from './VoiceSettings';
 import { UtilityPopover } from './UtilityPopover';
 import { voiceSettingsText } from '../i18n/voice-settings';
 import { observeSpeechPause } from '../lib/speech-pause';
@@ -39,13 +38,14 @@ async function toWav(blob: Blob): Promise<Blob> {
 type RecordingWork = { controller: AbortController; stream?: MediaStream; recorder?: MediaRecorder; timer?: number; stopPause?: () => void };
 type CapturePhase = 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing';
 
-export function VoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseChange, autoStart = false, contextKey, disabled = false, compact = false }: { onTranscript: (text: string) => void; onFailure?: (message: string) => void; onSilence?: () => void; onPhaseChange?: (phase: 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing') => void; autoStart?: boolean; contextKey: string; disabled?: boolean; compact?: boolean }) {
+export function VoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseChange, onLevel, autoStart = false, contextKey, disabled = false, compact = false }: { onTranscript: (text: string) => void; onFailure?: (message: string) => void; onSilence?: () => void; onPhaseChange?: (phase: 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing') => void; onLevel?: (level:number)=>void; autoStart?: boolean; contextKey: string; disabled?: boolean; compact?: boolean }) {
   const { preferences } = useVoicePreferences();
   const { locale, messages } = useI18n();
   const copy = { ...voiceText(locale), silence: voiceSilenceText[locale] };
   const feedback = operationFeedback(locale);
   const [phase, setPhase] = useState<CapturePhase>('idle');
   const [levels, setLevels] = useState<number[]>(Array(12).fill(0));
+  useEffect(()=>onLevel?.(phase==='recording'?(levels.at(-1)??0):0),[levels,phase,onLevel]);
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     if (phase !== 'recording') return;
@@ -80,6 +80,13 @@ export function VoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseCh
     setPhase('idle'); setFailure(null); setSetupRequired(false);
     return cancel;
   }, [contextKey]);
+  useEffect(() => {
+    const dismiss = () => { cancel(); setPhase('idle'); };
+    const visibility = () => { if (document.hidden) dismiss(); };
+    window.addEventListener('offgrid-desktop-dismiss', dismiss);
+    document.addEventListener('visibilitychange', visibility);
+    return () => { window.removeEventListener('offgrid-desktop-dismiss', dismiss); document.removeEventListener('visibilitychange', visibility); };
+  }, []);
   const stop = () => {
     const work = current.current;
     if (work?.recorder?.state === 'recording') {
@@ -165,7 +172,7 @@ export function VoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseCh
   if (compact && error) return <span className="voice-input-control voice-input-compact" data-capture-phase={phase}>
     <UtilityPopover defaultOpen label={voiceSettingsText(locale).title} trigger={<Icon name="mic" size={18} />} triggerClassName="icon-button voice-needs-setup" className="composer-voice-recovery" align="end">
       <p className="voice-error" role="status">{error}</p>
-      {setupRequired && <VoiceSettings inline />}
+      {setupRequired && <a className="composer-settings-link" href="#/settings/voice">{voiceSettingsText(locale).title}</a>}
       <button type="button" className="secondary-button" disabled={disabled} onClick={() => void start()}>{copy.record}</button>
     </UtilityPopover>
   </span>;
@@ -178,12 +185,12 @@ export function VoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseCh
     </span>}
     {compact && phase === 'recording' && <button type="button" className="voice-discard" aria-label={messages.models.cancel} title={messages.models.cancel} onClick={() => { cancel(); setPhase('idle'); }}><Icon name="close" size={17} /></button>}
     <button type="button" className={phase === 'recording' ? 'voice-button recording' : 'voice-button'} disabled={disabled && !current.current} onClick={current.current ? stop : () => void start()} aria-label={label} aria-pressed={phase === 'recording'} aria-busy={phase === 'checking' || phase === 'permission' || phase === 'transcribing'} title={label}>
-      <Icon name={phase === 'recording' ? 'check' : phase !== 'idle' ? 'close' : 'mic'} size={18} />
+      <Icon name={phase === 'recording' ? autoStart ? 'mic' : 'check' : phase !== 'idle' ? 'close' : 'mic'} size={18} />
       <span className={compact ? 'sr-only' : undefined}>{phase === 'recording' ? copy.recording : label}</span>
     </button>
     {status && !compact && <small role="status">{status}</small>}
     {error && <small className="voice-error" role="status">{error}</small>}
-    {setupRequired && <VoiceSettings subtle />}
+    {setupRequired && <a className="composer-settings-link" href="#/settings/voice">{voiceSettingsText(locale).title}</a>}
   </span>;
 }
 
@@ -227,8 +234,11 @@ export function ReadAloudButton({ text }: { text: string }) {
   };
   const stop = () => { dispose(); setState('idle'); };
   useEffect(() => {
+    const visibility = () => { if (document.hidden) stop(); };
     window.addEventListener(playbackEvent, stop);
-    return () => { window.removeEventListener(playbackEvent, stop); dispose(); };
+    window.addEventListener('offgrid-desktop-dismiss', stop);
+    document.addEventListener('visibilitychange', visibility);
+    return () => { window.removeEventListener(playbackEvent, stop); window.removeEventListener('offgrid-desktop-dismiss', stop); document.removeEventListener('visibilitychange', visibility); dispose(); };
   }, []);
   useEffect(() => { stop(); setError(''); }, [text]);
 

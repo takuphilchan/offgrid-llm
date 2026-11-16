@@ -131,6 +131,7 @@ func taskResponse(task *agents.Task) map[string]any {
 	response["can_recover_execution"] = agents.CanRecoverExecution(task)
 	response["archived_at"] = task.ArchivedAt
 	response["progress"] = task.Progress
+	response["response_preview_allowed"] = responsePreviewAllowed(task)
 	if task.Config.Automation != nil {
 		response["schedule"] = task.Config.Automation
 	}

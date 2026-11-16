@@ -33,7 +33,11 @@ Embeddings are vector representations of text that capture semantic meaning. The
 3. Choose **Enable** for an installed model, or **Install and enable** after
    reviewing the download size. OffGrid tracks the download and activates search
    when the model is ready.
-4. Add up to 20 documents in one selection. Each file shows its own result;
+4. Choose **Add document** and select up to 20 files. Choose a destination collection,
+   review its owner/editors/readers and acknowledge that audience before adding.
+   **Create private collection** creates an owner-only collection; you still review
+   it before transferring the files. Cancelling the dialog sends no files.
+   Each file shows its own result;
    unavailable formats are identified before transfer. **Document formats**
    explains local reader availability, including missing PDF/OCR support.
 5. Inspect a source, then choose **Ask using Knowledge**, or select particular
@@ -49,7 +53,12 @@ A lost response stops the batch and shows an unknown result. Check the saved
 import and library before uploading again. Processing is request-owned: a service
 restart reports interrupted work and waits for an explicit retry. It does not
 automatically replay imports. Clearing recent results only dismisses that panel.
-Older services without durable imports retain their existing upload behavior.
+If the collection service is unavailable, the current UI leaves the files on your
+device; it never falls back to uploading them into the shared workspace. Existing
+legacy CLI/API multipart uploads retain their documented workspace destination.
+The entire batch uses the collection revision you reviewed. If membership changes,
+remaining publication is blocked; inspect saved imports and review the audience
+again before submitting another selection. Completed copies keep their own identities.
 
 Knowledge foregrounds your documents, index readiness and **View source**.
 **Manage Knowledge** contains the active embedding model and disabling retrieval;

@@ -253,6 +253,8 @@ test('retired task-composer links lead to Chat without creating or replaying a j
 });
 
 test('policy control preserves all locales, RTL, and narrow-screen layout', async ({ page }, info) => {
+  test.setTimeout(180000); // Multiple locale/theme navigations; individual assertions retain their deadlines.
+
   const submissions = await setup(page, { desktop: true });
   await page.setViewportSize({ width: 390, height: 640 });
   await openAgentChat(page);

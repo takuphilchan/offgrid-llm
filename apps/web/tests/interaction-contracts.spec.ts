@@ -122,7 +122,7 @@ test('mobile conversation drawer contains focus and Escape restores its trigger'
   const trigger = page.getByRole('button', { name: 'Primary navigation', exact: true });
   await trigger.click();
   await expect(page.locator('#conversation-history')).toBeVisible();
-  await expect(page.locator('.sidebar-toggle')).toBeFocused();
+  expect(await page.locator('.sidebar').evaluate(el=>el.contains(document.activeElement))).toBe(true);
   for (let i = 0; i < 12; i++) { await page.keyboard.press('Tab'); const focus = await page.evaluate(() => ({ inside: !!document.activeElement?.closest('.sidebar'), element: document.activeElement?.outerHTML.slice(0, 1000) })); expect(focus.inside, `Tab ${i + 1}: ${focus.element}`).toBe(true); }
   await page.keyboard.press('Escape'); await expect(page.locator('#conversation-history')).not.toBeVisible(); await expect(trigger).toBeFocused();
 });
@@ -132,7 +132,7 @@ test('member UI does not call administrator endpoints or offer privileged action
   await page.goto('/ui/#/agents/tools'); await expect(page.getByText('Administrator access required')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start task', exact: true })).toHaveCount(0);
   await page.goto('/ui/#/settings'); await expect(page.locator('.settings-page')).toContainText('Administrator access required');
-  await page.goto('/ui/#/models'); await page.getByRole('tab', { name: 'Discover models', exact: true }).click(); await expect(page.locator('.catalog-card .primary-button')).toBeDisabled();
+  await page.goto('/ui/#/models'); await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click(); await expect(page.locator('.catalog-card .primary-button')).toBeDisabled();
   await page.goto('/ui/#/knowledge'); await expect(page.locator('.knowledge-library-toolbar')).toBeVisible(); await expect(page.getByRole('button', { name: 'Add document' })).toHaveCount(0);
   expect(state.calls.filter(path => path.startsWith('/v1/agents/') || path === '/api/v2/computer/status' || path === '/v1/models/download/progress')).toEqual([]);
 });
@@ -165,12 +165,12 @@ test('statistics failure does not hide available run history', async ({ page }) 
 test('connector drafts and selected Activity survive navigation without refetching online searches', async ({ page }) => {
   await fixture(page); await page.goto('/ui/#/agents/connections');
   await page.locator('.connector-panel input').nth(0).fill('Private connector'); await page.locator('.connector-panel input').nth(1).fill('http://localhost:3000/mcp');
-  await page.locator('.sidebar a[href="#/models"]').click(); await page.getByRole('tab', { name: 'Discover models', exact: true }).click(); await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click(); await page.getByLabel('Model name or publisher', { exact: true }).fill('Research model');
-  await page.locator('.sidebar a[href="#/agents"]').click(); await page.getByRole('link', { name: 'Tools & MCP', exact: true }).click();
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click(); await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click(); await page.getByRole('button', { name: 'Search Hugging Face', exact: true }).click(); await page.getByLabel('Model name or publisher', { exact: true }).fill('Research model');
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/agents"]').click(); await page.getByRole('link', { name: 'Tools & MCP', exact: true }).click();
   await expect(page.locator('.connector-panel input').nth(0)).toHaveValue('Private connector');
-  await page.locator('.sidebar a[href="#/models"]').click(); await expect(page.getByLabel('Model name or publisher', { exact: true })).toHaveValue('Research model');
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click(); await expect(page.getByLabel('Model name or publisher', { exact: true })).toHaveValue('Research model');
   await page.locator('.sidebar a[href="#/activity"]').click(); await openActivityArchive(page); await page.getByRole('button', { name: /^Saved run/ }).click();
-  await page.locator('.sidebar a[href="#/models"]').click(); await page.locator('.sidebar a[href="#/activity"]').click();
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click(); await page.locator('.sidebar a[href="#/activity"]').click();
   await expect(page.locator('.run-row.selected')).toContainText('Saved run');
 });
 
@@ -212,7 +212,7 @@ test('late provider setup cannot overwrite instructions for a newly selected mod
   await page.getByRole('button', { name: 'Model', exact: true }).click();
   await page.getByRole('option').filter({ hasText: 'model-b' }).click();
   release();
-  await page.locator('.sidebar a[href="#/agents"]').click();
+  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/agents"]').click();
   await page.getByRole('link', { name: 'External agents', exact: true }).click();
   await page.locator('.provider-card summary').click();
   await expect(page.locator('.provider-card')).toContainText('model-b');

@@ -65,8 +65,8 @@ test('models page starts only one download for a rapid repeated click', async ({
   });
 
   await page.goto('/ui/#/models');
-  await page.getByRole('button', { name: 'Embeddings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Discover models', exact: true }).click();
+  await page.locator('.model-category-filter').selectOption({label:'Embeddings'});
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'BGE M3' })).toBeVisible();
   await page.getByRole('button', { name: 'Review download', exact: true }).click();
   await page.getByRole('button', { name: 'Download' }).dblclick();
@@ -92,7 +92,7 @@ test('agents page exposes runtime tools, durable tasks, MCP, and computer status
   await page.goto('/ui/#/activity');
   await expect(page.getByText('Summarize the report')).toBeVisible();
   if (process.env.OFFGRID_VISUAL_CAPTURE) await page.screenshot({ path: test.info().outputPath('agents-workspace.png'), fullPage: true });
-  await page.locator('.primary-nav').getByRole('link', { name: 'Agents', exact: true }).click();
+  await page.goto('/ui/#/agents');
   await page.getByRole('link', { name: 'Tools & MCP', exact: true }).click();
   await expect(page.getByText('1/1 enabled').first()).toBeVisible();
   await expect(page.locator('.agent-metrics')).toHaveCount(0);

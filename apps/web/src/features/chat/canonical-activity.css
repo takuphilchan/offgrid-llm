@@ -1,0 +1,9 @@
+.canonical-response-status { display:grid; gap:8px; padding:8px 4px; color:var(--muted); font-size:var(--type-meta); }
+.canonical-response-status p { margin:0; }
+.canonical-response-summary { display:flex; align-items:center; gap:8px; min-height:24px; }
+.response-pulse { width:7px; height:7px; border-radius:50%; background:currentColor; animation:response-breathe 1.6s ease-in-out infinite; }
+.canonical-response-issue { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; }
+.canonical-response-issue p { flex:1 1 240px; }
+@keyframes response-breathe { 50% { opacity:.35; } }
+@media(prefers-reduced-motion:reduce) { .response-pulse { animation:none; } }
+html[data-reduce-motion=true] .response-pulse { animation:none; }

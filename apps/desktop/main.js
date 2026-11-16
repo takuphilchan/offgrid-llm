@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, nativeTheme, screen, utilityProcess, powerMonitor, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, nativeTheme, screen, utilityProcess, powerMonitor, safeStorage, globalShortcut } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -100,7 +100,7 @@ const computer = new ComputerRuntime({
   },
   confirm: async (origin, service, networkMode, approvalMode) => {
     const text=computerText();
-    const result=await dialog.showMessageBox(mainWindow,{type:'question',title:text.consentTitle,message:text.consentTitle,
+    const result=await showAppMessage(mainWindow,{type:'question',title:text.consentTitle,message:text.consentTitle,
       detail:`${origin}\n${service}\n\n${copy('approvalPolicy')}: ${copy(({ask_every_time:'askEveryTime',scoped_changes:'scopedChanges',full_task:'fullTask'})[approvalMode]??'askEveryTime')}\n\n${text.consentBody}${networkMode==='trusted-vpn'?'\n\n'+text.networkWarning:''}`,buttons:[text.cancel,text.allow],defaultId:0,cancelId:0,noLink:true});
     return result.response===1;
   }
@@ -122,7 +122,7 @@ const execution=new ExecutionRuntime({trust:folderTrust,root:executionRoot,direc
   pairing:service=>executionFetch(service,'/api/v2/execution/pairing','POST'),
   verify:root=>require('./execution-pack.cjs').verify(root,app.getVersion(),process.platform,process.arch),
   choose:async()=>{const chosen=await dialog.showOpenDialog(mainWindow,{properties:['openDirectory','dontAddToRecent'],title:copy('chooseWorkspace')});return chosen.canceled||chosen.filePaths.length!==1?null:fs.promises.realpath(chosen.filePaths[0]);},
-  confirm:async({folder,permissions,service,actor,canRemember})=>{const mode=copy(permissions.processes?'workspaceCommands':permissions.write?'workspaceWrite':'workspaceRead');const result=await dialog.showMessageBox(mainWindow,{type:'question',title:copy('workspaceAccessTitle'),message:copy('workspaceAccessTitle'),detail:`${folder}\n${service}\n${copy('account')}: ${actor}\n\n${mode}\n\n${copy('workspaceLifetime')}`,buttons:[copy('cancel'),copy('allowAccess')],defaultId:0,cancelId:0,noLink:true,...(canRemember?{checkboxLabel:folderTrustCopy(presentation.locale).remember,checkboxChecked:false}:{})});return result.response===1?(result.checkboxChecked?'remember':true):false;}
+  confirm:async({folder,permissions,service,actor,canRemember})=>{const mode=copy(permissions.processes?'workspaceCommands':permissions.write?'workspaceWrite':'workspaceRead');const result=await showAppMessage(mainWindow,{type:'question',title:copy('workspaceAccessTitle'),message:copy('workspaceAccessTitle'),detail:`${folder}\n${service}\n${copy('account')}: ${actor}\n\n${mode}\n\n${copy('workspaceLifetime')}`,buttons:[copy('cancel'),copy('allowAccess')],defaultId:0,cancelId:0,noLink:true,...(canRemember?{checkboxLabel:folderTrustCopy(presentation.locale).remember,checkboxChecked:false}:{})});return result.response===1?(result.checkboxChecked?'remember':true):false;}
 });
 execution.on('status',()=>{if(app.isReady()&&presentationCopy)updateMenus();});
 const applicationLauncher = createApplicationLauncher({ platform: process.platform, env: process.env, shell });
@@ -150,7 +150,21 @@ let presentationQueue = Promise.resolve();
 const copy = key => localizedCopy(presentationCopy??{},presentation.locale,'desktop/presentation')[key] ?? key;
 const reportTrayBackground = createTrayFeedback({ platform: process.platform, tray: () => tray, copy });
 const effectiveTheme = () => presentation.theme === 'system' ? (nativeTheme.shouldUseDarkColors ? 'dark' : 'light') : presentation.theme;
-const presentationSnapshot = () => ({ ...presentation, effectiveTheme: effectiveTheme(), direction: languages[presentation.locale].direction, copy: localizedCopy(presentationCopy??{},presentation.locale,'desktop/presentation') });
+const showAppMessage = (parent,options) => require('./app-dialog').showAppDialog({BrowserWindow,ipcMain,screen},parent,{buttons:[copy('close')],...options},()=>({theme:effectiveTheme(),palette:terminalPalette(),locale:presentation.locale,direction:languages[presentation.locale].direction,reduceMotion:presentation.appearance?.reduceMotion===true}));
+const presentationSnapshot = () => ({ ...presentation, palette: terminalPalette(), effectiveTheme: effectiveTheme(), direction: languages[presentation.locale].direction, windowControls: Object.values(localizedCopy(require('./window-controls.json'),presentation.locale,'desktop/window-controls')), copy: localizedCopy(presentationCopy??{},presentation.locale,'desktop/presentation'), startupOverrides:localeOverrides[presentation.locale]?.['desktop/startup-welcome'] });
+let commandCopy = {};
+const commandLabel = () => commandCopy[presentation.locale]?.[0] ?? commandCopy.en?.[0] ?? 'Quick window';
+const commandPreferencePath = path.join(configRoot, 'command-window.json');
+let commandPreferenceQueue = Promise.resolve();
+const commandTransitions = require('./command-window-motion').createCommandTransitionBridge();
+const commandMotion = require('./command-window-motion').createCommandWindowMotion({
+  prepare: commandTransitions.prepare, reducedMotion: () => presentation.appearance?.reduceMotion === true
+});
+const commandWindow = require('./command-window').createCommandWindow({ window: () => mainWindow, screen, globalShortcut,
+  ready: () => runtime.state.state === 'ready' && !quitting && !workspaceNavigationPending,
+  hideTerminal: () => terminal?.hide(), motion: commandMotion,
+  changed: value => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('command-window-state', value); }
+});
 
 async function loadWindowState() {
   const defaults = { width: 1400, height: 900 };
@@ -168,7 +182,8 @@ async function loadWindowState() {
 
 function saveWindowState() {
   if (!mainWindow || mainWindow.isDestroyed()) return saveQueue;
-  const state = { ...mainWindow.getNormalBounds(), isMaximized: mainWindow.isMaximized() };
+  const fullState = commandWindow.fullState();
+  const state = fullState ? { ...fullState.bounds, isMaximized: fullState.maximized } : { ...mainWindow.getNormalBounds(), isMaximized: mainWindow.isMaximized() };
   saveQueue = saveQueue.then(async () => {
     await fs.promises.mkdir(configRoot, { recursive: true });
     await fs.promises.writeFile(statePath + '.tmp', JSON.stringify(state));
@@ -179,9 +194,7 @@ function saveWindowState() {
 
 function showWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return void createWindow();
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
+  commandWindow.expand();
 }
 
 function safeExternal(value) {
@@ -203,6 +216,7 @@ runtime.on('status', status => {
   mainWindow.webContents.send('startup-state', status);
   if (status.state === 'ready') showWorkspace();
   else if (status.state === 'error' && !mainWindow.webContents.getURL().startsWith(LOADING_URL)) {
+    commandWindow.expand();
     void mainWindow.loadFile(path.join(__dirname, 'loading.html'));
   }
 });
@@ -224,7 +238,7 @@ async function createMainWindow() {
     ...require('./branding.cjs').windowChrome(process.platform, effectiveTheme(), terminalPalette()),
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'), backgroundThrottling: true, spellcheck: true, additionalArguments: ['--offgrid-presentation=' + Buffer.from(JSON.stringify(presentationSnapshot())).toString('base64')] }
   });
-  terminal = require('./terminal-dock').createTerminalDock({electron:require('electron'),window:mainWindow,host:app.isPackaged?path.join(process.resourcesPath,'terminal-runtime','offgrid-terminal-host.exe'):path.join(__dirname,'../../build/terminal-runtime/win-x64/offgrid-terminal-host.exe'),cli:path.join(binaryRoot,binaryName),service:()=>runtime.url,presentation:()=>({theme:effectiveTheme(),locale:presentation.locale,palette:terminalPalette(),reduceMotion:presentation.appearance?.reduceMotion===true,translations:localeOverrides[presentation.locale]?.['desktop/terminal']??{}})});
+  terminal = require('./terminal-dock').createTerminalDock({electron:require('electron'),showMessage:showAppMessage,window:mainWindow,host:app.isPackaged?path.join(process.resourcesPath,'terminal-runtime','offgrid-terminal-host.exe'):path.join(__dirname,'../../build/terminal-runtime/win-x64/offgrid-terminal-host.exe'),cli:path.join(binaryRoot,binaryName),service:()=>runtime.url,presentation:()=>({theme:effectiveTheme(),locale:presentation.locale,palette:terminalPalette(),reduceMotion:presentation.appearance?.reduceMotion===true,translations:localeOverrides[presentation.locale]?.['desktop/terminal']??{}})});
   if (state.isMaximized) mainWindow.maximize();
   // A first launch can spend several seconds in Windows reputation scanning
   // and Chromium initialization. Put a real native surface on screen as soon
@@ -274,6 +288,7 @@ async function createMainWindow() {
     // Do not strand failed first launches invisibly in the tray.
     if (!quitting && process.platform !== 'darwin' && runtime.state.state === 'ready' && tray) {
       event.preventDefault();
+      mainWindow.webContents.send('command-window-dismiss');
       mainWindow.hide();
       reportTrayBackground();
     }
@@ -288,13 +303,13 @@ async function manageFolderTrust(){
   const text=folderTrustCopy(presentation.locale);
   try{
     const records=await folderTrust.list();
-    if(!records.length){await dialog.showMessageBox(mainWindow,{type:'info',message:text.empty});return;}
+    if(!records.length){await showAppMessage(mainWindow,{type:'info',message:text.empty});return;}
     for(const record of records){
       const level=['read','write','processes'].filter(key=>record.permissions[key]).map(key=>text.permissions[['read','write','processes'].indexOf(key)]).join(' · ');
-      const answer=await dialog.showMessageBox(mainWindow,{type:'question',message:text.title,detail:`${record.root}\n${record.host}\n${record.service}\n${record.actor}\n${level}\n\n${text.notice}`,buttons:[text.done,text.forget,text.next],defaultId:0,cancelId:0,noLink:true});
+      const answer=await showAppMessage(mainWindow,{type:'question',message:text.title,detail:`${record.root}\n${record.host}\n${record.service}\n${record.actor}\n${level}\n\n${text.notice}`,buttons:[text.done,text.forget,text.next],defaultId:0,cancelId:0,noLink:true});
       if(answer.response===0)return;if(answer.response===1)await folderTrust.revoke(record.id);
     }
-  }catch{await dialog.showMessageBox(mainWindow,{type:'error',message:text.error});}
+  }catch{await showAppMessage(mainWindow,{type:'error',message:text.error});}
 }
 
 function updateMenus() {
@@ -302,16 +317,18 @@ function updateMenus() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
     { label: copy('file'), submenu: [
+      { label: commandLabel(), click: () => commandWindow.open() },
       { label: computerText()?.stop ?? 'Stop browser assistance', enabled:!!computer.child || computer.pending, click:()=>void computer.stop() },
       { label:copy('stopWorkspace'),enabled:!!execution.child||execution.pending,click:()=>void execution.stop() },
       { label:folderTrustCopy(presentation.locale).manage,click:()=>void manageFolderTrust() },
       { type: 'separator' },
       role(process.platform === 'darwin' ? 'close' : 'quit')
     ] },
-    { label:copy('editMenu'),submenu:[role('undo'),role('redo'),{type:'separator'},role('cut'),role('copy'),role('paste'),role('selectAll')] }, { label:copy('viewMenu'), submenu: [{ label: require('./terminal-translations').text(presentation.locale,'Terminals'), accelerator: 'CommandOrControl+`', click: () => void terminal?.toggle().catch(error => dialog.showMessageBox(mainWindow,{type:'error',message:error.message})) }, {type:'separator'}, role('reload'),role('toggleDevTools','developerTools'), {type:'separator'},role('resetZoom'),role('zoomIn'),role('zoomOut'),role('togglefullscreen','fullscreen')] }, { role: 'windowMenu',label:copy('windowMenu') },
+    { label:copy('editMenu'),submenu:[role('undo'),role('redo'),{type:'separator'},role('cut'),role('copy'),role('paste'),role('selectAll')] }, { label:copy('viewMenu'), submenu: [{ label: require('./terminal-translations').text(presentation.locale,'Terminals'), accelerator: 'CommandOrControl+`', click: () => void terminal?.toggle().catch(error => showAppMessage(mainWindow,{type:'error',message:error.message})) }, {type:'separator'}, role('reload'),role('toggleDevTools','developerTools'), {type:'separator'},role('resetZoom'),role('zoomIn'),role('zoomOut'),role('togglefullscreen','fullscreen')] }, { role: 'windowMenu',label:copy('windowMenu') },
     { role: 'help',label:copy('helpMenu'), submenu: [{ label: copy('guide'), click: () => void shell.openExternal('https://github.com/takuphilchan/offgrid-llm/blob/main/docs/setup/desktop-startup.md') }] }
   ]));
   tray?.setContextMenu(Menu.buildFromTemplate([
+    { label: commandLabel(), click: () => commandWindow.open() },
     { label: copy('open'), click: showWindow },
     { label: computerText()?.stop ?? 'Stop browser assistance', enabled:!!computer.child || computer.pending, click:()=>void computer.stop() },
     { label:copy('stopWorkspace'),enabled:!!execution.child||execution.pending,click:()=>void execution.stop() },
@@ -341,6 +358,32 @@ function handleTrustedIPC(channel, handler, startupOnly = false) {
 }
 
 handleTrustedIPC('get-api-url', () => runtime.url);
+// Only the isolated preload caption exposes these buttons. No contextBridge
+// window-control method is provided to service content.
+handleTrustedIPC('window-chrome-action', action => require('./branding.cjs').controlWindow(mainWindow, action, commandWindow.snapshot().mode === 'compact'));
+handleTrustedIPC('command-window-status', () => commandWindow.snapshot());
+handleTrustedIPC('command-window-open', () => commandWindow.open());
+handleTrustedIPC('command-window-expand', () => commandWindow.expand());
+handleTrustedIPC('command-window-dismiss', () => commandWindow.dismiss());
+handleTrustedIPC('command-window-layout', value => commandWindow.setLayout(value?.layout, {prepared:value?.prepared === true, reduceMotion:value?.reduceMotion === true}));
+handleTrustedIPC('command-window-transition-ready', value => {
+  const settled = commandMotion.settled;
+  return commandTransitions.acknowledge(value) ? settled : undefined;
+});
+handleTrustedIPC('command-window-configure', value => {
+  if (!value || typeof value.shortcut !== 'string') throw Error('invalid_command_shortcut');
+  // Serialize native registration with the preference write. Report disk failure
+  // instead of claiming the shortcut survives restart.
+  commandPreferenceQueue = commandPreferenceQueue.catch(() => {}).then(async () => {
+    if (quitting) throw Error('desktop_shutting_down');
+    return require('./command-window').saveShortcut(value.shortcut, async shortcut => {
+      await fs.promises.mkdir(configRoot, {recursive: true});
+      await fs.promises.writeFile(commandPreferencePath + '.tmp', JSON.stringify({shortcut}));
+      await fs.promises.rename(commandPreferencePath + '.tmp', commandPreferencePath);
+    }, shortcut => quitting ? commandWindow.snapshot() : commandWindow.configure(shortcut));
+  });
+  return commandPreferenceQueue;
+});
 handleTrustedIPC('get-app-version', () => app.getVersion());
 handleTrustedIPC('get-server-status', () => runtime.state.state === 'ready');
 handleTrustedIPC('get-backend-info', () => runtime.snapshot());
@@ -365,7 +408,7 @@ handleTrustedIPC('computer-launchable-apps', () => ({ state: 'selecting', target
 handleTrustedIPC('computer-launch-app', request => applicationLauncher.launch(request?.id));
 handleTrustedIPC('computer-stop', () => computer.stop());
 handleTrustedIPC('computer-stop-access', request => computer.stopAccess(request));
-handleTrustedIPC('terminal-open', async () => {try{return await terminal.open();}catch(error){if(!quitting&&mainWindow&&!mainWindow.isDestroyed()&&error.message!=='terminal_stopping')await dialog.showMessageBox(mainWindow,{type:'error',message:copy('terminalFailure'),detail:error.message});return {visible:false};}});
+handleTrustedIPC('terminal-open', async () => {try{return await terminal.open();}catch(error){if(!quitting&&mainWindow&&!mainWindow.isDestroyed()&&error.message!=='terminal_stopping')await showAppMessage(mainWindow,{type:'error',message:copy('terminalFailure'),detail:error.message});return {visible:false};}});
 handleTrustedIPC('terminal-status', () => ({available:terminal?.sessions.available()===true}));
 handleTrustedIPC('terminal-layout', value => terminal.setWorkspaceBounds(value));
 handleTrustedIPC('terminal-overlay', value => terminal.setOverlayActive(value));
@@ -420,6 +463,7 @@ app.on('second-instance', (_event, _argv, _directory, request) => {
 app.whenReady().then(async () => {
   if (process.platform === 'win32') app.setAppUserModelId('com.offgrid.llm.desktop');
   presentationCopy = readCopy(uiDir);
+  try { commandCopy = JSON.parse(await fs.promises.readFile(path.join(uiDir, 'desktop-command.json'), 'utf8')); } catch { /* Older UI retains the tray entry and explicit settings capability. */ }
   computerCopy = JSON.parse(await fs.promises.readFile(path.join(uiDir,'computer-experience.json'),'utf8'));
   try { presentation = normalizePresentation(JSON.parse(await fs.promises.readFile(presentationPath, 'utf8')), app.getLocale().split('-')[0]); }
   catch { presentation = normalizePresentation({}, app.getLocale().split('-')[0]); }
@@ -427,6 +471,10 @@ app.whenReady().then(async () => {
   // including when OffGrid's explicit choice differs from the OS preference.
   nativeTheme.themeSource = presentation.theme;
   await createWindow();
+  let shortcut = 'CommandOrControl+Shift+Space';
+  try { const preference = JSON.parse(await fs.promises.readFile(commandPreferencePath, 'utf8')); if (preference.shortcut === '' || require('./command-window').shortcuts.includes(preference.shortcut)) shortcut = preference.shortcut; } catch {}
+  // Isolated tests never register a shortcut on the user's real desktop.
+  if (!customHome && !installerTest) commandWindow.configure(shortcut);
   // Qualification/alternate profiles must not change the user's default handler.
   if(app.isPackaged && !installerTest && !customHome) app.setAsDefaultProtocolClient('offgrid');
   powerMonitor.on('lock-screen',()=>{void computer.stop();void execution.stop();});
@@ -454,10 +502,11 @@ app.on('before-quit', event => {
   event.preventDefault();
   if (quitting) return;
   quitting = true;
+  commandWindow.dispose();
   clearTimeout(saveTimer);
   void (async () => {
     await require('./shutdown').shutdownDesktop({
-      save: async () => { await saveWindowState(); await presentationQueue; },
+      save: async () => { await saveWindowState(); await presentationQueue; await commandPreferenceQueue.catch(() => {}); },
       computer, execution, terminal, runtime,
     });
     tray?.destroy();
@@ -465,6 +514,7 @@ app.on('before-quit', event => {
     app.quit();
   })().catch(() => {
     quitting = false;
+    commandWindow.configure(commandWindow.snapshot().shortcut);
     runtime.publish({ state: 'error', reason: 'OffGrid could not confirm that all local work stopped. Quit again to retry. No new service was started.' });
     showWindow();
   });

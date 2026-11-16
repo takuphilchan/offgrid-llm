@@ -21,7 +21,7 @@ async function fixture(page: Page, locale='en') {
 test('speech choices distinguish revisions, filter locally and never capture or submit',async({page})=>{
   const {state,audio}=await fixture(page);
   await page.locator('.composer textarea').fill('Keep this unsent draft');
-  await page.getByRole('button',{name:'Response settings',exact:true}).click();
+  await page.goto('/ui/#/settings/voice');
   await page.getByRole('button',{name:'Recognition model',exact:true}).click();
   const group=page.getByRole('radiogroup',{name:'Recognition model'});
   await expect(group.getByRole('radio')).toHaveCount(4);
@@ -29,18 +29,39 @@ test('speech choices distinguish revisions, filter locally and never capture or 
   await expect(group).not.toContainText('Speech only');
   await page.getByRole('searchbox',{name:'Filter model choices'}).fill('@r2');
   await expect(group.getByRole('radio')).toHaveCount(1);
+  await page.locator('.model-choice-details').first().click();
   await expect(group).toContainText('Quality and latency');
   await page.getByRole('searchbox',{name:'Filter model choices'}).press('Enter');
   await expect(group.getByRole('radio')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button',{name:'Recognition model',exact:true})).toBeFocused();
-  await expect(page.locator('.composer textarea')).toHaveValue('Keep this unsent draft');
+  await page.goto('/ui/#/chat');await expect(page.locator('.composer textarea')).toHaveValue('Keep this unsent draft');
   expect(state.writes).toEqual([]);
   await page.keyboard.press('Escape');audio.profiles=profiles.filter(p=>p.revision!=='r2');
-  await page.getByRole('button',{name:'Response settings',exact:true}).click();
+  await page.goto('/ui/#/settings/voice');
   await expect(page.locator('.model-choice-missing')).toContainText('whisper@r2');
   await expect(page.getByRole('button',{name:'Recognition model',exact:true})).toContainText('unavailable');
   expect(state.writes).toEqual([]);
+});
+
+test('speech picker presents clean names while retaining searchable exact identities',async({page},info)=>{
+ const {state,audio}=await fixture(page);
+ const revision='5359861c739e955e79d9a303cbc70fb988958b1';
+ audio.profiles=[{id:'ggml-tiny.en-f56b5b8014a2',revision,name:'ggerganov/whisper.cpp · ggml-tiny.en.bin',architecture:'whisper',available:true,smoke_tested:false,capabilities:['transcription']}];
+ await page.goto('/ui/#/settings/voice');
+ await page.getByRole('button',{name:'Recognition model',exact:true}).click();
+ const group=page.getByRole('radiogroup',{name:'Recognition model'});
+ await expect(group.getByRole('radio')).toHaveCount(2);
+ await expect(group).toContainText('Whisper · tiny.en');
+ await expect(group).not.toContainText('ggerganov');await expect(group).not.toContainText(revision);
+ await expect(group.getByRole('radio').first()).toBeChecked();
+ await page.screenshot({path:info.outputPath('speech-picker-clean.png')});
+ await page.getByRole('searchbox',{name:'Filter model choices'}).fill(revision);
+ await expect(group.getByRole('radio')).toHaveCount(2);
+ await page.locator('.model-choice-details').first().click();await expect(group).toContainText(revision);
+ await group.getByRole('radio').last().click();
+ await expect(page.getByRole('button',{name:'Recognition model',exact:true})).toHaveText('Whisper · tiny.en');
+ expect(state.writes).toEqual([]);
 });
 
 test('embedding selection distinguishes installed and catalog data without starting a download',async({page})=>{
@@ -64,19 +85,18 @@ for(const locale of ['en','fr','de','es','ar','sw','sn','nd','zu']) test(`speech
  const {state}=await fixture(page,locale);await page.setViewportSize({width:320,height:480});
  const copy=voiceText(locale as LocaleCode);
  await expect(page.getByRole('button',{name:copy.record,exact:true})).toBeVisible();
- const voice=page.locator('.composer-context-menu > button');await voice.click();
- await expect(page.getByRole('checkbox',{name:copy.speakResponses,exact:true})).not.toBeChecked();
- const panel=page.locator('.composer-context-menu > .utility-popover-panel'),trigger=panel.locator('.voice-settings-panel .model-choice-trigger').first();
+ await page.goto('/ui/#/settings/voice');
+ const panel=page.locator('.voice-settings-panel'),trigger=panel.locator('.model-choice-trigger').first();
  await expect(trigger).toBeEnabled();await trigger.click();
  await panel.getByRole('searchbox').fill('r2');
  await panel.getByRole('searchbox').dispatchEvent('keydown',{key:'Enter',isComposing:true});
  await expect(trigger).toHaveAttribute('aria-expanded','true');expect(state.writes).toEqual([]);
- const box=await panel.boundingBox();expect(box!.x).toBeGreaterThanOrEqual(0);expect(box!.x+box!.width).toBeLessThanOrEqual(320);expect(box!.height).toBeLessThanOrEqual(480);
+ const box=await panel.boundingBox();expect(box!.x).toBeGreaterThanOrEqual(0);expect(box!.x+box!.width).toBeLessThanOrEqual(320);await expect(panel.getByRole('searchbox')).toBeInViewport();
  const overflow=await panel.evaluate(node=>[node,...Array.from(node.querySelectorAll('*'))].filter(child=>child.scrollWidth>child.clientWidth+1).map(child=>({tag:child.tagName,className:child.className,width:child.getBoundingClientRect().width,client:child.clientWidth,scroll:child.scrollWidth,text:child.textContent?.slice(0,70)})));
  expect(await panel.evaluate(node=>node.scrollWidth<=node.clientWidth+1),JSON.stringify(overflow)).toBe(true);
  if(locale==='en'||locale==='ar') await page.screenshot({path:info.outputPath(`speech-choice-${locale}.png`)});
  await page.keyboard.press('Escape');await expect(panel).toBeVisible();await expect(trigger).toBeFocused();
- await page.keyboard.press('Escape');await expect(panel).toBeHidden();await expect(voice).toBeFocused();
+ await page.keyboard.press('Escape');await expect(panel).toBeVisible();await expect(trigger).toBeFocused();
 });
 
 test('voice controls and recovery messages have a complete locale-specific copy set',()=>{
@@ -93,7 +113,7 @@ test('voice controls and recovery messages have a complete locale-specific copy 
 
 test('unavailable automatic speech is explained without expanding a model chooser',async({page})=>{
  const {state,audio}=await fixture(page);audio.profiles=[];
- await page.getByRole('button',{name:'Response settings',exact:true}).click();
+ await page.goto('/ui/#/settings/voice');
  await expect(page.locator('.voice-settings-panel section')).toHaveCount(2);
  await expect(page.locator('.voice-settings-panel')).toContainText('No model is installed for this speech feature.');
  await expect(page.locator('.voice-settings-panel').getByRole('link',{name:'Set up recognition'})).toHaveAttribute('href','#/models');

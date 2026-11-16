@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/takuphilchan/offgrid-llm/internal/document"
 )
 
 // SourceRange identifies extractor text within retained RawContent. Offsets are
@@ -28,7 +30,18 @@ func (e *Engine) IngestParsed(ctx context.Context, name string, result *ParseRes
 	if err != nil {
 		return nil, err
 	}
-	return e.ingestText(ctx, name, content, metadata, ranges, result.ContentType, nil)
+	retained := make(map[string]string, len(metadata)+len(result.Metadata))
+	for key, value := range metadata {
+		retained[key] = value
+	}
+	result.bindCoverage()
+	for key, value := range result.Metadata {
+		retained[key] = value
+	}
+	if err := result.bindStructure(); err != nil {
+		return nil, err
+	}
+	return e.ingestText(ctx, name, content, retained, ranges, result.ContentType, nil, result.Structure)
 }
 
 func parsedSourceRanges(result *ParseResult) (string, []SourceRange, error) {
@@ -117,13 +130,40 @@ func (c *Chunker) chunkDocument(doc *Document) ([]*Chunk, error) {
 	if err := validateSourceRanges(doc.RawContent, doc.SourceRanges); err != nil {
 		return nil, err
 	}
+	if doc.Extraction != nil {
+		if err := doc.Extraction.Verify(); err != nil {
+			return nil, err
+		}
+		if doc.Extraction.Text != doc.RawContent {
+			return nil, fmt.Errorf("chunk extraction text mismatch")
+		}
+	}
 	var chunks []*Chunk
+	blocksByUnit := map[string][]document.Block{}
+	unitKeys := map[string]string{}
+	if doc.Extraction != nil {
+		for _, unit := range doc.Extraction.Units {
+			unitKeys[unit.ID] = fmt.Sprintf("%s:%d", unit.Kind, unit.Index)
+		}
+		for _, block := range doc.Extraction.Blocks {
+			key := unitKeys[block.UnitID]
+			blocksByUnit[key] = append(blocksByUnit[key], block)
+		}
+	}
 	for _, r := range doc.SourceRanges {
-		for _, chunk := range c.exactChunks(doc.ID, doc.RawContent[r.Start:r.End]) {
+		var selected []*Chunk
+		if doc.Extraction != nil {
+			selected = c.structuredChunks(doc, r, blocksByUnit[fmt.Sprintf("%s:%d", r.Kind, r.Index)])
+		} else {
+			selected = c.exactChunks(doc.ID, doc.RawContent[r.Start:r.End])
+			for _, chunk := range selected {
+				chunk.StartChar += r.Start
+				chunk.EndChar += r.Start
+			}
+		}
+		for _, chunk := range selected {
 			chunk.Index = len(chunks)
 			chunk.ID = GenerateChunkID(doc.ID, chunk.Index)
-			chunk.StartChar += r.Start
-			chunk.EndChar += r.Start
 			if r.Kind == "page" {
 				chunk.Page = r.Index
 			} else {

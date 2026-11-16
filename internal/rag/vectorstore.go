@@ -3,8 +3,8 @@ package rag
 import (
 	"container/heap"
 	"fmt"
+	"github.com/takuphilchan/offgrid-llm/internal/textsearch"
 	"math"
-	"strings"
 	"sync"
 )
 
@@ -429,35 +429,7 @@ func cosineSimilarityInMemory(a, b []float32) float32 {
 
 // tokenize splits text into lowercase tokens for keyword matching
 func tokenize(text string) []string {
-	// Convert to lowercase
-	text = strings.ToLower(text)
-
-	// Split on non-alphanumeric characters
-	var tokens []string
-	var current strings.Builder
-
-	for _, r := range text {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			current.WriteRune(r)
-		} else if current.Len() > 0 {
-			token := current.String()
-			// Skip very short tokens and common stop words
-			if len(token) > 2 && !isStopWord(token) {
-				tokens = append(tokens, token)
-			}
-			current.Reset()
-		}
-	}
-
-	// Don't forget the last token
-	if current.Len() > 0 {
-		token := current.String()
-		if len(token) > 2 && !isStopWord(token) {
-			tokens = append(tokens, token)
-		}
-	}
-
-	return tokens
+	return textsearch.Tokens(text)
 }
 
 // stopWords is a pre-allocated map of common stop words (package-level to avoid repeated allocations)

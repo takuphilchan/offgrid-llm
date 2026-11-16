@@ -1,0 +1,38 @@
+[
+    {
+        "file":  "chat-workspace.png",
+        "sha256":  "c20d66f6fe7bccbef46b5f6d10cce8c791ee7b828cc9edbe099d03a929b649ef"
+    },
+    {
+        "file":  "chat-dark.png",
+        "sha256":  "48df0445054818b92114fc9237398f71bd6ccc02a0f5dca684b20141fa2ab78d"
+    },
+    {
+        "file":  "models-installed.png",
+        "sha256":  "d73655b4046e2e64c3f611d1b4545d7b76b3a874e3edd0b28578eade2d48b5d0"
+    },
+    {
+        "file":  "models-discover.png",
+        "sha256":  "51452ae56423631ad98975943d8869f1eb6e5a7ff82b9a78446a0f82e324be6e"
+    },
+    {
+        "file":  "knowledge-library.png",
+        "sha256":  "d9aff47524543f446fe82db5487a0dcfe5d23c801d44da491cce0b908c158ed6"
+    },
+    {
+        "file":  "agent-profiles.png",
+        "sha256":  "48c4809786a3b3554e53725004a73672ce4934e07a07ed4537239abd97cc1a4d"
+    },
+    {
+        "file":  "desktop-terminal.png",
+        "sha256":  "cf63d7f7fd174ae8ec4bcc49265a70d07bd35751c023f3c01916a33e913123de"
+    },
+    {
+        "file":  "terminal-command-context.png",
+        "sha256":  "0892db5fba0cc9d9de542df3826796bad56f54ffbe4e415be3a51e6bd5d0ef78"
+    },
+    {
+        "file":  "workspace-tour.gif",
+        "sha256":  "1e4a80f22cbdee6ba466c10e96378484138f599ea4673f50ad30ab094ec77168"
+    }
+]

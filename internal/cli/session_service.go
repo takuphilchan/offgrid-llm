@@ -24,6 +24,9 @@ const SessionHelp = `Saved conversations on the connected OffGrid service:
   offgrid session attach NAME FILE
   offgrid session attachments NAME
   offgrid session remove-attachment NAME ID
+  offgrid session attachment-structure NAME ID REVISION [BLOCK_OFFSET] [RELATIONSHIP_OFFSET] [NAVIGATION_OFFSET]
+  offgrid session attachment-revisions NAME ID
+  offgrid session correct-attachment NAME ID REVIEW.json
   offgrid session send NAME [--file FILE] [--attachment ID] [--image PATH] [--model MODEL] MESSAGE
   offgrid session send NAME --answer QUESTION_ID --request-id ID ANSWER
   offgrid session send NAME --profile ID --profile-revision N [--request-id ID] [--wait] MESSAGE
@@ -79,6 +82,10 @@ func RunSessionServiceWithFiles(ctx context.Context, client *serviceclient.Clien
 		return runSessionFolder(ctx, client, args, stdout, jsonMode)
 	case "changes":
 		return runSessionChanges(ctx, client, args, stdout, jsonMode)
+	case "attachment-structure":
+		return runSessionStructure(ctx, client, args, stdout)
+	case "attachment-revisions", "correct-attachment":
+		return runSessionCorrections(ctx, client, args, stdout)
 	case "attach", "attachments", "remove-attachment":
 		return RunSessionFiles(ctx, client, args, stdout, jsonMode)
 	case "send", "turn", "recover":

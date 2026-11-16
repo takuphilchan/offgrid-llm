@@ -1,3 +1,4 @@
+import { Icon } from '../../components/Icon';
 import { useEffect, useRef, useState } from 'react';
 import { api, type ExecutionWorkspace as Workspace } from '../../api/client';
 import { UtilityPopover } from '../../components/UtilityPopover';
@@ -10,7 +11,7 @@ export function sameExecutionWorkspace(a: Workspace, b: Workspace) {
 }
 
 /** Discovery selects existing authority; never requests a grant or submits work. */
-export function ExecutionWorkspace({value, onChange, disabled, onReady,ceiling,initialAccess='edit'}: {value: Workspace | null; onChange: (value: Workspace | null) => void; disabled: boolean; onReady: (ready: boolean) => void;ceiling?:Workspace['permissions'];initialAccess?:'read'|'edit'|'trusted'}) {
+export function ExecutionWorkspace({value, onChange, disabled, onReady,ceiling,initialAccess='edit',menu=false}: {value: Workspace | null; onChange: (value: Workspace | null) => void; disabled: boolean; onReady: (ready: boolean) => void;ceiling?:Workspace['permissions'];initialAccess?:'read'|'edit'|'trusted';menu?:boolean}) {
   const {locale, messages} = useI18n(), copy = executionWorkspaceText[locale];
   const [hosts, setHosts] = useState<Workspace[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState('');
   const [supported, setSupported] = useState(false);
@@ -51,7 +52,7 @@ export function ExecutionWorkspace({value, onChange, disabled, onReady,ceiling,i
     }catch{if(alive.current)setNativeError(copy.unavailable);}
     finally{if(alive.current)setNativeBusy(false);}
   };
-  return <UtilityPopover label={copy.label} trigger={<>{copy.label}<span className="composer-choice">{value ? value.reference.host : copy.none}</span></>} triggerClassName="secondary-button" className="chat-execution-workspace" panelClassName="execution-workspace-panel" onOpenChange={open => {if (open) void refresh();}}>
+  return <UtilityPopover label={copy.label} trigger={<><Icon name="folder" size={18}/>{(value||menu) && <span className="composer-choice">{value?.reference.host??copy.label}</span>}</>} triggerClassName={value||menu ? "text-button" : "icon-button"} className="chat-execution-workspace" panelClassName="execution-workspace-panel" onOpenChange={open => {if (open) void refresh();}}>
     <div className="execution-workspace-heading"><strong>{copy.label}</strong><button type="button" className="text-button" disabled={loading} onClick={() => void refresh()}>{copy.refresh}</button></div>
     <fieldset disabled={disabled}><legend className="sr-only">{copy.label}</legend>
       <label className="profile-option"><input type="radio" name="chat-execution" checked={!value} onChange={() => onChange(null)} /><span>{copy.none}</span></label>

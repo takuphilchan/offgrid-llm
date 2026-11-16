@@ -75,5 +75,5 @@ func (e *Engine) IngestReader(ctx context.Context, name string, reader io.Reader
 	if err != nil {
 		return nil, err
 	}
-	return e.IngestText(ctx, name, result.Content, metadata)
+	return e.IngestParsed(ctx, name, result, metadata)
 }

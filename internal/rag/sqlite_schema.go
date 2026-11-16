@@ -100,6 +100,8 @@ func (s *SQLiteStore) initSchema() error {
 	// does not support ADD COLUMN IF NOT EXISTS on all supported versions, so
 	// duplicate-column errors are intentionally ignored.
 	for _, migration := range []string{
+		`ALTER TABLE documents ADD COLUMN extraction_revision TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE document_imports ADD COLUMN coverage_json TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE document_imports ADD COLUMN extraction_json TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE index_metadata ADD COLUMN embedding_identity TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE documents ADD COLUMN content_hash TEXT DEFAULT ''`,
@@ -111,13 +113,27 @@ func (s *SQLiteStore) initSchema() error {
 		`ALTER TABLE chunks ADD COLUMN page INTEGER DEFAULT 0`,
 		`ALTER TABLE chunks ADD COLUMN section TEXT DEFAULT ''`,
 		`ALTER TABLE chunks ADD COLUMN content_hash TEXT DEFAULT ''`,
+		`ALTER TABLE chunks ADD COLUMN search_terms TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE chunks ADD COLUMN embedding_v1 BLOB`,
 	} {
 		if _, err := s.db.Exec(migration); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
 			return fmt.Errorf("failed to migrate RAG schema: %w", err)
 		}
 	}
 
-	return s.initCollectionSchema()
+	if err := s.initLexicalIndex(); err != nil {
+		return err
+	}
+	if err := s.initBinaryVectors(); err != nil {
+		return err
+	}
+	if err := s.initExtractionSchema(); err != nil {
+		return err
+	}
+	if err := s.initCollectionSchema(); err != nil {
+		return err
+	}
+	return s.initAnalysisSchema()
 }
 
 // isFTS5Error checks if an error is related to FTS5 not being available

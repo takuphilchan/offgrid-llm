@@ -5,6 +5,11 @@ import { conversationWorkText } from '../../i18n/conversation-work';
 import type { CanonicalInput, CanonicalQuestion, CanonicalInputMode } from './canonical-input';
 import { conversationInputModeText } from '../../i18n/conversation-input-mode';
 import { Icon } from '../../components/Icon';
+import './canonical-activity.css';
+
+export function pendingCanonicalInputs(inputs: CanonicalInput[]) {
+  return inputs.filter(input => !input.applied_at && !input.settled_at && !['failed', 'stopped'].includes(input.state));
+}
 
 export function ConversationInputMode({mode, chooseMode, question, disabled}: {mode: CanonicalInputMode; chooseMode: (mode: CanonicalInputMode) => void; question?: CanonicalQuestion | null; disabled: boolean}) {
   const {locale} = useI18n(), copy = conversationInputModeText[locale];
@@ -18,7 +23,7 @@ export function ConversationInputMode({mode, chooseMode, question, disabled}: {m
 export function CanonicalInputActivity({id, inputs, control, error, question, mode, chooseMode, disabled}: {id: string; inputs: CanonicalInput[]; control: (input: CanonicalInput, kind: 'stop'|'continue') => Promise<void>; error: string; question?: CanonicalQuestion | null; mode: CanonicalInputMode; chooseMode: (mode: CanonicalInputMode) => void; disabled: boolean}) {
   const {messages, locale} = useI18n(), status = useTaskStatus();
   const [busy, setBusy] = useState(''), [failure, setFailure] = useState('');
-  const pending = inputs.filter(input => !input.applied_at && input.state !== 'stopped');
+  const pending = pendingCanonicalInputs(inputs);
   const act = async (input: CanonicalInput, kind: 'stop'|'continue') => {
     setBusy(input.id); setFailure('');
     try { await control(input, kind); }
@@ -28,14 +33,12 @@ export function CanonicalInputActivity({id, inputs, control, error, question, mo
   const copy = conversationInputModeText[locale];
   return <div className="canonical-input-controls">
     {mode !== 'auto' && <div className="composer-mode-override"><span>{mode === 'new_work' ? copy.newWork : copy.message}</span><button type="button" className="icon-button" disabled={disabled} aria-label={messages.models.cancel} onClick={() => chooseMode('auto')}><Icon name="close" size={16} /></button></div>}
-    {(pending.length > 0 || error || failure || question) && <section className="conversation-work" aria-label={conversationWorkText[locale].activity}>
+    {(pending.length > 0 || error || failure || question) && <section className="canonical-response-status" aria-label={conversationWorkText[locale].activity}>
     {question && <p className="composer-question" role="status">{question.content}</p>}
-    {pending.map(input => <div key={input.id}>
-      <p>{input.input.content.length > 120 ? `${input.input.content.slice(0,120)}…` : input.input.content}</p>
-      <span role="status">{status(input.state === 'accepted' ? 'pending' : input.state === 'stopping' ? 'stopping' : input.run_status ?? input.state)}</span>
+    {pending.length > 0 && <div className="canonical-response-summary" role="status"><span className="response-pulse" aria-hidden="true"/>{status(pending[0].state === 'accepted' ? 'pending' : pending[0].state === 'stopping' ? 'stopping' : pending[0].run_status ?? pending[0].state)}{pending.length > 1 && <span> · {pending.length}</span>}</div>}
+    {pending.filter(input => input.delivery_issue || input.decision_issue || input.run_status === 'interrupted').map(input => <div className="canonical-response-issue" key={input.id}>
       {input.delivery_issue && <p role="status">{input.delivery_issue.message}</p>}
       {input.decision_issue && <p role="status">{input.decision_issue.message}</p>}
-      {!input.stopped_at && <button type="button" className="secondary-button" disabled={!!busy} onClick={() => void act(input,'stop')}>{messages.chat.stop}</button>}
       {input.run_status === 'interrupted' && !input.stopped_at && <button type="button" className="secondary-button" disabled={!!busy} onClick={() => void act(input,'continue')}>{messages.models.resume}</button>}
     </div>)}
     {(failure || error) && <p role="alert">{failure || error}</p>}

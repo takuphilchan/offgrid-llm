@@ -1,42 +1,45 @@
-import { useEffect, useRef } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { workspaceHelp } from '../i18n/workspace-help';
-import { helpTopics } from '../i18n/workspace-help-topics';
-import { voiceSettingsText } from '../i18n/voice-settings';
+import { helpCenter } from '../i18n/help-center';
+import { helpArticles, findHelpArticles } from './help-articles';
 import { restoreFocus } from '../lib/restore-focus';
 import { Icon } from './Icon';
+import { SearchField } from './SearchField';
+import { useWorkspaceState } from '../lib/workspace-context';
+import type { ModelCategory } from '../api/client';
 import './workspace-help.css';
 
-/** Local guidance: navigation only, never grants, submissions or downloads. */
-export function WorkspaceHelp({ close, guide }: { close:()=>void; guide:()=>void }) {
-  const {locale,messages:text}=useI18n(), copy=workspaceHelp[locale];
-  const dialog=useRef<HTMLDialogElement>(null);
+/** Local guidance only. The underlying workspace remains mounted with its draft. */
+export function WorkspaceHelp({ close }: { close:()=>void }) {
+  const {locale,messages:text}=useI18n(), copy=workspaceHelp[locale], labels=helpCenter[locale];
+  const [query,setQuery]=useState(''), [selected,setSelected]=useState('chat');
+  const [,setCategory]=useWorkspaceState<ModelCategory>('models.category','language');
+  const [,setView]=useWorkspaceState<'installed'|'discover'>('models.view','installed');
+  const root=useRef<HTMLElement>(null), article=useRef<HTMLElement>(null);
+  const topics=helpArticles(locale,text,!!window.electron);
+  const matches=findHelpArticles(topics,query), active=matches.find(item=>item.id===selected)??matches[0];
   useEffect(()=>{
-    const node=dialog.current!, previous=document.activeElement as HTMLElement|null;
-    const overflow=document.documentElement.style.overflow;
-    document.documentElement.style.overflow='hidden';
-    node.showModal();
-    return()=>{
-      node.close();
-      document.documentElement.style.overflow=overflow;
-      restoreFocus(previous===document.body||!previous?.isConnected?document.querySelector<HTMLElement>('.help-trigger'):previous);
-    };
+    const previous=document.activeElement as HTMLElement|null;
+    root.current?.querySelector<HTMLInputElement>('input[type="search"]')?.focus();
+    return()=>restoreFocus(previous===document.body||!previous?.isConnected?document.querySelector<HTMLElement>('.help-trigger'):previous);
   },[]);
-  const sections=[
-    {title:text.nav.chat,body:copy.chat,link:'#/chat',action:text.nav.chat},
-    {title:text.nav.knowledge,body:helpTopics[locale].documents,link:'#/knowledge',action:text.nav.knowledge},
-    {title:voiceSettingsText(locale).title,body:helpTopics[locale].voice,link:null,action:null},
-    {title:text.nav.agents,body:copy.agents,link:'#/agents/profiles',action:text.nav.agents},
-    {title:copy.settings,body:copy.access,link:null,action:null},
-    {title:text.nav.activity,body:copy.returning,link:'#/activity',action:text.nav.activity},
-    ...(window.electron ? [{title:'OffGrid CLI',body:helpTopics[locale].terminal,link:null,action:null}] : []),
-  ];
-  return <dialog ref={dialog} className="workspace-help" aria-labelledby="workspace-help-title" onCancel={event=>{event.preventDefault();close();}}>
-    <header><h2 id="workspace-help-title">{copy.help}</h2><button autoFocus type="button" className="icon-button utility-button" onClick={close} aria-label={copy.close}><Icon name="close" size={18}/></button></header>
-    <div className="workspace-help-body">
-      <p className="workspace-help-example">{copy.example}</p>
-      {sections.map((section,index)=><details key={index} open={index===0}><summary>{section.title}</summary><p>{section.body}</p>{section.link&&<a className="text-button" href={section.link} onClick={close}>{section.action}</a>}</details>)}
+  return <section ref={root} className="workspace-help" aria-labelledby="workspace-help-title" onKeyDown={event=>{
+    if(event.key==='Escape'&&!event.nativeEvent.isComposing){event.preventDefault();event.stopPropagation();close();}
+  }}>
+    <header className="help-heading"><div><h2 id="workspace-help-title">{copy.help}</h2><p>{labels.browse}</p></div><button type="button" className="icon-button utility-button" onClick={close} aria-label={copy.close} title={copy.close}><Icon name="close" size={18}/></button></header>
+    <div className="help-search"><SearchField label={labels.search} value={query} onChange={setQuery}/><span className="help-result-count" role="status" aria-live="polite">{matches.length} · {labels.topics}</span></div>
+    <div className="help-layout">
+      <nav className="help-topics" aria-label={labels.topics}>
+        {matches.map(topic=><button type="button" key={topic.id} aria-current={active?.id===topic.id?'page':undefined} onClick={()=>{setSelected(topic.id);requestAnimationFrame(()=>article.current?.focus());}}><Icon name={topic.icon} size={19}/><span>{topic.title}</span><Icon name="chevron-right" size={14}/></button>)}
+        <button type="button" className="help-setup" onClick={()=>{setQuery('');setSelected('models');requestAnimationFrame(()=>article.current?.focus());}}><Icon name="home" size={19}/><span>{text.settings.showGuide}</span></button>
+      </nav>
+      {active ? <article ref={article} tabIndex={-1} className="help-article" aria-labelledby="help-article-title" key={active.id}>
+        <span className="help-article-icon"><Icon name={active.icon} size={26}/></span>
+        <h3 id="help-article-title">{active.title}</h3>
+        {active.sections.map((section,index)=><section key={index}>{section.title&&<h4>{section.title}</h4>}{section.paragraphs.map((body,i)=><p key={i}>{body}</p>)}</section>)}
+        <div className="help-destinations">{active.links.map(link=><a className="help-destination" key={link.href} href={link.href} onClick={()=>{if(link.category){setCategory(link.category);setView('installed');}close();}}><span>{link.label}</span><Icon name="chevron-right" size={16}/></a>)}</div>
+      </article> : <div className="help-empty"><Icon name="search" size={28}/><p>{labels.empty}</p><button className="text-button" type="button" onClick={()=>setQuery('')}>{labels.browse}</button></div>}
     </div>
-    <footer><button type="button" className="text-button" onClick={guide}>{text.settings.showGuide}</button><a className="text-button" href="#/settings" onClick={close}>{text.nav.settings}</a></footer>
-  </dialog>;
+  </section>;
 }

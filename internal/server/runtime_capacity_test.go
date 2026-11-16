@@ -28,6 +28,24 @@ func TestLoadCapacityFailureDoesNotShrinkRequest(t *testing.T) {
 	}
 }
 
+func TestLoadCapacityRejectsCommitPressureEvenWithFreeGPU(t *testing.T) {
+	model := &api.ModelMetadata{Size: 4 << 30, ContextSize: 131072, KVElementsPerToken: 32768}
+	for _, gpu := range []bool{false, true} {
+		for _, commit := range []int64{0, 512, 1024} {
+			r := &resource.SystemResources{TotalRAM: 10000, AvailableRAM: 9000, AvailableCommitMB: commit, CommitMeasured: true, GPUAvailable: true, GPUMemory: 24000, GPUAvailableMemory: 20000}
+			err := checkContextCapacity(model, r, 8192, "q4_0", 1, gpu, true)
+			var capacity *contextCapacityError
+			if !errors.As(err, &capacity) || capacity.requested != 8192 {
+				t.Fatalf("commit %d GPU %t: %v", commit, gpu, err)
+			}
+			r.AvailableCommitMB = 9000
+			if err := checkContextCapacity(model, r, 8192, "q4_0", 1, gpu, true); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
 func TestLoadCapacityWaitsForReleasedMemoryWithoutChangingAllocation(t *testing.T) {
 	calls := 0
 	err := waitForLoadCapacity(context.Background(), time.Second, time.Millisecond, func() error {

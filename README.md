@@ -1,14 +1,20 @@
 # OffGrid
 
-OffGrid is a local-first AI runtime with a CLI, HTTP API, responsive web UI,
-and Electron desktop host. It runs GGUF models through `llama-server` and keeps
-models, conversations, knowledge indexes, users, and run history on storage you
-control.
+OffGrid is a local-first AI workspace for conversations, agent tasks, and work
+with your files. Use the desktop app, its quick window, the CLI, or the HTTP API.
+It runs GGUF models through `llama-server` and keeps models, conversations,
+knowledge indexes, users, and run history on storage you control.
 
-![OffGrid Chat in dark mode, showing a sample community workshop plan](docs/images/chat-dark.png)
+![OffGrid Chat in light mode, showing a project task, agent status, work inspection and a concise result](docs/images/agent-workspace-light.png)
+
+*Chat with a purpose: a demonstration task with sample file and command receipts.*
 
 [Download OffGrid v0.4.30](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.30) ·
 [Quickstart](docs/setup/quickstart.md) · [Interface tour](docs/guides/interface-tour.md)
+
+**Interface preview:** the images below show the development checkout captured
+on 16 November 2026, not the published v0.4.30 interface. Conversations and
+library entries are demonstration data. [Capture details](docs/images/README.md).
 
 The project is being hardened from a prototype into a dependable local tool.
 Core paths are tested; optional subsystems are exposed according to their
@@ -32,13 +38,13 @@ For help and responsible disclosure, see [Support](SUPPORT.md) and
 
 ## Desktop download
 
-The newest download for Windows, macOS and Linux is
+The published download linked here for Windows, macOS and Linux is
 [OffGrid v0.4.30](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.30).
 Windows packages are unsigned; macOS apps are not Developer ID signed or
 notarized. Read the release's OS trust guidance before installing.
-GitHub's **Latest** release is 0.4.30. This designation does not establish
-publisher trust. [All published versions](https://github.com/takuphilchan/offgrid-llm/releases)
-remain available.
+[All published versions](https://github.com/takuphilchan/offgrid-llm/releases)
+remain available; the development preview pictured here is separate from those
+release downloads.
 Windows users should choose the **setup.exe** download. See the
 [platform and architecture guide](docs/setup/installation.md#download-and-verify-a-release)
 for the matching package and checksum instructions. Desktop includes the local
@@ -47,10 +53,38 @@ available on Windows x64.
 
 ## See the workspace
 
+Start with a request, choose a model beside the composer, and return to saved
+work from the sidebar. Agent profiles bring instructions and allowed tools into
+Chat; Activity keeps execution, approvals, and recovery visible. The desktop
+quick window provides a compact entry point while OffGrid runs in the background.
+
+### Quick access from your desktop
+
+Press **Ctrl+Shift+Space** on Windows or **Command+Shift+Space** on macOS to
+open the compact input while OffGrid is running. Type a request, attach a file,
+choose your model, or switch to voice without opening the full workspace.
+
+![OffGrid Quick access with a draft request, attachment actions, model selection and voice controls](docs/images/quick-access-input.png)
+
+The window grows to show your conversation. Expand it to continue in the main
+workspace with the same draft and saved work. Change the shortcut in **Settings
+→ Quick window** if it conflicts with another app.
+
+![OffGrid Quick access expanded to show a sample project checklist reply](docs/images/quick-access-reply.png)
+
+### Files beside your work
+
+Attach a file as a compact tile and open its source beside the conversation.
+The reader keeps file tabs, page navigation, zoom, and download close at hand;
+extraction coverage tells you which material still needs review.
+
+![OffGrid document reader beside a draft, showing an authored workshop handout](docs/images/document-reader.png)
+
 ### Models
 
 Browse the model catalog, compare requirements and review a download before
-installing. Switch to **Installed** to choose a model already on your device.
+installing. **Installed**, **Discover models**, and **Search Hugging Face** keep
+local models, catalog suggestions, and online search in distinct views.
 
 ![OffGrid model discovery with Qwen3.5, SmolLM3 and Granite catalog cards](docs/images/models-discover.png)
 
@@ -59,13 +93,48 @@ installing. Switch to **Installed** to choose a model already on your device.
 Use the bundled OffGrid CLI and PowerShell from the Windows desktop workspace.
 Terminal tabs retain their sessions when you return to Chat.
 
-![OffGrid 0.4.30 native terminal displaying CLI help in an isolated Demo drive](docs/images/desktop-terminal.png)
+Choose **OffGrid CLI** to work in a local folder, or **Agent** to start with an
+agent profile.
+
+![OffGrid terminal welcome screen with OffGrid CLI and Agent entry points](docs/images/terminal-welcome.png)
+
+Run commands in a terminal tab alongside your saved work.
+
+![OffGrid development preview terminal displaying actual packaged CLI help in an isolated Demo drive](docs/images/desktop-terminal.png)
+
+### Speak naturally
+
+Open **Talk** for the full workspace listening view. With the required local speech
+models and runtimes installed, automatic turn detection lets you finish speaking
+before OffGrid sends your request. Text and voice share the same conversation;
+the microphone and stop controls stay within reach.
+
+![OffGrid full workspace voice view in its Listening state, with microphone and stop controls](docs/images/voice-listening-light.png)
+
+This is a demonstration of the listening interface using simulated microphone
+input. See [voice setup](docs/guides/voice.md) for requirements and limitations.
 
 ### Knowledge and agents
 
-| Reuse documents in Knowledge | Configure an agent for your work |
-| --- | --- |
-| [![Knowledge with three sample documents and source selection](docs/images/knowledge-library.png)](docs/images/knowledge-library.png) | [![Workshop assistant profile with instructions and model selection](docs/images/agent-profiles.png)](docs/images/agent-profiles.png) |
+Reuse documents across conversations in Library, organize collections, and
+choose the sources for your next request.
+
+![Knowledge with three sample documents and source selection](docs/images/knowledge-library.png)
+
+Configure an agent's instructions, model, and allowed resources for the work
+you want it to do.
+
+![Workshop assistant profile with instructions and model selection](docs/images/agent-profiles.png)
+
+### Make it yours
+
+Choose light and dark themes, text size, and reduced motion in **Settings →
+Appearance**. Response settings let you display text as it is generated or wait
+until completion. Voice, desktop shortcuts, storage, and access settings have
+separate sections. Language availability and linguistic review are reported
+separately from document and speech capabilities.
+
+![OffGrid Appearance settings with theme previews, light and dark palettes, text size and reduced motion](docs/images/settings-appearance.png)
 
 <details>
 <summary>Watch the 16-second workspace tour</summary>
@@ -74,11 +143,11 @@ Terminal tabs retain their sessions when you return to Chat.
 
 </details>
 
-The [illustrated tour](docs/guides/interface-tour.md) includes the installed-model
-library, terminal command details and light mode. These are real UI captures
-from the 0.4.30 source with isolated sample conversations, documents, models and
-profiles. The terminal runs the actual packaged CLI; the GIF is a screenshot
-slideshow, not an inference-speed demonstration.
+The [illustrated tour](docs/guides/interface-tour.md) explains the current
+navigation, document reader, model setup, agents, voice, and settings. These are
+real renderer captures with isolated sample data. The terminal runs the actual
+packaged preview CLI; the GIF is a screenshot slideshow, not an inference-speed
+demonstration. [Provenance and regeneration](docs/images/README.md).
 
 ## Community
 
@@ -127,8 +196,10 @@ upgrade channel. See [Docker deployment](docs/setup/docker.md) and the
 
 ## Build and run from source
 
-Saved chat streams by default in the web and desktop UI. Response settings
-separate smaller interactive context from extended context without changing
+Saved chat supports streaming in the web and desktop UI. Choose **Settings →
+Models & responses → Response display** for **As it is generated** or **When
+complete**. Document validation and runtime capabilities can still delay display.
+Response settings separate smaller interactive context from extended context without changing
 external-agent allocations. See [inference performance](docs/advanced/PERFORMANCE.md)
 for GPU setup, memory tradeoffs, and meaningful latency measurements.
 
@@ -181,7 +252,7 @@ The CLI is also the container entry point:
 ```
 
 The catalog is a starting point, not a model-size limit. In the web/desktop app,
-open **Models → Find more models** to search public GGUF repositories and choose
+open **Models → Search Hugging Face** to search public GGUF repositories and choose
 a specific file/quantization. Search uses Hugging Face online; installed models
 remain available offline. See [model discovery and download recovery](docs/guides/model-discovery.md).
 

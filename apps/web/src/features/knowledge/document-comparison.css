@@ -1,0 +1,50 @@
+@layer components {
+ .document-comparison{display:flex;flex-direction:column;width:100%;height:calc(var(--workspace-viewport,100dvh) - 120px);min-height:320px;min-width:0;padding:0;overflow:hidden;color:var(--text);background:var(--surface-1);border:0;box-shadow:none}
+ .comparison-header{display:flex;align-items:center;justify-content:space-between;gap:20px;flex:none;width:min(100%,1160px);margin-inline:auto;padding:28px 32px 20px;box-sizing:border-box}
+ .comparison-heading{display:flex;align-items:center;gap:12px;min-width:0}.comparison-heading>svg{flex:none;color:var(--muted)}
+ .comparison-heading h2{margin:0;font-size:22px;line-height:1.4;font-weight:600;letter-spacing:-.025em}
+ .comparison-tabs{display:flex;align-items:center;gap:6px;flex:none}.comparison-tabs .text-button{color:var(--muted)}.comparison-tabs .text-button[aria-pressed=true]{background:var(--surface-2);color:var(--text)}
+ .comparison-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:0 32px 32px}.comparison-body>*{max-width:1096px;margin-inline:auto}
+ .comparison-start{margin-block:8px 28px}.comparison-start-heading{display:none}
+ .comparison-choice{display:grid;position:relative;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end;gap:48px}
+ .comparison-choice label{display:grid;gap:10px;min-width:0}.comparison-choice label>span{font-size:13px;font-weight:500;color:var(--muted);padding-inline:2px}.comparison-choice label:nth-child(2){grid-column:2;grid-row:1}
+ .comparison-file-choice{position:relative;min-width:0}.comparison-file-choice>svg{position:absolute;inset-inline-start:16px;top:17px;z-index:1;color:var(--muted);pointer-events:none}
+ .comparison-choice select{--select-height:54px;--select-font-size:15px;--select-background:var(--surface-2);--select-radius:14px;width:100%;min-width:0}
+ .comparison-swap{position:absolute;inset-inline-start:calc(50% - 18px);bottom:9px}.comparison-submit{min-height:40px;white-space:normal}
+ .comparison-scope-note{font-size:13px;line-height:1.6;color:var(--muted);margin:14px 0 0;max-width:78ch}
+ .comparison-result-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;margin-bottom:20px}
+ .comparison-statusbar{display:flex;align-items:center;flex-wrap:wrap;gap:12px}.comparison-statusbar>p{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0;font-size:13px;color:var(--muted)}
+ .comparison-state{display:inline-flex;align-items:center;gap:6px;font-weight:500;color:var(--text);font-size:13px}.comparison-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+ .comparison-result-tools>.comparison-coverage{margin-inline-start:auto}.comparison-coverage,.comparison-export{font-size:13px;color:var(--muted)}
+ .comparison-coverage-content{font-size:14px;line-height:1.65}.comparison-coverage-content p,.comparison-export p{margin:0 0 14px;line-height:1.65}.comparison-coverage-content ul{padding-inline-start:20px;overflow-wrap:anywhere}
+ .comparison-coverage-content nav{display:flex;align-items:center;justify-content:space-between;gap:8px}
+ .comparison-expanded-review{flex-basis:100%;order:1;min-width:0;margin-top:12px;padding:20px;background:var(--surface-2);border-radius:16px}.comparison-expanded-review>header{display:flex;justify-content:space-between;align-items:center;gap:12px}.comparison-expanded-review h3{font-size:16px;margin:0;overflow-wrap:anywhere}
+ .comparison-job>progress{width:100%;height:4px;margin:0 0 20px;accent-color:var(--accent)}
+ .comparison-diff-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:48px;align-items:start}.comparison-side{min-width:0;border-radius:18px;background:color-mix(in srgb,var(--surface-2) 64%,var(--surface-1));overflow:hidden}
+ .comparison-source-heading{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+ .comparison-changes{list-style:none;padding:0;margin:0}.comparison-changes li{padding:24px;min-width:0}.comparison-changes li+li{padding-block-start:12px}.comparison-changes li[data-active=true]{background:var(--accent-soft)}
+ .comparison-change-kind{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--muted)}.comparison-change-kind>span:first-child{display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:var(--surface-1);font:16px monospace}
+ .comparison-excerpts pre{margin:18px 0;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:16px;line-height:1.8}.comparison-excerpts small{color:var(--muted);font-size:12px}
+ .comparison-source-link.text-button{display:inline-flex;align-items:center;gap:8px;justify-content:flex-start;font-size:13px;color:var(--muted);padding:6px 0;margin-top:4px}.comparison-source-link.text-button:hover{color:var(--text);background:transparent}
+ .comparison-side-empty{margin:24px;color:var(--muted);font-size:14px;line-height:1.6}.comparison-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0;font-size:13px}
+ .comparison-source{margin-top:20px;padding:24px;border:1px solid var(--separator);border-radius:18px;background:var(--surface-1)}.comparison-evidence-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.comparison-evidence-heading small{color:var(--muted);font-size:12px}.comparison-evidence-heading h4{margin:6px 0 0;font-size:16px;overflow-wrap:anywhere}
+ .comparison-source pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:24rem;overflow:auto;line-height:1.8;font:inherit;font-size:15px}.comparison-source dl>div{display:grid;grid-template-columns:minmax(7rem,1fr) 2fr;gap:1rem;font-size:14px}.comparison-source dd{margin:0;overflow-wrap:anywhere}
+ .comparison-evidence-details{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.comparison-evidence-details summary{border:0;background:transparent;padding:8px 0}
+ .comparison-history ul{list-style:none;padding:0;margin:0}.comparison-history li>button{display:flex;align-items:center;width:100%;gap:16px;padding:18px;background:transparent;border:0;border-radius:14px;color:var(--text);text-align:start}.comparison-history li>button:hover,.comparison-history li>button[aria-pressed=true]{background:var(--surface-2)}.comparison-history li>button>svg{color:var(--muted);flex:none}.comparison-history li>button>span{flex:1;min-width:0}
+ .comparison-history-names{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:15px;overflow-wrap:anywhere}.comparison-history small{display:block;margin-top:6px;color:var(--muted);font-size:13px}.comparison-history nav{display:flex;justify-content:space-between;padding:12px}
+ .comparison-notice,.comparison-selection-notice{padding:16px 20px;border-radius:14px;background:var(--surface-2);font-size:14px;line-height:1.6;color:var(--muted);box-sizing:border-box}.comparison-loading,.comparison-waiting{padding:32px 24px;color:var(--muted);font-size:14px;text-align:center}
+ @media(max-width:900px){.comparison-header{padding-inline:24px}.comparison-body{padding-inline:24px}}
+ @media(max-width:640px){.document-comparison{height:calc(100dvh - 100px)}.comparison-header{padding:20px 16px;gap:10px;flex-wrap:wrap}.comparison-heading h2{font-size:20px}.comparison-heading>svg{display:none}.comparison-tabs{margin-inline-start:auto;gap:2px}.comparison-body{padding-inline:16px}.comparison-choice{grid-template-columns:minmax(0,1fr) 36px;gap:14px 10px}.comparison-choice label:nth-child(2){grid-column:1;grid-row:2}.comparison-swap{inset-inline-start:auto;inset-inline-end:0;bottom:43px}.comparison-result-tools{gap:12px}.comparison-statusbar{flex-basis:100%}.comparison-result-tools>.comparison-coverage{margin-inline-start:0}.comparison-result-tools>.comparison-export{margin-inline-start:auto}.comparison-diff-grid{grid-template-columns:1fr;gap:16px}.comparison-changes li{padding:20px}.comparison-source{padding:20px}.comparison-source dl>div{grid-template-columns:1fr;gap:4px}}
+ @media(max-width:640px){.comparison-tabs{flex:1 1 100%;min-width:0;flex-wrap:wrap;justify-content:flex-end}.comparison-tabs .comparison-submit{flex:1 1 140px;min-width:0}}
+ @media(forced-colors:active){.comparison-side{border:1px solid CanvasText}.comparison-source-heading{position:static;width:auto;height:auto;clip-path:none;white-space:normal;margin:0;padding:16px}}
+}
+/* The shared native picker stylesheet is deliberately unlayered for Electron.
+   Keep the file icon inset on both native and customizable-select hosts. */
+.document-comparison .comparison-file-choice select:not([multiple]):not([size]){padding-inline:46px 16px;border-color:transparent}
+@layer controls {
+ .document-comparison :is(.icon-button,.text-button,.primary-button){display:inline-flex;align-items:center;justify-content:center;gap:8px}
+ .document-comparison .icon-button{width:36px;height:36px;min-height:36px;padding:7px;border:0;background:transparent;border-radius:50%;flex:none}.document-comparison .icon-button:hover{background:var(--surface-2)}
+ .document-comparison .text-button{font-size:13px;min-height:36px;padding:8px 10px;border:0;border-radius:999px}
+ .document-comparison .comparison-choice select{border-color:transparent;background-color:var(--surface-2);border-radius:14px;box-shadow:none}.document-comparison .comparison-choice select:hover{background-color:color-mix(in srgb,var(--surface-2),var(--text) 3%)}
+ .document-comparison .comparison-submit{border-radius:999px;font-size:14px;padding:12px 20px}.document-comparison .comparison-source-link{padding:6px 0;border:0;background:transparent}.document-comparison .comparison-source-link:hover{background:transparent;color:var(--text)}
+}

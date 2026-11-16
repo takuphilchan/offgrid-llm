@@ -2,7 +2,7 @@ package rag
 
 import "fmt"
 
-const knowledgePolicySchema = 4
+const knowledgePolicySchema = 8
 
 // Versioned, transactional policy foundation. This adds no document sharing or
 // tenant-isolation claim: document bindings and enforcement must precede APIs.
@@ -77,6 +77,50 @@ func (s *SQLiteStore) initCollectionSchema() error {
 			`INSERT INTO document_retention SELECT id,1,1,0,0 FROM documents`,
 			`CREATE TRIGGER documents_retention_insert AFTER INSERT ON documents BEGIN INSERT OR IGNORE INTO document_retention(document_id,schema_version,revision) VALUES(new.id,1,1); END`,
 			`INSERT INTO knowledge_policy_migrations(version) VALUES(4)`,
+		} {
+			if _, err := tx.Exec(statement); err != nil {
+				return err
+			}
+		}
+	}
+	if version < 5 {
+		for _, statement := range []string{
+			`CREATE TABLE knowledge_collection_audit (sequence INTEGER PRIMARY KEY AUTOINCREMENT,actor TEXT NOT NULL,collection_id TEXT NOT NULL,action TEXT NOT NULL,subject TEXT NOT NULL,revision INTEGER NOT NULL,created_at DATETIME NOT NULL)`,
+			`CREATE INDEX idx_collection_audit ON knowledge_collection_audit(collection_id,sequence)`,
+			`ALTER TABLE import_collections ADD COLUMN expected_revision INTEGER NOT NULL DEFAULT 0`,
+			`DROP TRIGGER imports_collection_insert`,
+			`CREATE TRIGGER imports_collection_insert AFTER INSERT ON document_imports BEGIN INSERT INTO import_collections(import_id,collection_id,schema_version) VALUES(new.id,'workspace',1); END`,
+			`INSERT INTO knowledge_policy_migrations(version) VALUES(5)`,
+		} {
+			if _, err := tx.Exec(statement); err != nil {
+				return err
+			}
+		}
+	}
+	if version < 6 {
+		for _, statement := range []string{
+			`ALTER TABLE document_imports ADD COLUMN ocr_language TEXT NOT NULL DEFAULT 'eng'`,
+			`INSERT INTO knowledge_policy_migrations(version) VALUES(6)`,
+		} {
+			if _, err := tx.Exec(statement); err != nil {
+				return err
+			}
+		}
+	}
+	if version < 7 {
+		for _, statement := range []string{
+			`CREATE TABLE IF NOT EXISTS document_import_ocr_pages (import_id TEXT NOT NULL REFERENCES document_imports(id) ON DELETE CASCADE, page INTEGER NOT NULL, checkpoint_key TEXT NOT NULL, receipt BLOB NOT NULL, receipt_sha256 TEXT NOT NULL, PRIMARY KEY(import_id,page))`,
+			`INSERT INTO knowledge_policy_migrations(version) VALUES(7)`,
+		} {
+			if _, err := tx.Exec(statement); err != nil {
+				return err
+			}
+		}
+	}
+	if version < 8 {
+		for _, statement := range []string{
+			`CREATE TABLE IF NOT EXISTS document_import_revisions (import_id TEXT PRIMARY KEY REFERENCES document_imports(id) ON DELETE CASCADE, schema_version INTEGER NOT NULL, current_revision TEXT NOT NULL, history_sha256 TEXT NOT NULL, history BLOB)`,
+			`INSERT INTO knowledge_policy_migrations(version) VALUES(8)`,
 		} {
 			if _, err := tx.Exec(statement); err != nil {
 				return err

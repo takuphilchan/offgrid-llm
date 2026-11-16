@@ -12,22 +12,82 @@ from offgrid import Client, OffGridError
 from offgrid import knowledge_files
 
 
+@pytest.mark.parametrize("returned", ["chi_sim", "eng"])
+@pytest.mark.parametrize("selection", ["chi_sim", "chi_sim+fra"])
+def test_collection_ocr_selection_requires_matching_receipt(service, tmp_path, monkeypatch, returned, selection):
+    client, state = service
+    monkeypatch.setattr(client, "_request", lambda method, path: {"capabilities": ["document-ocr-language-selection-v1", "document-ocr-mixed-languages-v1"]})
+    returned = selection if returned == "chi_sim" else returned
+    source = tmp_path / "source.txt"
+    source.write_text("native source", encoding="utf-8")
+    state["status"] = 202
+    state["body"] = json.dumps({"id": "import-one", "state": "accepted", "collection_id": "private", "collection_revision": 2, "ocr_language": returned}).encode()
+    if returned == selection:
+        assert client.kb.collections.import_file("private", 2, source, ocr_language=selection)["ocr_language"] == returned
+    else:
+        with pytest.raises(OffGridError):
+            client.kb.collections.import_file("private", 2, source, ocr_language=selection)
+    assert len(state["requests"]) == 1
+    assert parse_qs(urlsplit(state["requests"][0][1]).query)["ocr_language"] == [selection]
+
+
+def test_ocr_selection_never_falls_back_on_old_service(service, tmp_path, monkeypatch):
+    client, state = service
+    monkeypatch.setattr(client, "_request", lambda method, path: {"capabilities": []})
+    with pytest.raises(OffGridError, match="Upgrade"):
+        client.kb.collections.import_file("private", 1, tmp_path / "not-read.txt", ocr_language="chi_sim")
+    assert not state["requests"]
+
+
+def test_mixed_ocr_requires_more_than_single_language_capability(service, tmp_path, monkeypatch):
+    client, state = service
+    monkeypatch.setattr(client, "_request", lambda method, path: {"capabilities": ["document-ocr-language-selection-v1"]})
+    with pytest.raises(OffGridError, match="Upgrade"):
+        client.kb.collections.import_file("private", 1, tmp_path / "not-read.txt", ocr_language="chi_sim+fra")
+    assert not state["requests"]
+
+
 def test_explicit_attachment_import_does_not_upload_or_retry(service):
     client, state = service
     state["status"] = 202
-    state["body"] = json.dumps({"id": "import-one", "state": "accepted"}).encode()
-    result = client.kb.import_attachment("private", "file-" + "a" * 32, "b" * 64)
+    state["body"] = json.dumps({"id": "import-one", "state": "accepted", "collection_id": "collection-private", "collection_revision": 2, "sha256": "b" * 64}).encode()
+    destination = dict(collection_id="collection-private", collection_revision=2)
+    result = client.kb.import_attachment("private", "file-" + "a" * 32, "b" * 64, **destination)
     assert result["state"] == "accepted"
     method, path, _, body = state["requests"][0]
-    assert (method, path) == ("POST", "/v1/documents/imports")
+    assert (method, path) == ("POST", "/v1/collections/imports?collection_id=collection-private&collection_revision=2")
     assert json.loads(body) == {"attachment": {"session": "private", "id": "file-" + "a" * 32, "sha256": "b" * 64}}
     state["status"] = 503
     with pytest.raises(OffGridError):
-        client.kb.import_attachment("private", "file-" + "a" * 32, "b" * 64)
+        client.kb.import_attachment("private", "file-" + "a" * 32, "b" * 64, **destination)
     assert len(state["requests"]) == 2
     with pytest.raises(ValueError):
-        client.kb.import_attachment("private", "../wrong", "b" * 64)
+        client.kb.import_attachment("private", "../wrong", "b" * 64, **destination)
     assert len(state["requests"]) == 2
+
+
+def test_attachment_audience_receipt_and_required_review(service):
+    client, state = service
+    with pytest.raises(TypeError):
+        client.kb.import_attachment("private", "file-" + "a" * 32, "b" * 64)
+    assert state["requests"] == []
+    state["status"] = 202
+    state["body"] = json.dumps({"id": "import-one", "state": "accepted", "collection_id": "workspace", "collection_revision": 1, "sha256": "b" * 64}).encode()
+    with pytest.raises(ValueError):
+        client.kb.import_attachment("private", "file-" + "a" * 32, "b" * 64, collection_id="collection-private", collection_revision=2)
+    assert len(state["requests"]) == 1
+
+
+@pytest.mark.parametrize("revision", [None, 1, "2", True])
+def test_collection_upload_rejects_unreviewed_audience_receipt(service, tmp_path, revision):
+    client, state = service
+    path = tmp_path / "private.txt"
+    path.write_bytes(b"Private source")
+    state["status"] = 202
+    state["body"] = json.dumps({"id": "import-one", "state": "accepted", "collection_id": "private", "collection_revision": revision}).encode()
+    with pytest.raises(OffGridError):
+        client.kb.collections.import_file("private", 2, str(path))
+    assert len(state["requests"]) == 1
 
 
 @pytest.fixture

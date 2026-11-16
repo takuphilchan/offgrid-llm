@@ -30,7 +30,7 @@ for (const locale of ['en', 'fr', 'de', 'es', 'ar', 'sw', 'sn', 'nd', 'zu'] as L
     const fixture = await firstUse(page, locale);
     await page.setViewportSize({ width: 390, height: 620 });
     await page.goto('/ui/');
-    const guide = page.getByRole('dialog');
+    const guide = page.locator('.workspace-setup');
     const action = guide.getByRole('button', { name: modelImport(locale).title, exact: true });
     await expect(action).toBeVisible();
     if (locale === 'en' || locale === 'ar') await page.screenshot({ path: test.info().outputPath(`offline-setup-${locale}.png`), fullPage: true });
@@ -44,7 +44,7 @@ for (const locale of ['en', 'fr', 'de', 'es', 'ar', 'sw', 'sn', 'nd', 'zu'] as L
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(await page.evaluate(() => localStorage.getItem('offgrid.model'))).toBe('saved-unavailable');
     await page.reload();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.locator('.workspace-setup')).toHaveCount(0);
     await expect(panel).toHaveAttribute('open', '');
     expect(fixture.writes).toEqual([]);
   });
@@ -55,7 +55,7 @@ for (const mode of ['older-service', 'not-admin', 'offline'] as const) {
     const fixture = await firstUse(page, 'en', mode !== 'older-service', mode !== 'not-admin');
     if (mode === 'offline') await page.route('**/health', r => r.abort());
     await page.goto('/ui/');
-    const guide = page.getByRole('dialog');
+    const guide = page.locator('.workspace-setup');
     await expect(guide).toBeVisible();
     await expect(guide.getByRole('button', { name: modelImport('en').title })).toHaveCount(0);
     expect(fixture.writes).toEqual([]);
@@ -65,8 +65,8 @@ for (const mode of ['older-service', 'not-admin', 'offline'] as const) {
 test('import destination replaces a retained speech category without reopening setup', async ({ page }) => {
   const fixture = await firstUse(page);
   await page.goto('/ui/');
-  await page.getByRole('dialog').getByRole('button', { name: modelImport('en').title }).click();
-  await page.getByRole('button', { name: 'Speech recognition', exact: true }).click();
+  await page.locator('.workspace-setup').getByRole('button', { name: modelImport('en').title }).click();
+  await page.locator('.model-category-filter').selectOption({label:'Speech recognition'});
   await expect(page.locator('.offline-model-import')).toHaveCount(0);
   await page.evaluate(() => { location.hash = '#/models'; });
   await page.evaluate(() => { location.hash = '#/models/import'; });
@@ -84,7 +84,7 @@ test('first-use import ends with explicit model choice and returns to the retain
     return r.fulfill({ status: 201, json: { model_id: 'offline', filename: 'offline.gguf', size: 1024 ** 2, sha256: 'a'.repeat(64), inventory_refreshed: true } });
   });
   await page.goto('/ui/#/chat/new');
-  await page.getByRole('dialog').getByRole('button', { name: 'Close guide', exact: true }).click();
+  await page.locator('.workspace-setup').getByRole('button', { name: 'Close guide', exact: true }).click();
   await page.locator('.composer textarea').fill('Keep my first question');
   await page.evaluate(() => { location.hash = '#/models/import'; });
   const panel = page.locator('.offline-model-import');

@@ -33,6 +33,7 @@ async function fixture(page: Page) {
 }
 
 test('representative composition captures without dispatch', async ({ page }, info) => {
+  test.setTimeout(180000); // Multiple routes, themes and task states.
   const state = await fixture(page);
   for (const width of [1440, 1120]) {
     await page.setViewportSize({ width, height: 820 });
@@ -60,9 +61,9 @@ test('sidebar collapse preserves the live composer and exposes labelled navigati
   await page.locator('.sidebar-collapse').click();
   await expect(page.locator('.sidebar')).toHaveCSS('width', '64px');
   await expect(editor).toHaveValue('Keep this unsent café 日本語 draft');
-  await expect(page.locator('.primary-nav').getByRole('link', { name: 'Agents', exact: true })).toBeVisible();
+  await expect(page.locator('.sidebar').getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
   await page.locator('.sidebar-collapse').click();
-  await expect(page.locator('.sidebar')).toHaveCSS('width', '304px');
+  await expect(page.locator('.sidebar')).toHaveCSS('width', '248px');
   await expect(page.locator('.history-open')).toBeVisible();
   expect(state.writes).toEqual([]);
 });

@@ -5,7 +5,7 @@
   .primary-button:not(:disabled), .composer-actions > button:last-child:not(:disabled) { background-image: var(--gradient-primary); }
   :root {
     --control-height: 40px;
-    --control-radius: 8px;
+    --control-radius: 12px;
     --control-font-size: 14px;
     --control-gap: 8px;
   }
@@ -114,14 +114,13 @@
     min-height: var(--control-height);
     padding: 8px 12px;
     color: var(--text);
-    background: var(--surface-0);
-    border: 1px solid var(--line-strong);
+    background: var(--surface-1);
+    border: 1px solid var(--line);
     border-radius: var(--control-radius);
     font: inherit;
     font-size: var(--control-font-size);
     line-height: 22px;
   }
-  select { padding-inline-end: 28px; text-overflow: ellipsis; }
   /* Native popup lists do not reliably inherit a transparent select's surface.
      Specify both colors so a dark label cannot be painted on an OS-light menu.
      Keep native keyboard, type-ahead, RTL and forced-colors behavior intact. */
@@ -135,8 +134,8 @@
   :where(input, textarea, select):disabled { opacity: .6; cursor: not-allowed; }
   :where(input, textarea, select)[aria-invalid='true'] { border-color: var(--red); }
   :where(button, input, textarea, select, a):focus-visible {
-    outline: 2px solid var(--text);
-    outline-offset: -2px;
+    outline: 1.5px solid var(--muted);
+    outline-offset: 2px;
     box-shadow: none;
   }
   .field, .connector-panel form label {
@@ -151,6 +150,8 @@
   input[type='search']:focus-visible { border-color: var(--muted); outline: none; box-shadow: none; }
   .history-search input:focus-visible, .command-search input:focus-visible { outline: none; }
   .workspace-search-field { padding-inline-end: 4px; }
+  .workspace-search-field { border-color:var(--line); border-radius:12px; background:var(--surface-1); transition:border-color 140ms ease,background-color 140ms ease; }
+  .workspace-search-field:focus-within { border-color:var(--muted); box-shadow:0 0 0 2px color-mix(in srgb,var(--muted) 10%,transparent); }
   .workspace-search-field input::-webkit-search-cancel-button { display: none; }
   .workspace-search-field .search-clear { width: 40px; height: 40px; min-width: 40px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
   .workspace-search-field .search-clear:hover { background: var(--surface-2); color: var(--text); }
@@ -220,14 +221,13 @@
   /* Headings/disclosures already identify the next section; whitespace is enough. */
   .model-section + .model-section { padding-block-start: 16px; border-block-start: 0; }
   /* Rows divide siblings. The next section owns its own opening boundary. */
-  :is(.tool-list, .connector-list, .event-list) > article:last-child,
+  .event-list > article:last-child,
   .model-list > .model-row:last-child,
   .readiness-list > div:last-child,
   .card-grid > .resource-card:last-child,
   .knowledge-documents .resource-card:last-child,
   .known-work-list > li:last-child,
   .schedule-list > li:last-child,
-  .agent-management-page .tool-list > article:last-child,
   .activity-history-row:last-child,
   .execution-step:last-child,
   .skill-card:last-child { border-block-end: 0; }
@@ -276,26 +276,18 @@
     .history-search input { min-height: 34px; padding-block: 5px; }
     .workspace-search-field .search-clear { width: 32px; height: 32px; min-width: 32px; }
     .workspace-history-toolbar .history-manage { width: 32px; min-height: 32px; }
-    .sidebar-foot .workspace-options > button { min-height: 36px; padding: 6px 10px; }
     .sidebar-context .history-open, .sidebar-context .history-row { min-height: 32px; }
     .sidebar-context .history-open { padding-block: 6px; }
-    .workspace-options-panel .secondary-button { min-height: 32px; }
     :is(.action-group, .history-dialog-actions) > :is(.primary-button, .secondary-button, .danger-button) { min-height: 36px; padding: 6px 12px; }
   }
-  .workspace-options-panel .utility-popover-content { gap: 12px; }
-  .workspace-options-panel .secondary-button { justify-content: flex-start; text-align: start; border-color: transparent; background: transparent; }
-  .workspace-options-panel .secondary-button:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
-  .workspace-options-panel .workspace-account { font-size: 13px; padding-block-start: 12px; }
-  .workspace-options > button { transition: none; }
-  .workspace-options > button:active:not(:disabled) { transform: none; }
-  .workspace-options > button[aria-expanded='true'] { background: var(--surface-2); color: var(--text); border-color: var(--line); }
   @media (forced-colors: active) {
+    :where(button, input, textarea, select, a):focus-visible { outline: 2px solid Highlight; }
     summary:focus-visible { outline: 2px solid Highlight; }
     :is(.task-management, .model-library-tabs) > :is([aria-current='page'], [aria-selected='true'], [aria-pressed='true']) { border-block-end-color: Highlight; }
     .danger-button { border-color: ButtonText; }
-    :is(.history-search, .command-search):focus-within,
+    :is(.history-search, .command-search, .workspace-search-field):focus-within,
     input[type='search']:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
-    :is(.history-search, .command-search) input:focus-visible { outline: none; }
+    :is(.history-search, .command-search, .workspace-search-field) input:focus-visible { outline: none; }
     :is(.primary-button, .secondary-button, .new-chat-button) { border-color: ButtonText; }
     :is(.model-library-tabs [aria-selected='true'], .model-library-tabs [aria-pressed='true'], .model-category-picker [aria-pressed='true'], .model-discovery-sources [aria-pressed='true']) { border-color: Highlight; }
   }
@@ -316,12 +308,12 @@
   .activity-page > .model-library-tabs > button { background: transparent; border-radius: 0; padding-inline: 0; }
   .activity-page > .model-library-tabs > button[aria-pressed='true'] { border-block-end: 2px solid var(--text); }
   .work-history { gap: 16px; }
-  .work-history .work-state-filters { gap: 4px; margin: 0; align-items: center; }
-  .work-history .work-state-filters > button { min-height: 36px; padding: 6px 12px; border: 1px solid transparent; border-radius: 7px; background: transparent; font-weight: var(--weight-regular); color: var(--muted); }
-  .work-history .work-state-filters > button[aria-pressed='true'] { background: var(--surface-2); color: var(--text); font-weight: var(--weight-medium); }
-  .work-history .work-state-filters > button:hover { background: var(--surface-2); color: var(--text); }
-  .work-history .work-state-filters > button:last-child { margin-inline-start: auto; }
-  .work-history .work-state-filters span { font-size: var(--type-caption); font-weight: var(--weight-regular); }
+  .work-state-filters { gap: 4px; margin: 0; align-items: center; }
+  .work-state-filters > button { min-height: 36px; padding: 6px 12px; border: 1px solid transparent; border-radius: 7px; background: transparent; font-weight: var(--weight-regular); color: var(--muted); }
+  .work-state-filters > button[aria-pressed='true'] { background: var(--surface-2); color: var(--text); font-weight: var(--weight-medium); }
+  .work-state-filters > button:hover { background: var(--surface-2); color: var(--text); }
+  .work-state-filters > button:nth-child(5) { margin-inline-start: auto; }
+  .work-state-filters span { font-size: var(--type-caption); font-weight: var(--weight-regular); }
   .work-history .workspace-history-toolbar { grid-template-columns: minmax(12rem, 24rem) minmax(0, 1fr) auto; gap: 8px 12px; }
   .work-history .workspace-history-toolbar .history-tools { grid-column: 3; grid-row: 1; }
   .work-history .workspace-history-toolbar .history-clear-visible { grid-column: 2; grid-row: 1; justify-self: end; font-size: var(--type-caption); }
@@ -338,14 +330,14 @@
     .work-history .workspace-history-toolbar .history-search { grid-column: 1 / -1; grid-row: 1; }
     .work-history .workspace-history-toolbar .history-clear-visible { grid-column: 1; grid-row: 2; justify-self: start; }
     .work-history .workspace-history-toolbar .history-tools { grid-column: 2; grid-row: 2; }
-    .work-history .work-state-filters { column-gap: 0; row-gap: 4px; }
-    .work-history .work-state-filters > button { padding-inline: 8px; }
-    .work-history .work-state-filters > button:last-child { margin-inline-start: 0; }
+    .work-state-filters { column-gap: 0; row-gap: 4px; }
+    .work-state-filters > button { padding-inline: 8px; }
+    .work-state-filters > button:nth-child(5) { margin-inline-start: 0; }
     .work-history .work-history-empty { padding-inline: 12px; }
   }
-  @media (pointer: coarse) { .work-history .work-state-filters > button, .library-create-action { min-height: 44px; } }
+  @media (pointer: coarse) { .work-state-filters > button, .library-create-action { min-height: 44px; } }
   @media (forced-colors: active) {
-    .work-history .work-state-filters > button[aria-pressed='true'] { border-color: Highlight; }
+    .work-state-filters > button[aria-pressed='true'] { border-color: Highlight; }
     .library-create-action { border-color: ButtonText; }
   }
 }

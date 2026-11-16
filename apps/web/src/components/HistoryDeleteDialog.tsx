@@ -2,9 +2,10 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { APIError } from '../api/client';
 import { useI18n } from '../i18n';
 import { interaction } from '../i18n/interaction';
+import { presentation } from '../i18n/presentation';
 import { deleteConversationBody } from '../i18n/history-deletion';
 
-export type HistoryItem = { id: string; label: string };
+export type HistoryItem = { id: string; label: string; canonicalId?: string; revision?: number };
 
 // Delete exactly the snapshot the user confirmed, not items added in another
 // tab afterwards. Partial failure keeps only failed items selected for retry.
@@ -25,6 +26,7 @@ export function HistoryDeleteDialog({ items, kind, remove, onDeleted, onClose, o
   const [remaining, setRemaining] = useState(items);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [reasons,setReasons]=useState<{label:string;message:string}[]>([]);
   const id = useId();
   useEffect(() => {
     const element = dialog.current!;
@@ -44,20 +46,21 @@ export function HistoryDeleteDialog({ items, kind, remove, onDeleted, onClose, o
     locked.current = true; stopRequested.current = false; setStopping(false); setProcessed(0); setBusy(true); setFailed(false);
     const removed: string[] = [], failures: HistoryItem[] = [];
     let failure = false;
+    const details: {label:string;message:string}[]=[];
     for (let index = 0; index < remaining.length; index++) {
       if (stopRequested.current) { failures.push(...remaining.slice(index)); break; }
       const item = remaining[index];
       try { await remove(item.id); removed.push(item.id); }
       catch (reason) {
         if (reason instanceof APIError && reason.status === 404) removed.push(item.id);
-        else { failures.push(item); failure = true; onFailure?.(reason); }
+        else { failures.push(item); failure = true; details.push({label:item.label,message:reason instanceof Error?reason.message:text.common.error}); onFailure?.(reason); }
       }
       setProcessed(index + 1);
     }
     onDeleted(removed);
     locked.current = false; setBusy(false);
     if (!failures.length) onClose();
-    else { setRemaining(failures); setFailed(failure); }
+    else { setRemaining(failures); setFailed(failure); setReasons(details); }
   };
   return <dialog ref={dialog} className="history-delete-dialog" aria-labelledby={`${id}-title`} aria-describedby={`${id}-body`} onCancel={event => { event.preventDefault(); if (!locked.current) onClose(); }}>
     <h2 id={`${id}-title`}>{kind === 'chats' && items.length === 1 ? text.chat.deleteConversation : text.history.confirmTitle}</h2>
@@ -65,6 +68,7 @@ export function HistoryDeleteDialog({ items, kind, remove, onDeleted, onClose, o
     <ul>{remaining.slice(0, 5).map(item => <li key={item.id}>{item.label}</li>)}{remaining.length > 5 && <li>+{remaining.length - 5}</li>}</ul>
     {options?.(busy)}
     {failed && <p role="alert">{text.history.partialFailure.replace('{count}', String(remaining.length))}</p>}
+    {failed && reasons.length>0 && <details className="history-delete-reasons"><summary>{presentation[locale].details}</summary>{reasons.map((reason,index)=><div key={index}><strong>{reason.label}</strong><p>{reason.message}</p></div>)}</details>}
     {busy && <p role="status">{interaction[locale].deleteProgress.replace('{done}', String(processed)).replace('{total}', String(remaining.length))}</p>}
     <div className="history-dialog-actions"><button ref={cancel} className="secondary-button" disabled={stopping && busy} onClick={() => { if (busy) { stopRequested.current = true; setStopping(true); } else onClose(); }}>{busy ? interaction[locale].stopAfterCurrent : text.models.cancel}</button><button className="danger-button" disabled={busy || confirmDisabled} onClick={() => void confirm()}>{busy ? text.history.deleting : text.models.confirmDelete}</button></div>
   </dialog>;

@@ -26,10 +26,17 @@ copies only after your confirmation; originals and newer drafts remain intact.
 If a conversation was removed during setup, its draft stays available without
 being attached to another conversation or resubmitted.
 
-1. Open **Models → Discover models**, choose **Language** or **Embeddings**.
-2. Enter a model or publisher and choose **Search**. Typing alone does not send a query.
+1. Open **Models** from the destination rail. Choose **Discover models** for the
+   curated catalog or **Search Hugging Face** for public repositories, then choose
+   **Language** or **Embeddings** in **Model category**.
+2. In **Search Hugging Face**, enter a model or publisher and choose **Search**.
+   Typing alone does not send a query.
 3. Choose **Review download** on a repository. Its decision opens in that result.
 4. Read its model card and license. Select the exact GGUF file/quantization, then Download.
+
+Switch to **Installed** to select a downloaded model. The category filter stays
+available across these views; speech models have their own categories. See the
+[current model screens](interface-tour.md#models) for the layout.
 
 A single supported variant needs no file-selection step; alternatives stay in
 the same card. Curated language/embedding models use the same review-then-download

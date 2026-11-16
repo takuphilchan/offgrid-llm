@@ -94,6 +94,9 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 
 	// Simple retry logic for 503 (slots busy) with exponential backoff
 	maxRetries := 15
+	if boundedDocumentGeneration(ctx) {
+		maxRetries = 0
+	}
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		// Check if context was cancelled before making request
 		select {
@@ -139,7 +142,11 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
+			var errorReader io.Reader = resp.Body
+			if boundedDocumentGeneration(ctx) {
+				errorReader = io.LimitReader(resp.Body, 64<<10)
+			}
+			body, _ := io.ReadAll(errorReader)
 			resp.Body.Close()
 			if len(req.Tools) > 0 && resp.StatusCode == http.StatusInternalServerError {
 				if rejection := singleStepRuntimeRejection(body); rejection != nil {
@@ -152,7 +159,7 @@ func (e *LlamaHTTPEngine) ChatCompletion(ctx context.Context, req *api.ChatCompl
 		defer resp.Body.Close()
 		var chatResp api.ChatCompletionResponse
 		var reader io.Reader = resp.Body
-		if len(req.Tools) > 0 {
+		if len(req.Tools) > 0 || boundedDocumentGeneration(ctx) {
 			body, err := io.ReadAll(io.LimitReader(reader, (4<<20)+1))
 			if err != nil || len(body) > 4<<20 || jsonwire.Validate(body) != nil {
 				return nil, fmt.Errorf("ambiguous, malformed or oversized tool response")

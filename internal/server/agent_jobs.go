@@ -24,7 +24,8 @@ type jobSubmitRequest struct {
 
 	ResponseProfile         string                      `json:"response_profile,omitempty"`
 	ExecutionRequestVersion int                         `json:"execution_request_version,omitempty"`
-	DeferKnowledge          bool                        `json:"-"` // Internal calendar review; never accepted from clients.
+	DeferKnowledge          bool                        `json:"-"` // Internal inventory validation; never accepted from clients.
+	SelectedKnowledge       bool                        `json:"-"` // Exact retained evidence, resolved after resource authorization.
 	Execution               *execution.Reference        `json:"execution,omitempty"`
 	Prompt                  string                      `json:"prompt"`
 	Model                   string                      `json:"model"`

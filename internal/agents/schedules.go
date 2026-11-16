@@ -165,6 +165,9 @@ func (m *Manager) SaveScheduleWithEpoch(workspace, actor, id string, expected in
 		return nil, err
 	}
 	// Check the pinned immutable profile inside the same writer transaction.
+	if err = rejectDeletedProfile(tx, config); err != nil {
+		return nil, err
+	}
 	var profileData []byte
 	err = tx.QueryRow(`SELECT r.snapshot FROM agent_profiles p JOIN agent_profile_revisions r ON p.id=r.profile_id WHERE p.id=? AND p.workspace=? AND p.actor=? AND p.archived=0 AND r.revision=?`, config.Profile.ID, workspace, actor, config.Profile.Revision).Scan(&profileData)
 	if errors.Is(err, sql.ErrNoRows) {

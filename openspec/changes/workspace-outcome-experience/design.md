@@ -1,5 +1,343 @@
 # Design
 
+### Attachment and preview refinement (2026-11-15 owner reference)
+
+Continue the existing shared reader and uploader. Use bounded file tiles with a
+quiet format mark, readable filename, size/status and independent remove action.
+Keep source limitations available through a concise disclosure; failed preparation
+keeps its explanation and explicit recovery actions. Pending uploads use the same
+tile geometry and a small indeterminate indicator, never a fake percentage,
+orbiting border or full-canvas sweep. Image preparation follows the same rule.
+
+The source pane has a file-tab heading and one slim toolbar. Page thumbnails open
+in an anchored, scrollable panel without pushing the original down the canvas.
+Alternate text/side-by-side views, search and review remain discoverable in one
+reader-options menu. A concise coverage indicator opens the existing specific
+warnings and unread-page links. Do not turn partial extraction into a readiness
+claim, auto-submit files or broaden source authority. Use existing translated
+labels, theme tokens and both reduced-motion settings. Verify interaction and
+actual renders, including errors, retained drafts, RTL and enlarged layouts.
+
+## Current approved desktop-agent design (2026-11-15)
+
+This supersedes document-led Home and configuration-heavy composition below.
+The full app is a calm work surface, not a dashboard. Its empty state provides
+one request input; recent work is subordinate. A document opens beside work when
+selected and never makes every new task a document workflow. A slim destination
+rail provides Chat, Library, Activity and Models, with Settings at its foot. A
+separate contextual column holds recent work or Settings categories. Keep
+existing route adapters and access checks.
+
+### Compact desktop presentation
+
+Transition follow-up (2026-11-16): text, voice and full-window changes share one
+interruptible presentation lane. Fade outgoing content briefly, change the layout
+behind the same themed surface, ease native bounds over a bounded interval and
+reveal only after the renderer has painted the final geometry. Do not animate
+independent composer/card entrances on top of the host transition. Use an
+acknowledgment from the existing trusted renderer before host-initiated resizing;
+time out safely when no renderer is available. OS or app reduced motion bypasses
+interpolation. Reversal, dismissal and window replacement cancel stale visual
+callbacks; microphone cancellation and execution identities remain independent.
+Never persist intermediate/compact bounds as the full workspace geometry.
+
+Screenshot correction (2026-11-15): Quick Access is a bounded frameless surface
+on Windows, not a maximizable workspace with its sidebar hidden. The same window
+retains its full bounds; compact mode disables native resize/maximize and restores
+them on expansion. Full-mode captions are owned by the isolated preload, use
+localized labels and trusted native clicks, and expose no renderer window-control
+API. Voice and text are interchangeable presentations of the same work in both
+compact and full modes. Voice occupies the host directly with no dimmed nested
+frame or visible chat background. The mounted text workspace is hidden and inert
+while voice is active; returning restores the conversation, draft and focus.
+The composer has one text row and a lower action row with visible model choice;
+unselected folder configuration belongs under Attach. A short input grows for
+open menus, actual work or voice and returns after dismissal. Voice separates a
+warm peach/coral core, pale light and subtle halo instead of overlapping muddy
+accent tints; animation uses restrained transforms and real input/state signals.
+
+Use the existing authenticated BrowserWindow and conversation controller in a
+compact presentation, initially targeting Windows qualification. Reusing one trusted window
+avoids a second executor, competing drafts or broader IPC sender trust. Record
+full-window bounds separately; summon at the active display, restore the full
+workspace explicitly, and never persist compact bounds as full-window geometry.
+The full workspace need not be visible. The tray process and local service must
+remain alive for the shortcut to function. Explicit Quit still performs existing
+bounded host/terminal/service shutdown; existing close-to-tray behaviour remains.
+
+Register a configurable shortcut with conflict reporting and a tray fallback.
+Escape dismisses compact input only after nested dialogs/menus are dismissed;
+it does not stop a task. Dismiss cancels microphone capture/playback and preserves
+the unsent draft. Reopening never submits or replays audio. Stop uses the existing
+service control path. Expansion retains the same conversation and accepted input
+identity. Settings and large source/result inspection expand to the full window.
+Retain task-specific permissions and visible requests; compact mode is not a grant.
+
+### Everyday controls and configuration
+
+Screenshot follow-up: Models is directly reachable in the destination rail. New
+chat sits above recent work in the adjacent context column. Models keeps Installed, Discover models and Search
+Hugging Face visible in one stable navigation row with a labelled type filter;
+speech and text use the same discovery structure. Search remains explicit and
+does not issue network requests merely from navigation or typing. Settings uses
+the same contextual column as conversation history, with a compact search field
+and icon-labelled category rows, rather than adding a third navigation column.
+Other management pages retain only the rail. Collapsed and narrow Settings use
+an inline category fallback; section URLs survive reload/back navigation. Shared selects style their
+popup choices when the host supports customizable native selects, retaining a
+themed native fallback and the original keyboard, form and disabled semantics.
+
+The owner's later full Settings reference supersedes the centered-input draft:
+the welcome sits in the conversation area while the composer remains anchored at
+the bottom. Use a 60px destination rail and 280px contextual column at desktop
+widths, system UI typography with the existing script fallbacks, and an uncluttered
+content canvas. Settings has its own Appearance destination using existing locale
+labels, visual System/Light/Dark mode choices, aligned theme/text/motion rows inside
+one subtle boundary, a larger section heading and no duplicate visible page title.
+Only controls backed by OffGrid settings are shown; the reference does not create
+nonexistent account/billing/theme-editing functionality.
+
+The composer shows attachments, the current model/profile, microphone and one
+Send/Stop control. Active access and source chips appear only when relevant.
+Advanced limits, runtime identifiers and voice model selectors belong in Settings;
+provide direct links that preserve the draft and return location. Keep explicit
+per-task restrictions accessible and do not mutate pinned profiles via preferences.
+Sidebar, document reader and composer consume shared flat semantic surfaces with
+subtle single boundaries. Avoid gradients, repeated card frames and large warning
+paragraphs. Preserve one concise source-coverage disclosure independent of prose.
+Motion is short opacity/translation for appearing surfaces and a bounded real-state
+indicator while working/listening; no endless decorative gradient or fake progress.
+Respect both OS and in-app reduced motion, forced colours, RTL and 200% zoom.
+
+Talk has a focused surface with a soft visual that responds to measured input
+energy. Permission waiting, listening, transcription, processing, playback and
+recovery have distinct localized states. Only processing/playback use a quiet
+state animation. The visual is not a progress estimate. Escape ends Talk and
+returns focus to typing; hiding the desktop cancels capture/playback without
+cancelling accepted work. The compact host grows for voice and active work and
+returns to a small input presentation when appropriate. No extra recorder or
+unrequested background listening is introduced.
+
+### Guided local setup and model packs
+
+Use one model-management destination reachable through Settings and old deep links.
+Show ready installed models first, a clear Add models action, one search field and
+one persistent transfer list. Curated results are the default; external search is
+explicit and labelled as online. Type/category is a filter, not another nested
+navigation hierarchy. Expert exact identifiers/variants remain inspectable.
+
+Packs specify capabilities, pinned model/package revisions, required runtimes,
+artifacts/digests/licenses, platform, supported languages and estimated memory.
+An explicit review shows additional bytes and missing prerequisites. Reuse existing
+artifact operations, deduplicate already verified components, retain per-component
+failure/retry and only activate a configuration after required components are ready.
+Cancelling never removes previously installed resources. Downloaded, runtime-ready
+and task-qualified are distinct states. Optional voice, vision and Knowledge packs
+must not force their downloads for basic text work. Preserve current selections
+unless the user explicitly chooses to replace them. Hardware/model qualification
+is evidence, not a claim inferred from file size or catalogue metadata.
+
+### Acceptance and ownership
+
+`agent-conversation-workflows` owns default assistant admission, tool discovery,
+canonical work control and cross-client recovery. This change owns presentation,
+shortcut/window lifecycle and acquisition coordination; existing computer, voice,
+runtime and model stores remain authoritative. Do not turn on an incomplete agent
+preview or advertise app/browser automation merely because the launcher renders.
+Test native action paths against isolated authorized targets and test real model
+work separately from mocked UI responses. Record unfinished implementation as
+unfinished, independently of external human/hardware qualification.
+
+## Proposed coherent workspace refactor (2026-11-14)
+
+### Context and scope precedence
+
+See the opening proposal section for the product problem and scope. This design
+reconciles earlier presentation follow-ups into a single interaction architecture.
+Existing checked tasks describe prior increments, not acceptance of this design.
+Implementation began under the owner's explicit instruction on 2026-11-14. The dated work-surface-redesign-2026-11-15 evidence separates implemented preview behavior from remaining qualification gates.
+
+The source audit found `CanonicalInputActivity` rendering pending ordinary input
+as a second message/status/Stop panel, while `DocumentWorkspace` owns reader
+selection independently of submission and the canonical inbox accepts text.
+Existing `DocumentComparison`, `DocumentSynthesis`, synthesis review/history,
+collection APIs, reader memory and immutable source previews should be reused.
+Cosmetic-only repair would leave these workflow boundaries unchanged. A full
+rewrite would risk established access and recovery behavior; use a staged
+replacement of presentation/controller seams with working compatibility paths.
+
+### Product and interaction decisions
+
+1. **Navigation:** Home offers recent work and direct entry for a new request or
+   document task. Library presents reusable documents and collections. Activity
+   manages attention, running work and history. Recent work links open the same
+   saved work surface; do not create a second competing Work history. Models,
+   Agents and integrations remain discoverable under tools/setup, the terminal
+   is an optional panel, and the gear opens Settings directly. Preserve old deep
+   links with explicit route adapters. A returning user can resume their last
+   work directly; Home is not an obligatory dashboard detour.
+2. **Work surface:** a compact title/status/context header sits above a primary
+   canvas. Quick conversation uses that canvas directly. Document tasks show a
+   reader or result there with a collapsible assistant. Reviewing a citation
+   switches to result plus source; chat remains reachable without losing state.
+   At most two content panes are visible, with resizable bounded widths. Narrow
+   screens use tabs/drawers, not squeezed columns. Navigation is collapsible and
+   does not count as another content pane. Reading and editing each have one
+   intentional scroll owner. No mandatory project creation before asking.
+3. **Composer and progress:** one input, compact selected-source chips and one
+   primary Send/Stop location. Show active grants; hide empty folder/workspace
+   scaffolding. Ordinary replies have one bounded pending indicator. Longer
+   tasks expose real phase, queued/blocked state, completed units where known,
+   and reviewable partial output. Details and child activity expand on demand.
+   Never invent percent progress or show a submitted prompt again as a task card.
+   Acceptance, execution and completion are distinct; unknown acceptance must
+   reconcile the original request before offering a retry.
+4. **Reader:** the document is the dominant surface, with one compact toolbar
+   for page navigation, zoom, view and search. Thumbnails/outline and detailed
+   coverage open on demand. A concise persistent coverage state identifies
+   unread material; collapsing details never makes partial extraction appear
+   complete. Original, extracted and comparison views share the same reader and
+   source identity. Avoid nested framed cards and multiple rows of page links.
+5. **Results:** summaries, requirements and comparisons are saved reviewable
+   outputs rather than transcript-only text or a long modal. Reuse current
+   analysis/composition/review stores and exports. Source links open pinned
+   evidence; corrections/review decisions are attributed and versioned. Separate
+   a user's edited result from generated candidates; regenerate creates a new
+   candidate and cannot overwrite user edits. Unsupported result editing must
+   get an explicit additive contract rather than be stored in browser-only state.
+6. **Visual language:** shared typography, spacing, control sizes, icon use,
+   semantic surfaces, focus and divider tokens. Prefer whitespace and alignment
+   to nested containers. Reserve strong contrast for the primary action and
+   selected content. Keep named palettes and theme-aware logo/terminal rendering.
+   Motion explains actual transitions and respects reduced motion; large-area
+   loading may cover the document canvas but cannot imply measured progress.
+   No dependency on external fonts, assets or services at runtime.
+
+### Refactor seams and state ownership
+
+| Boundary | Implementation direction | Invariant |
+| --- | --- | --- |
+| App shell/routes | Extract navigation, work header and responsive pane layout from feature-specific layout assumptions | Navigation never submits or restarts work |
+| Conversation controller | Retain `useCanonicalConversation` and canonical request identities; move presentation-specific concerns into selectors/components | One accepted input and one execution authority |
+| Source context | Lift shared reader/context state to the active work boundary; model selected sources separately from the viewed source | Viewing is not permission or implicit inclusion |
+| Input composition | One submission adapter for text and supported document/image/Knowledge references, with explicit capability checks | No dropped inputs, automatic new chat or silent model switch |
+| Results and reviews | Reuse analyses, synthesis, comparison, review history and export endpoints | Revisions, evidence and user edits survive restart |
+| Status | Project existing inbox/job/analysis events into compact and expanded views | No second scheduler, duplicate polling authority or invented state |
+| Styles | Component-owned layouts consume shared tokens; remove superseded overrides after each migrated route | One shared component per reader/composer/status purpose |
+
+The UI term work is a presentation of canonical conversation, job, analysis and
+artifact identities; it is not a new tenant or security workspace. Persist only
+missing relationships/preferences additively after checking existing stores.
+Service state owns accepted work, evidence and outputs. Local draft state owns
+unsent text and pending selections, scoped to actor, service and work identity.
+Reader state owns page/zoom/search. Scope change clears private cached views and
+aborts or ignores stale requests without cancelling accepted server work.
+
+### Unified inputs and current-page context
+
+Coordinate the inbox extension with `agent-conversation-workflows`; that change
+owns canonical admission, execution and delivery. Coordinate evidence selection
+with `document-ingestion-reliability`; it owns revision resolution, retrieval,
+coverage and collection enforcement. Task group 43 integrates these dependencies;
+it must not build a new retrieval engine or duplicate backend task ownership.
+
+Use bounded typed references for attachments, images and selected Knowledge,
+including immutable revision identity and explicit document/page/block scope.
+Pin the scope shown next to the composer when submitting. For a current-page
+question, offer an explicit page context chip; do not assume that any open PDF
+is already authorized input. Switching reader pages after submission does not
+change the accepted scope. The server validates identity, access, page/block
+membership and revision, rechecking permissions before generation and delivery.
+Evidence receipts/citations identify what was actually used, independently of
+model prose. Source text remains untrusted and cannot authorize tool execution.
+
+Text, references and request identity must be admitted together or yield a clear
+recoverable error with the draft retained. Preserve limits and local vision/OCR
+capability checks; document text readiness is not visual understanding. Do not
+silently convert an image request to text-only processing. Advertise the new
+input capability; older services expose an explicit limitation, retain drafts
+and cannot fall through to a legacy writer. Maintain the legacy mutation guard
+and history projection. Test changed revisions, cross-user references, revoked
+access, missing capabilities, reconnect and lost acknowledgments.
+
+### Delivery order and gates
+
+| Package | Deliverable | Gate before proceeding |
+| --- | --- | --- |
+| A: Interaction prototype | Route/state inventory and clickable shared-renderer prototype of quick chat, document work and reviewed result; desktop/narrow/dark/light/RTL fixtures including failures | Owner reviews the actual primary layouts and recovery journey; prototype data is visibly identified, not claimed as working inference |
+| B: Shared foundation | Shell, pane manager, composer/status primitives, reader toolbar and token consolidation | Same accepted state renders coherently at desktop, narrow and 200% zoom; drafts and focus survive navigation; no duplicate primary controls |
+| C: Input continuity | Canonical multimodal references and explicit page scope with existing policies | Same-conversation text/document/image/Knowledge cases succeed for advertised capabilities, once only; no new-chat workaround; unauthorized/stale references fail safely |
+| D: Complete document journey | Library selection through requirements/summary/comparison, source review, saved edits, export and reopening | End-to-end task yields persistent attributable results; incomplete coverage remains visible; no draft loss or repeated execution |
+| E: Whole-app consistency | Activity, Models, Agents, integrations, Settings, Help, voice and terminal use the shared patterns | All supported routes/states audited, all 29 catalogs wired, keyboard/RTL/themes verified; active grants and runtime failures remain understandable |
+| F: Release verification | Migration/rollback rehearsal, regression suites, actual packaged/offline behavior and real-model task evidence | No unresolved blocking data, authority, duplicate-execution or workflow defects; unmet external qualification explicitly recorded |
+
+Dependencies: A freezes the interaction contract; B and C can then be developed
+as separate internal work packages; D requires both; E reuses B; F evaluates the
+integrated result. A short early prototype review prevents a complete build of
+another rejected layout. It is not a request to approve every component or patch.
+Complete a whole vertical journey before broad cosmetic propagation. Do not
+install successive partial UI experiments as if they were the finished redesign.
+
+### Acceptance matrix
+
+- Quick conversation: type a greeting immediately, receive one reply, stop a
+  pending reply from the composer, leave/return without duplicate submission or
+  a second Running card. No folder/project selection is required.
+- Current-page question: select page 8, pin page context and ask; the accepted
+  evidence receipt resolves that revision/page. Moving to page 9 does not change
+  the request. Unread figures are disclosed; no claim of visual interpretation.
+- Requirements: select policy plus amendment, run extraction, review a linked
+  exception and source, edit/review a result, export and reopen it. Source units
+  and gaps remain accounted for; edited content is not labelled machine-verified.
+- Compare: choose before/after revisions, inspect actual changes with sources
+  and coverage, navigate without a long modal and reopen the same result.
+- Folder task: request a supported file operation using explicit existing grants;
+  active scope, permission request, progress, resulting artifact and recovery are
+  visible. No redesign control creates authority implicitly.
+- Recovery: model load failure, unsupported vision, import failure, offline
+  service, stopped work, lost acknowledgment, revoked source and save conflict
+  retain drafts and show an action specific to the actual cause.
+
+For each scenario record behavior assertions, inspected screenshots and measured
+latency separately. Use fixture tests for UI determinism, then isolated real
+service/model runs for actual behavior. Record hardware/model/runtime identities;
+never substitute fixture answers for model-quality or local-runtime evidence.
+
+### Migration, measurement and risks
+
+Introduce routes/components behind a development feature flag, keeping the same
+canonical data. Back up and validate any additive migration against disposable
+copies first: counts, ownership, source hashes, revisions, saved outputs and
+preferences must match. Test restart, deep links, interrupted jobs and mixed
+client/service versions. UI rollback may select the old renderer only where its
+contracts are still compatible; data rollback requires the matching snapshot.
+Do not create a fallback that restores forbidden legacy writes.
+
+Capture an existing-build baseline for task steps, interruptions, payload/request
+counts, renderer memory and time to visible feedback on fixed hardware. Proposed
+UI gates: p95 immediate local feedback under 100 ms and no more than 10% regression
+in warm navigation or renderer memory on the same fixture set; investigate any
+failure before rollout. Inference latency is measured separately and not masked
+by animation. Virtualize/page large inventories and lazily render thumbnails;
+do not mount every original page to make a thumbnail strip. Preserve the 8 GB
+CPU-friendly core and separately qualify the optional advanced document profile.
+
+Risks: new navigation may hide existing tools -> preserve deep links, search and
+an explicit destination map. Backend/UI contract drift -> generated contracts
+and capability-negotiation tests. New copy may reintroduce mixed languages ->
+all-locale rendered audit plus updated translator review packs, with human review
+still separately pending. Dense panes may fail narrow/zoom layouts -> enforce
+minimum pane widths and switch to one content surface. Cosmetic iteration may
+expand indefinitely -> accept the prototype against the task matrix and record
+remaining findings by severity, with each blocker tied to a reproducible case.
+
+Track each package as planned, implemented, verified or blocked with concrete
+evidence. Do not infer a product completion percentage from historical task
+counts. `docs/advanced/production-readiness.md` remains the release authority;
+this refactor does not certify OCR, all model answers, native translations or
+public-sector accreditation. Installation/publication requires its own requested
+stage after verification, not an automatic side effect of planning.
+
 ## Activity and attention reconciliation (2026-11-05)
 
 The existing header truncates unordered jobs before prioritizing them, includes
@@ -704,3 +1042,164 @@ a second reviewer. A separate readiness command must fail for incomplete or
 unreviewed languages. No native speaker has yet signed off; group 32.3 stays open.
 Computer-use automation is explicitly stopped. Run isolated headless tests and
 packaging checks; installation is authorized separately by the owner.
+
+## Document OCR selection coordination (2026-11-14)
+
+The document-ingestion change now owns the shared mixed-language picker used by
+Chat and Knowledge: primary language plus up to two explicitly chosen additional
+packs, no duplicate or implicit selections, current-theme controls and all 29
+language catalogs. Source projections also return retained parser/pack identities.
+Existing reader, comparison and library work is reused. Real OCR/retry/source and
+headless interface evidence is recorded in
+`docs/quality/evidence/document-mixed-ocr-2026-11-14.md`. This is not a claim that
+the full document UX, native translations or departmental release is complete.
+
+## Canonical document handoff recovery (2026-11-14)
+
+The attachment picker must respect conversation ownership, not only service-wide
+file support. A canonical text conversation retains selected files in memory and
+offers an explicit New chat action using the existing localized capability copy.
+That action creates a document-compatible conversation, transfers the unsent
+draft, resets conversation-specific configuration, and uploads the selected files.
+It neither submits the question nor alters the original conversation history.
+Cancel releases the pending files and focuses the unchanged draft. Send is blocked
+while the handoff is unresolved. Navigating to another conversation clears it.
+The same action recovers a stale-client canonical_conversation_required rejection.
+Server ownership guards remain unchanged; this does not add canonical document
+inputs, automatic migration, or a second executor to an existing conversation.
+
+## Reader and recovery screenshot follow-up (2026-11-14)
+
+Keep document handoff decisions above the composer so they do not occupy its
+single-line editing grid. Preserve file selection, explicit New chat/Cancel,
+unsent text and the no-auto-submit boundary. Use compact ready-source cards.
+Replace the conversation's full-height focus stripe with a bounded focus marker
+on its first content item, retaining keyboard focus visibility.
+
+The reader is a workspace pane with a single boundary. Keep partial-coverage
+status visible in a labelled disclosure, and reveal affected-page navigation on
+demand. Retain source identities, accessible controls and bounded thumbnails;
+reduce header and thumbnail height to give the document more space.
+
+Model-start failures receive a typed recovery code. Specific capacity, queue,
+timeout and cancellation causes remain distinct; generic failures do not assert
+memory exhaustion. Offer explicit model selection without changing a model or
+replaying a request automatically. Diagnostic detail remains inspectable.
+
+Reader page navigation currently does not constrain attachment retrieval to that
+page: attachment references contain only file identity and revision. Page-scoped
+questions require a separate revision-validated request contract and matching
+retrieval/citation tests. Do not imply that these presentation changes deliver it.
+
+### Settings organization and model identity follow-up (2026-11-15)
+
+Remove the redundant footer refresh/overflow entry. Account actions belong to General; automatic refresh on return from another window retains drafts and model selection. Keep Appearance separate from General, and desktop Quick window shortcuts and Local storage separate from access controls, Voice, model response limits, Terminal and About. Expose only working capabilities. Keep search, locale changes, persistent deep links and keyboard focus across category changes. Composer labels use bounded family/size names; searchable menu rows retain complete names and exact IDs so visually similar variants remain distinguishable. No change to runtime choice, model download, permissions or task execution authority.
+
+### Theme and control refinement (2026-11-15)
+
+The owner requests a consistent action-widget hierarchy, clearer Models/Agents destinations and aligned response and Voice settings. Use shared action cards for destinations/launch choices, compact choices for preferences and icon controls for familiar toolbar actions; retain labels and focus. Speech triggers show readable model names while menus retain searchable exact IDs and revisions. Recognition/output/voice rows share one group with explicit readiness. Terminal welcome choices use the same visual hierarchy without granting shell access. Listening has bounded continuous motion distinct from microphone energy; processing and speaking have separate rhythms. Derive orb colors from active palette tokens; system and application reduced-motion settings disable motion. Keep existing all-language copy and no effect on runtime selection, download, permissions or saved work.
+
+Host-owned confirmation windows replace system message boxes for terminal close, routine failures and desktop access decisions. The local sandboxed dialog has no service API bridge or Node integration. Only its own main frame can reply; invalid responses are rejected. Closing, hiding, navigation, renderer loss and queued obsolete prompts resolve to Cancel. Default focus stays on Cancel, persistent trust remains unchecked, original scope text is literal, and file/folder pickers remain operating-system controls. No permission decision is moved into the service renderer.
+
+### Installed UI follow-up (2026-11-15)
+
+The owner's installed screenshots identify a 36/32 DIP terminal caption mismatch, asymmetric card hover, raw speech identifiers dominating choices, sharp main panels and residual block buttons. Round native layout coordinates only after zoom conversion and align the terminal caption reserve with the host. Use the selected palette during startup, with a centered brand/status and separate actionable recovery state. Preserve all failure detail and reduced motion. Speech menus show readable names and only the revision suffix needed to distinguish duplicate names; exact identifiers remain searchable and inspectable under Technical details. All selections continue to use immutable IDs. Use rounded main workspace surfaces and spacing rather than full-height sidebar borders. Extend destination/launch cards to Quick window, setup guide and Library; analysis mode choices and collection creation use related selectable/disclosure widgets. Destructive, save, cancel and workflow submit controls remain explicit compact actions; no authority, sharing or execution semantics change.
+# Help, icons and form controls follow-up (2026-11-15)
+
+The owner explicitly extended the current UI correction to searchable, useful Help,
+semantic icons, dropdown contents and input outlines. Help becomes a workspace
+view rather than a blocking popup. The existing page stays mounted and hidden so
+an unsent draft and reading state survive returning. Search indexes local translated
+topic titles and guidance, with Unicode normalization, multiple terms and a clear
+empty state. Articles link to supported in-app destinations; opening guidance never
+grants access, submits work or downloads models. Keyboard close restores its trigger.
+Navigation away dismisses Help. Localized model/runtime, document coverage, voice,
+permission and interrupted-work guidance remain accurate and usable offline.
+
+### File, Library and comparison flow follow-up
+
+Use compact attachment tiles and filename/status feedback rather than sweeping
+upload effects or repeated full-width metadata. Keep recoverable failed files in
+the draft while processing later batch items; unknown outcomes are not replayed.
+The shared reader separates source tabs from a slim viewing toolbar. Chat keeps
+up to eight metadata-only source tabs within the current conversation, with one
+active reader. A format badge identifies the file; close, add attachment, expand
+and split controls have distinct roles. Add keeps the upload unsent, and closing a
+tab keeps the attachment. Filename opens a scrollable vertical thumbnail panel
+with at most four decoded rasters and one request at a time. Zoom and download sit
+at the other end of the toolbar; page navigation and concise coverage sit in the
+footer. Search, extraction detail and alternate views stay on demand. Popovers
+are opaque in every theme. Source identity, reading state and keyboard access
+survive these transitions. Setup is inline, with Help as a searchable workspace
+surface rather than a second blocking layer.
+
+Library places collection filtering beside document search and management. Two
+compact actions lead to analysis and comparison. Collection management shows a
+list and the selected collection's details together, with separate creation and
+explicit audience review. Controls have bounded widths and semantic icons.
+
+The reported comparison screenshot had duplicate headings, nested selector cards,
+three disclosure rows and a full-height divider dominating a tiny result. Replace
+that with two always-editable source selectors, one status/action row and aligned
+rounded change surfaces. The primary Compare action stays in the header. Changing
+the pair hides stale results; a fresh comparison resolves current extraction
+revisions while history keeps immutable references. Access checks and incomplete
+coverage remain independent of presentation.
+
+### Response presentation and profile removal
+
+Live text is the default for eligible ordinary responses; a scoped preference can
+buffer it until completion. Canonical Chat observes its existing saved job stream,
+bound to that run, without submitting another executor. The server explicitly
+allows previews only for eligible running text work. Evidence-sensitive workflows,
+unavailable context and revoked access withhold or clear preview text. Provider
+support and actual progress remain distinct from this display preference.
+
+Permanent profile removal requires an owner-scoped review token over the profile,
+tasks, dependencies and exact private-memory identities/revisions. Delete is atomic
+under the existing SQLite writer reservation and manager lock. Active or independently
+retained canonical work and dependent profiles/jobs/schedules block removal. Existing
+task deletion rules apply; stale task and schedule admission cannot revive a removed
+profile. Shared files, exports and backups remain separate retention domains. UI,
+CLI and Python require explicit review and never replay deletion automatically.
+
+Settings uses distinct palette, floating-window, shield, storage-drive and info
+icons alongside existing gear/model/microphone/terminal icons. Library uses
+collections, comparison and document-search symbols. All share existing SVG stroke,
+size and accessibility conventions. Native selects keep their semantic and keyboard
+behavior while supported hosts theme the picker; fallback and forced colors remain.
+
+## Migrated conversation deletion follow-up (2026-11-15)
+The reported delete failure revealed that the UI sent migrated chats to a deliberately fenced legacy delete path. Extend the existing DELETE session resource with explicit canonical identity and revision. Keep old clients fenced; atomically tombstone canonical state before purging conversation bodies and retryable filesystem cleanup. Retain independent work/backups as disclosed, require an explicit active-work choice, block unsettled input, prevent reimport/replayed commands, and preserve actor isolation. The dialog must expose typed recovery actions and technical failure details; partial successes are never deleted again. Verify HTTP and rendered flows with isolated state, including cleanup failure and restart.
+
+## Resumed Agents refinement (2026-11-15)
+
+Keep the existing Profiles, Tools & MCP and External agents destinations. Profile
+search and archive visibility belong with the list; the selected editor exposes
+Save and Use in its heading, while duplication, archive and reviewed deletion
+remain secondary maintenance actions. Archived entries are visibly identified and
+cannot be offered as new delegates. Instructions, model and optional resources
+retain scoped drafts and explicit save semantics.
+
+Tools use recognizable capability icons and compact rows with full technical
+identity available for inspection. MCP connections use matching rows, bounded
+inline setup and explicit cancellation; failed requests retain the draft. Serialize
+tool mutations to prevent duplicate toggles and stale refreshes. External-agent
+compatibility, host setup and workflow qualification remain separate facts;
+neutral information indicators replace alarming decoration. Setup commands remain
+copy-only, never automatically executed. Reuse translated controls and verify
+these surfaces through isolated renderer fixtures, without operating the desktop.
+
+### Startup and transcript follow-through (2026-11-16)
+The owner reported a first-message outline during scrolling and a premature transition from service startup into disabled Chat. Use a shared local startup visual across native service connection and HTTP renderer bootstrap. Renderer readiness is explicit: base access/model discovery plus Chat history, capabilities and selected-conversation configuration settle before the first reveal. Errors reveal actionable recovery, not fabricated readiness; a bundle watchdog offers reload without exposing disabled Chat. Background refreshes and active generation do not re-enter the gate. Preserve reduced motion with textual stage and elapsed feedback. Focus decoration belongs to keyboard navigation of the scroll region, never the first message.
+
+The follow-up replaces the small spinner with a larger OffGrid stack that gently expands and settles. Three welcoming lines rotate independently of real loading stages; they never imply progress. Native and renderer startup share the same local CSS, controller and 29-language catalog. Hidden windows and recovery pause the copy rotation, teardown removes its timers, and reduced motion changes copy without fades or spatial motion. New copy enters the existing translator review/export/import inventory and remains pending human review.
+
+The Windows caption area is reserved consistently during renderer bootstrap.
+Boot/login content uses the remaining viewport height, and the hidden mounting
+application cannot create a document scrollbar behind startup. The startup surface
+owns overflow for short-window recovery controls and begins below the caption
+strip. Removing the gate restores ordinary application scrolling. Animation is
+automatic by default, with no startup chooser; app and system accessibility
+preferences remain authoritative. The owner explicitly enabled app animations
+for this installation after a saved reduced-motion setting was identified.

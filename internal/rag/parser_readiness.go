@@ -1,9 +1,15 @@
 package rag
 
-import "os"
+import (
+	"github.com/takuphilchan/offgrid-llm/internal/documentocr"
+	"os"
+	"strings"
+)
 
 const builtinDocumentRevision = "offgrid-document-v2"
-const xlsxDocumentRevision = "offgrid-xlsx-v3"
+const xlsxDocumentRevision = "offgrid-xlsx-structure-v4"
+const docxDocumentRevision = "offgrid-docx-structure-v7"
+const pptxDocumentRevision = "offgrid-pptx-structure-v3"
 
 // FormatReadiness describes extraction, independently of embedding/index setup.
 // Installed is deliberately not equivalent to tested or qualified.
@@ -30,16 +36,22 @@ func (p *DocumentParser) FormatReadiness() []FormatReadiness {
 	formats := []FormatReadiness{
 		{ID: "text", Extensions: []string{".txt", ".md", ".markdown", ".go", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".rs", ".rb", ".php"}, SourceUnits: []string{"section"}, Limitations: []string{"UTF-8 text only; code is never executed."}},
 		{ID: "structured_text", Extensions: []string{".json", ".csv", ".xml", ".html", ".htm", ".rtf"}, SourceUnits: []string{"section"}, Limitations: []string{"Extracted text only; layout, scripts, external resources and embedded objects are not rendered."}},
-		{ID: "docx", Extensions: []string{".docx"}, SourceUnits: []string{"section"}, Limitations: []string{"Body text and tables only; rendered page numbers, headers, notes and images are not available."}},
-		{ID: "xlsx", Extensions: []string{".xlsx"}, SourceUnits: []string{"sheet"}, Limitations: []string{"Stored cells with cell references and formula text only; cached formula results may be stale. Up to 100,000 populated cells per worksheet. Charts, images and macros are not interpreted."}},
-		{ID: "pptx", Extensions: []string{".pptx"}, SourceUnits: []string{"slide"}, Limitations: []string{"Slide text only; notes, charts, images and embedded documents are not interpreted."}},
+		{ID: "docx", Extensions: []string{".docx"}, SourceUnits: []string{"section"}, Limitations: []string{"Current body text, tables, referenced notes, headers and footers. Page placement and fields are not recalculated. Images and embedded objects are not interpreted. Tracked changes are disclosed."}},
+		{ID: "xlsx", Extensions: []string{".xlsx"}, SourceUnits: []string{"sheet"}, Limitations: []string{"Native typed cells, raw numbers, stored styles, supported numeric/date displays and explicit table headers. Unsupported display formats retain raw values and format codes with review warnings. Hidden cells and merged ranges are marked. Formula caches may be stale or missing; formulas and external links are never evaluated. Up to 100,000 populated cells per worksheet. Charts, images, conditional formatting and macros are not interpreted."}},
+		{ID: "pptx", Extensions: []string{".pptx"}, SourceUnits: []string{"slide"}, Limitations: []string{"Native slide text, speaker notes and table structure in XML order. Master/layout text, animations and visual reading order are not resolved. Images, charts and embedded objects are identified but not interpreted. Table styling is not proof of semantic headers."}},
 	}
 	for i := range formats {
 		formats[i].Runtime = "builtin"
 		formats[i].RuntimeState = "available"
 		formats[i].ExtractorRevision = builtinDocumentRevision
+		if formats[i].ID == "docx" {
+			formats[i].ExtractorRevision = docxDocumentRevision
+		}
 		if formats[i].ID == "xlsx" {
 			formats[i].ExtractorRevision = xlsxDocumentRevision
+		}
+		if formats[i].ID == "pptx" {
+			formats[i].ExtractorRevision = pptxDocumentRevision
 		}
 		formats[i].Qualification = "unverified"
 		formats[i].MaxFileBytes = p.maxFileSize
@@ -62,13 +74,27 @@ func (p *DocumentParser) FormatReadiness() []FormatReadiness {
 		pdf.OCRState = "language_missing"
 		if p.ocrSetupErr != nil {
 			pdf.OCRState = "language_invalid"
-		} else if len(p.ocrLanguage) > 0 && ocrDigest(p.ocrLanguage) == ocrEnglishSHA {
+		} else if documentocr.ValidateModels(p.ocrPack().Language, p.ocrLanguage) {
 			pdf.OCRState = "installed_unchecked"
-			pdf.OCRLanguages = []string{"eng"}
-			pdf.Limitations = []string{"Local English OCR is installed but not release-qualified. Low-confidence or ambiguous mixed content remains partial. Installed runtime presence is not qualification."}
+			pdf.OCRLanguages = strings.Split(p.ocrPack().Language, "+")
+			pdf.Limitations = []string{"Local OCR is installed but not release-qualified. Low-confidence or ambiguous mixed content remains partial. Installed runtime presence is not qualification."}
 		}
 	}
 	formats = append(formats, pdf)
+	image := FormatReadiness{ID: "image_document", Extensions: []string{".png", ".jpg", ".jpeg"}, Runtime: "tesseract_wasm", RuntimeState: "unavailable",
+		ExtractorRevision: imageDocumentRevision, Qualification: "unverified", SourceUnits: []string{"page"}, MaxFileBytes: min(p.maxFileSize, imageDocumentMaxBytes), MaxTextBytes: p.maxExtractedSize,
+		OCRState: pdf.OCRState, OCRLanguages: append([]string{}, pdf.OCRLanguages...), EncryptedPolicy: "reject",
+		Limitations: []string{"Single still PNG/JPEG, at most 8192 pixels per side and 16 million pixels. Requires the packaged local OCR worker and verified English pack. Printed-text transcription only; figures, tables, handwriting and signatures are not interpreted. EXIF orientation is preserved through original-pixel source coordinates. Runtime presence is not language or format qualification."}}
+	if pdf.OCRState != "unavailable" {
+		image.RuntimeState = "installed_unchecked"
+	}
+	formats = append(formats, image)
+	tiff := image
+	tiff.ID = "tiff"
+	tiff.Extensions = []string{".tif", ".tiff"}
+	tiff.ExtractorRevision = tiffDocumentRevision
+	tiff.Limitations = []string{"Classic multipage TIFF: up to 100 pages, 8192 pixels per side, 16 million pixels per page and 200 million pixels total. BigTIFF, subimages, planar samples and JPEG compression require conversion. Page orientation is retained. Requires the packaged OCR worker and verified English pack. Printed text only; deskew, visual interpretation and format/language qualification remain unavailable."}
+	formats = append(formats, tiff)
 	for _, f := range []struct {
 		id  string
 		ext []string
@@ -76,7 +102,6 @@ func (p *DocumentParser) FormatReadiness() []FormatReadiness {
 		{"legacy_office", []string{".doc", ".xls", ".ppt"}},
 		{"opendocument", []string{".odt", ".ods", ".odp"}},
 		{"email", []string{".eml", ".msg", ".mbox"}},
-		{"image_document", []string{".png", ".jpg", ".jpeg", ".tif", ".tiff"}},
 	} {
 		formats = append(formats, FormatReadiness{ID: f.id, Extensions: f.ext, Runtime: "none", RuntimeState: "unavailable", Qualification: "unverified", SourceUnits: []string{}, OCRLanguages: []string{}, EncryptedPolicy: "reject", Limitations: []string{"Requires a dedicated local document adapter. Chat image understanding is a separate model capability."}})
 	}

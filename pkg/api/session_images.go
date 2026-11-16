@@ -1,10 +1,8 @@
 package api
 
 import (
-	"bytes"
 	"encoding/base64"
 	"errors"
-	"image"
 	"strings"
 	"unicode/utf8"
 )
@@ -32,16 +30,7 @@ func ValidateSessionImages(images []SessionImage) error {
 		if len(item.DataURL) > base64.StdEncoding.EncodedLen(MaxSessionImageBytes)+32 {
 			return ErrSessionImages
 		}
-		if err := validateDataImage(ChatImageURL{URL: item.DataURL}); err != nil {
-			return ErrSessionImages
-		}
-		_, encoded, _ := strings.Cut(item.DataURL, ",")
-		data, err := base64.StdEncoding.Strict().DecodeString(encoded)
-		if err != nil || len(data) > MaxSessionImageBytes {
-			return ErrSessionImages
-		}
-		// DecodeConfig alone accepts truncated pixel data. Dimensions were bounded above.
-		if _, _, err = image.Decode(bytes.NewReader(data)); err != nil {
+		if err := validateDataImageLimit(ChatImageURL{URL: item.DataURL}, MaxSessionImageBytes); err != nil {
 			return ErrSessionImages
 		}
 	}

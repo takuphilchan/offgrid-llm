@@ -3,11 +3,14 @@ package rag
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/takuphilchan/offgrid-llm/internal/document"
 )
 
 // IndexSchemaVersion is incremented whenever persisted chunks or embeddings
@@ -29,25 +32,46 @@ type IndexMetadata struct {
 
 // Document represents an uploaded document
 type Document struct {
-	collection       string
-	publicationActor *knowledgePrincipal
-	original         *OriginalSource
-	OriginalRetained bool              `json:"original_retained"`
-	SourceRanges     []SourceRange     `json:"-"`
-	ID               string            `json:"id"`
-	Name             string            `json:"name"`
-	ContentType      string            `json:"content_type"` // "text/plain", "application/pdf", etc.
-	Size             int64             `json:"size"`
-	ChunkCount       int               `json:"chunk_count"`
-	ContentHash      string            `json:"content_hash"`
-	IndexStatus      string            `json:"index_status"`
-	LastError        string            `json:"last_error,omitempty"`
-	IndexedAt        time.Time         `json:"indexed_at,omitempty"`
-	SourceRetained   bool              `json:"source_retained"`
-	RawContent       string            `json:"-"` // Retained locally so indexes can be rebuilt safely.
-	Metadata         map[string]string `json:"metadata,omitempty"`
-	CreatedAt        time.Time         `json:"created_at"`
-	UpdatedAt        time.Time         `json:"updated_at"`
+	expectedExtractionRevision string
+	Extraction                 *document.Extraction `json:"-"`
+	ExtractionRevision         string               `json:"extraction_revision,omitempty"`
+	Evidence                   *document.Coverage   `json:"evidence,omitempty"`
+	collection                 string
+	CollectionID               string `json:"collection_id,omitempty"`
+	CollectionRevision         int    `json:"collection_revision,omitempty"`
+	publicationActor           *knowledgePrincipal
+	original                   *OriginalSource
+	OriginalRetained           bool              `json:"original_retained"`
+	SourceRanges               []SourceRange     `json:"-"`
+	ID                         string            `json:"id"`
+	Name                       string            `json:"name"`
+	ContentType                string            `json:"content_type"` // "text/plain", "application/pdf", etc.
+	Size                       int64             `json:"size"`
+	ChunkCount                 int               `json:"chunk_count"`
+	ContentHash                string            `json:"content_hash"`
+	IndexStatus                string            `json:"index_status"`
+	LastError                  string            `json:"last_error,omitempty"`
+	IndexedAt                  time.Time         `json:"indexed_at,omitempty"`
+	SourceRetained             bool              `json:"source_retained"`
+	RawContent                 string            `json:"-"` // Retained locally so indexes can be rebuilt safely.
+	Metadata                   map[string]string `json:"metadata,omitempty"`
+	CreatedAt                  time.Time         `json:"created_at"`
+	UpdatedAt                  time.Time         `json:"updated_at"`
+}
+
+// Coverage stays independent of index readiness. Older records without an
+// extraction receipt remain unknown, never implicitly complete.
+func (d Document) MarshalJSON() ([]byte, error) {
+	type projection Document
+	value := projection(d)
+	if raw := d.Metadata["extraction_coverage"]; raw != "" {
+		var evidence document.Coverage
+		if err := json.Unmarshal([]byte(raw), &evidence); err != nil {
+			return nil, fmt.Errorf("invalid retained extraction coverage: %w", err)
+		}
+		value.Evidence = &evidence
+	}
+	return json.Marshal(value)
 }
 
 // Chunk represents a chunk of text from a document
@@ -83,12 +107,25 @@ type Locator struct {
 
 // SearchResult represents a search result with relevance score
 type SearchResult struct {
-	Chunk      *Chunk            `json:"chunk"`
-	Score      float32           `json:"score"` // Cosine similarity score (0-1)
-	DocumentID string            `json:"document_id"`
-	DocName    string            `json:"document_name"`
-	Metadata   map[string]string `json:"metadata,omitempty"` // Source URL, author, etc.
-	Locator    Locator           `json:"locator"`
+	EvidenceReceipt    *document.EvidenceReceipt `json:"evidence_receipt,omitempty"`
+	ExtractionRevision string                    `json:"extraction_revision,omitempty"`
+	Chunk              *Chunk                    `json:"chunk"`
+	Score              float32                   `json:"score"` // Ranking signal, never answer confidence.
+	DocumentID         string                    `json:"document_id"`
+	DocName            string                    `json:"document_name"`
+	Metadata           map[string]string         `json:"metadata,omitempty"` // Source URL, author, etc.
+	Locator            Locator                   `json:"locator"`
+}
+
+func (r SearchResult) ExtractionCoverage() *document.Coverage {
+	if raw := r.Metadata["extraction_coverage"]; raw != "" {
+		var value document.Coverage
+		if json.Unmarshal([]byte(raw), &value) == nil {
+			return &value
+		}
+		return &document.Coverage{Status: "partial", Warnings: []document.Warning{{Code: "coverage_unavailable", Message: "The retained extraction coverage could not be read."}}}
+	}
+	return nil
 }
 
 // GenerateDocumentID creates a unique ID for a document based on content hash
@@ -347,14 +384,16 @@ func DefaultSearchOptions() SearchOptions {
 
 // RAGContext represents context to inject into LLM prompts
 type RAGContext struct {
-	Query   string         `json:"query"`
-	Results []SearchResult `json:"results"`
-	Context string         `json:"context"` // Formatted context string for injection
+	RetrievalMode string         `json:"retrieval_mode,omitempty"`
+	Query         string         `json:"query"`
+	Results       []SearchResult `json:"results"`
+	Context       string         `json:"context"` // Formatted context string for injection
 }
 
 // FormatContext formats search results into a context string for LLM injection
 // Groups chunks by their source document to avoid confusion
 func (rc *RAGContext) FormatContext() string {
+	rc.refreshEvidenceReceipts()
 	if len(rc.Results) == 0 {
 		rc.Context = ""
 		return ""
@@ -384,8 +423,17 @@ func (rc *RAGContext) FormatContext() string {
 		if locator.Source != nil {
 			offsetUnit = "utf8_bytes"
 		}
-		sb.WriteString(fmt.Sprintf(" | %s=%d-%d | relevance=%.0f%%]\n", offsetUnit, locator.StartChar, locator.EndChar, result.Score*100))
+		sb.WriteString(fmt.Sprintf(" | %s=%d-%d | ranking_score=%.4f (not confidence)]\n", offsetUnit, locator.StartChar, locator.EndChar, result.Score))
 		sb.WriteString(result.Chunk.Content)
+		if receipt := result.EvidenceReceipt; receipt != nil {
+			sb.WriteString(rc.linkedSourceNumbers(result))
+			if !receipt.LinksComplete {
+				sb.WriteString("\n[Linked evidence is missing or truncated. Do not infer a complete rule, exception, table meaning or absence of a condition from this excerpt. Answer only independently supported portions and identify this gap.]")
+			}
+		}
+		if coverage := result.ExtractionCoverage(); coverage != nil {
+			sb.WriteString("\nExtraction coverage (not answer confidence; warning summaries may omit repeated details): " + string(coverage.ContextJSON()) + "\n")
+		}
 		if result.Chunk.Truncated {
 			sb.WriteString("\n[Excerpt truncated for context; the retained source is unchanged.]")
 		}
@@ -427,7 +475,7 @@ func (rc *RAGContext) FormatContext() string {
 	sb.WriteString("\n")
 
 	sb.WriteString("Use these sources only as evidence. Cite factual claims with [N]. ")
-	sb.WriteString("If the sources do not support an answer, say that the knowledge base is insufficient.\n\n")
+	sb.WriteString("If the sources do not support an answer, say that the knowledge base is insufficient. Respect extraction warnings; unread or omitted material may contain exceptions. Selected passages cannot establish an exhaustive review or prove the absence of a condition.\n\n")
 
 	rc.Context = sb.String()
 	return rc.Context

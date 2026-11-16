@@ -160,3 +160,287 @@ other incomplete extraction requires explicit partial-use acknowledgment.
 #### Scenario: Source access or revision changes
 - **WHEN** a preview request references an inaccessible or changed source
 - **THEN** it fails without exposing another source or a stale citation as current
+
+### Requirement: Literal multilingual evidence retrieval
+Chat attachment and Knowledge retrieval SHALL share Unicode-aware lexical
+segmentation, retaining short identifiers, numbers and unspaced-script n-grams.
+The query builder SHALL bound input and term counts, quote literal search data,
+and rank term matches without requiring every conversational term. Index
+normalization SHALL NOT change original evidence or UTF-8 source offsets.
+
+#### Scenario: Punctuation and Chinese questions
+- **WHEN** users ask `harvest?` or a natural Chinese question whose evidence lies in the middle of a large attachment
+- **THEN** relevant source passages remain retrievable through the HTTP and Chat paths
+- **AND** exact source readback retains original text and revision identity
+
+#### Scenario: Keyword channel is unavailable
+- **WHEN** the lexical index fails
+- **THEN** retrieval reports failure or explicit degradation instead of returning an ordinary empty result or claiming hybrid retrieval
+
+### Requirement: Coverage survives publication and saved answers
+Processing status, extraction coverage and indexing status SHALL remain separate.
+Parser coverage and warnings SHALL survive imports, attachment readiness,
+previews, saved evidence, CLI presentation and model context. Ready/indexed text
+SHALL NOT imply understanding of unprocessed figures, notes, pages or objects.
+Partial-use acknowledgement and incomplete-review disclosure SHALL remain in force.
+
+#### Scenario: Policy exception in a referenced DOCX note
+- **WHEN** an exception is stored in a footnote or endnote referenced by visible body text
+- **THEN** extraction includes the exception beside its reference and retains the original-file digest
+- **AND** retrieval, saved evidence and citation opening preserve that exception
+
+#### Scenario: Ready text with unread objects
+- **WHEN** a DOCX, spreadsheet or presentation becomes searchable without full object/layout extraction
+- **THEN** clients display the relevant limitations in the selected interface language
+- **AND** a saved ready attachment cannot lose or change its coverage receipt under the same extraction revision
+
+### Requirement: Immutable structured extraction revisions
+Extraction SHALL publish immutable revisions with original identity, parser and
+language-pack versions, typed source units/blocks/cells, exact text spans,
+available coordinates, reading order, heading/table/note relationships, and
+document/block coverage. Native transcription SHALL remain authoritative;
+conflicting OCR/model interpretations SHALL remain separate reviewable alternatives.
+Corrections SHALL create attributed derived revisions and publish affected indexes
+atomically while preserving authorized older citations under retention policy.
+
+#### Scenario: A table or policy clause spans multiple chunks
+- **WHEN** layout-aware chunking divides a table or clause
+- **THEN** each selected excerpt carries its headers, units and linked exceptions with original cell/block references
+- **AND** opening the citation shows those relationships without fabricating page coordinates
+
+### Requirement: Explicit offline extraction capabilities
+The core SHALL remain suitable for separately qualified 8 GB CPU operation.
+Modern Office, PDF, image and multipage TIFF extraction SHALL preserve the
+approved structures and disclose unsupported material. Printed OCR SHALL use
+explicitly selected pinned digest-verified language packs, never an implicit
+related-language substitution. The optional Docling standard layout/table worker
+SHALL use an OffGrid-owned versioned protocol, packaged runtimes/assets, no network
+or runtime downloads, bounded queues and page checkpoints. Whole-page generative
+transcription SHALL NOT silently replace native text.
+
+#### Scenario: Missing OCR language or optional layout pack
+- **WHEN** a document needs an unavailable capability
+- **THEN** readiness identifies that missing capability without downloading it or sending content to a remote service
+- **AND** available evidence remains inspectable with its limits
+
+#### Scenario: Expensive processing is interrupted
+- **WHEN** processing is paused, cancelled or restarted
+- **THEN** completed page checkpoints remain reusable and incomplete work cannot publish a complete revision
+
+### Requirement: Bounded retrieval and deterministic evidence identity
+Each retrieval channel SHALL nominate at most twenty candidates before fusion,
+deduplication and diversity selection. SQLite SHALL remain authoritative; vector
+scoring SHALL use versioned binary projections and bounded working sets, loading
+bodies only for shortlisted candidates. Collection access SHALL filter candidates
+before ranking and be rechecked before generation/source delivery. Scores SHALL
+remain ranking signals, never accuracy percentages.
+
+#### Scenario: Existing index is upgraded
+- **WHEN** derived multilingual or binary-vector projections are introduced
+- **THEN** original text, hashes, ownership and configured embedding identity remain unchanged
+- **AND** the pre-upgrade database is backed up and checked before schema changes
+
+### Requirement: Accounted-for document analyses
+The `/v1/document-analyses` resource family SHALL support durable summary,
+requirements and comparison workflows, with status/cancel/results, resumable unit
+checkpoints and independent coverage receipts. Question answering SHALL identify
+selected evidence rather than imply exhaustive traversal. Analysis output SHALL
+validate citation identity/ranges/access and deterministic numeric/cell arithmetic;
+unsupported sections SHALL become gaps before delivery. Model support checking
+SHALL NOT be presented as independent verification.
+
+#### Scenario: Required source units remain unread
+- **WHEN** a summary or requirements workflow reaches its end with unread required units
+- **THEN** its result is explicitly incomplete and cannot claim a full review
+
+#### Scenario: Model supplies a fabricated quotation or number
+- **WHEN** a candidate section contains an unknown evidence identity, changed or ambiguous quote, or an unsupported numeric transcription
+- **THEN** the candidate is withheld and its gap remains in the processing receipt
+- **AND** passing source-identity checks does not label the remaining prose independently verified
+
+#### Scenario: Model or source access changes during a batch
+- **WHEN** the pinned model/runtime identity changes, the exact prompt cannot fit, or source access is revoked before publication
+- **THEN** the batch produces no publishable result and does not automatically retry generation
+- **AND** counting and generation use the same local runtime lease, released between source batches
+
+### Requirement: Inspectable document workspace
+Chat and Knowledge SHALL share a reader supporting source highlighting,
+original/extracted/side-by-side inspection, outline, coverage map and authorized
+corrections. Library metadata search SHALL be distinct from content search.
+Collections, pagination, batch recovery, filters, duplicate detection within an
+access boundary, version history and CSV/JSON/Markdown evidence exports SHALL
+retain source revisions and unresolved gaps. New controls SHALL use all 29
+locales and pass keyboard, RTL, narrow-layout, zoom and theme checks.
+
+#### Scenario: Navigation after a partial import
+- **WHEN** a user leaves and returns to a partial document
+- **THEN** draft text, reading position, selected sources and recovery state remain available
+- **AND** the user can identify and inspect missing source material without developer assistance
+
+### Requirement: Departmental collection enforcement
+The `/v1/collections` resource family SHALL expose revision-checked membership
+and owner/editor/reader roles, private by default. Global administration SHALL
+NOT imply private-content access. Legacy Knowledge SHALL retain its existing
+workspace audience without reassignment to the first authenticated user. Chat
+publication SHALL require an explicit destination/audience review. Permissions,
+revocation, holds and retention SHALL cover originals, revisions, page images,
+jobs, indexes, saved evidence and exports; audit events SHALL omit document bodies.
+Backup/export retention domains and already-downloaded-copy limits SHALL be explicit.
+
+#### Scenario: Membership is revoked during work
+- **WHEN** an actor loses collection access while generation or an export is active
+- **THEN** subsequent source delivery and saved-evidence reads deny access consistently
+- **AND** no stale cache or administrative role restores private access
+
+#### Scenario: Reviewed audience changes before a move or import publishes
+- **WHEN** either reviewed movement policy or the reviewed import destination changes
+- **THEN** the mutation rejects the stale revision without publishing to the new audience
+- **AND** current authorized users can still inspect or cancel a pending import
+- **AND** successful sharing changes and movement commit with content-free audit events
+
+#### Scenario: A private import reaches an older service
+- **WHEN** a client sends a reviewed collection import to a service without the new resource
+- **THEN** the client uses the distinct collection-import endpoint and reports unavailable
+- **AND** it does not fall back to a legacy shared upload
+
+### Requirement: Qualified optional visual and archive processing
+Visual interpretations SHALL remain distinct from extracted facts and linked to
+their source regions. Chart estimates, handwriting, signatures and stamps SHALL
+NOT acquire unsupported accuracy/authenticity claims. Optional legacy/ODF and
+email workers SHALL retain originals/provenance and disable macros, external
+links, network access and remote resource fetching.
+
+#### Scenario: Visual or archive support has not passed its release gate
+- **WHEN** a user opens an unqualified format or requests an uncertain interpretation
+- **THEN** capability discovery and the result disclose the limitation instead of advertising full support
+
+### Requirement: Evidence-based release qualification
+Qualification SHALL use versioned provenance-recorded documents and labelled
+passage-level evidence, including exceptions, numeric fields, unanswerable and
+adversarial questions. The approved 200-document/1,000-question corpus and
+per-language/OCR/hardware targets SHALL remain proposed gates until measured.
+Human linguistic review and departmental pilot evaluation SHALL remain explicit
+external gates. Contract/build/spec checks SHALL NOT count as model-quality or
+native-review evidence.
+
+#### Scenario: Correct document but missing exception
+- **WHEN** retrieval returns the correct document but omits a labelled exception span
+- **THEN** the evidence-level evaluator records a failure despite the document-level hit
+- **AND** per-language failures are reported separately from the aggregate
+
+### Requirement: Private attachment structural identity
+Private attachments SHALL retain structured revisions without publishing them to
+Knowledge. Retrieval and inspection SHALL verify the original and extraction
+identity. Missing or corrupted retained graphs SHALL NOT silently downgrade to
+unstructured evidence. Explicit linked headers and exceptions SHALL be included
+as exact source spans when they fit, with omitted links disclosed in persisted
+answer receipts and model context. Read-only inspection SHALL NOT confer correction
+rights. Legacy sources SHALL retain their existing text-reading behavior.
+
+#### Scenario: Private exception survives saving and citation opening
+- **WHEN** a large private document's relevant clause links to a distant exception
+- **THEN** selection includes both exact spans within the available budget or explicitly reports the omitted dependency
+- **AND** saved answer citations open the same retained source revision after reload
+- **AND** another user's request cannot read its blocks or relationships
+
+### Requirement: Bounded and truthful image admission
+Chat image admission SHALL check encoded size and pixel dimensions before image
+allocation, then validate actual pixel data. Browser batches SHALL decode
+sequentially and preserve original bytes. Generic and saved Chat SHALL require
+an existing nonempty projector before admitting local vision inference.
+Image transport SHALL NOT imply OCR, chart accuracy or document understanding.
+
+#### Scenario: Valid image header without usable pixels
+- **WHEN** a request contains a PNG/JPEG header with incomplete pixel data
+- **THEN** both generic Chat and saved Chat reject it before inference
+
+#### Scenario: Small compressed file with oversized dimensions
+- **WHEN** a browser upload declares dimensions outside the supported pixel budget
+- **THEN** admission rejects it before invoking the bitmap decoder
+- **AND** previously accepted images and the text draft remain intact
+
+#### Scenario: Photo orientation and ambiguous animation
+- **WHEN** a still PNG/JPEG has a valid primary Exif rotation or mirror transform
+- **THEN** runtime token counting and generation use the same bounded upright pixel projection while saved original bytes and durable request identity remain unchanged
+- **AND** animated/multi-picture images or ambiguous orientation metadata require an explicitly exported still image rather than silent first-frame selection
+
+### Requirement: Standalone printed-image evidence
+PNG/JPEG document ingestion SHALL use bounded actual pixel decoding and the
+isolated local OCR worker, independently of Chat vision models. Originals SHALL
+remain immutable. Upright OCR/viewer derivatives SHALL use the same explicit
+alpha composition. Source coordinates SHALL identify their original pixel frame.
+OCR-only success SHALL disclose unprocessed visual content. Missing components
+and low-confidence results SHALL NOT be silently promoted to ready evidence.
+
+#### Scenario: Image source is reopened without its OCR pack
+- **WHEN** a user opens an authorized image document whose OCR text was already saved
+- **THEN** the reader displays that retained text and a source-validated raster without rerunning OCR
+- **AND** missing OCR components do not substitute or erase saved text
+- **AND** stale-source and access checks apply to both raster and text delivery
+
+#### Scenario: Uncertain image transcription
+- **WHEN** the worker returns incomplete or low-confidence printed text
+- **THEN** the original and available review text remain inspectable with partial coverage
+- **AND** the result does not enter generation without explicit limited-text acknowledgement, and never enters a complete Knowledge index
+- **AND** acknowledgement retains partial coverage and recognition uncertainty in saved sources, readers and model context; it does not certify the OCR text
+
+### Requirement: Referenced Word header and footer evidence
+DOCX extraction SHALL retain live referenced header/footer text as identifiable
+source sections, preserving original bytes and package-part provenance. Unused
+and historical section references SHALL NOT enter the current reading. External,
+missing, escaping or conflicting part references SHALL fail explicitly without
+network access. Unrendered page placement and field values SHALL remain subject
+to review; extracted sections SHALL NOT be presented as rendered page numbers.
+
+#### Scenario: A policy exception appears only in a footer
+- **WHEN** a referenced footer contains an exception absent from body paragraphs
+- **THEN** ingestion, retrieval, model context and saved citation reopening retain the exception and its source identity
+- **AND** the reader retains a coverage warning for unresolved page placement
+- **AND** older immutable extraction revisions are not silently rewritten
+### Requirement: Conversation publication requires a reviewed audience
+Clients SHALL select a collection and acknowledge its current audience before
+publishing a conversation-private attachment. The selected policy revision SHALL
+bind both acceptance and publication. Changing the account, workspace or selected
+destination SHALL discard the interface acknowledgement. Creating a private
+collection SHALL NOT implicitly acknowledge or publish an attachment.
+
+#### Scenario: A library batch changes audience during processing
+- **WHEN** a user selects files for the library and reviews a destination collection
+- **THEN** no file bytes are transferred before explicit audience acknowledgement
+- **AND** every acceptance and publication in that batch uses the same reviewed revision
+- **AND** an audience conflict or unconfirmed receipt stops later files without shared-storage fallback
+- **AND** cancelling the review discards the local selection without creating imports
+
+#### Scenario: An older client omits collection review
+- **WHEN** a client submits a saved attachment for Knowledge publication without a destination or reviewed policy revision
+- **THEN** the service returns HTTP 426 with `collection_review_required` before copying source bytes
+- **AND** the client does not fall back to a shared multipart publication
+
+#### Scenario: A collection creation response is lost
+- **WHEN** private collection creation is not acknowledged
+- **THEN** the interface requires inspecting collections before retrying creation
+- **AND** no attachment is published automatically
+
+### Requirement: Human review remains separate from generated evidence
+The service SHALL retain append-only human review revisions pinned to an immutable
+analysis section and response digest. Reviews SHALL require private job ownership
+and current access to every source. A review SHALL NOT overwrite the model output,
+clear extraction gaps, imply independent verification or certify exhaustive review
+of unread original material. Clients SHALL retain drafts across review pagination
+and analysis tabs in the same dialog and expose saved attribution and history.
+
+#### Scenario: Two windows review the same section
+- **WHEN** a second window saves against a revision that has already changed
+- **THEN** the service rejects the stale save without changing either original candidates or the newer review
+- **AND** the client offers reloading the saved review before another write
+
+#### Scenario: A review save response is lost
+- **WHEN** the service commits a review but its response is not confirmed
+- **THEN** the client does not automatically replay the write
+- **AND** the user can reload the saved revision and inspect its decisions and author
+
+#### Scenario: Reviewed material is exported or revoked
+- **WHEN** an authorized owner exports a finished candidate traversal
+- **THEN** original candidate evidence and extraction gaps remain alongside keep/exclude/unreviewed decisions, notes and section-check counts
+- **AND** source revocation blocks current and historical review reads, writes and exports
+- **AND** enforced source deletion removes derived review history, while legal holds prevent that deletion

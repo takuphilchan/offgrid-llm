@@ -62,15 +62,19 @@ func (p *DocumentParser) extractPDFPagesWithOCR(parent context.Context, source [
 			break
 		}
 		text := page.Text
-		if strings.TrimSpace(unit.Text) != "" {
-			text, err = mergeNativeOCR(unit.Text, raster, page)
+		if strings.TrimSpace(pdfPageNativeText(*unit)) != "" {
+			text, err = mergeNativeOCR(pdfPageNativeText(*unit), raster, page)
 			if err != nil {
 				result.Warnings = append(result.Warnings, ExtractionWarning{Code: "document_ocr_overlap", SourceIndex: unit.Index, Message: "Native and scanned text could not be safely combined. Review this page in the original document."})
 				continue
 			}
 		}
+		fields := unit.FormFields
 		unit.Text = text
-		unit.ExtractorRevision = ocrExtractionRevision
+		if err := appendPDFFields(unit, fields); err != nil {
+			return nil, err
+		}
+		unit.ExtractorRevision = p.ocrRevision(ocrExtractionRevision)
 		minimumConfidence := 100
 		for _, word := range page.Words {
 			minimumConfidence = min(minimumConfidence, word.Confidence)
@@ -78,7 +82,7 @@ func (p *DocumentParser) extractPDFPagesWithOCR(parent context.Context, source [
 		if len(page.Words) == 0 {
 			minimumConfidence = 0
 		}
-		result.Metadata[fmt.Sprintf("ocr_page_%d", unit.Index)] = fmt.Sprintf("eng; rotation=%d; attempts=%d; minimum_confidence=%d", page.Rotation, page.Attempts, minimumConfidence)
+		result.Metadata[fmt.Sprintf("ocr_page_%d", unit.Index)] = fmt.Sprintf("%s; rotation=%d; attempts=%d; minimum_confidence=%d", p.ocrPack().Language, page.Rotation, page.Attempts, minimumConfidence)
 		if page.State != "complete" || strings.TrimSpace(page.Text) == "" {
 			unit.State = "ocr_partial"
 			result.Warnings = append(result.Warnings, ExtractionWarning{Code: "document_ocr_low_confidence", SourceIndex: unit.Index, Message: "Some text on this scanned page could not be read confidently. Review the original; the document is not fully extracted."})
@@ -108,8 +112,8 @@ func (p *DocumentParser) extractPDFPagesWithOCR(parent context.Context, source [
 	result.Warnings = warnings
 	result.Content = strings.TrimSpace(text.String())
 	result.WordCount = countWords(result.Content)
-	result.Metadata["ocr_revision"], result.Metadata["ocr_language_sha256"] = ocrWorkerRevision, ocrEnglishSHA
-	result.Metadata["extractor_revision"] = ocrExtractionRevision
+	p.bindOCRProvenance(result)
+	result.Metadata["extractor_revision"] = p.ocrRevision(ocrExtractionRevision)
 	if partial {
 		result.State = ExtractionPartial
 		result.Metadata["extraction_state"] = "partial"

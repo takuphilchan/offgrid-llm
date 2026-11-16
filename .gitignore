@@ -24,6 +24,7 @@ apps/web/vite.config.js
 apps/web/vite.config.d.ts
 playwright-report/
 test-results/
+/apps/web/test-results-*/
 
 # Temporary notes
 DEMO_COMMANDS.md
@@ -93,6 +94,7 @@ docs/PAPER.md
 docs/PAPER_README.md
 *.pdf
 # Authored, digest-pinned parser fixtures; never user documents.
+!/internal/rag/testdata/documents/native-form.pdf
 !/internal/rag/testdata/documents/corpus/*.pdf
 !/internal/rag/testdata/documents/ocr/inputs/*.pdf
 

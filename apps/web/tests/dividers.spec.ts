@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+﻿import { test, expect, type Page } from '@playwright/test';
 import { craftFixture } from './helpers/craft-fixture';
 import { availablePalettes, type PaletteMode } from '../src/appearance';
 
@@ -50,7 +50,7 @@ for(const mode of ['light','dark'] as const)for(const palette of availablePalett
   test(`Models boundary and settings separators: ${palette} ${mode}`,async({page})=>{
     const state=await fixture(page,palette,mode);
     await page.goto('/ui/#/models');
-    await page.locator('.model-category-picker button').nth(2).click();
+    await page.locator('.model-category-filter').selectOption('speech_recognition');
     const rows=page.locator('.installed-package-list > article');
     await expect(rows).toHaveCount(2);
     await expect(rows.last().locator(':scope > details > summary')).toBeVisible();
@@ -69,10 +69,14 @@ for(const mode of ['light','dark'] as const)for(const palette of availablePalett
     if(['dracula','warm','solarized','contrast'].includes(palette))await page.screenshot({path:test.info().outputPath('models.png'),fullPage:true});
     await page.goto('/ui/#/settings');
     await expect(page.locator('#settings-language')).toBeVisible();
-    for(const panel of await page.locator('.settings-panel').all())await expect(panel).toHaveCSS('border-bottom-width','0px');
-    for(const row of await page.locator('.appearance-preference-row').all())await expect(row).toHaveCSS('border-bottom-width','0px');
+    // Enclosed settings cards have one continuous border, not a standalone divider.
+    for(const panel of await page.locator('.settings-panel:visible').all()) {
+      const borders=await panel.evaluate(el=>{const s=getComputedStyle(el);return [s.borderTopWidth,s.borderRightWidth,s.borderBottomWidth,s.borderLeftWidth];});
+      expect(new Set(borders).size).toBe(1);
+    }
+
     expect(await emptyDoubleRules(page)).toEqual([]);
-    await page.locator('.theme-summary').first().click();
+    await page.goto('/ui/#/settings/appearance');await page.locator('.theme-summary').first().click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.keyboard.press('Escape');
     expect(state.writes).toEqual([]);
@@ -113,8 +117,9 @@ test('Markdown thematic break and forced colors preserve semantics and keyboard 
   await page.keyboard.press('Tab');
   await page.locator('#model-view-installed').focus();
   await expect(page.locator('#model-view-installed')).toHaveCSS('outline-style','solid');
-  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Tab');
   await expect(page.locator('#model-view-discover')).toBeFocused();
-  await expect(page.locator('#model-view-discover')).toHaveCSS('border-bottom-width','2px');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#model-view-discover')).toHaveAttribute('aria-current','page');
   await page.screenshot({path:test.info().outputPath('forced-colors.png')});
 });
