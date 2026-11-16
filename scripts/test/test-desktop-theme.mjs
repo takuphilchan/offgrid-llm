@@ -141,7 +141,7 @@ try {
     await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/${routePath}`);
     // Hash navigation completes before React commits the new route. Wait for
     // its heading so a generic locator cannot focus the previous page's button.
-    await expect(page.locator('.topbar h1')).toHaveText({chat:'Chat',agents:'Agents','agents/workspace':'Activity',models:'Models',knowledge:'Knowledge',activity:'Activity',settings:'Settings'}[route]);
+    await expect(page.locator('.topbar h1')).toHaveText({chat:'Chat',agents:'Agents','agents/workspace':'Activity',models:'Models',knowledge:'Library',activity:'Activity',settings:'Settings'}[route]);
     await expect(page.locator('.page-content')).toBeVisible();
     // Empty Activity intentionally has no page-level action: its refresh belongs
     // to the shared header. Exercise the remaining diagnostics disclosure.
