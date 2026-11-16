@@ -16,11 +16,11 @@ export async function dismissWorkspaceSetup(page,workspace) {
   }
   const key=`offgrid.onboarding.workspace:${identity}`;
   const state=await page.evaluate(key=>localStorage.getItem(key),key);
-  const dialog=page.locator('dialog.onboarding');
+  const setup=page.locator('.workspace-setup');
   if(state!=='working'&&state!=='complete') {
-    await expect(dialog).toBeVisible();
-    await dialog.locator('.onboarding-close').click();
+    await expect(setup).toBeVisible();
+    await setup.locator('.onboarding-close').click();
     await expect.poll(()=>page.evaluate(key=>localStorage.getItem(key),key)).toBe('working');
   }
-  await expect(dialog).toHaveCount(0);
+  await expect(setup).toHaveCount(0);
 }

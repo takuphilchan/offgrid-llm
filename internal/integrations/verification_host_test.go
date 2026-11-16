@@ -70,8 +70,13 @@ func TestExplicitVerificationFailsClosedAndDoesNotPersistSecrets(t *testing.T) {
 			if (err == nil) != (mode == "passed") || r.Verification == nil {
 				t.Fatalf("%+v %v", r, err)
 			}
-			if f.seen == nil || f.seen.Workspace != dir {
+			if f.seen == nil {
 				t.Fatalf("missing scoped invocation: phase=%s report=%+v err=%v", r.Phase, r, err)
+			}
+			wantWorkspace, wantErr := os.Stat(dir)
+			gotWorkspace, gotErr := os.Stat(f.seen.Workspace)
+			if wantErr != nil || gotErr != nil || !os.SameFile(wantWorkspace, gotWorkspace) {
+				t.Fatalf("verification workspace mismatch: got=%q want=%q statErrors=(%v, %v)", f.seen.Workspace, dir, gotErr, wantErr)
 			}
 			report, _ := json.Marshal(r)
 			if strings.Contains(string(report), f.seen.Token) || strings.Contains(string(report), f.seen.URL) {
