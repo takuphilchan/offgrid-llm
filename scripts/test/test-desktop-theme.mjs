@@ -77,7 +77,11 @@ async function launch() {
 try {
   let page = await launch();
   assert.equal(await app.evaluate(({nativeTheme}) => nativeTheme.themeSource), 'dark', 'Saved preference must reach native controls on startup');
-  await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/settings`);
+  // Appearance controls are intentionally grouped under their own settings
+  // section. Opening the settings landing page selects General, so explicitly
+  // enter Appearance before interacting with its theme mode controls.
+  await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/settings/appearance`);
+  await expect(page.locator('#setting-theme')).toBeVisible();
   for (const theme of ['light','dark','system','dark']) {
     console.log(`Checking ${theme} appearance on ${process.platform}`);
     await page.getByRole('button',{name:{light:'Light',dark:'Dark',system:'System'}[theme],exact:true}).click();
