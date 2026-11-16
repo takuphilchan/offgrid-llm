@@ -101,18 +101,10 @@ try {
       await expect(option).toHaveCSS('color', effective === 'dark' ? 'rgb(245, 245, 244)' : 'rgb(23, 23, 23)');
       await expect(option).toHaveCSS('background-color', effective === 'dark' ? 'rgb(24, 24, 25)' : 'rgb(255, 255, 255)');
     }
-    if (process.platform === 'darwin') {
-      // macOS runs native select menus outside Chromium's automation event
-      // loop. Opening one can block the next CDP key command indefinitely.
-      // Browser integration covers keyboard selection; this packaged check
-      // verifies main/renderer theme and locale synchronization without claiming
-      // automation of the OS-owned popup itself.
-      await language.selectOption('fr');
-    } else {
-      await language.focus();
-      await language.press('ArrowDown');
-      await language.press('Enter');
-    }
+    // selectOption updates the native control deterministically across Windows
+    // and macOS. ArrowDown is not equivalent: the system menu can open without
+    // changing the selected locale, leaving the packaged check platform-flaky.
+    await language.selectOption('fr');
     await expect(language).toHaveValue('fr');
     await language.selectOption('en');
   }
