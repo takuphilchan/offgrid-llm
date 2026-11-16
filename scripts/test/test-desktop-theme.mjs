@@ -83,11 +83,18 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/settings/appearance`);
   await expect(page.locator('#setting-theme')).toBeVisible();
   for (const theme of ['light','dark','system','dark']) {
+    if (!await page.locator('#setting-theme').isVisible()) {
+      await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/settings/appearance`);
+      await expect(page.locator('#setting-theme')).toBeVisible();
+    }
     console.log(`Checking ${theme} appearance on ${process.platform}`);
     await page.getByRole('button',{name:{light:'Light',dark:'Dark',system:'System'}[theme],exact:true}).click();
     await expect.poll(() => app.evaluate(({nativeTheme}) => nativeTheme.themeSource)).toBe(theme);
     const effective = await app.evaluate(({nativeTheme}) => nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
     await expect(page.locator('html')).toHaveAttribute('data-theme', effective);
+    // Locale controls belong to General settings, separate from Appearance.
+    await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/settings/general`);
+    await expect(page.locator('#settings-language')).toBeVisible();
     const language = page.locator('#settings-language');
     await expect(language.locator('option')).toHaveCount(Object.keys(require(join(root,'apps/desktop/language-registry.json'))).length);
     for (const option of await language.locator('option').all()) {
@@ -111,7 +118,8 @@ try {
   }
   console.log('Checking named palettes in the real packaged renderer and native chrome');
   const palettes=require(join(root,'apps/desktop/theme-palettes.json'));
-  await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/settings`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/settings/appearance`);
+  await expect(page.locator('#setting-theme')).toBeVisible();
   for(const mode of ['light','dark']){
     await page.locator('#setting-theme').getByRole('button',{name:mode==='light'?'Light':'Dark',exact:true}).click();
     for(const id of Object.keys(palettes.sources)){
