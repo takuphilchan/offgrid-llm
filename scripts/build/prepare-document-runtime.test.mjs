@@ -2,7 +2,30 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { unpackRuntime, lock } from './prepare-document-runtime.mjs';
+import { unpackRuntime, lock, fetchPinnedArchive } from './prepare-document-runtime.mjs';
+
+test('pinned archive fetch retries transient network failures with a bounded attempt count', async () => {
+  let calls = 0;
+  const archive = Buffer.from('pinned fixture');
+  const fetched = await fetchPinnedArchive(async url => {
+    assert.equal(url, lock.archive_url);
+    calls++;
+    if (calls === 1) throw new TypeError('fetch failed');
+    return new Response(archive, { status: 200 });
+  }, async () => {});
+  assert.deepEqual(fetched, archive);
+  assert.equal(calls, 2);
+
+  calls = 0;
+  await assert.rejects(fetchPinnedArchive(async () => { calls++; throw new TypeError('fetch failed'); }, async () => {}), /after 3 attempts: fetch failed/);
+  assert.equal(calls, 3);
+});
+
+test('pinned archive fetch does not retry permanent upstream errors', async () => {
+  let calls = 0;
+  await assert.rejects(fetchPinnedArchive(async () => { calls++; return new Response('', { status: 404 }); }, async () => {}), /HTTP 404/);
+  assert.equal(calls, 1);
+});
 
 test('unknown and oversized archives cannot prepare runtime assets', () => {
   assert.throws(() => unpackRuntime(Buffer.from('not the approved archive')), /digest mismatch/);

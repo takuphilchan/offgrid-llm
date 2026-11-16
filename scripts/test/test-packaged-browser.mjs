@@ -71,6 +71,16 @@ const env={...process.env,OFFGRID_DESKTOP_HOME:directory,OFFGRID_PORT:String(ser
 let app;const timeout=setTimeout(()=>failed(Error('Packaged browser task timed out')),60000);
 try{
  app=await electron.launch({executablePath:binary,env,timeout:30000});
+ const approveBrowserConsent=async()=>{
+  const consentWindowPromise=app.waitForEvent('window');
+  await page.locator('.task-access').getByRole('button',{name:'Allow access and continue',exact:true}).click();
+  const consentWindow=await consentWindowPromise;
+  await expect(consentWindow.getByRole('dialog')).toBeVisible();
+  await expect(consentWindow.locator('#title')).toHaveText('Allow browser assistance?');
+  await expect(consentWindow.locator('#detail')).toContainText('changes need approval');
+  await expect(consentWindow.locator('#detail')).toContainText(`http://127.0.0.1:${server.address().port}`);
+  await consentWindow.getByRole('button',{name:'Allow',exact:true}).click();
+ };
  if(process.argv.includes('--narrow')) await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(960,720));
  const page=await app.firstWindow();page.setDefaultTimeout(15000);await page.waitForURL(/\/ui\//,{timeout:15000});
  console.log('Packaged workspace connected');
@@ -85,14 +95,7 @@ try{
  await expect(page.getByRole('heading',{name:'Agents',exact:true})).toBeVisible();
   await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/agents/task/${runId}`);
   await expect(page.locator('.computer-mode-picker, .computer-setup, .task-card, .result-card')).toHaveCount(0);
- const consentWindowPromise=app.waitForEvent('window');
-  await page.locator('.task-access').getByRole('button',{name:'Allow access and continue',exact:true}).click();
- const consentWindow=await consentWindowPromise;
- await expect(consentWindow.getByRole('dialog')).toBeVisible();
- await expect(consentWindow.locator('#title')).toHaveText('Allow browser assistance?');
- await expect(consentWindow.locator('#detail')).toContainText('changes need approval');
- await expect(consentWindow.locator('#detail')).toContainText(`http://127.0.0.1:${server.address().port}`);
- await consentWindow.getByRole('button',{name:'Allow',exact:true}).click();
+ await approveBrowserConsent();
  console.log('Requested local browser session');
  await completion;
  assert.equal(await page.locator('.computer-pair-code').count(),0);
@@ -108,7 +111,7 @@ try{
   // Starting a second session rechecks the installed manifest after actual use.
   inputId='input-2';attached=false;
   await page.reload();
-  await page.locator('.task-access').getByRole('button',{name:'Allow access and continue',exact:true}).click();
+   await approveBrowserConsent();
   await expect.poll(()=>attachments.length,{timeout:60000}).toBe(2);
   await page.locator('.computer-activity').getByRole('button',{name:'Stop control',exact:true}).click();
  await expect.poll(async()=>(await page.evaluate(()=>window.electron.getComputerStatus())).state,{timeout:45000}).toBe('stopped');

@@ -9,6 +9,32 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export const lock = JSON.parse(readFileSync(resolve(root, 'runtimes/pdfium/engine.lock.json'), 'utf8'));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
+export async function fetchPinnedArchive(fetchImpl = fetch, pause = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  const delays = [250, 750];
+  let lastError;
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      const response = await fetchImpl(lock.archive_url, { signal: AbortSignal.timeout(60_000) });
+      if (!response.ok) {
+        const error = new Error(`PDF archive download failed: HTTP ${response.status}`);
+        if (response.status < 500 && response.status !== 429) throw error;
+        lastError = error;
+      } else {
+        const parts = []; let size = 0;
+        for await (const part of response.body) { size += part.length; if (size > 16 * 1024 * 1024) throw new Error('PDF archive exceeds build limit'); parts.push(part); }
+        return Buffer.concat(parts);
+      }
+    } catch (error) {
+      if (error.message.includes('PDF archive exceeds build limit') || error.message.startsWith('PDF archive download failed: HTTP ')) {
+        if (!error.message.includes('HTTP 429') && !error.message.includes('HTTP 5')) throw error;
+      }
+      lastError = error;
+    }
+    if (attempt < delays.length) await pause(delays[attempt]);
+  }
+  throw new Error(`PDF archive download failed after ${delays.length + 1} attempts: ${lastError?.cause?.message ?? lastError?.message ?? 'unknown network error'}`);
+}
+
 export function unpackRuntime(archive) {
   if (archive.length > 16 * 1024 * 1024 || sha256(archive) !== lock.archive_sha256) throw new Error('PDF archive digest mismatch');
   const tar = gunzipSync(archive, { maxOutputLength: 64 * 1024 * 1024 });
@@ -42,13 +68,7 @@ export async function prepare(args) {
   if (args.length && (args.length !== 2 || args[0] !== '--archive')) throw new Error('Usage: node scripts/build/prepare-document-runtime.mjs [--archive PATH]');
   let archive;
   if (args.length) archive = readFileSync(resolve(args[1]));
-  else {
-    const response = await fetch(lock.archive_url, { signal: AbortSignal.timeout(60_000) });
-    if (!response.ok) throw new Error(`PDF archive download failed: HTTP ${response.status}`);
-    const parts = []; let size = 0;
-    for await (const part of response.body) { size += part.length; if (size > 16 * 1024 * 1024) throw new Error('PDF archive exceeds build limit'); parts.push(part); }
-    archive = Buffer.concat(parts);
-  }
+  else archive = await fetchPinnedArchive();
   const assets = resolve(root, 'runtimes/pdfium/assets');
   const { wasm, notice } = unpackRuntime(archive);
   mkdirSync(assets, { recursive: true });
