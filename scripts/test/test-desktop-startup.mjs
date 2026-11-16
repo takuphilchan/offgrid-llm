@@ -219,7 +219,7 @@ try {
   await timeout.locator('#separate > summary').focus();
   await timeout.keyboard.press('Enter');
   assert.equal(await timeout.locator('#separate').getAttribute('open'), '');
-  assert.equal(await timeout.locator('#indicator').evaluate(element => getComputedStyle(element).animationName), 'none');
+  assert.equal(await timeout.locator('.startup-brand svg path').first().evaluate(element => getComputedStyle(element).animationName), 'none');
   await capture('timeout-recovery-dark.png');
   hang = false;
   await timeout.locator('#retry').focus();

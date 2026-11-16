@@ -27,6 +27,9 @@ apps/desktop/*
 !apps/desktop/language-registry.json
 !apps/desktop/select-controls.css
 !apps/desktop/theme-NOTICE.txt
+!apps/desktop/startup-surface.css
+!apps/desktop/startup-welcome.js
+!apps/desktop/workspace-startup.js
 apps/computer/
 examples/
 installers/

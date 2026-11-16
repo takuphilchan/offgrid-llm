@@ -71,7 +71,7 @@ func TestExplicitVerificationFailsClosedAndDoesNotPersistSecrets(t *testing.T) {
 				t.Fatalf("%+v %v", r, err)
 			}
 			if f.seen == nil || f.seen.Workspace != dir {
-				t.Fatal("missing scoped invocation")
+				t.Fatalf("missing scoped invocation: phase=%s report=%+v err=%v", r.Phase, r, err)
 			}
 			report, _ := json.Marshal(r)
 			if strings.Contains(string(report), f.seen.Token) || strings.Contains(string(report), f.seen.URL) {
