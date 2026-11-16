@@ -148,7 +148,7 @@ try {
     // not a second composer. Keep both routes in packaged zoom coverage.
     if (route.startsWith('agents')) await expect(page.getByRole('textbox',{name:'Task',exact:true})).toHaveCount(0);
     if (route === 'models') await expect(page.getByRole('alert')).toHaveCount(0);
-    const target = route === 'chat' ? page.locator('.composer textarea') : route === 'agents' ? page.locator('.profile-library-header > button') : route === 'agents/workspace' ? page.getByRole('region',{name:'Recent tasks',exact:true}).getByRole('link',{name:'Chat',exact:true}) : route === 'models' ? page.getByRole('button',{name:'Language',exact:true}) : route === 'knowledge' ? page.getByRole('button',{name:'Open model manager',exact:true}) : route === 'activity' ? page.locator('.activity-diagnostics > summary') : page.locator('#appearance-text-size');
+    const target = route === 'chat' ? page.locator('.composer textarea') : route === 'agents' ? page.locator('.profile-library-header > button') : route === 'agents/workspace' ? page.getByRole('region',{name:'Recent tasks',exact:true}).getByRole('link',{name:'Chat',exact:true}) : route === 'models' ? page.locator('.model-category-filter') : route === 'knowledge' ? page.getByRole('button',{name:'Open model manager',exact:true}) : route === 'activity' ? page.locator('.activity-diagnostics > summary') : page.locator('#appearance-text-size');
     await expect(target).toBeVisible(); await expect(target).toBeEnabled(); await target.focus(); await target.scrollIntoViewIfNeeded();
     await expect(target).toBeFocused();
     await page.evaluate(() => document.fonts.ready);
