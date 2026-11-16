@@ -137,7 +137,8 @@ try {
   });
   for (const route of ['chat','agents','agents/workspace','models','knowledge','activity','settings']) {
     console.log(`Checking 200% zoom on ${route}`);
-    await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/${route}`);
+    const routePath = route === 'settings' ? 'settings/appearance' : route;
+    await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/${routePath}`);
     // Hash navigation completes before React commits the new route. Wait for
     // its heading so a generic locator cannot focus the previous page's button.
     await expect(page.locator('.topbar h1')).toHaveText({chat:'Chat',agents:'Agents','agents/workspace':'Activity',models:'Models',knowledge:'Knowledge',activity:'Activity',settings:'Settings'}[route]);
