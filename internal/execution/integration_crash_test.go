@@ -51,6 +51,7 @@ func TestIntegrationCrashProcessFixture(t *testing.T) {
 }
 
 func TestIntegrationRecoversRealProcessExitAfterEachFile(t *testing.T) {
+	requireIntegrationReplacementBackend(t)
 	for crashAt := 0; crashAt < 5; crashAt++ {
 		t.Run(strconv.Itoa(crashAt), func(t *testing.T) {
 			owned := t.TempDir()

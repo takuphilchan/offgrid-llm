@@ -51,7 +51,9 @@ def main():
         assert hashlib.sha256(data).hexdigest() == fixture["sha256"]
         result = json.loads(run(data))
         assert result["protocol"] == 1 and result["sha256"] == fixture["sha256"]
-        assert result["revision"] == "pdfium-8057-0001cb839e62425b-offgrid4"
+        # Keep the offline fixture gate aligned with the pinned worker lock,
+        # not a manually maintained revision literal.
+        assert result["revision"] == lock["worker_revision"]
         pages = result.get("pages", [])
         text = " ".join(" ".join(page["text"] for page in pages).split())
         error = result.get("error", "")

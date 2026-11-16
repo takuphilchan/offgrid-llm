@@ -15,6 +15,7 @@ func integrationCandidateFixture(t *testing.T) (*LocalEndpoint, *WorkingCopies, 
 
 func integrationCandidateFixtureWith(t *testing.T, setup, mutate func(string)) (*LocalEndpoint, *WorkingCopies, Binding, string, *PreparedWorker, SealChangeSetRequest) {
 	t.Helper()
+	requireIntegrationReplacementBackend(t)
 	e, store, binding, source := workingCopyFixture(t)
 	store.policy.MaxTotalBytes = 12 * 1024
 	ctx := context.Background()

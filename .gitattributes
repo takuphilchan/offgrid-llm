@@ -20,6 +20,7 @@ go.sum text eol=lf
 internal/server/testdata/*.golden text eol=lf
 # Preserve exact fixture/receipt bytes used by the document corpus digest gates.
 internal/rag/testdata/documents/corpus/** -text -whitespace
+internal/rag/testdata/documents/**/*.pdf -text -diff -whitespace
 internal/rag/testdata/documents/ocr/inputs/** -text -whitespace
 internal/rag/testdata/documents/ocr/*.hocr -text -whitespace
 internal/rag/testdata/documents/ocr/native/*.hocr -text -whitespace

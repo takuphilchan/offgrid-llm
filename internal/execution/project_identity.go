@@ -26,6 +26,16 @@ func loadProjectHostIdentity(directory, approvedRoot string) (string, error) {
 	if err := PrivateStateOutsideRoot(approvedRoot, directory); err != nil {
 		return "", err
 	}
+	// The per-account config root may exist while OffGrid's private namespace
+	// does not (common on clean Linux profiles). Create that one trusted parent
+	// before creating the more restricted identity leaf.
+	parent := filepath.Dir(directory)
+	if err := os.Mkdir(parent, 0700); err != nil && !os.IsExist(err) {
+		return "", err
+	}
+	if err := ProtectPrivatePath(parent); err != nil {
+		return "", err
+	}
 	if err := EnsurePrivateDirectory(directory); err != nil {
 		return "", err
 	}

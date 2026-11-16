@@ -431,7 +431,15 @@ jobs:
       - name: Test native CLI, persistence, and agent contracts
         # These tests use subprocesses and real local files, not OS emulation.
         # They do not substitute for installed-app or hardware qualification.
-        run: go test ./cmd/offgrid ./cmd/offgrid-computer ./cmd/offgrid-executor ./internal/execution ./internal/computer ./internal/serviceclient ./internal/storage ./internal/rag ./internal/sessions ./internal/agents ./internal/models ./internal/integrations/...
+        shell: bash
+        run: |
+          # Hosted Windows temp roots can be junctions. Tests exercising
+          # reparse-resistant filesystem replacement need ordinary directories
+          # on the checked-out local volume, so keep their temporary state here.
+          test_temp="$GITHUB_WORKSPACE/build/native-test-temp"
+          mkdir -p "$test_temp"
+          export TMPDIR="$test_temp" TEMP="$test_temp" TMP="$test_temp" GOTMPDIR="$test_temp"
+          go test ./cmd/offgrid ./cmd/offgrid-computer ./cmd/offgrid-executor ./internal/execution ./internal/computer ./internal/serviceclient ./internal/storage ./internal/rag ./internal/sessions ./internal/agents ./internal/models ./internal/integrations/...
       - name: Test isolated Windows UI Automation and local stop controls
         if: runner.os == 'Windows'
         env:

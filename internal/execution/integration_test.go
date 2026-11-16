@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func integrationFixture(t *testing.T) (*LocalEndpoint, *WorkingCopies, Binding, string, ChangeSet, IntegrateChangeSetRequest) {
 	t.Helper()
+	requireIntegrationReplacementBackend(t)
 	e, store, binding, source, _, seal := integrationCandidateFixture(t)
 	set, err := store.PrepareIntegrationCandidate(context.Background(), seal)
 	if err != nil {
@@ -18,6 +20,13 @@ func integrationFixture(t *testing.T) (*LocalEndpoint, *WorkingCopies, Binding, 
 	}
 	req := IntegrateChangeSetRequest{RequestID: "integrate", Source: binding, ChangeSetID: set.ID, OperationsDigest: set.OperationsDigest, InstructionVersion: set.InstructionVersion, ControlEpoch: set.ControlEpoch, MaxReservedBytes: 4096}
 	return e, store, binding, source, set, req
+}
+
+func requireIntegrationReplacementBackend(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "linux" && runtime.GOOS != "windows" {
+		t.Skip("durable working-copy integration is qualified only on Linux and Windows replacement backends")
+	}
 }
 
 func TestUnsupportedIntegrationRetainsReviewableChangesWithoutReplay(t *testing.T) {
