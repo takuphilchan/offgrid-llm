@@ -83,18 +83,16 @@ try{
  await expect(page.locator('.topbar')).toBeVisible();
  await page.evaluate(()=>{window.location.hash='#/agents';});
  await expect(page.getByRole('heading',{name:'Agents',exact:true})).toBeVisible();
- // Test-only native-dialog interception validates the scope before granting it.
- await app.evaluate(({dialog})=>{
-   dialog.showMessageBox=async(...args)=>{
-     const options=args.at(-1);
-     if(options.title!=='Allow browser assistance?' || !options.detail.startsWith('demo\nhttp://127.0.0.1:')) throw Error('Unexpected native consent scope');
-     if(!options.detail.includes('changes need approval')) throw Error('Missing consent boundary');
-     return {response:1,checkboxChecked:false};
-   };
- });
   await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/agents/task/${runId}`);
   await expect(page.locator('.computer-mode-picker, .computer-setup, .task-card, .result-card')).toHaveCount(0);
+ const consentWindowPromise=app.waitForEvent('window');
   await page.locator('.task-access').getByRole('button',{name:'Allow access and continue',exact:true}).click();
+ const consentWindow=await consentWindowPromise;
+ await expect(consentWindow.getByRole('dialog')).toBeVisible();
+ await expect(consentWindow.locator('#title')).toHaveText('Allow browser assistance?');
+ await expect(consentWindow.locator('#detail')).toContainText('changes need approval');
+ await expect(consentWindow.locator('#detail')).toContainText(`http://127.0.0.1:${server.address().port}`);
+ await consentWindow.getByRole('button',{name:'Allow',exact:true}).click();
  console.log('Requested local browser session');
  await completion;
  assert.equal(await page.locator('.computer-pair-code').count(),0);
