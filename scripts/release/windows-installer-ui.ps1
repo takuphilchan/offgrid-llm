@@ -216,9 +216,12 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
         while ($clock.Elapsed.TotalSeconds -lt 180) {
             foreach ($capture in $captures) { Update-WizardCapture $capture }
             if ($finishAt -ge 0 -and $finishClosedMs -lt 0) {
-                Write-WizardDiagnostic $diagnosticPath 'finish-window' @{ window = $finishWindow.ToInt64(); exists = [OffGridWizard]::IsWindow($finishWindow); visible = [OffGridWizard]::IsWindowVisible($finishWindow); owner = [OffGridWizard]::Owner($finishWindow); title = [OffGridWizard]::Text($finishWindow); elapsedMs = $clock.ElapsedMilliseconds - $finishAt }
-                if (-not [OffGridWizard]::IsWindow($finishWindow)) { $finishClosedMs = $clock.ElapsedMilliseconds - $finishAt }
-                elseif ($clock.ElapsedMilliseconds - $finishAt -gt 2000) { throw 'Finish did not close the installer window within 2 seconds.' }
+                # NSIS can keep a hidden handle while the launched app starts; only a visible page blocks the user.
+                $finishExists = [OffGridWizard]::IsWindow($finishWindow)
+                $finishVisible = $finishExists -and [OffGridWizard]::IsWindowVisible($finishWindow)
+                Write-WizardDiagnostic $diagnosticPath 'finish-window' @{ window = $finishWindow.ToInt64(); exists = $finishExists; visible = $finishVisible; owner = [OffGridWizard]::Owner($finishWindow); title = [OffGridWizard]::Text($finishWindow); elapsedMs = $clock.ElapsedMilliseconds - $finishAt }
+                if (-not $finishVisible) { $finishClosedMs = $clock.ElapsedMilliseconds - $finishAt }
+                elseif ($clock.ElapsedMilliseconds - $finishAt -gt 2000) { throw 'Finish remained visible for more than 2 seconds.' }
             }
             if ($process.HasExited) { break }
             foreach ($window in [OffGridWizard]::Windows('OffGrid Desktop Install Test')) {
@@ -292,7 +295,7 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
                     $pageBody = if ($Uninstall) { 'The application has been removed.' } else { 'Your models and saved work are kept.' }
                     Assert-WizardPageLayout $window $expectedTitle $pageBody
                     # Keep probing while a bounded helper captures the settled page.
-                    # Click Finish only afterwards; its two-second close gate remains.
+                    # Click Finish only afterwards; its two-second visibility gate remains.
                     if ($detailsCapture -and -not $detailsCapture.done) { continue }
                     if (-not $finishCapture) {
                         $finishName = if ($Uninstall) { 'uninstaller-finish.png' } else { 'installer-finish.png' }
