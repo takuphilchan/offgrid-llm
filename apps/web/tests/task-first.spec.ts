@@ -16,12 +16,12 @@ test('unknown approval keeps exact arguments visible, including integers beyond 
 });
 
 test('expiry changes approval to a read-only refresh without resuming or approving', async ({ page }) => {
-  const f = await fixture(page), at = new Date('2026-10-08T10:00:00Z');
-  await page.clock.install({ time: at });
-  await page.clock.pauseAt(at);
+  const f = await fixture(page), at = new Date(Date.now() + 30_000);
   f.setState('waiting_for_approval', { pending_approval: { id: 'expiring', tool: 'write_file', arguments: { path: '/allowed/draft.txt' }, expires_at: new Date(+at + 1500).toISOString() } });
   await page.goto(`/ui/#/agents/task/${id}`);
   await expect(page.locator('.approval-card').getByRole('button', { name: 'Approve exact call', exact: true })).toBeVisible();
+  await page.clock.install({ time: at });
+  await page.clock.pauseAt(at);
   await page.clock.fastForward(2000);
   await expect(page.locator('.approval-card')).toContainText('This approval has expired');
   await expect(page.locator('.approval-card').getByRole('button', { name: 'Approve exact call', exact: true })).toHaveCount(0);

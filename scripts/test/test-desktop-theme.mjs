@@ -189,6 +189,10 @@ try {
   await page.locator('.theme-summary').nth(1).click();
   await page.getByRole('button',{name:'Catppuccin Mocha',exact:true}).click();
   await page.getByRole('button',{name:'Apply',exact:true}).click();
+  // Locale lives under General; the final palette selection leaves Appearance
+  // active, whose hidden General section contains this select in the DOM.
+  await page.goto(`http://127.0.0.1:${server.address().port}/ui/#/settings/general`);
+  await expect(page.locator('#settings-language')).toBeVisible();
   await page.locator('#settings-language').selectOption('ur');
   await expect.poll(()=>page.evaluate(async()=>(await window.electron.getPresentation()).locale)).toBe('ur');
   await app.close(); app = null;

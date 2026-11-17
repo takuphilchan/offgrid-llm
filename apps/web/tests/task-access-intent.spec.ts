@@ -180,6 +180,7 @@ test('in-app Stop remains available between tasks, across navigation and offline
 test('retry with the same preselected policy keeps request identity and does not reselect it during access', async ({ page }) => {
   const submissions = await setup(page, { lost: true });
   await openAgentChat(page);
+  await expect(page.locator('#workspace-startup')).toHaveCount(0);
   const trigger = page.getByRole('button', { name: 'Computer access', exact: true });
   await expect(trigger).toHaveText('Full task access');
   await trigger.click();
@@ -192,12 +193,13 @@ test('retry with the same preselected policy keeps request identity and does not
   await trigger.click();
   // Dismiss through an actual outside target, independent of compact composer
   // geometry. This remains a real pointer click, not a forced click or Escape.
-  await page.locator('.topbar h1').click();
+  await page.locator('.composer textarea').click();
   await expect(panel).toBeHidden();
   await sendAgentMessage(page,'Open Chrome');
   await expect(page.getByRole('alert').first()).toBeVisible();
   await page.reload();
   await selectTaskAgent(page);
+  await expect(page.locator('#workspace-startup')).toHaveCount(0);
   // Profile and policy selections are session-memory settings; deliberately
   // restore the same choices before retrying the retained draft.
   await trigger.click();

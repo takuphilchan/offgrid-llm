@@ -74,8 +74,10 @@ test('catalog, inventory and metadata recover independently without unrelated er
     return catalogFailed ? route.fulfill({ status: 503, json: { error: 'Catalog offline' } }) : route.fallback();
   });
   await models(page);
+  await page.locator('#model-view-discover').click();
   await expect(page.getByRole('alert').filter({ hasText: 'Inventory offline' })).toBeVisible();
   await expect(page.getByRole('alert').filter({ hasText: 'Catalog offline' })).toBeVisible();
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
   await page.getByRole('searchbox').fill('test');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Search offline' })).toBeVisible();
@@ -83,8 +85,12 @@ test('catalog, inventory and metadata recover independently without unrelated er
   await page.getByRole('alert').filter({ hasText: 'Inventory offline' }).getByRole('button').click();
   await expect(page.getByRole('alert').filter({ hasText: 'Inventory offline' })).toHaveCount(0);
   catalogFailed = false;
+  await page.locator('#model-view-discover').click();
   await page.getByRole('button', { name: 'Refresh catalog' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Catalog offline' })).toHaveCount(0);
+  await page.locator('.model-library-navigation').getByRole('button', { name: 'Search Hugging Face', exact: true }).click();
+  await page.getByRole('searchbox').fill('test');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Retry search' })).toBeVisible();
 });
 
@@ -201,7 +207,6 @@ test('superseded Knowledge reads cannot replace readiness; selected Knowledge is
   mode = 'unavailable';
   await refreshWorkspace(page);
   await expect(page.locator('.composer > [role="status"]')).toBeVisible();
-  await page.locator('.composer-attachments-menu > button').click();
   await expect(page.getByRole('link', { name: 'Set up Knowledge' })).toBeVisible();
   await expect(knowledge).toBeChecked();
   await expect(knowledge).toBeEnabled(); // User can turn it off; never silently downgrade.
@@ -235,7 +240,7 @@ test('Settings groups preferences and service identity without claiming desktop 
   await expect(page.getByText('C:\\desktop-only\\models', { exact: true })).toBeHidden();
   await page.getByRole('button', { name: 'Local storage', exact: true }).click();
   await expect(page.getByText('C:\\desktop-only\\models', { exact: true })).toBeVisible();
-  await expect(page.locator('.desktop-local-paths')).toContainText('not its workspace paths');
+  await expect(page.locator('.settings-group').filter({ has: page.locator('.desktop-local-paths') })).toContainText('not its workspace paths');
   await refreshWorkspace(page);
   expect(state.writes).toEqual([]);
 });

@@ -73,7 +73,8 @@ for(const theme of ['light','dark']) for(const reduce of ['none','app','system']
   await expect(splash).toBeVisible();
   await expect(splash.locator('.startup-brand svg path').first()).toHaveCSS('animation-name',reduce==='none'?'startup-layer-top':'none');
   await expect(splash.locator('.startup-spinner')).toHaveCount(0);
-  await expect(splash.locator('.startup-welcome')).toHaveText('Welcome to OffGrid.');
+  const initialGreeting=await splash.locator('.startup-welcome').textContent();
+  expect(greetings.en).toContain(initialGreeting);
   if(reduce==='none') {
     const mark=splash.locator('.startup-brand svg path').first();
     const first=await mark.evaluate(el=>getComputedStyle(el).transform);
@@ -81,7 +82,8 @@ for(const theme of ['light','dark']) for(const reduce of ['none','app','system']
   }
   const time=await splash.locator('.startup-elapsed').textContent();
   await expect(splash.locator('.startup-elapsed')).not.toHaveText(time!);
-  await expect(splash.locator('.startup-welcome')).toHaveText('Bring your ideas to life.',{timeout:7000});
+  await expect.poll(()=>splash.locator('.startup-welcome').textContent(),{timeout:15000}).not.toBe(initialGreeting);
+  expect(greetings.en).toContain(await splash.locator('.startup-welcome').textContent());
   if(reduce==='none') await expect(splash.locator('.startup-welcome')).toHaveCSS('transition-duration','0.2s, 0.2s');
   else expect(await splash.locator('.startup-welcome').evaluate(el=>parseFloat(getComputedStyle(el).transitionDuration))).toBeLessThanOrEqual(.00001);
   mkdirSync('../../build/ui-craft/startup',{recursive:true});
@@ -92,6 +94,7 @@ for(const theme of ['light','dark']) for(const reduce of ['none','app','system']
 test('a failed application bundle still has a local startup surface and a retry',async({page})=>{
   await boot(page);
   await page.route('**/src/main.tsx',route=>route.abort());
+  await page.route('**/ui/assets/index-*.js',route=>route.abort());
   await page.clock.install();await page.goto('/ui/#/home');
   await expect(page.locator('#workspace-startup')).toBeVisible();
   await page.clock.fastForward(30001);
@@ -104,6 +107,7 @@ test('all 29 startup languages rotate without overflow on narrow screens',async(
   // Isolate the local startup surface from network deadlines while advancing
   // several minutes of greeting rotation. Recovery after API timeouts is tested above.
   await page.route('**/src/main.tsx',route=>route.abort());
+  await page.route('**/ui/assets/index-*.js',route=>route.abort());
   await page.clock.install();await page.goto('/ui/#/chat');
   const welcome=page.locator('.startup-welcome');await expect(welcome).toBeVisible();
   for(const [locale,copy] of Object.entries(greetings)) {

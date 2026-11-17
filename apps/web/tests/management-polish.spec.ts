@@ -11,9 +11,10 @@ for (const theme of ['light', 'dark']) test(`search focus is restrained and rema
   await expect(search).toHaveCSS('outline-style', 'none');
   await expect(field).toHaveCSS('outline-style', 'none');
   await expect(field).toHaveCSS('border-top-width', '1px');
-  const focused = await field.evaluate(el => getComputedStyle(el).borderTopColor);
+  const focusedShadow = await field.evaluate(el => getComputedStyle(el).boxShadow);
+  expect(focusedShadow).not.toBe('none');
   await search.blur();
-  expect(await field.evaluate(el => getComputedStyle(el).borderTopColor)).not.toBe(focused);
+  await expect.poll(() => field.evaluate(el => getComputedStyle(el).boxShadow)).toBe('none');
   await search.fill('Research');
   await field.getByRole('button').click();
   await expect(search).toHaveValue('');

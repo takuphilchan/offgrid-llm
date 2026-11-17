@@ -75,7 +75,12 @@ async function workspace(page: Page) {
   });
   return state;
 }
-const nav=async(page:Page,route:string)=>route==='settings'?openSettings(page):page.locator(`.sidebar a[href="#/${route}"]`).click();
+const nav=async(page:Page,route:string)=>{
+  await expect(page.locator('#workspace-startup')).toHaveCount(0);
+  if(route==='settings') return openSettings(page);
+  if(route==='agents') return page.goto('/ui/#/agents');
+  await page.locator(`.sidebar .nav-link[href="#/${route}"]`).click();
+};
 async function send(page:Page,text:string) {await page.locator('.composer textarea').fill(text);await page.getByRole('button',{name:'Send',exact:true}).click();}
 async function start(page:Page,state:Awaited<ReturnType<typeof workspace>>) {
   await installChatJob(page,{workspace:'journey',model:'journey-model',snapshot:()=>state.run,onWrite:(path,data)=>state.writes.push({path,data}),submit:data=>{

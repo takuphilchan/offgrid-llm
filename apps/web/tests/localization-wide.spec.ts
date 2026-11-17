@@ -87,12 +87,12 @@ test('brand mark inherits each palette instead of the operating-system image col
    localStorage.setItem('offgrid.appearance.v1',value);window.dispatchEvent(new StorageEvent('storage',{key:'offgrid.appearance.v1',newValue:value}));
   },{mode,palette});
   await expect(page.locator('html')).toHaveAttribute('data-theme',mode);
-  await expect(page.locator('.brand img')).toHaveCount(0);
-  const colors=await page.locator('.brand').evaluate(el=>({text:getComputedStyle(el).color,stroke:getComputedStyle(el.querySelector('svg g')!).stroke,fill:getComputedStyle(el.querySelector('svg')!).fill}));
+  await expect(page.locator('.rail-brand img')).toHaveCount(0);
+  const colors=await page.locator('.rail-brand .brand-symbol').evaluate(el=>({text:getComputedStyle(el).color,stroke:getComputedStyle(el.querySelector('g')!).stroke,fill:getComputedStyle(el).fill}));
   expect(colors.stroke).toBe(colors.text);expect(colors.fill).toBe('none');
  }
  await page.screenshot({path:test.info().outputPath('themed-brand.png')});
  await page.emulateMedia({forcedColors:'active'});
- const colors=await page.locator('.brand').evaluate(el=>[getComputedStyle(el).color,getComputedStyle(el.querySelector('svg g')!).stroke]);
+ const colors=await page.locator('.rail-brand .brand-symbol').evaluate(el=>[getComputedStyle(el).color,getComputedStyle(el.querySelector('g')!).stroke]);
  expect(colors[0]).toBe(colors[1]);
 });

@@ -321,9 +321,10 @@ test('terminal task followers stop polling and logout removes private work', asy
   await page.clock.fastForward(15_000);
   await expect(page.locator('.work-status')).toContainText('Completed');
   expect(state.reads.filter(path => path === `/api/v2/jobs/${id}`).length).toBe(reads);
-  await page.locator('.sidebar a[href="#/chat"]').click();
+  await page.locator('.sidebar .nav-link[href="#/chat"]').click();
   await expect(page.getByRole('button', { name: 'Known work', exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Workspace options', exact: true }).click();
+  await openSettings(page);
+  await page.locator('.settings-navigation [data-section="general"]').click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Known work', exact: true })).toHaveCount(0);
   expect(state.writes).toEqual(['/v1/auth/logout']);

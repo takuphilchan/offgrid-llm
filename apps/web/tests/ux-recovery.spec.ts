@@ -71,10 +71,15 @@ test('model deletion has a safe Cancel and one explicit confirmation',async({pag
  if (await page.locator('.model-maintenance > button').getAttribute('aria-expanded') !== 'true') await page.locator('.model-maintenance > button').click();await page.locator('.model-actions').getByRole('button',{name:'Delete',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Confirm delete'}).click();await expect.poll(()=>deletions).toBe(1);
 });
 
-test('a stalled startup request has a bounded recovery path',async({page})=>{
- await workspace(page);await page.clock.install();
- await page.addInitScript(()=>{const original=window.fetch.bind(window);window.fetch=(input,init)=>String(input)==='/v1/users/me'?new Promise((_resolve,reject)=>init?.signal?.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true})):original(input,init);});
- await page.goto('/ui/');await expect(page.locator('.boot-screen')).toBeVisible();await page.clock.fastForward(31_000);await expect(page.locator('.boot-screen')).toContainText('too long');await expect(page.getByRole('button',{name:'Try again'})).toBeVisible();
+test('a stalled identity check keeps startup visible and offers retry after failure',async({page})=>{
+ await workspace(page);let rejectRequest!:()=>void;
+ const pending=new Promise<void>(resolve=>{rejectRequest=resolve;});
+ await page.route('**/v1/users/me',async route=>{await pending;await route.abort('failed');});
+ await page.goto('/ui/');
+ await expect(page.locator('#workspace-startup')).toBeVisible();
+ await expect(page.getByRole('button',{name:/Try again|Retry/})).toHaveCount(0);
+ rejectRequest();
+ await expect(page.getByRole('button',{name:/Try again|Retry/})).toBeVisible();
 });
 
 test('an active chat reconnects after navigation without submitting new work',async({page})=>{

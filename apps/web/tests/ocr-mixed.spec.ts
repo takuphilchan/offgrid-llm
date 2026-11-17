@@ -70,12 +70,20 @@ test('Knowledge retains ordered OCR packs with its reviewed destination',async({
 
 test('old services receive no mixed-language upload',async({page})=>{
  await craftFixture(page,'en','light');
- await page.route('**/api/v2/system',r=>r.fulfill({json:{product:'offgrid',capabilities:['document-ocr-language-selection-v1']}}));
- let uploads=0;await page.route('**/v1/collections/imports?*',r=>{uploads++;return r.abort();});
+ let mixedCapability=true;
+ await page.route('**/api/v2/system',r=>r.fulfill({json:{product:'offgrid',capabilities:['session-files-v1','document-ocr-language-selection-v1',...(mixedCapability?['document-ocr-mixed-languages-v1']:[])]}}));
+ await page.route('**/v1/document-ocr-languages',r=>r.fulfill({json:{selection_mode:'ordered_languages',max_languages:3,languages:catalog.packs.map(p=>({...p,state:['chi_sim','fra'].includes(p.language)?'installed_verified':'missing'})),unavailable_interface_locales:catalog.unavailable_interface_locales}}));
+ let uploads=0;await page.route('**/v1/sessions/*/attachments*',r=>{if(r.request().method()==='POST')uploads++;return r.fulfill({json:{attachments:[]}});});
  await page.goto('/ui/#/chat');
- const rejected=await page.evaluate(async()=>{
-  const {api}=await import('/ui/src/api/client.ts');
-  try{await api.collections.acceptImport('workspace',1,new File(['test'],'test.txt'),'key',undefined,'eng+fra');return false;}catch{return true;}
- });
- expect(rejected).toBe(true);expect(uploads).toBe(0);
+ await page.locator('.composer-attachments-menu > button').click();
+ await page.getByRole('button',{name:ocrSetup('en').title,exact:true}).click();
+ const dialog=page.getByRole('dialog');
+ await dialog.locator('.ocr-language-choice select').selectOption('chi_sim');
+ await dialog.getByRole('button',{name:ocrMixed('en').add,exact:true}).click();
+ await dialog.locator('.ocr-additional-language select').selectOption('fra');
+ await dialog.getByRole('button',{name:ocrChoice('en').close,exact:true}).click();
+ mixedCapability=false;
+ await page.locator('input[data-attachment="files"]').setInputFiles({name:'mixed.txt',mimeType:'text/plain',buffer:Buffer.from('new text')});
+ await expect(page.getByRole('alert')).toContainText(/update|version|support/i);
+ expect(uploads).toBe(0);
 });
