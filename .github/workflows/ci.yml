@@ -33,7 +33,7 @@ jobs:
     name: Isolated PDF worker (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: document-ocr-runtime
-    timeout-minutes: 15
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -192,9 +192,9 @@ jobs:
     name: Go, contract, UI, and desktop
     needs: document-ocr-runtime
     runs-on: ubuntu-latest
-    # The browser suite can take 21 minutes; allow Go/race and native packaging
-    # checks to finish on the same runner without changing test-level deadlines.
-    timeout-minutes: 45
+    # Hosted browser runs exceed 30 minutes; leave room for the desktop checks
+    # that follow without changing test-level deadlines.
+    timeout-minutes: 75
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
