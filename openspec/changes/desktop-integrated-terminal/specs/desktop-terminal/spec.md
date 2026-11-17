@@ -77,6 +77,28 @@ platform tests, with safe fallback to the ordinary app if unavailable.
 - **WHEN** a desktop cannot load its terminal runtime
 - **THEN** Terminal shows a repairable error while Chat and Knowledge remain usable
 
+### Requirement: Terminal and command-context presentation
+The terminal pane SHALL retain its rounded outer edge while sharing one surface
+color with xterm; the inner terminal surface SHALL remain square. The Commands
+dialog SHALL present command context with clear, theme-aware controls, a compact
+no-output state, and reachable actions on narrow viewports.
+
+#### Scenario: Render a rounded terminal pane without an inner square
+- **WHEN** the terminal is visible in the desktop workspace
+- **THEN** the terminal pane retains its rounded outer edge against the surrounding page
+- **AND** the pane background matches the terminal renderer so no separate inner square is visible
+- **AND** the terminal renderer itself has no added rounded corners
+
+#### Scenario: Review command context at any viewport
+- **WHEN** a user opens Commands for a command with output
+- **THEN** output and question fields have clear hierarchy and theme-aware controls
+- **AND** the Continue in Chat action remains visible on narrow viewports without changing its enabled state or behavior
+
+#### Scenario: Review a command with no output
+- **WHEN** a completed command has no text output
+- **THEN** the dialog shows a compact no-output state instead of blank editable fields
+- **AND** it does not offer actions that cannot succeed without output
+
 ### Requirement: Bounded terminal display preferences
 The trusted terminal SHALL provide validated local display preferences and
 complete readable light/dark palettes without changing shell execution authority.

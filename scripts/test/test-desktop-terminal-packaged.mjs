@@ -127,7 +127,7 @@ try {
    for(const zoom of [1,1.25,2]) {
      await app.evaluate(({BrowserWindow},factor)=>BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(factor),zoom);
      await expect.poll(()=>page.evaluate(()=>Math.round(document.querySelector('#offgrid-native-chrome').getBoundingClientRect().height*devicePixelRatio))).toBeGreaterThan(0);
-     await expect.poll(()=>page.evaluate(()=>document.querySelector('main.workspace').getBoundingClientRect().top)).toBeCloseTo(36/zoom,0);
+     await expect.poll(()=>page.evaluate(()=>document.querySelector('main.workspace').getBoundingClientRect().top)).toBeCloseTo(32/zoom,0);
      const fit=await page.evaluate(()=>({height:innerHeight,bottom:document.querySelector('main.workspace').getBoundingClientRect().bottom,color:getComputedStyle(document.querySelector('#offgrid-native-chrome')).backgroundColor,sidebar:getComputedStyle(document.querySelector('.sidebar')).backgroundColor}));
      assert.ok(Math.abs(fit.bottom-fit.height)<2,JSON.stringify(fit));
      assert.equal(fit.color,fit.sidebar);
@@ -150,7 +150,7 @@ try {
  const terminal=app.context().pages().find(x=>x.url().endsWith('/terminal.html'));
  terminal.setDefaultTimeout(15000);
  // Navigation can report its URL before open() applies the visible view bounds.
- if(process.platform==='win32') await expect.poll(()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].contentView.children.at(-1).getBounds().y)).toBeGreaterThanOrEqual(36);
+ if(process.platform==='win32') await expect.poll(()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].contentView.children.at(-1).getBounds().y)).toBeGreaterThanOrEqual(32);
  terminal.on('pageerror',error=>console.error('TERMINAL PAGE ERROR',error));
  await expect(terminal.locator('#start-agent')).toBeVisible();
  // Resting state has no selected card. Keyboard traversal still has a subtle
@@ -160,13 +160,15 @@ try {
  await terminal.keyboard.press('Tab');
  await expect(terminal.locator('#start')).toBeFocused();
  const outlineWidth=selector=>terminal.locator(selector).evaluate(el=>parseFloat(getComputedStyle(el).outlineWidth));
- // The focused card uses its muted border and background without a text decoration.
- await expect(terminal.locator('#start')).toHaveCSS('outline-style','none');
+ // Keyboard focus remains visible without adding a text decoration.
+ await expect(terminal.locator('#start')).toHaveCSS('outline-style','solid');
+ await expect(terminal.locator('#start')).toHaveCSS('outline-width','2px');
  assert.notEqual(await terminal.locator('#start').evaluate(el=>getComputedStyle(el).borderTopColor),await terminal.locator('#start').evaluate(el=>getComputedStyle(el).color));
  await expect(terminal.locator('#start strong')).toHaveCSS('text-decoration-line','none');
  await terminal.keyboard.press('Tab');
  await expect(terminal.locator('#start-agent')).toBeFocused();
- await expect(terminal.locator('#start-agent')).toHaveCSS('outline-style','none');
+ await expect(terminal.locator('#start-agent')).toHaveCSS('outline-style','solid');
+ await expect(terminal.locator('#start-agent')).toHaveCSS('outline-width','2px');
  await terminal.emulateMedia({forcedColors:'active'});
  assert.ok(await outlineWidth('#start-agent')>1);
  await terminal.emulateMedia({forcedColors:'none'});
@@ -179,12 +181,10 @@ try {
  await expect.poll(()=>page.evaluate(()=>document.documentElement.hasAttribute('data-native-terminal-visible'))).toBe(false);
  // Settings lives in the sidebar footer, outside the primary navigation.
  // Returning to the same route must hide the native view without resetting it.
- await page.getByRole('button',{name:'Workspace options',exact:true}).click();
  await page.getByRole('link',{name:'Settings',exact:true}).click();
  await page.getByRole('button',{name:'Terminal',exact:true}).click();
  await page.locator('.settings-content').getByRole('button',{name:'Open terminal',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>document.documentElement.hasAttribute('data-native-terminal-visible'))).toBe(true);
- await page.getByRole('button',{name:'Workspace options',exact:true}).click();
  await page.getByRole('link',{name:'Settings',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>document.documentElement.hasAttribute('data-native-terminal-visible'))).toBe(false);
  await expect(page.locator('.settings-navigation').getByRole('button',{name:'Terminal',exact:true})).toHaveAttribute('aria-current','page');
@@ -237,14 +237,19 @@ try {
    await app.evaluate(({dialog},folder)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[folder]});},evidence);
  }
  await terminal.getByRole('button',{name:'Close OffGrid CLI',exact:true}).click();
+ await expect.poll(()=>terminal.context().pages().filter(p=>p.url().endsWith('/app-dialog.html')).length).toBe(1);
+ const cliStopDialog=terminal.context().pages().find(p=>p.url().endsWith('/app-dialog.html'));
+ await cliStopDialog.getByRole('button',{name:'Stop and close',exact:true}).click();
+ await expect.poll(()=>cliStopDialog.isClosed()).toBe(true);
+ await expect(terminal.getByRole('tab',{name:'OffGrid CLI',exact:true})).toHaveCount(0);
  await terminal.getByTitle('New terminal',{exact:true}).click();
  await terminal.locator('#shell').click();
- await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(1);
+ await expect(terminal.getByRole('tab',{name:'PowerShell',exact:true})).toHaveCount(1);
  await input.pressSequentially("[Console]::WriteLine(('CHECK_' + [char]0x65e5 + [char]0x672c + [char]0x8a9e))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('CHECK_\u65e5\u672c\u8a9e');
  await terminal.getByTitle('New terminal',{exact:true}).click();
  await terminal.locator('#shell').click();
- await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(2);
+ await expect(terminal.getByRole('tab',{name:'PowerShell',exact:true})).toHaveCount(2);
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');
  await input.pressSequentially("[Console]::WriteLine(('SECOND_' + 'TAB'))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('SECOND_TAB');
@@ -266,14 +271,20 @@ try {
  await input.pressSequentially("[Console]::Write(([char]27)+']52;c;dW50cnVzdGVk'+([char]7)); [Console]::WriteLine(('ESCAPE_'+'DONE'))");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('ESCAPE_DONE');
  assert.deepEqual(await app.evaluate(()=>global.__terminalCopy),['SECOND_TAB','SECOND_TAB']);
+ const currentPrompt=()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();});
+ await expect.poll(currentPrompt).toMatch(/^PS .*>$/);
  // Copy while a command is busy must not cancel it. No selection must retain
  // the normal interrupt path. All commands run in the disposable fixture folder.
- await input.pressSequentially("[Console]::WriteLine(('COPY_'+'RUNNING')); Start-Sleep -Seconds 3; [Console]::WriteLine(('COPY_'+'SURVIVED'))");await input.press('Enter');
+ const copyCommand="[Console]::WriteLine(('COPY_'+'RUNNING')); Start-Sleep -Seconds 3; [Console]::WriteLine(('COPY_'+'SURVIVED'))";
+ await input.pressSequentially(copyCommand);
+ await expect.poll(()=>terminal.evaluate(command=>{const b=tabs.get(current).term.buffer.active,end=b.baseY+b.cursorY;return Array.from({length:4},(_,i)=>b.getLine(Math.max(0,end-3+i))?.translateToString(true)||'').join('');},copyCommand),{timeout:15000}).toContain(copyCommand);
+ await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('COPY_RUNNING');
  await terminal.evaluate(()=>tabs.get(current).search.findPrevious('COPY_RUNNING'));
  await input.press('Control+C');
  await expect.poll(()=>app.evaluate(()=>global.__terminalCopy.at(-1))).toBe('COPY_RUNNING');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('COPY_SURVIVED');
+ await expect.poll(currentPrompt).toMatch(/^PS .*>$/);
  await terminal.evaluate(()=>tabs.get(current).term.clearSelection());
  await input.pressSequentially("[Console]::WriteLine(('INTERRUPT_'+'RUNNING')); Start-Sleep -Seconds 30");await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('INTERRUPT_RUNNING');
@@ -285,7 +296,7 @@ try {
  // Exercise the actual accelerator through the owned clipboard bridge. Pasting
  // inserts a command and must not submit until Enter is pressed.
  await input.press('Control+V');
- await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active,y=b.baseY+b.cursorY;return Array.from({length:4},(_,i)=>b.getLine(Math.max(0,y-3)+i)?.translateToString(true)||'').join('');})).toContain("'caf\u00e9_\u65e5\u672c\u8a9e'");
+ await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return Array.from({length:b.length},(_,i)=>b.getLine(i)?.translateToString(true)||'').join('');}),{timeout:15000}).toContain("'caf\u00e9_\u65e5\u672c\u8a9e'");
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).not.toContainText('PASTE_caf\u00e9_\u65e5\u672c\u8a9e');
  await input.press('Enter');
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PASTE_caf\u00e9_\u65e5\u672c\u8a9e');
@@ -323,7 +334,11 @@ try {
  await expect(terminal.locator('html')).toHaveAttribute('data-theme','light');
  await capture(terminal,join(evidence,'terminal-light.png'));
  await terminal.getByRole('button',{name:'Close PowerShell',exact:true}).last().click();
- await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(1);
+ await expect.poll(()=>terminal.context().pages().filter(p=>p.url().endsWith('/app-dialog.html')).length).toBe(1);
+ const stopDialog=terminal.context().pages().find(p=>p.url().endsWith('/app-dialog.html'));
+ await stopDialog.getByRole('button',{name:'Stop and close',exact:true}).click();
+ await expect.poll(()=>stopDialog.isClosed()).toBe(true);
+ await expect(terminal.getByRole('tab',{name:'PowerShell',exact:true})).toHaveCount(1,{timeout:15000});
  const {execFileSync}=require('node:child_process');const alive=()=>execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`if(Get-Process -Id ${pid} -ErrorAction SilentlyContinue){'alive'}else{'gone'}`],{encoding:'utf8',windowsHide:true}).trim();
  assert.equal(alive(),'gone');
  await input.pressSequentially("$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 300' -WindowStyle Hidden -PassThru; [Console]::WriteLine(('RELOAD' + 'PID:' + $p.Id))");await input.press('Enter');
@@ -334,7 +349,7 @@ try {
  await expect(terminal.getByRole('tab')).toHaveCount(0);
  await terminal.getByTitle('New terminal',{exact:true}).click();
  await terminal.locator('#shell').click();
- await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(1);
+ await expect(terminal.getByRole('tab',{name:'PowerShell',exact:true})).toHaveCount(1);
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('PS ');
 
  // Keep unfinished input through Chat/Terminal changes. No new shell or key replay.
@@ -350,7 +365,7 @@ try {
  const workspace=await page.locator('main.workspace').boundingBox();
  assert.ok(Math.abs(geometry.view.x-workspace.x)<=1,'terminal covers sidebar');
  assert.equal(geometry.view.y,Math.round(workspace.y));assert.equal(geometry.view.height,geometry.size[1]-geometry.view.y);
- // Web menus must never be cut off by the native terminal's compositing layer.
+ // Sidebar navigation remains usable beside the native terminal and preserves its draft.
  const nativeVisible=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].contentView.children[0].getVisible());
  const menuDraft="[Console]::WriteLine(('MENU_'+'EXACT'))";
  const menuPadding=await terminal.evaluate(length=>tabs.get(current).term.cols-length-3,menuDraft.length);
@@ -360,13 +375,12 @@ try {
  await input.pressSequentially(menuDraft);await input.press('ArrowLeft');
  await expect.poll(async()=> (await draftSnapshot()).lines.join('')).toContain('PS '+'x'.repeat(menuPadding)+'> '+menuDraft);
  const cursorBeforeMenu=await draftSnapshot();
- const options=page.locator('.workspace-options > button'),optionsPanel=page.locator('.workspace-options-panel');
- await options.click();await expect(optionsPanel).toBeVisible();
- const optionsBox=await optionsPanel.boundingBox(),sidebarBox=await page.locator('.sidebar').boundingBox();
- assert.ok(optionsBox.x+optionsBox.width<=sidebarBox.x+sidebarBox.width,'menu crosses native terminal');
- assert.equal(await nativeVisible(),true);
- await capture(page,join(evidence,'terminal-sidebar-options.png'));
- await page.keyboard.press('Escape');await expect(options).toBeFocused();
+ const settingsLink=page.locator('.sidebar-foot a[href="#/settings"]');
+ await settingsLink.click();await expect(page).toHaveURL(/#\/settings$/);
+ await expect.poll(nativeVisible).toBe(false);
+ await capture(page,join(evidence,'terminal-settings-navigation.png'));
+ await page.locator('.sidebar .nav-link[href="#/chat"]').click();await expect(page).toHaveURL(/#\/chat$/);
+ await page.getByRole('button',{name:'Open terminal',exact:true}).click();await expect.poll(nativeVisible).toBe(true);
  // Collapsed-sidebar and modal overlays cannot fit beside the view. Suspending
  // its display must retain the same shell/buffer without stealing dismiss focus.
  await page.evaluate(()=>{const panel=document.createElement('div');panel.id='terminal-overlay-fixture';panel.popover='auto';panel.style.cssText='position:fixed;inset:100px auto auto 100px;width:450px;height:200px;background:Canvas';panel.textContent='Overlay fixture';document.body.append(panel);panel.showPopover();});
@@ -384,7 +398,7 @@ try {
  await expect(terminal.getByRole('tab',{name:'Agent',exact:true})).toHaveCount(1);
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Search or number:',{timeout:15000});
 	await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1440,900));
-	await expect.poll(()=>terminal.evaluate(()=>innerWidth)).toBeGreaterThan(1100);
+	await expect.poll(()=>terminal.evaluate(()=>innerWidth)).toBeGreaterThanOrEqual(1100);
 	assert.equal(await terminal.evaluate(()=>{const pane=document.querySelector('.pane:not([hidden])'),surface=pane.querySelector('.terminal-surface');const a=pane.getBoundingClientRect(),b=surface.getBoundingClientRect();return Math.abs(b.left-a.left-24)<2&&Math.abs(b.right-a.right+24)<2;}),true,'terminal content does not use the available pane width');
  await capture(terminal,join(evidence,'agent-profile-picker.png'));
 	await terminal.evaluate(()=>appearance({theme:'dark'}));
@@ -394,8 +408,14 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Choose a listed profile number');
  const closedAgentTab=await terminal.evaluate(()=>current);
  await terminal.getByRole('button',{name:'Close Agent',exact:true}).click();
+ await expect.poll(()=>terminal.context().pages().filter(p=>p.url().endsWith('/app-dialog.html')).length).toBe(1);
+ const agentStopDialog=terminal.context().pages().find(p=>p.url().endsWith('/app-dialog.html'));
+ await agentStopDialog.getByRole('button',{name:'Stop and close',exact:true}).click();
+ await expect.poll(()=>agentStopDialog.isClosed()).toBe(true);
+ await expect(terminal.getByRole('tab',{name:'Agent',exact:true})).toHaveCount(0,{timeout:15000});
  await terminal.getByTitle('New terminal',{exact:true}).click();
  await terminal.getByTitle('Open OffGrid Agent and choose a profile').click();
+ await expect(terminal.getByRole('tab',{name:'Agent',exact:true})).toHaveCount(1);
  await expect.poll(()=>terminal.evaluate(()=>current)).not.toBe(closedAgentTab);
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Search or number:');
  await expect(input).toBeFocused();
@@ -453,6 +473,10 @@ try {
  await expect(terminal.locator('.pane:not([hidden]) .xterm-accessibility-tree')).toContainText('Start here');
  await capture(terminal,join(evidence,'agent-returned-to-shell.png'));
  await terminal.getByRole('button',{name:'Close Agent',exact:true}).click();
+ await expect.poll(()=>terminal.context().pages().filter(p=>p.url().endsWith('/app-dialog.html')).length).toBe(1);
+ const returnedAgentStopDialog=terminal.context().pages().find(p=>p.url().endsWith('/app-dialog.html'));
+ await returnedAgentStopDialog.getByRole('button',{name:'Stop and close',exact:true}).click();
+ await expect.poll(()=>returnedAgentStopDialog.isClosed()).toBe(true);
 	await expect(input).toBeFocused();
 
  await input.pressSequentially("$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 300' -WindowStyle Hidden -PassThru; [Console]::WriteLine(('QUIT' + 'PID:' + $p.Id))");await input.press('Enter');

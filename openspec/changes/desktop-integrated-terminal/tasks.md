@@ -45,3 +45,7 @@ Evidence: `docs/quality/evidence/terminal-session-followup-2026-11-07.md`.
 - [x] 6.2 Implement reviewed PowerShell command context and deliberate output-to-agent preview through a focused follow-up contract; never treat shell markers as execution receipts or transfer whole transcripts automatically.
 
 Evidence: `docs/quality/evidence/cli-terminal-interaction-2026-11-08.md`.
+
+### 6.3 Terminal surface and Commands dialog polish
+- [x] Keep the rounded outer terminal pane while matching its surface to xterm, with no inner square or xterm rounding; `node scripts/test/test-terminal-display.mjs` and the packaged terminal test passed.
+- [x] Redesign Commands around actual output, with a compact no-output state and responsive themed controls; `node scripts/test/test-terminal-display.mjs` passed for light/dark, narrow viewports, keyboard focus and forced colors.

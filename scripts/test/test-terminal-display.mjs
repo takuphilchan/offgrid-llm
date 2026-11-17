@@ -9,6 +9,7 @@ import {tmpdir} from 'node:os';
 const root=resolve(import.meta.dirname,'../..'),desktop=join(root,'apps/desktop');
 const require=createRequire(join(root,'apps/web/package.json'));
 const {chromium,expect}=require('@playwright/test');
+const cssColor=hex=>`rgb(${hex.slice(1).match(/../g).map(value=>parseInt(value,16)).join(', ')})`;
 const server=createServer(async(req,res)=>{try{const file=resolve(desktop,'.'+new URL(req.url,'http://localhost').pathname);assert.ok(file.startsWith(desktop+sep));res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css'})[extname(file)]||'application/octet-stream');res.end(await readFile(file));}catch{res.statusCode=404;res.end();}});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:1100,height:700}});
@@ -27,6 +28,7 @@ try{
  await expect(page.getByRole('button',{name:'Ask about selection',exact:true})).toBeVisible();
  await page.locator('#commands').click();
  await expect(page.locator('#context-command')).toBeHidden();
+ await expect(page.locator('#context-selection')).toBeVisible();
  await expect(page.locator('#context-output')).toHaveValue('OffGrid');
  await page.keyboard.press('Escape');
  await page.evaluate(()=>tabs.get(current).term.clearSelection());
@@ -103,12 +105,14 @@ try{
  await expect(page.locator('#context-state')).toContainText('exit 7');
  await page.locator('#context-output').fill('redacted output');
  await page.locator('#context-question').fill('Explain this');
+ await page.screenshot({path:join(evidence,'command-context-review.png')});
  await page.locator('#context-share').click();
  const shares=await page.evaluate(()=>fixtureCalls.filter(c=>c.action==='share'));
  assert.equal(shares.length,1);assert.equal(shares[0].context.output,'redacted output');assert.equal(shares[0].context.command,'Write-Host sample');
  assert.equal(await page.evaluate(()=>fixtureCalls.filter(c=>c.action==='input').length),0);
  await page.locator('#commands').click();await page.setViewportSize({width:400,height:450});
  assert.equal(await page.evaluate(()=>{const d=document.querySelector('#terminal-commands'),r=d.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth;}),true);
+ await expect(page.locator('#context-share')).toBeInViewport();
  await page.screenshot({path:join(evidence,'command-context-narrow.png')});
  await page.keyboard.press('Escape');
 
@@ -158,6 +162,10 @@ try{
  }));
  await page.locator('#commands').click();
  await expect(page.locator('#context-limits')).toHaveText('This command produced no text output.');
+ await expect(page.locator('#context-selection')).toBeHidden();
+ await expect(page.locator('#context-output-label')).toBeHidden();
+ await expect(page.locator('#context-question-label')).toBeHidden();
+ await expect(page.locator('#context-content .display-actions')).toBeHidden();
  await expect(page.locator('#context-copy')).toBeDisabled();await page.keyboard.press('Escape');
  // Exercise the actual xterm renderer with every new locally bundled palette.
  const catalog=require(join(desktop,'theme-palettes.json'));
@@ -168,11 +176,28 @@ try{
   await page.evaluate(({mode,palette})=>fixtureEvent({type:'appearance',theme:mode,palette,reduceMotion:true}),{mode,palette});
   const actual=await page.evaluate(()=>({theme:tabs.get(current).term.options.theme,blink:tabs.get(current).term.options.cursorBlink}));
   assert.equal(actual.theme.background,palette['surface-0']);assert.equal(actual.theme.cursorAccent,palette['surface-0']);
+  await expect(page.locator('html')).toHaveCSS('background-color',cssColor(palette['surface-0']));
+  await expect(page.locator('body')).toHaveCSS('background-color',cssColor(palette['surface-1']));
+  await expect(page.locator('body')).toHaveCSS('border-top-left-radius','20px');
+  await expect(page.locator('body')).toHaveCSS('border-top-right-radius','20px');
+  await expect(page.locator('.pane')).toHaveCSS('background-color',cssColor(palette['surface-0']));
+  await expect(page.locator('.pane')).toHaveCSS('border-radius','20px');
+  await expect(page.locator('.terminal-surface')).toHaveCSS('border-radius','0px');
   for(const [key,color] of Object.entries(ansi))assert.equal(actual.theme[key],color);
   assert.equal(actual.blink,false);
  }
  await page.evaluate(()=>new Promise(resolve=>tabs.get(current).term.write('\r\n\x1b[31mError\x1b[0m  \x1b[32mSuccess\x1b[0m  \x1b[33mWarning\x1b[0m  \x1b[34mLink\x1b[0m\r\n',resolve)));
  await page.screenshot({path:join(evidence,'established-palette-terminal.png')});
+ await page.locator('#commands').click();
+ const commandDialog=page.locator('#terminal-commands');
+ const commandTokens=await page.evaluate(()=>Object.fromEntries(['bg','accent-strong'].map(key=>[key,getComputedStyle(document.documentElement).getPropertyValue(`--${key}`).trim()])));
+ await expect(commandDialog).toHaveCSS('background-color',cssColor(commandTokens.bg));
+ await expect(commandDialog).toHaveCSS('border-radius','18px');
+ await expect(page.locator('#context-jump')).toHaveCSS('min-height','40px');
+ await expect(page.locator('#context-jump')).toHaveCSS('border-radius','10px');
+ await expect(page.locator('#context-share')).toHaveCSS('background-color',cssColor(commandTokens['accent-strong']));
+ await page.screenshot({path:join(evidence,'command-context-palette.png')});
+ await page.keyboard.press('Escape');
  await page.emulateMedia({forcedColors:'active'});
  await expect.poll(()=>page.evaluate(()=>{const t=tabs.get(current).term.options.theme;return t.red===t.foreground;})).toBe(true);
  if(process.env.OFFGRID_TERMINAL_CAPTURE){
