@@ -47,7 +47,7 @@ function ThemeChooser({initial,initialMode,onApply,onClose}:{initial:Appearance;
 export function AppearanceSettings() {
  const {locale}=useI18n(),c=personalization[locale];
  const [value,setValue]=useState(readAppearance),[picker,setPicker]=useState<PaletteMode|null>(null),[saved,setSaved]=useState<boolean|null>(null);
- useEffect(()=>{const sync=()=>{setValue(readAppearance());setPicker(null);};window.addEventListener('offgrid-appearance',sync);return()=>{window.removeEventListener('offgrid-appearance',sync);applyAppearance();};},[]);
+ useEffect(()=>{const sync=()=>{setValue(readAppearance());setPicker(null);};sync();window.addEventListener('offgrid-appearance',sync);return()=>{window.removeEventListener('offgrid-appearance',sync);applyAppearance();};},[]);
  function commit(next:Appearance){setSaved(saveAppearance(next));setValue(next);setPicker(null);}
  return <div className="appearance-settings" id="setting-appearance" tabIndex={-1}>
   <p className="appearance-scope">{c[9]}</p>
