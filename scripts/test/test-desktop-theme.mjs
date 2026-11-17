@@ -163,7 +163,7 @@ try {
   }
   console.log('Checking Help at 200% zoom');
   await page.locator('.help-trigger').click();
-  const help = page.getByRole('dialog', {name:'Help',exact:true});
+  const help = page.getByRole('region', {name:'Help',exact:true});
   await expect(help).toBeVisible();
   await expect(help.getByRole('button',{name:'Close help'})).toBeInViewport();
   await help.evaluate(el=>{el.scrollTop=el.scrollHeight;});
