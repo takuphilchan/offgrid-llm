@@ -34,6 +34,8 @@ test('startup stays continuous until models, history and the selected turn have 
   await expect(splash).toHaveCSS('top','32px');
   models.release();await expect.poll(()=>historyRequested).toBe(true);
   await expect(splash).toBeVisible();await expect(page.locator('.composer textarea')).toBeHidden();
+  await expect(splash.locator('.startup-stage')).toHaveText('Opening your workspace');
+  await expect(splash.locator('.startup-stage')).not.toContainText('Chat');
   history.release();await expect.poll(()=>turnRequested).toBe(true);
   await expect(splash).toBeVisible();await expect(page.locator('.composer textarea')).toBeDisabled();
   turn.release();await expect(splash).toHaveCount(0);

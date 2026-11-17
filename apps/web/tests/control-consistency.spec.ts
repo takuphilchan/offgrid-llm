@@ -113,7 +113,7 @@ test('search, chat agent and document controls share sizing and keyboard focus',
   await page.goto('/ui/#/chat');
   await page.getByRole('button',{name:'Response settings',exact:true}).click();
   await expect(page.getByRole('button',{name:'Agent',exact:true})).toHaveCSS('min-height', '32px');
-  await expect(page.locator('.composer')).toHaveCSS('border-radius', '26px');
+  await expect(page.locator('.composer')).toHaveCSS('border-radius', '24px');
   await page.goto('/ui/#/knowledge');
   const controls = ['Add document', 'Ask using Knowledge', 'Manage Knowledge'].map(name => page.getByRole('button', { name, exact: true }));
   for (const control of controls) {
@@ -123,6 +123,20 @@ test('search, chat agent and document controls share sizing and keyboard focus',
     await expect(control).toBeFocused();
   }
   await expect(page.locator('.knowledge-workspace > button')).toHaveCount(0);
+});
+
+test('composer model picker does not jump when pressed', async ({ page }) => {
+  await fixture(page);
+  await page.goto('/ui/#/chat');
+  const trigger = page.locator('.composer .model-select-trigger');
+  await expect(trigger).toBeVisible();
+  const before = await trigger.boundingBox();
+  await trigger.hover();
+  await page.mouse.down();
+  const pressed = await trigger.boundingBox();
+  expect(pressed!.x).toBe(before!.x);
+  expect(pressed!.y).toBe(before!.y);
+  await page.mouse.up();
 });
 
 test('Knowledge and model searches use the compact accessible search surface', async ({ page }) => {

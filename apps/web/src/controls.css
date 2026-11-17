@@ -31,7 +31,7 @@
     color: var(--text);
     background: var(--surface-1);
     cursor: pointer;
-    transition: transform var(--motion-press) var(--ease-move), opacity var(--motion-press) var(--ease-move), background-color var(--motion-press) ease, border-color var(--motion-press) ease, color var(--motion-press) ease;
+    transition: opacity var(--motion-press) ease, background-color var(--motion-press) ease, border-color var(--motion-press) ease, color var(--motion-press) ease;
     transform: none;
   }
   :where(.primary-button, .composer-actions > button) {
@@ -87,7 +87,9 @@
     color: var(--text); background: var(--surface-2); border-color: transparent; font-weight: 600;
   }
   button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
-  :where(button, a.primary-button, a.secondary-button):active:not(:disabled) { transform: translateY(var(--press-distance)); }
+  /* Keep pointer-down geometry stable. Moving a control by a pixel on press
+     reads as a flicker in dense controls such as the composer and model picker. */
+  :where(button, a.primary-button, a.secondary-button):active:not(:disabled) { transform: none; }
   :where(button, a.primary-button, a.secondary-button):focus-visible { scroll-margin-block: var(--space-4); }
   button > svg { flex-shrink: 0; }
   .icon-button { width: var(--control-height); height: var(--control-height); flex-shrink: 0; border-radius: var(--control-radius); }

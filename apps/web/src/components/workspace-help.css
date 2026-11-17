@@ -1,8 +1,9 @@
 @layer controls {
   .workspace > .page-content[hidden] { display:none; }
-  .workspace.help-page { overflow:auto; }
-  .workspace-help { width:min(1080px,100%); margin-inline:auto; padding:24px clamp(16px,4vw,56px) 64px; color:var(--text); }
-  .help-heading { display:flex; justify-content:space-between; align-items:start; gap:16px; margin-block-end:24px; }
+  .workspace.help-page { height:var(--workspace-viewport,100dvh); min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+  .help-page > .topbar { flex-shrink:0; }
+  .workspace-help { box-sizing:border-box; width:min(1080px,100%); min-height:0; flex:1; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; margin-inline:auto; padding:24px clamp(16px,4vw,56px) 64px; color:var(--text); }
+  .help-heading { position:sticky; inset-block-start:0; z-index:1; display:flex; justify-content:space-between; align-items:start; gap:16px; margin-block-end:24px; padding-block-start:1px; background:var(--surface-1); }
   .help-heading h2 { margin:0; font-size:clamp(26px,3vw,34px); font-weight:600; letter-spacing:-.025em; }
   .help-heading p { margin:8px 0 0; color:var(--muted); font-size:var(--type-ui); }
   .help-search { display:flex; gap:16px; align-items:center; margin-block-end:32px; }

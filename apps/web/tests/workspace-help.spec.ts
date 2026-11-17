@@ -30,3 +30,11 @@ test('Help search, keyboard topics and destinations preserve a returning draft',
  await help.getByRole('link',{name:'Activity',exact:true}).click();await expect(help).toHaveCount(0);await expect(page).toHaveURL(/#\/activity$/);
  await page.locator('.primary-nav a[href="#/chat"]').click();await expect(page.locator('.composer textarea')).toHaveValue('Keep my draft');expect(state.writes).toEqual([]);
 });
+test('Help stays within the app viewport at 200 percent zoom',async({page})=>{
+ await craftFixture(page,'en','dark');await page.setViewportSize({width:640,height:450});await page.goto('/ui/#/chat');
+ await page.locator('.help-trigger').click();const help=page.getByRole('region',{name:'Help',exact:true});await expect(help).toBeVisible();
+ const bounds=()=>help.boundingBox();let box=await bounds(),viewport=await page.evaluate(()=>({width:innerWidth,height:innerHeight}));
+ expect(box).not.toBeNull();expect(box!.x).toBeGreaterThanOrEqual(0);expect(box!.y).toBeGreaterThanOrEqual(0);expect(box!.x+box!.width).toBeLessThanOrEqual(viewport.width+1);expect(box!.y+box!.height).toBeLessThanOrEqual(viewport.height+1);
+ await help.evaluate(node=>{node.scrollTop=node.scrollHeight;});await expect(help.getByRole('button',{name:workspaceHelp.en.close,exact:true})).toBeInViewport();
+ await page.keyboard.press('Escape');await expect(help).toHaveCount(0);
+});

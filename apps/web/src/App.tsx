@@ -253,7 +253,11 @@ export function App() {
   ];
   useEffect(() => {
     if (startupFinished.current) return;
-    updateWorkspaceStartup({stage:access === 'ready' ? text.common.loading + ' · ' + text.nav.chat : text.status.checking, locale:language, startupOverrides:(startupTranslations as Record<string,Record<string,Record<string,string>>>)[language]?.['desktop/startup-welcome'], retry:text.common.retry});
+    // Keep the native startup's stable, human-readable "Opening your
+    // workspace" status while the initial model/history/turn reads settle.
+    // A route label such as "Loading · Chat" is neither a real stage nor
+    // useful progress feedback.
+    updateWorkspaceStartup({locale:language, startupOverrides:(startupTranslations as Record<string,Record<string,Record<string,string>>>)[language]?.['desktop/startup-welcome'], retry:text.common.retry});
     const ready = access === 'login' || !!loadError || (access === 'ready' && (page !== 'chat' || showOnboarding || chatInitialized));
     if (!ready) return;
     let second = 0;
@@ -324,11 +328,16 @@ function Onboarding({ health, inventoryState, inventoryError, chatModelCount, ch
 }) {
   const { messages: text, locale } = useI18n();
   const surface=useRef<HTMLElement>(null);
-  useEffect(()=>{ const previous=document.activeElement as HTMLElement|null; surface.current?.focus(); return()=>{if(previous?.isConnected)previous.focus();}; },[]);
+  useEffect(()=>{
+    const previous=document.activeElement as HTMLElement|null;
+    const handleKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!event.isComposing){event.preventDefault();onClose();}};
+    surface.current?.focus();window.addEventListener('keydown',handleKeyDown);
+    return()=>{window.removeEventListener('keydown',handleKeyDown);if(previous?.isConnected)previous.focus();};
+  },[]);
   const checking = health === 'checking' || inventoryState === 'checking';
   const hasSuggested = pending && health === 'ready' && inventoryState === 'ready' && !!suggestedModel;
   const action = !pending ? text.onboarding.close : checking ? text.status.checking : health !== 'ready' ? text.onboarding.retryService : inventoryState === 'failed' ? text.common.retry : chatReady ? text.onboarding.startChat : hasSuggested ? `${workspaceOrder(locale).selectModel}: ${readableModelName(suggestedModel)}` : text.onboarding.chooseModel;
-  return <section ref={surface} tabIndex={-1} className="workspace-setup" aria-labelledby="onboarding-title" onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();onClose();}}}>
+  return <section ref={surface} tabIndex={-1} className="workspace-setup" aria-labelledby="onboarding-title">
     <button className="onboarding-close icon-button" onClick={onClose} aria-label={text.onboarding.close}><Icon name="close" size={18} /></button>
     <div className="onboarding-heading"><div className="onboarding-mark"><Icon name="models" size={24} /></div><h2 id="onboarding-title">{text.onboarding.title}</h2></div>
     <p>{text.onboarding.body}</p>

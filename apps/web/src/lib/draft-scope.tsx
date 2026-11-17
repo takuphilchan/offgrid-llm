@@ -29,7 +29,10 @@ export function DraftRecoveryNotice() {
   const [offered, setOffered] = useState(() => hasLegacyDrafts(actor, workspace));
   const [message, setMessage] = useState('');
   useEffect(() => {
-    const changed = () => setOffered(hasLegacyDrafts(actor, workspace));
+    const changed = () => { setOffered(hasLegacyDrafts(actor, workspace)); setMessage(''); };
+    // Identity can change without a storage event (for example after a
+    // service refresh), so recompute the offer for the newly scoped workspace.
+    changed();
     window.addEventListener('storage', changed);
     return () => window.removeEventListener('storage', changed);
   }, [actor, workspace]);

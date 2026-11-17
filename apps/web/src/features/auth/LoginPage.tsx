@@ -14,6 +14,22 @@ export function LoginPage({ onAuthenticated }: { onAuthenticated: (user: PublicU
   const [visible, setVisible] = useState(false);
   const [service, setService] = useState(window.location.origin);
   const pending = useRef(false);
+  const usernameInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    // Native autofocus can run before the async desktop identity read and
+    // renderer startup settle. Restore it once, without stealing focus after
+    // the user has moved to another control.
+    let frame = 0;
+    let attempts = 0;
+    const focusWhenReady = () => {
+      const app = usernameInput.current?.closest('#root');
+      if (document.activeElement !== document.body) return;
+      if (app && !app.hasAttribute('inert')) { usernameInput.current?.focus(); return; }
+      if (attempts++ < 8) frame = requestAnimationFrame(focusWhenReady);
+    };
+    frame = requestAnimationFrame(focusWhenReady);
+    return () => cancelAnimationFrame(frame);
+  }, []);
   useEffect(() => {
     let disposed = false;
     void window.electron?.getBackendInfo?.().then(backend => {
@@ -46,7 +62,7 @@ export function LoginPage({ onAuthenticated }: { onAuthenticated: (user: PublicU
     <div className="login-service"><span>{copy.service}</span><code dir="ltr">{service}</code></div>
     <p className="login-account-hint" id={`${id}-account`}>{copy.account}</p>
     {error && <div className="inline-error login-recovery" role="alert"><p>{error}</p><p>{copy.recovery}</p></div>}
-    <label><span>{text.auth.username}</span><input autoComplete="username" autoFocus autoCapitalize="none" spellCheck={false} aria-describedby={`${id}-account`} disabled={busy} value={username} onChange={event => setUsername(event.target.value)} /></label>
+    <label><span>{text.auth.username}</span><input ref={usernameInput} autoComplete="username" autoFocus autoCapitalize="none" spellCheck={false} aria-describedby={`${id}-account`} disabled={busy} value={username} onChange={event => setUsername(event.target.value)} /></label>
     <div className="login-password"><label htmlFor={`${id}-password`}>{text.auth.password}</label><input id={`${id}-password`} type={visible ? 'text' : 'password'} autoComplete="current-password" disabled={busy} value={password} onChange={event => setPassword(event.target.value)} />
       <button type="button" className="utility-button" aria-controls={`${id}-password`} aria-pressed={visible} onClick={() => setVisible(!visible)}>{visible ? copy.hide : copy.show}</button></div>
     <button className="primary-button" disabled={busy || !username.trim() || !password}>{busy ? text.common.loading : text.auth.signIn}</button>

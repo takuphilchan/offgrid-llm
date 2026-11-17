@@ -37,7 +37,7 @@ for (const locale of Object.keys(modelComparison) as LocaleCode[]) test(`catalog
   await expect(filter).toHaveCount(0);await expect(page.locator('#model-search-query')).toBeVisible();
   await page.locator('#model-view-discover').click();
   await expect(page.locator('#model-search-query')).toHaveCount(0);await expect(filter).toHaveValue('model-3');
-  await page.locator('.model-category-filter').selectOption('embedding');
+  await page.locator('.model-category-filter').selectOption('embeddings');
   await expect(comparison.locator('article')).toHaveCount(0);
   await expect(filter).toHaveValue('');
   await page.locator('.model-category-filter').selectOption('language');

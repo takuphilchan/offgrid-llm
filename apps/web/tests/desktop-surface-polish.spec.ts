@@ -29,9 +29,10 @@ for(const [theme,palette] of [['light','slate'],['dark','offgrid']] as const) {
   await expect(page.locator('html')).toHaveAttribute('data-startup-state','loading');
   await expect(page.locator('#technical')).toBeHidden();await expect(page.locator('#recovery')).toBeHidden();
   expect(await page.locator('html').evaluate(el=>getComputedStyle(el).getPropertyValue('--bg').trim())).toBe(presentation.palette['surface-0']);
-  await expect(page.locator('header svg')).toHaveCSS('animation-name','breathe');
+  const brandLayer=page.locator('header svg path').first();
+  await expect(brandLayer).toHaveCSS('animation-name','startup-layer-top');
   await page.screenshot({path:info.outputPath('startup-'+theme+'.png')});
-  await page.emulateMedia({reducedMotion:'reduce'});await expect(page.locator('header svg')).toHaveCSS('animation-name','none');
+  await page.emulateMedia({reducedMotion:'reduce'});await expect(brandLayer).toHaveCSS('animation-name','none');
   await page.evaluate(()=>(window as any).startupFixtureState({state:'unavailable',reason:'Fixture service is stopped',managedByDesktop:true}));
   await expect(page.locator('#retry')).toBeVisible();await expect(page.locator('#technical')).toBeVisible();await expect(page.locator('#separate')).toBeHidden();
   await page.setViewportSize({width:390,height:700});await page.screenshot({path:info.outputPath('recovery-'+theme+'.png')});
@@ -60,7 +61,7 @@ for(const [locale,theme,width] of [['en','light',1440],['ar','dark',390]] as con
  const cards=page.locator('.knowledge-workflows .action-card');await expect(cards).toHaveCount(2);
  await page.screenshot({path:info.outputPath('library-'+locale+'.png'),fullPage:true});
  const collections=page.locator('.collection-library-controls button.icon-button');await collections.click();const manager=page.locator('.collection-manager');await expect(manager).toBeVisible();
- await manager.locator('.collection-create-choice').click();await expect(manager.locator('.collection-create input')).toBeVisible();
+ await manager.locator('.collection-new').click();await expect(manager.locator('.collection-create input')).toBeVisible();
  await page.screenshot({path:info.outputPath('collection-'+locale+'.png')});
  await page.keyboard.press('Escape');await expect(collections).toBeFocused();
  await cards.nth(1).click();await expect(page.locator('.synthesis-modes label')).toHaveCount(2);

@@ -97,9 +97,9 @@ test('workspace and actor changes dispose search results and return state', asyn
 
 for(const locale of ['en','fr','de','es','ar','sw','sn','nd','zu']) test(`search results fit narrow ${locale} layout and respect keyboard composition`,async({page}, testInfo)=>{
  await fixture(page,locale);await page.setViewportSize({width:320,height:640});await page.goto('/ui/#/models');
- await page.keyboard.press('Control+k');await page.getByRole('combobox').fill('demo');
+ await page.keyboard.press('Control+k');const search=page.getByRole('dialog').getByRole('combobox');await search.fill('demo');
  await expect(page.getByRole('option',{name:'Archived demo café'})).toBeVisible();
- await page.getByRole('combobox').dispatchEvent('keydown',{key:'Enter',isComposing:true});await expect(page.getByRole('dialog')).toBeVisible();
+ await search.dispatchEvent('keydown',{key:'Enter',isComposing:true});await expect(page.getByRole('dialog')).toBeVisible();
  const overflow=await page.getByRole('dialog').evaluate(node=>node.scrollWidth>node.clientWidth+1);expect(overflow).toBe(false);
  if(locale==='en'||locale==='ar') await page.screenshot({path:testInfo.outputPath(`search-${locale}.png`)});
  await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toHaveCount(0);

@@ -161,6 +161,10 @@ for (const change of ['actor', 'workspace'] as const) test(`${change} isolates d
   await page.locator('.composer textarea').fill('Only in workspace A for Alice');
   state[change] = change === 'actor' ? 'bob' : 'workspace-b';
   await refreshWorkspace(page);
+  // A new actor/workspace may receive its own first-run guide. Dismiss it so
+  // the draft isolation assertion can inspect the underlying workspace notice.
+  const closeGuide = page.getByRole('button', { name: 'Close guide', exact: true });
+  if (await closeGuide.isVisible()) await closeGuide.click();
   await expect(page.locator('.composer textarea')).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Restore previous drafts here' })).toBeVisible();
   state[change] = change === 'actor' ? 'alice' : 'workspace-a';
