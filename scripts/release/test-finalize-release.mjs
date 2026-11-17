@@ -46,7 +46,7 @@ function run(assetNames, {
       join(repo, `docs/releases/release-notes-${version}.md`),
       join(root, `docs/releases/release-notes-${version}.md`),
     );
-    if(previewNotes) writeFileSync(join(root, `docs/releases/release-notes-${version}.md`), '# Unsigned preview\nNo publisher signature or notarization.\n');
+    if(previewNotes) writeFileSync(join(root, `docs/releases/release-notes-${version}.md`), '# unsigned preview\nNo publisher signature or notarization.\n');
     writeFileSync(join(root, 'initial-assets.json'), JSON.stringify(initialAssets));
     writeFileSync(join(root, 'assets.json'), JSON.stringify(assets));
     const mock = `

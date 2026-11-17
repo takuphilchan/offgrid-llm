@@ -111,11 +111,11 @@ fi
 
 publish_flags=(--prerelease=false)
 if [[ "$channel" == unsigned-preview ]]; then
-  if ! grep -Fq 'Unsigned preview' "$notes_path"; then
+  if ! grep -Fiq 'unsigned preview' "$notes_path"; then
     echo '::error::Unsigned preview release notes must disclose the signing status'; exit 1
   fi
   publish_flags=(--prerelease --latest=false --title "OffGrid ${version} - Unsigned preview")
-elif grep -Fq 'Unsigned preview' "$notes_path"; then
+elif grep -Fiq 'unsigned preview' "$notes_path"; then
   echo '::error::Unsigned preview notes cannot publish through the signed channel'; exit 1
 fi
 

@@ -70,7 +70,7 @@ jobs:
           git fetch --no-tags --depth=1 origin "refs/tags/${RELEASE_VERSION}"
           source_sha="$(git rev-parse 'FETCH_HEAD^{commit}')"
           git show "${source_sha}:docs/releases/release-notes-${RELEASE_VERSION}.md" > "$RUNNER_TEMP/release-notes.md"
-          if grep -Fq 'Unsigned preview' "$RUNNER_TEMP/release-notes.md"; then
+          if grep -Fiq 'unsigned preview' "$RUNNER_TEMP/release-notes.md"; then
             if [[ "$RELEASE_CHANNEL" != unsigned-preview ]]; then
               echo '::error::This source requires explicit unsigned_preview manual dispatch'; exit 1
             fi
