@@ -62,6 +62,18 @@ an older release cannot move those aliases backward.
 Confirm both the multi-platform CPU tag and AMD64 GPU tag are pullable before
 proceeding.
 
+To deliberately rebuild already-published containers, dispatch
+`docker-publish.yml` from the reviewed workflow revision on `main` with
+`version=X.Y.Z`, `source_ref=vX.Y.Z`, `force_rebuild=true`, and
+`publish_gpu=true`. The source tag must match the requested version. The
+workflow applies reviewed Dockerfiles from the dispatch revision while keeping
+the application source pinned to the immutable tag, then rebuilds both CPU
+architectures, republishes their manifest, and rebuilds the NVIDIA AMD64 image.
+This replaces the versioned Docker tags and, for the highest stable tag, their
+latest/minor aliases. It does not move the Git tag or modify GitHub release
+assets. Verify the CPU AMD64/ARM64 manifest, GPU AMD64 image, and source identity
+after the run.
+
 When every asset already exists and only checksums/notes/final publication
 failed, push `release-finalize/vX.Y.Z` from the reviewed workflow commit.
 `release-finalize.yml` verifies the source tag, CPU and GPU container platforms,

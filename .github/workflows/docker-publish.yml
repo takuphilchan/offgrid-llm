@@ -30,11 +30,22 @@ on:
         description: Image label for a manual pre-release build
         required: true
         default: edge
+        type: string
+      source_ref:
+        description: Immutable vX.Y.Z tag to build from (required for a forced rebuild)
+        required: false
+        default: ''
+        type: string
       publish_gpu:
         description: Also publish the Linux AMD64 NVIDIA CUDA image
         required: true
         type: boolean
         default: true
+      force_rebuild:
+        description: Rebuild existing versioned image tags
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -63,15 +74,32 @@ jobs:
       - name: Resolve build version
         id: version
         shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_SOURCE_REF: ${{ inputs.source_ref || '' }}
+          FORCE_REBUILD: ${{ inputs.force_rebuild || false }}
         run: |
           set -euo pipefail
-          if [[ -n "${{ inputs.source_ref || '' }}" ]]; then
-            value="${{ inputs.version }}"
-            value="${value#v}"
-            source_ref="${{ inputs.source_ref }}"
-          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            value="${{ inputs.version }}"
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            value="${INPUT_VERSION#v}"
             source_ref="${GITHUB_REF}"
+            if [[ -n "${INPUT_SOURCE_REF}" ]]; then
+              if [[ ! "${INPUT_SOURCE_REF}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "::error::Manual source_ref must be an immutable vX.Y.Z tag"
+                exit 1
+              fi
+              if [[ "${INPUT_SOURCE_REF#v}" != "${value}" ]]; then
+                echo "::error::Manual source_ref version must match the requested image version"
+                exit 1
+              fi
+              source_ref="refs/tags/${INPUT_SOURCE_REF}"
+            elif [[ "${FORCE_REBUILD}" == "true" ]]; then
+              echo "::error::A forced manual rebuild requires source_ref=vX.Y.Z matching version"
+              exit 1
+            fi
+          elif [[ -n "${INPUT_SOURCE_REF}" ]]; then
+            value="${INPUT_VERSION#v}"
+            source_ref="${INPUT_SOURCE_REF}"
           elif [[ "${GITHUB_REF}" == refs/heads/release-container/v* ]]; then
             source_ref="${GITHUB_REF#refs/heads/release-container/}"
             if [[ ! "${source_ref}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -82,6 +110,14 @@ jobs:
           else
             value="${GITHUB_REF_NAME#v}"
             source_ref="${GITHUB_REF}"
+          fi
+          if [[ ! "${value}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "::error::Image version must be a valid Docker tag"
+            exit 1
+          fi
+          if [[ "${source_ref}" == *$'\n'* || "${source_ref}" == *$'\r'* ]]; then
+            echo "::error::Source ref must be a single-line Git ref"
+            exit 1
           fi
           {
             echo "value=${value}"
@@ -127,12 +163,14 @@ jobs:
       - name: Reuse complete published versioned images
         id: existing
         shell: bash
+        env:
+          FORCE_REBUILD: ${{ inputs.force_rebuild || false }}
         run: |
           set -euo pipefail
           echo "cpu=false" >> "${GITHUB_OUTPUT}"
           echo "gpu=false" >> "${GITHUB_OUTPUT}"
-          if [[ "${{ inputs.force_rebuild || false }}" == true ]]; then
-            echo "Explicit draft rebuild: do not reuse images from the previous source"
+          if [[ "${FORCE_REBUILD}" == true ]]; then
+            echo "Explicit rebuild: do not reuse existing images"
             exit 0
           fi
           for flavor in cpu gpu; do
@@ -183,8 +221,8 @@ jobs:
           ref: ${{ needs.prepare.outputs.source_ref }}
           fetch-depth: 0
 
-      - name: Apply reviewed CPU packaging on repair branch
-        if: startsWith(github.ref, 'refs/heads/release-container/v')
+      - name: Apply reviewed CPU packaging from automation revision
+        if: startsWith(github.ref, 'refs/heads/release-container/v') || (github.event_name == 'workflow_dispatch' && inputs.source_ref != '')
         shell: bash
         run: |
           set -euo pipefail
@@ -226,6 +264,7 @@ jobs:
             org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
             org.opencontainers.image.revision=${{ needs.prepare.outputs.source_sha }}
             org.opencontainers.image.created=${{ needs.prepare.outputs.created }}
+            org.offgrid.packaging.revision=${{ github.sha }}
           build-args: |
             VERSION=${{ needs.prepare.outputs.version }}
             VCS_REF=${{ needs.prepare.outputs.source_sha }}
@@ -284,7 +323,7 @@ jobs:
             type=raw,value=latest,enable=${{ needs.prepare.outputs.is_latest == 'true' }}
             type=raw,value=${{ needs.prepare.outputs.version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') }}
             type=raw,value=${{ needs.prepare.outputs.minor_version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') && needs.prepare.outputs.is_latest == 'true' }}
-            type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=${{ needs.prepare.outputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=raw,value=sha-${{ needs.prepare.outputs.source_short_sha }},enable=${{ !startsWith(github.ref, 'refs/heads/release-container/v') }}
           labels: |
             org.opencontainers.image.title=OffGrid
@@ -356,8 +395,8 @@ jobs:
           ref: ${{ needs.prepare.outputs.source_ref }}
           fetch-depth: 0
 
-      - name: Apply reviewed GPU packaging on repair branch
-        if: startsWith(github.ref, 'refs/heads/release-container/v')
+      - name: Apply reviewed GPU packaging from automation revision
+        if: startsWith(github.ref, 'refs/heads/release-container/v') || (github.event_name == 'workflow_dispatch' && inputs.source_ref != '')
         shell: bash
         run: |
           set -euo pipefail
@@ -398,7 +437,7 @@ jobs:
             type=raw,value=latest,enable=${{ needs.prepare.outputs.is_latest == 'true' }}
             type=raw,value=${{ needs.prepare.outputs.version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') }}
             type=raw,value=${{ needs.prepare.outputs.minor_version }},enable=${{ startsWith(github.ref, 'refs/heads/release-container/v') && needs.prepare.outputs.is_latest == 'true' }}
-            type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=${{ needs.prepare.outputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=raw,value=sha-${{ needs.prepare.outputs.source_short_sha }},enable=${{ !startsWith(github.ref, 'refs/heads/release-container/v') }}
           labels: |
             org.opencontainers.image.title=OffGrid (NVIDIA CUDA)

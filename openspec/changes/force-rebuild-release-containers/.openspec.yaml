@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-11-18
+goal: Allow explicit CPU and NVIDIA image rebuilds from the exact published
+  source tag, then verify the multi-platform manifest and provenance.
