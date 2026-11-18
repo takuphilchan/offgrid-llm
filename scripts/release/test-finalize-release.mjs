@@ -9,6 +9,10 @@ const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const version = 'v0.3.1';
 const packageVersion = version.slice(1);
 const script = readFileSync(join(repo, '.github/scripts/finalize-release.sh'), 'utf8');
+const releaseWorkflow = readFileSync(join(repo, '.github/workflows/release-unified.yml'), 'utf8').replace(/\r\n/g, '\n');
+const finalizer = releaseWorkflow.split('  finalize-release:\n')[1];
+assert.ok(finalizer?.includes('path: .release-automation'));
+assert.ok(finalizer?.includes('bash .release-automation/.github/scripts/finalize-release.sh'));
 const names = [
   `offgrid-${version}-linux-amd64-cpu-avx2.tar.gz`,
   `offgrid-${version}-linux-amd64-cpu-avx512.tar.gz`,

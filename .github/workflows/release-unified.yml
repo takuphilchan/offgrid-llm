@@ -1305,6 +1305,12 @@ jobs:
         with:
           ref: ${{ needs.release-context.outputs.source_ref }}
 
+      - name: Checkout release automation
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: .release-automation
+
       - name: Get version
         id: version
         run: |
@@ -1316,7 +1322,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_CHANNEL: ${{ needs.release-context.outputs.channel }}
         run: |
-          bash .github/scripts/verify-release-containers.sh \
+          bash .release-automation/.github/scripts/verify-release-containers.sh \
             "${{ steps.version.outputs.version }}"
-          bash .github/scripts/finalize-release.sh \
+          bash .release-automation/.github/scripts/finalize-release.sh \
             "${{ steps.version.outputs.version }}" "${{ github.repository }}" "$RELEASE_CHANNEL"
