@@ -183,6 +183,14 @@ jobs:
           ref: ${{ needs.prepare.outputs.source_ref }}
           fetch-depth: 0
 
+      - name: Apply reviewed CPU packaging on repair branch
+        if: startsWith(github.ref, 'refs/heads/release-container/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          git show "${GITHUB_SHA}:docker/Dockerfile" > docker/Dockerfile
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 

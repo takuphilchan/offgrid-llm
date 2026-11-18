@@ -82,6 +82,9 @@ console.log('Release and Docker llama.cpp builds do not depend on optional UI do
 // Exercise the workflow's alias decision with an immutable source that would
 // otherwise be the latest tag. Preview publication must still disable aliases.
 const workflow=readFileSync(join(repo,'.github/workflows/docker-publish.yml'),'utf8').replace(/\r\n/g,'\n');
+const cpuRepairStep=workflow.split('- name: Apply reviewed CPU packaging on repair branch\n')[1]?.split('\n      - name:')[0];
+assert.ok(cpuRepairStep?.includes('git show "${GITHUB_SHA}:docker/Dockerfile" > docker/Dockerfile'),
+  'A repair branch must apply its reviewed CPU Dockerfile while retaining tagged application source');
 const sourceStep=workflow.split('- name: Record source revision\n')[1].split('\n      - name:')[0];
 const sourceScript=sourceStep.split('        run: |\n')[1].split('\n')
   .filter(line=>line.startsWith('          ')).map(line=>line.slice(10)).join('\n');
