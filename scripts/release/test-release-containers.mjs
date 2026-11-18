@@ -72,6 +72,13 @@ assert.match(eventuallyComplete.stdout, /not fully indexed/);
 
 console.log('Container release verification checks both CPU platforms, GPU, and registry indexing retries');
 
+for (const path of ['.github/workflows/release-unified.yml', 'docker/Dockerfile', 'docker/Dockerfile.gpu']) {
+  const build = readFileSync(join(repo, path), 'utf8');
+  assert.match(build, /LLAMA_BUILD_UI=OFF/, `${path} must disable local llama.cpp UI builds`);
+  assert.match(build, /LLAMA_USE_PREBUILT_UI=OFF/, `${path} must not download llama.cpp UI assets`);
+}
+console.log('Release and Docker llama.cpp builds do not depend on optional UI downloads');
+
 // Exercise the workflow's alias decision with an immutable source that would
 // otherwise be the latest tag. Preview publication must still disable aliases.
 const workflow=readFileSync(join(repo,'.github/workflows/docker-publish.yml'),'utf8').replace(/\r\n/g,'\n');

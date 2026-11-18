@@ -18,12 +18,17 @@ release bundles apply the same patch. The worker reports the distinct commit
 suffix `-offgrid-seq2`, so runtime evidence cannot silently carry over from the
 unpatched worker. Existing runtime downloads are not automatically replaced.
 
+Release and Docker builds disable both the embedded llama.cpp UI build and
+prebuilt-UI download. The managed server is internal; OffGrid provides the
+user-facing interface, so building it must not depend on external UI assets.
+
 Apply and test in a separate checkout of the pinned source:
 
 ```sh
 sh /path/to/offgrid/runtimes/llama-cpp/apply-patches.sh /path/to/llama.cpp
 cmake -S /path/to/llama.cpp -B /path/to/llama.cpp/build \
-  -DLLAMA_BUILD_TESTS=ON -DGGML_CUDA=OFF -DLLAMA_BUILD_UI=OFF
+  -DLLAMA_BUILD_TESTS=ON -DGGML_CUDA=OFF \
+  -DLLAMA_BUILD_UI=OFF -DLLAMA_USE_PREBUILT_UI=OFF
 cmake --build /path/to/llama.cpp/build --parallel 3 --target test-chat-auto-parser
 cd /path/to/llama.cpp
 build/bin/test-chat-auto-parser

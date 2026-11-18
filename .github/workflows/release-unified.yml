@@ -456,6 +456,7 @@ jobs:
             # CURL is no longer the switch for cpp-httplib in this pinned tree.
             -DLLAMA_OPENSSL=OFF
             -DLLAMA_BUILD_UI=OFF
+            -DLLAMA_USE_PREBUILT_UI=OFF
           )
           # macOS ships Bash 3.2. With `set -u`, expanding an empty array is an
           # unbound-variable error. ARM builds have no x86 GGML arguments, so
