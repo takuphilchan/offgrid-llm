@@ -98,6 +98,7 @@ for (const [draft, rebuild, succeeds, operations] of [
   [{isDraft:true,body:`<!-- offgrid-source: ${source} --> <!-- offgrid-channel: signed -->`},'false',true,''],
   [{isDraft:true,body:'old source <!-- offgrid-channel: signed -->'},'false',false,''],
   [{isDraft:true,body:'old source <!-- offgrid-channel: signed -->'},'true',true,'delete\ncreate\n'],
+  [{isDraft:true,body:'old source <!-- offgrid-channel: unsigned-preview -->'},'true',true,'delete\ncreate\n'],
   [{isDraft:false,body:'published'},'true',false,''],
   [{isDraft:false,body:'published <!-- offgrid-channel: signed -->'},'false',false,''],
   [{isDraft:true,body:`<!-- offgrid-source: ${source} --> <!-- offgrid-channel: unsigned-preview -->`},'false',false,''],

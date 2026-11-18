@@ -122,15 +122,13 @@ jobs:
           exists=false
           if gh release view "${version}" --repo "${{ github.repository }}" --json isDraft,body > "$RUNNER_TEMP/release-state.json"; then
             exists=true
-            if ! jq -e --arg marker "$channel_marker" '(.body // "") | contains($marker)' "$RUNNER_TEMP/release-state.json" >/dev/null; then
-              echo '::error::Release channel is different or unverified; refusing asset reuse'; exit 1
-            fi
             if ! jq -e '.isDraft' "$RUNNER_TEMP/release-state.json" >/dev/null; then
               echo "::error::Refusing to modify a published release; use a new version"; exit 1
             fi
-            if jq -e '.isDraft' "$RUNNER_TEMP/release-state.json" >/dev/null && ! jq -e --arg marker "$marker" '(.body // "") | contains($marker)' "$RUNNER_TEMP/release-state.json" >/dev/null; then
+            if ! jq -e --arg marker "$channel_marker" '(.body // "") | contains($marker)' "$RUNNER_TEMP/release-state.json" >/dev/null ||
+              ! jq -e --arg marker "$marker" '(.body // "") | contains($marker)' "$RUNNER_TEMP/release-state.json" >/dev/null; then
               if [[ "$REBUILD_DRAFT" != true ]]; then
-                echo "::error::Draft source is unverified or changed; explicit unpublished-draft rebuild required"; exit 1
+                echo "::error::Draft source or channel is unverified or changed; explicit unpublished-draft rebuild required"; exit 1
               fi
               gh release delete "${version}" --repo "${{ github.repository }}" --yes
               exists=false
