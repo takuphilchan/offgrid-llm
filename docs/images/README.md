@@ -2,7 +2,7 @@
 
 Captured **16 November 2026** for the [README](../../README.md) and
 [workspace tour](../guides/interface-tour.md). These images show the development
-preview, not the published v0.4.30 release.
+preview, not the published v0.4.32 release.
 
 ## Provenance
 

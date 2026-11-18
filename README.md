@@ -9,11 +9,11 @@ knowledge indexes, users, and run history on storage you control.
 
 *Chat with a purpose: a demonstration task with sample file and command receipts.*
 
-[Download OffGrid v0.4.30](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.30) ·
+[Download OffGrid v0.4.32 (unsigned preview)](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.32) ·
 [Quickstart](docs/setup/quickstart.md) · [Interface tour](docs/guides/interface-tour.md)
 
 **Interface preview:** the images below show the development checkout captured
-on 16 November 2026, not the published v0.4.30 interface. Conversations and
+on 16 November 2026, not the published v0.4.32 interface. Conversations and
 library entries are demonstration data. [Capture details](docs/images/README.md).
 
 The project is being hardened from a prototype into a dependable local tool.
@@ -38,10 +38,11 @@ For help and responsible disclosure, see [Support](SUPPORT.md) and
 
 ## Desktop download
 
-The published download linked here for Windows, macOS and Linux is
-[OffGrid v0.4.30](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.30).
+The current GitHub Latest download for Windows, macOS and Linux is
+[OffGrid v0.4.32 (unsigned preview)](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.32).
 Windows packages are unsigned; macOS apps are not Developer ID signed or
-notarized. Read the release's OS trust guidance before installing.
+notarized. Checksums verify downloaded bytes, not publisher trust. Read the
+release's OS trust guidance before installing.
 [All published versions](https://github.com/takuphilchan/offgrid-llm/releases)
 remain available; the development preview pictured here is separate from those
 release downloads.
