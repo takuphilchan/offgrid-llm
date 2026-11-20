@@ -56,6 +56,12 @@ Replace `YOUR_MODEL`, `RUN_ID`, and `/path/to/...` with your own values. Copy an
 - [Releasing](advanced/releasing.md), [distribution](advanced/distribution.md), and [versioning](reference/versioning.md)
 - [Documentation standards](templates/README.md)
 
+For substantive development, follow the [OpenSpec workflow](../openspec/README.md)
+and continue an existing relevant change before creating a new proposal. Review
+scope and acceptance scenarios before implementation, then record actual test
+results. Small fixes and documentation corrections can use a focused patch and
+checks without a full proposal.
+
 ## Plans and historical material
 
 [Production readiness](quality/production-readiness.md) and the [roadmap](ROADMAP.md) describe unfinished work, not current guarantees. [Release notes](releases/) describe the version named in each file; old commands in those archives are not current setup instructions.
