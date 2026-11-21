@@ -14,11 +14,14 @@ const maxRateLimitBuckets = 10000
 
 // RateLimiter implements a token bucket rate limiter per IP/endpoint
 type RateLimiter struct {
-	mu       sync.RWMutex
-	buckets  map[string]*TokenBucket
-	rate     int           // requests per interval
-	interval time.Duration // time window
-	burst    int           // max burst size
+	mu        sync.RWMutex
+	buckets   map[string]*TokenBucket
+	rate      int           // requests per interval
+	interval  time.Duration // time window
+	burst     int           // max burst size
+	stop      chan struct{}
+	stopped   chan struct{}
+	closeOnce sync.Once
 }
 
 // TokenBucket represents a token bucket for rate limiting
@@ -38,6 +41,8 @@ func NewRateLimiter(rate int, interval time.Duration, burst int) *RateLimiter {
 		rate:     rate,
 		interval: interval,
 		burst:    burst,
+		stop:     make(chan struct{}),
+		stopped:  make(chan struct{}),
 	}
 
 	// Start cleanup goroutine to remove old buckets
@@ -46,11 +51,21 @@ func NewRateLimiter(rate int, interval time.Duration, burst int) *RateLimiter {
 	return rl
 }
 
+// Close releases the owned cleanup worker. It is safe to call concurrently.
+// Already admitted handlers can still use the limiter while HTTP drains.
+func (rl *RateLimiter) Close() error {
+	if rl == nil || rl.stop == nil {
+		return nil
+	}
+	rl.closeOnce.Do(func() { close(rl.stop) })
+	<-rl.stopped
+	return nil
+}
+
 // Allow checks if a request from the given key should be allowed
 func (rl *RateLimiter) Allow(key string) bool {
 	rl.mu.RLock()
 	bucket, exists := rl.buckets[key]
-	bucketCount := len(rl.buckets)
 	rl.mu.RUnlock()
 
 	if !exists {
@@ -59,19 +74,22 @@ func (rl *RateLimiter) Allow(key string) bool {
 		bucket, exists = rl.buckets[key]
 		if !exists {
 			// Check if we've hit the maximum bucket count (DDoS protection)
-			if bucketCount >= maxRateLimitBuckets {
+			if len(rl.buckets) >= maxRateLimitBuckets {
 				// Find and evict the oldest bucket
 				var oldestKey string
 				var oldestTime time.Time
 				first := true
 				for k, b := range rl.buckets {
-					if first || b.lastRefill.Before(oldestTime) {
+					b.mu.Lock()
+					refilled := b.lastRefill
+					b.mu.Unlock()
+					if first || refilled.Before(oldestTime) {
 						oldestKey = k
-						oldestTime = b.lastRefill
+						oldestTime = refilled
 						first = false
 					}
 				}
-				if oldestKey != "" {
+				if !first {
 					delete(rl.buckets, oldestKey)
 				}
 			}
@@ -116,10 +134,16 @@ func (tb *TokenBucket) take(rate int, interval time.Duration, burst int) bool {
 
 // cleanup periodically removes old buckets
 func (rl *RateLimiter) cleanup() {
+	defer close(rl.stopped)
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
+	for {
+		select {
+		case <-rl.stop:
+			return
+		case <-ticker.C:
+		}
 		rl.mu.Lock()
 		now := time.Now()
 		for key, bucket := range rl.buckets {

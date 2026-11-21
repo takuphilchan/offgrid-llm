@@ -105,13 +105,15 @@ func newTestServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
+	rateLimiter := NewRateLimiter(600, time.Minute, 60)
+	t.Cleanup(func() { _ = rateLimiter.Close() })
 	deps := Dependencies{
 		Context: context.Background(), Version: "test", Workspace: workspace,
 		Registry: registry, Engine: engine, EmbeddingEngine: embedding, RAGEngine: ragEngine,
 		Monitor: monitor, SystemResources: resources, StatsTracker: tracker, ResponseCache: responseCache,
 		ModelCache: modelCache, LlamaProcess: llamaProcess,
 		InferenceLifecycle: inference.NewLifecycleGate(cfg.InferenceSlots), ProviderScheduler: providerScheduler,
-		ProviderRegistry: providerRegistry, RateLimiter: NewRateLimiter(600, time.Minute, 60),
+		ProviderRegistry: providerRegistry, RateLimiter: rateLimiter,
 		InferenceRateLimiter: NewInferenceRateLimiter(10, 20), SessionHandlers: sessions,
 		AuthMiddleware: auth, UserStore: userStore, QuotaManager: users.NewQuotaManager(cfg.DataDir),
 		KBManager: users.NewKnowledgeBaseManager(cfg.DataDir), LoRAManager: inference.NewLoRAManager(cfg.DataDir, engine),

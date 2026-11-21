@@ -51,6 +51,7 @@ func New(cfg *config.Config) (_ *Runtime, err error) {
 
 	// HTTP limits and the RAG resolver preserve the legacy acquisition order.
 	rateLimiter := server.NewRateLimiter(600, time.Minute, 60)
+	c.owned.add("rate limiter", rateLimiter.Close)
 	inferenceRateLimiter := server.NewInferenceRateLimiter(10, 20)
 	ragEngine := rag.NewEngine(c.embedding, cfg.DataDir)
 	ragEngine.StartRetention()
