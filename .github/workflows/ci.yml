@@ -270,7 +270,7 @@ jobs:
         run: go test ./...
 
       - name: Race-test privacy, storage, and request lifecycle
-        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs ./internal/storage ./internal/serviceclient ./internal/models ./internal/audio ./internal/computer ./internal/execution ./internal/inference ./internal/integrations/... ./internal/cli ./internal/power ./internal/degradation ./cmd/offgrid ./cmd/offgrid-executor
+        run: go test -race ./internal/sessions ./internal/rag ./internal/server ./internal/users ./internal/cache ./internal/agents ./internal/runs ./internal/storage ./internal/serviceclient ./internal/models ./internal/audio ./internal/computer ./internal/execution ./internal/processowner ./internal/inference ./internal/integrations/... ./internal/cli ./internal/power ./internal/degradation ./cmd/offgrid ./cmd/offgrid-executor
 
       - name: Generate and build web UI
         working-directory: apps/web
@@ -384,6 +384,12 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           npm test
+
+      - name: Exercise disposable cross-client and browser handoff journeys
+        env:
+          OFFGRID_CROSS_CLIENT_TESTS: '1'
+          OFFGRID_BROWSER_MANUAL_INTEGRATION: '1'
+        run: go test -race ./internal/server -run '^Test(AgentCrossClientIntegration|BrowserManualHostIntegration)$' -count=1 -v -timeout=5m
 
       - name: Exercise packaged Linux desktop startup and recovery
         run: |
