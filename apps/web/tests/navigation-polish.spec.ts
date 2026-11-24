@@ -57,10 +57,17 @@ test('Settings context survives collapse, RTL and an enlarged viewport without d
  await page.getByRole('button',{name:workspaceShell.ar.expand,exact:true}).click();
  await expect(page.locator('.sidebar-detail .settings-navigation')).toBeVisible();
  await page.getByRole('searchbox',{name:copy.search}).fill(copy.sections[2]);
- await expect(page.locator('#voice-settings-title')).toBeVisible();
+ const voiceResult=page.locator('.settings-results a[href="#/settings/voice"]');
+ await expect(voiceResult).toBeVisible();
+ await expect(page.locator('.settings-groups')).toBeHidden();
  await page.setViewportSize({width:720,height:450});
  await expect(page.locator('.settings-page > .settings-navigation')).toBeVisible();
  await expect(page.getByRole('searchbox',{name:copy.search})).toHaveValue(copy.sections[2]);
+ await expect(voiceResult).toBeVisible();
+ await voiceResult.click();
+ await expect(page.getByRole('searchbox',{name:copy.search})).toHaveValue('');
+ await expect(page.locator('#voice-settings-title')).toBeVisible();
+ await expect(page.locator('#voice-settings-title')).toBeFocused();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 

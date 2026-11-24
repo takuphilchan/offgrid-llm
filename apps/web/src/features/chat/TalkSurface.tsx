@@ -20,6 +20,7 @@ export function TalkSurface({state,error,end,retry,canRetry,interrupt,canInterru
  useEffect(()=>{
   const target=surface.current!,previous=document.activeElement as HTMLElement|null;
   const shell=document.querySelector<HTMLElement>('.app-shell');
+  const composer=shell?.querySelector<HTMLTextAreaElement>('.composer textarea');
   const wasInert=shell?.inert??false;
   // Text and voice are two presentations of the same work. Keep text mounted
   // to preserve drafts and scroll position, but remove it from sight and input.
@@ -27,7 +28,10 @@ export function TalkSurface({state,error,end,retry,canRetry,interrupt,canInterru
   target.focus({preventScroll:true});
   return()=>{
    if(shell){shell.inert=wasInert;shell.removeAttribute('data-voice-hidden');}
-   if(previous?.isConnected)previous.focus({preventScroll:true});else document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus({preventScroll:true});
+   // Exiting voice returns to typing, regardless of whether the removed Talk
+   // trigger or body was active when this effect ran. Retain the originating
+   // composer reference instead of querying for another one during cleanup.
+   if(composer?.isConnected)composer.focus({preventScroll:true});else if(previous?.isConnected)previous.focus({preventScroll:true});
   };
  },[]);
  const status=state==='checking'?copy.checking:state==='thinking'?copy.thinking:state==='speaking'?copy.speaking:state==='needs_attention'?copy.attention:state==='transcribing'?copy.transcribing:capturePhase==='permission'?feedback.permissionPending:capturePhase==='checking'?copy.checking:capturePhase==='idle'?voice.record:copy.listening;

@@ -561,6 +561,21 @@ test('Talk control remains usable in a narrow Chat composer', async ({ page }) =
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('Talk exit returns to its composer when launch has no focused trigger', async ({ page }) => {
+  await microphoneFixture(page);
+  // Programmatic activation does not focus the trigger, as can also happen
+  // when the launch button is removed before Talk's mount effect runs.
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await page.getByRole('button', { name: 'Talk', exact: true }).dispatchEvent('click');
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.starts)).toBe(1);
+  await page.getByRole('button', { name: 'Stop Talk', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Talk', exact: true })).toHaveCount(0);
+  await expect(page.locator('.composer textarea')).toBeFocused();
+  expect(await page.evaluate(() => (window as any).micTest.requests)).toBe(0);
+});
+
 test('one primary composer action follows the draft without starting capture', async ({ page }, info) => {
   await microphoneFixture(page);
   const editor = page.locator('.composer textarea');

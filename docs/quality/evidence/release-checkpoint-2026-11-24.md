@@ -186,3 +186,26 @@ The combined correction passed the full Windows Go suite, including CLI
 checks passed in 1.165 s and 1.277 s, respectively:
 `build/macos-terminal-restore-linux-login.log`. Darwin arm64 compilation passed;
 actual Darwin execution and the final exact-source CI gate remain required.
+
+## Browser integration follow-up — 2026-11-25
+
+The Linux browser stage of CI `45421272452` completed 2,998 tests successfully,
+skipped 76 opt-in cases and failed two tests in 36.1 minutes. Windows native CI
+passed. The arm64 macOS job never acquired a hosted runner and was cancelled for
+capacity constraints; this is not native qualification evidence.
+
+Talk cleanup restored the previously focused element instead of the originating
+composer. Production-mode negative controls reproduced the existing Escape
+failure and an added no-focused-trigger case; development StrictMode had masked
+the lifecycle timing. The correction captures the composer before hiding the
+shell and restores it after removing inert state. The production build and ten
+related production-preview tests passed (`build/release-talk-focus-production-negative.log`,
+`build/release-talk-focus-production-fixed.log`).
+
+The Arabic Settings test expected an editable section to remain visible during
+search, contrary to the approved search-results flow. It now verifies localized
+results, hidden editing groups, query/result preservation after resize, result
+activation, cleared search and the original heading visibility plus focus.
+All 44 navigation/discovery cases passed in the isolated fixture; see
+`build/release-navigation-search-corrected-20261125.log`. No production search
+behavior was changed or native-language review claimed.
