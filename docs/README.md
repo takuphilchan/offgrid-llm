@@ -54,6 +54,7 @@ Replace `YOUR_MODEL`, `RUN_ID`, and `/path/to/...` with your own values. Copy an
 - [Architecture](architecture/overview.md), [repository map](repository-structure.md), and [client contracts](advanced/client-contracts.md)
 - [Workspace UI](advanced/workspace-ui.md), [agent progress](advanced/agent-live-progress.md), and [maintainability](advanced/maintainability.md)
 - [Releasing](advanced/releasing.md), [distribution](advanced/distribution.md), and [versioning](reference/versioning.md)
+- [Preparing verified offline starter kits](development/offline-starter-kits.md)
 - [Documentation standards](templates/README.md)
 
 For substantive development, follow the [OpenSpec workflow](../openspec/README.md)

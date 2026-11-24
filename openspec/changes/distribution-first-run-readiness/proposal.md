@@ -6,6 +6,13 @@ The packaging audit found remaining unsafe root installer behavior, incomplete C
 
 ## What Changes
 
+The 2026-11-24 starter-kit request additionally authorizes corrections to offline
+media preparation and import: preserve existing models on conflicts, fail closed
+on malformed manifests or missing files, and replace the incomplete bare-binary
+USB builder with a verified complete-payload preparation path. This request does
+not authorize installing over the user's application, publication or new model
+downloads. Clean-machine and language qualification remain separate release gates.
+
 - Apply verified downloads and ownership-preserving upgrade behavior to the root installer and archive helpers.
 - Preserve and discover complete UI, speech, inference and execution payloads across installation paths.
 - Make first-run inference preparation and CPU/GPU readiness visible; require an actual response before declaring readiness.

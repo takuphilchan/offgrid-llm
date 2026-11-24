@@ -31,6 +31,12 @@ type GGUFImportReceipt struct {
 // ImportGGUF streams user-owned weights into a private staging file, then publishes
 // without replacement. It never selects/loads a model or acquires companion files.
 func (r *Registry) ImportGGUF(ctx context.Context, name string, size int64, input io.Reader) (GGUFImportReceipt, error) {
+	return r.importGGUF(ctx, name, size, input, "")
+}
+
+// expectedDigest, when provided by an offline pack, is checked against the
+// staged bytes before publication, never against a second read of the source.
+func (r *Registry) importGGUF(ctx context.Context, name string, size int64, input io.Reader, expectedDigest string) (GGUFImportReceipt, error) {
 	var receipt GGUFImportReceipt
 	if input == nil {
 		return receipt, ErrGGUFImportInvalid
@@ -93,6 +99,9 @@ func (r *Registry) ImportGGUF(ctx context.Context, name string, size int64, inpu
 	}
 	if n != size {
 		return receipt, ErrGGUFImportInvalid
+	}
+	if expectedDigest != "" && !strings.EqualFold(expectedDigest, hex.EncodeToString(hash.Sum(nil))) {
+		return receipt, fmt.Errorf("manifest verification failed for %s", name)
 	}
 	if _, err = f.Seek(0, io.SeekStart); err != nil {
 		return receipt, err

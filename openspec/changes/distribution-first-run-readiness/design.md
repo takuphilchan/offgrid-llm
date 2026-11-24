@@ -10,6 +10,15 @@ Deliver the requested safe installation and first-response workflow on this Wind
 
 ## Decisions
 
+- Offline GGUF imports reuse the registry's private staging and no-replace
+  publication, validating expected hashes before activation. Identical retries
+  may be skipped; conflicting files and bulk failures remain errors. Importing
+  weights does not restart inference or select a model. Media preparation accepts
+  explicit prepared payloads and content only, verifies required runtime/model
+  identities, copies to a fresh destination and writes its inventory last.
+  No copy of a personal workspace, generated overwrite installer, network fetch
+  or fabricated ready-for-all-languages claim is permitted.
+
 - Verify a uniquely named archive against its release manifest before extraction. Keep root and streamed entry points self-contained, fail closed, and refuse replacement while active processes exist. Never infer permission to terminate an unrelated service.
 - Retain complete app-local runtime layouts and extend discovery using executable-relative paths, not the current directory. Preserve explicitly configured paths and legacy workspace runtime resolution.
 - Reuse the pinned inference runtime manager behind a preparation/readiness API with bounded downloads, state/progress and cancellation. Reuse existing onboarding first-reply tracking. CPU/GPU suitability and runtime availability remain distinct.

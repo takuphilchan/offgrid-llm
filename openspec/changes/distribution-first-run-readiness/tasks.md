@@ -1,5 +1,11 @@
 # Tasks
 
+## 7. Starter-kit preparation corrections (authorized 2026-11-24)
+
+- [x] 7.1 Fix USB import data loss, shared staging, malformed-manifest fallback and hidden bulk failures; remove implicit inference reload on import. Run model and CLI regressions including Windows publication and existing-data preservation.
+- [x] 7.2 Replace incomplete USB assembly with explicit verified prepared-payload input, complete content inventory and fresh-destination publication; add corruption, missing-runtime, overwrite and readback tests and maintained kit instructions.
+- [ ] 7.3 Qualify the selected actual master on a clean offline Windows machine and verify all ten physical drives after arrival. Synthetic packaging tests do not complete this task.
+
 ## 1. Installer integrity and ownership
 
 - [x] 1.1 Fix root and legacy installer verification before extraction and process refusal; update guidance and run `bash scripts/maintenance/test-installer-entrypoints.sh` and `bash scripts/maintenance/test-executor-install.sh` with failure fixtures.

@@ -30,7 +30,7 @@ func (f *fixtureUSBImporter) ImportModel(_ string, _ string, progress func(model
 	return nil
 }
 
-func TestImportModelUsesInjectedDisposableSourceAndReload(t *testing.T) {
+func TestImportModelPreservesRunningInference(t *testing.T) {
 	root := t.TempDir()
 	modelsDir := filepath.Join(root, "models")
 	usbDir := filepath.Join(root, "usb")
@@ -59,12 +59,12 @@ func TestImportModelUsesInjectedDisposableSourceAndReload(t *testing.T) {
 		ReloadModel:    func(path string) error { reloadedModel = path; return nil },
 		ReloadServer:   func() error { reloadedServer++; return nil },
 	}
-	if code := Execute(context.Background(), []string{"import", source}, env); code != 0 || importer.single != 1 || reloadedModel != filepath.Join(modelsDir, "fixture.gguf") {
+	if code := Execute(context.Background(), []string{"import", source}, env); code != 0 || importer.single != 1 || reloadedModel != "" {
 		t.Fatalf("single import failed: code=%d single=%d reload=%q stderr=%q", code, importer.single, reloadedModel, errOut.String())
 	}
 	out.Reset()
 	errOut.Reset()
-	if code := Execute(context.Background(), []string{"import", usbDir}, env); code != 0 || importer.all != 1 || reloadedServer != 1 || !strings.Contains(out.String(), "Imported 1 model") {
+	if code := Execute(context.Background(), []string{"import", usbDir}, env); code != 0 || importer.all != 1 || reloadedServer != 0 || !strings.Contains(out.String(), "Imported 1 model") {
 		t.Fatalf("directory import failed: code=%d all=%d reload=%d out=%q stderr=%q", code, importer.all, reloadedServer, out.String(), errOut.String())
 	}
 }

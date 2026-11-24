@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -298,30 +299,27 @@ func (r *Registry) UnloadModel(id string) error {
 
 // ImportFromUSB imports a model from a USB drive or external storage
 func (r *Registry) ImportFromUSB(sourcePath, modelName string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	// Verify source file exists
-	if _, err := os.Stat(sourcePath); err != nil {
-		return fmt.Errorf("source file not found: %w", err)
-	}
-
-	// Copy to models directory
-	destPath := filepath.Join(r.modelsDir, modelName)
-
-	// Read source
-	data, err := os.ReadFile(sourcePath)
+	info, err := os.Lstat(sourcePath)
 	if err != nil {
-		return fmt.Errorf("failed to read source: %w", err)
+		return err
 	}
-
-	// Write to destination
-	if err := os.WriteFile(destPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write model: %w", err)
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("model source must be a regular file")
 	}
-
-	// Re-scan to pick up the new model
-	return r.ScanModels()
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	opened, err := source.Stat()
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(info, opened) {
+		return fmt.Errorf("model source changed during import")
+	}
+	_, err = r.ImportGGUF(context.Background(), modelName, info.Size(), source)
+	return err
 }
 
 // SaveRegistry saves the registry to disk

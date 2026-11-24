@@ -1,5 +1,10 @@
 # Model Distribution & Offline Strategy
 
+This page describes distribution strategy and proposed CLI examples. Commands
+such as `pack-usb` and `create-update-pack` below are not implemented CLI commands.
+For the maintained Windows starter-kit builder, verification and update limits,
+use [offline starter-kit preparation](../development/offline-starter-kits.md).
+
 ## The Challenge
 
 OffGrid LLM is designed for **truly offline environments** where internet may be:

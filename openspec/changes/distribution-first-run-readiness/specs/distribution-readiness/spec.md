@@ -4,6 +4,28 @@ Ensure users can identify a supported distribution, install complete runtimes an
 
 ## ADDED Requirements
 
+### Requirement: Offline imports preserve existing work
+Offline import SHALL verify expected digests before publication, preserve existing
+conflicting files and unrelated staging, and surface malformed manifests and bulk
+failures. Model import MUST NOT restart inference or silently select a model.
+
+#### Scenario: Conflicting update or corrupt media
+- **WHEN** a USB model conflicts with installed bytes or its manifest is corrupt
+- **THEN** the prior model remains unchanged and the operation reports failure
+
+#### Scenario: Repeated successful import
+- **WHEN** the same verified model is imported again
+- **THEN** the identical file may be skipped without replacement or inference restart
+
+### Requirement: Offline kits contain verified prerequisites
+The starter-kit builder SHALL require explicit complete local application and
+runtime inputs plus verified model content, refuse existing output destinations,
+and inventory all copied files. Incomplete packages MUST NOT claim offline readiness.
+
+#### Scenario: Incomplete payload or damaged copy
+- **WHEN** a required runtime is missing or a copied artifact differs from its digest
+- **THEN** kit preparation fails without replacing a previous kit or installed workspace
+
 ### Requirement: Installed payloads are discoverable
 Supported installations SHALL retain and resolve their packaged UI, speech, inference and execution runtimes independently of the launch directory, while respecting explicit configuration and preserving user data.
 

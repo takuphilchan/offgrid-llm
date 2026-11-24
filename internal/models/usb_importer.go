@@ -1,9 +1,11 @@
 package models
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,7 +17,6 @@ import (
 type USBImporter struct {
 	modelsDir string
 	registry  *Registry
-	validator *Validator
 }
 
 // NewUSBImporter creates a new USB importer
@@ -23,7 +24,6 @@ func NewUSBImporter(modelsDir string, registry *Registry) *USBImporter {
 	return &USBImporter{
 		modelsDir: modelsDir,
 		registry:  registry,
-		validator: NewValidator(modelsDir),
 	}
 }
 
@@ -59,6 +59,12 @@ func (u *USBImporter) ScanUSBDrive(usbPath string) ([]string, error) {
 
 		// Skip directories
 		if info.IsDir() {
+			if info.Name() == PackageDirectory {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !info.Mode().IsRegular() {
 			return nil
 		}
 
@@ -78,182 +84,108 @@ func (u *USBImporter) ScanUSBDrive(usbPath string) ([]string, error) {
 }
 
 // ImportModel imports a single model file from USB to models directory
+var errUSBModelIdentical = errors.New("model already exists with identical bytes")
+
 func (u *USBImporter) ImportModel(sourcePath string, expectedSHA256 string, onProgress func(ImportProgress)) error {
-	// Get file info
-	sourceInfo, err := os.Stat(sourcePath)
+	info, err := os.Lstat(sourcePath)
 	if err != nil {
 		return fmt.Errorf("cannot access source file: %w", err)
 	}
-
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("model source must be a regular file")
+	}
 	fileName := filepath.Base(sourcePath)
-	destPath := filepath.Join(u.modelsDir, fileName)
-
-	progress := ImportProgress{
-		FilePath:   sourcePath,
-		FileName:   fileName,
-		BytesTotal: sourceInfo.Size(),
-		Status:     "copying",
-	}
-
-	// Check if file already exists
-	if _, err := os.Stat(destPath); err == nil {
-		// File exists, check if it's the same
-		sourceHash, err := u.calculateFileHash(sourcePath)
-		if err != nil {
-			return fmt.Errorf("cannot calculate source hash: %w", err)
-		}
-
-		if expectedSHA256 != "" && sourceHash != expectedSHA256 {
-			return fmt.Errorf("manifest verification failed for %s: expected %s, got %s", fileName, expectedSHA256, sourceHash)
-		}
-
-		destHash, err := u.calculateFileHash(destPath)
-		if err == nil && sourceHash == destHash {
-			progress.Status = "skipped"
-			progress.Percent = 100
-			progress.BytesDone = sourceInfo.Size()
-			progress.Message = "File already exists with matching checksum"
-			if onProgress != nil {
-				onProgress(progress)
-			}
-			return fmt.Errorf("model already exists: %s", fileName)
-		}
-
-		// Different file, remove old one
-		if err := os.Remove(destPath); err != nil {
-			return fmt.Errorf("cannot remove existing file: %w", err)
+	expectedSHA256 = strings.ToLower(strings.TrimSpace(expectedSHA256))
+	if expectedSHA256 != "" {
+		if digest, err := hex.DecodeString(expectedSHA256); err != nil || len(digest) != sha256.Size {
+			return fmt.Errorf("invalid manifest digest for %s", fileName)
 		}
 	}
-
-	// Create models directory if it doesn't exist
-	if err := os.MkdirAll(u.modelsDir, 0755); err != nil {
-		return fmt.Errorf("cannot create models directory: %w", err)
-	}
-
-	// Open source file
-	sourceFile, err := os.Open(sourcePath)
+	source, err := os.Open(sourcePath)
 	if err != nil {
-		return fmt.Errorf("cannot open source file: %w", err)
+		return err
 	}
-	defer sourceFile.Close()
-
-	// Create temporary file first (atomic import)
-	tempPath := destPath + ".tmp"
-	destFile, err := os.Create(tempPath)
+	defer source.Close()
+	opened, err := source.Stat()
 	if err != nil {
-		return fmt.Errorf("cannot create temporary file: %w", err)
+		return err
 	}
-	defer func() {
-		destFile.Close()
-		// Clean up temp file if still exists (error case)
-		os.Remove(tempPath)
-	}()
-
-	// Copy with progress tracking
-	buffer := make([]byte, 1024*1024) // 1MB buffer
-	var bytesCopied int64
-
-	for {
-		n, err := sourceFile.Read(buffer)
-		if n > 0 {
-			if _, writeErr := destFile.Write(buffer[:n]); writeErr != nil {
-				return fmt.Errorf("write error: %w", writeErr)
+	if !os.SameFile(info, opened) {
+		return fmt.Errorf("model source changed during import")
+	}
+	progress := ImportProgress{FilePath: sourcePath, FileName: fileName, BytesTotal: info.Size(), Status: "copying"}
+	notify := func() {
+		if onProgress != nil {
+			onProgress(progress)
+		}
+	}
+	registry := u.registry
+	if registry == nil {
+		registry = NewRegistry(u.modelsDir)
+	}
+	reader := &usbProgressReader{Reader: source, progress: &progress, notify: notify}
+	_, err = registry.importGGUF(context.Background(), fileName, info.Size(), reader, expectedSHA256)
+	if errors.Is(err, ErrGGUFImportExists) {
+		// An update never replaces an installed filename. Only identical bytes
+		// count as an idempotent retry; conflicting models need a new identity.
+		dest := filepath.Join(u.modelsDir, fileName)
+		target, statErr := os.Lstat(dest)
+		if statErr == nil && target.Mode().IsRegular() {
+			sourceHash, hashErr := u.calculateFileHash(sourcePath)
+			if hashErr != nil {
+				return hashErr
 			}
-
-			bytesCopied += int64(n)
-			progress.BytesDone = bytesCopied
-			progress.Percent = float64(bytesCopied) / float64(sourceInfo.Size()) * 100
-
-			if onProgress != nil {
-				onProgress(progress)
+			if expectedSHA256 != "" && sourceHash != expectedSHA256 {
+				return fmt.Errorf("manifest verification failed for %s", fileName)
+			}
+			destHash, hashErr := u.calculateFileHash(dest)
+			if hashErr == nil && sourceHash == destHash {
+				progress.Status, progress.Percent, progress.BytesDone = "skipped", 100, info.Size()
+				progress.Message = "File already exists with matching checksum"
+				notify()
+				return errUSBModelIdentical
 			}
 		}
-
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return fmt.Errorf("read error: %w", err)
-		}
+		return fmt.Errorf("model filename conflicts with installed data; use a new filename: %s", fileName)
 	}
-
-	// Verify size
-	if bytesCopied != sourceInfo.Size() {
-		return fmt.Errorf("incomplete copy: expected %d bytes, got %d", sourceInfo.Size(), bytesCopied)
-	}
-
-	// Verify integrity by comparing hashes
-	progress.Status = "verifying"
-	if onProgress != nil {
-		onProgress(progress)
-	}
-
-	sourceHash, err := u.calculateFileHash(sourcePath)
 	if err != nil {
-		return fmt.Errorf("cannot verify source: %w", err)
+		return err
 	}
-
-	if expectedSHA256 != "" && sourceHash != expectedSHA256 {
-		return fmt.Errorf("manifest verification failed for %s: expected %s, got %s", fileName, expectedSHA256, sourceHash)
-	}
-
-	destHash, err := u.calculateFileHash(tempPath)
-	if err != nil {
-		return fmt.Errorf("cannot verify destination: %w", err)
-	}
-
-	if sourceHash != destHash {
-		return fmt.Errorf("verification failed: hash mismatch")
-	}
-
-	// Additional validation using the validator
-	validationResult, err := u.validator.ValidateModel(tempPath)
-	if err != nil {
-		return fmt.Errorf("validation check failed: %w", err)
-	}
-
-	if !validationResult.Valid {
-		return fmt.Errorf("model validation failed: %v", validationResult.Errors)
-	}
-
-	if validationResult.IsCorrupted {
-		return fmt.Errorf("model file is corrupted")
-	}
-
-	if !validationResult.IsGGUF {
-		return fmt.Errorf("not a valid GGUF file")
-	}
-
-	// Atomic move: rename temp file to final destination
-	if err := os.Rename(tempPath, destPath); err != nil {
-		return fmt.Errorf("failed to move file to destination: %w", err)
-	}
-
-	// Success - clear the cleanup flag since rename succeeded
-	tempPath = ""
-
-	progress.Status = "complete"
-	progress.Percent = 100
-	if onProgress != nil {
-		onProgress(progress)
-	}
-
-	// Rescan registry to include new model
-	if u.registry != nil {
-		if err := u.registry.ScanModels(); err != nil {
-			// Log but don't fail - the file was copied successfully
-			fmt.Printf("Warning: failed to rescan models: %v\n", err)
-		}
-	}
-
+	progress.Status, progress.Percent, progress.BytesDone = "complete", 100, info.Size()
+	notify()
 	return nil
+}
+
+type usbProgressReader struct {
+	io.Reader
+	progress *ImportProgress
+	notify   func()
+}
+
+func (r *usbProgressReader) Read(b []byte) (int, error) {
+	n, err := r.Reader.Read(b)
+	r.progress.BytesDone += int64(n)
+	if r.progress.BytesTotal > 0 {
+		r.progress.Percent = float64(r.progress.BytesDone) / float64(r.progress.BytesTotal) * 100
+	}
+	if err == io.EOF {
+		r.progress.Status = "verifying"
+	}
+	r.notify()
+	return n, err
 }
 
 // ImportAll imports all GGUF files from a USB drive
 func (u *USBImporter) ImportAll(usbPath string, onProgress func(ImportProgress)) (int, error) {
+	return u.importAll(usbPath, onProgress, getDiskSpace)
+}
+
+func (u *USBImporter) importAll(usbPath string, onProgress func(ImportProgress), diskSpace func(string) (int64, error)) (int, error) {
 	// Try to load manifest first
 	manifest, manifestErr := u.LoadManifest(usbPath)
+	if manifestErr != nil && !errors.Is(manifestErr, os.ErrNotExist) {
+		return 0, manifestErr
+	}
 	var idx *manifestIndex
 	if manifestErr == nil && manifest != nil {
 		fmt.Printf("Found package manifest: %d models, %.2f GB total\n",
@@ -276,17 +208,40 @@ func (u *USBImporter) ImportAll(usbPath string, onProgress func(ImportProgress))
 	if len(modelFiles) == 0 {
 		return 0, fmt.Errorf("no GGUF model files found in %s", usbPath)
 	}
+	if idx != nil {
+		found := map[string]bool{}
+		for _, file := range modelFiles {
+			name := strings.ToLower(filepath.Base(file))
+			if _, listed := idx.byFileName[name]; !listed {
+				continue
+			}
+			if found[name] {
+				return 0, fmt.Errorf("ambiguous model filename in package: %s", name)
+			}
+			found[name] = true
+		}
+		for name := range idx.byFileName {
+			if !found[name] {
+				return 0, fmt.Errorf("manifest model is missing: %s", name)
+			}
+		}
+	}
 
 	// Check available disk space
 	var totalSize int64
 	for _, file := range modelFiles {
+		if idx != nil {
+			if _, listed := idx.byFileName[strings.ToLower(filepath.Base(file))]; !listed {
+				continue
+			}
+		}
 		info, err := os.Stat(file)
 		if err == nil {
 			totalSize += info.Size()
 		}
 	}
 
-	availableSpace, err := getDiskSpace(u.modelsDir)
+	availableSpace, err := diskSpace(u.modelsDir)
 	if err == nil && availableSpace < totalSize {
 		return 0, fmt.Errorf("insufficient disk space: need %s, available %s",
 			formatBytes(totalSize), formatBytes(availableSpace))
@@ -295,6 +250,7 @@ func (u *USBImporter) ImportAll(usbPath string, onProgress func(ImportProgress))
 	imported := 0
 	skipped := 0
 	manifestSkipped := 0
+	var failures []error
 
 	for _, modelFile := range modelFiles {
 		fileName := strings.ToLower(filepath.Base(modelFile))
@@ -320,10 +276,10 @@ func (u *USBImporter) ImportAll(usbPath string, onProgress func(ImportProgress))
 		err := u.ImportModel(modelFile, expected, onProgress)
 		if err != nil {
 			// Check if it was skipped (already exists)
-			if strings.Contains(err.Error(), "already exists") {
+			if errors.Is(err, errUSBModelIdentical) {
 				skipped++
 			} else {
-				fmt.Printf("Failed to import %s: %v\n", modelFile, err)
+				failures = append(failures, fmt.Errorf("import %s: %w", filepath.Base(modelFile), err))
 			}
 			continue
 		}
@@ -337,7 +293,7 @@ func (u *USBImporter) ImportAll(usbPath string, onProgress func(ImportProgress))
 		fmt.Printf("Skipped %d model(s) (not listed in manifest)\n", manifestSkipped)
 	}
 
-	return imported, nil
+	return imported, errors.Join(failures...)
 }
 
 // calculateFileHash computes SHA256 hash of a file
@@ -386,23 +342,50 @@ func (u *USBImporter) LoadManifest(usbPath string) (*PackageManifest, error) {
 	manifestPaths := []string{
 		filepath.Join(usbPath, "manifest.json"),
 		filepath.Join(usbPath, "offgrid-models", "manifest.json"),
+		filepath.Join(usbPath, "models", "manifest.json"),
 	}
 
 	for _, manifestPath := range manifestPaths {
-		if _, err := os.Stat(manifestPath); err == nil {
+		info, err := os.Lstat(manifestPath)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if !info.Mode().IsRegular() || info.Size() > 1<<20 {
+			return nil, fmt.Errorf("invalid USB manifest file")
+		}
+		{
 			file, err := os.Open(manifestPath)
 			if err != nil {
-				continue
+				return nil, err
 			}
 			defer file.Close()
 
 			var manifest PackageManifest
-			if err := json.NewDecoder(file).Decode(&manifest); err != nil {
-				continue
+			decoder := json.NewDecoder(io.LimitReader(file, (1<<20)+1))
+			if err := decoder.Decode(&manifest); err != nil {
+				return nil, fmt.Errorf("invalid USB manifest: %w", err)
+			}
+			if decoder.Decode(new(any)) != io.EOF {
+				return nil, fmt.Errorf("invalid trailing USB manifest data")
+			}
+			if len(manifest.Models) == 0 {
+				return nil, fmt.Errorf("USB manifest contains no models")
+			}
+			seen := map[string]bool{}
+			for _, entry := range manifest.Models {
+				name := strings.ToLower(entry.FileName)
+				digest, err := hex.DecodeString(entry.SHA256)
+				if !validArtifactPath(entry.FileName) || strings.Contains(entry.FileName, "/") || !strings.HasSuffix(name, ".gguf") || seen[name] || err != nil || len(digest) != sha256.Size {
+					return nil, fmt.Errorf("invalid or duplicate USB manifest model entry")
+				}
+				seen[name] = true
 			}
 			return &manifest, nil
 		}
 	}
 
-	return nil, fmt.Errorf("no manifest found")
+	return nil, fmt.Errorf("no manifest found: %w", os.ErrNotExist)
 }

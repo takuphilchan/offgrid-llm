@@ -9,7 +9,6 @@ import (
 )
 
 func importModelCommand(_ context.Context, args []string, env Environment) error {
-	p := Presenter{Stdout: env.Stdout, Stderr: env.Stderr, JSON: env.Options.JSON, Style: env.Style}
 	// Check for help flag
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help") {
 		args = []string{} // Trigger help display
@@ -36,7 +35,7 @@ func importModelCommand(_ context.Context, args []string, env Environment) error
 	if err != nil {
 		return err
 	}
-	if env.ModelVerify.NewRegistry == nil || env.ModelTransfer.NewUSBImporter == nil || env.ModelTransfer.Stat == nil || env.ModelTransfer.RenderProgress == nil || env.ModelTransfer.ReloadServer == nil || env.ModelTransfer.ReloadModel == nil {
+	if env.ModelVerify.NewRegistry == nil || env.ModelTransfer.NewUSBImporter == nil || env.ModelTransfer.Stat == nil || env.ModelTransfer.RenderProgress == nil {
 		return fmt.Errorf("local model import adapters unavailable")
 	}
 	registry := env.ModelVerify.NewRegistry(cfg.ModelsDir)
@@ -107,17 +106,7 @@ func importModelCommand(_ context.Context, args []string, env Environment) error
 
 		fmt.Fprintf(env.Stdout, "\n  %s%s%s Imported %d model(s) to %s\n", env.Style.Success, env.Style.Check, env.Style.Reset, imported, cfg.ModelsDir)
 
-		// Reload llama-server with imported models
-		if imported > 0 {
-			if err := env.ModelTransfer.ReloadServer(); err != nil {
-				fmt.Fprintln(env.Stdout)
-				p.Warning(fmt.Sprintf("Could not auto-reload server: %v", err))
-				fmt.Fprintln(env.Stdout)
-				p.Info("Manually restart the server:")
-				p.Item("Restart service", "Restart the intended OffGrid service after active work finishes")
-				fmt.Fprintln(env.Stdout)
-			}
-		}
+		fmt.Fprintln(env.Stdout, "Select an imported model in the intended OffGrid workspace when you are ready to use it.")
 	} else {
 		// Import single file
 		fmt.Fprintf(env.Stdout, "Importing %s\n\n", filepath.Base(usbPath))
@@ -139,17 +128,7 @@ func importModelCommand(_ context.Context, args []string, env Environment) error
 
 		fmt.Fprintf(env.Stdout, "\n  %s%s%s Model imported to %s\n", env.Style.Success, env.Style.Check, env.Style.Reset, cfg.ModelsDir)
 
-		// Reload llama-server with the imported model
-		// Construct the destination path where the model was imported
-		importedModelPath := filepath.Join(cfg.ModelsDir, filepath.Base(usbPath))
-		if err := env.ModelTransfer.ReloadModel(importedModelPath); err != nil {
-			fmt.Fprintln(env.Stdout)
-			p.Warning(fmt.Sprintf("Could not auto-reload server: %v", err))
-			fmt.Fprintln(env.Stdout)
-			p.Info("Manually restart the server:")
-			p.Item("Restart service", "Restart the intended OffGrid service after active work finishes")
-			fmt.Fprintln(env.Stdout)
-		}
+		fmt.Fprintln(env.Stdout, "Select the imported model in the intended OffGrid workspace when you are ready to use it.")
 	}
 	return nil
 }
