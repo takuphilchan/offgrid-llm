@@ -61,6 +61,11 @@ physical echo/noise rejection, conversational latency, languages and human
 naturalness remain unqualified. Durable played-speech context and complete
 owner-loss recovery also remain unfinished.
 
+macOS desktop and native CLI packages omit the pinned Piper runtime because its
+upstream archive lacks a required library. Downloading Piper voice weights alone
+does not enable playback. Bundled macOS Piper synthesis remains unavailable and
+unqualified; the broader speech requirement remains open.
+
 macOS native execution cannot yet prove retirement of detached descendants or
 perform the qualified working-copy quarantine/atomic replacement operations.
 It retains uncertain receipts, copied artifacts and reservations instead of

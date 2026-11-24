@@ -23,12 +23,17 @@ func TestPinnedStdioEndpointRunsRealExecutor(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		ext = ".exe"
 	}
-	binary := filepath.Join(testhost.PrivateDirectory(t), "offgrid-executor"+ext)
+	binary := os.Getenv("OFFGRID_TEST_PACKAGED_EXECUTOR")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	build := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"+ext), "build", "-o", binary, ".")
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatal(string(output), err)
+	if binary == "" {
+		binary = filepath.Join(testhost.PrivateDirectory(t), "offgrid-executor"+ext)
+		build := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"+ext), "build", "-o", binary, ".")
+		if output, err := build.CombinedOutput(); err != nil {
+			t.Fatal(string(output), err)
+		}
+	} else if !filepath.IsAbs(binary) {
+		t.Fatal("packaged executor fixture requires an absolute executable path")
 	}
 	data, err := os.ReadFile(binary)
 	if err != nil {

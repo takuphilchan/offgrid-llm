@@ -518,7 +518,7 @@ jobs:
           else
             mkdir -p build/macos
             for arch in amd64 arm64; do
-              CGO_ENABLED=0 GOARCH="$arch" go build -ldflags "-X main.Version=v$version" -o "build/macos/offgrid-$arch" ./cmd/offgrid
+              CGO_ENABLED=1 CC=clang MACOSX_DEPLOYMENT_TARGET=15.0 GOARCH="$arch" go build -ldflags "-X main.Version=v$version" -o "build/macos/offgrid-$arch" ./cmd/offgrid
             done
           fi
 
@@ -541,6 +541,8 @@ jobs:
             npx electron-builder --dir --mac "--$arch" --publish never
             package_dir=mac
             if [[ "$arch" == arm64 ]]; then package_dir=mac-arm64; fi
+            OFFGRID_TEST_PACKAGED_EXECUTOR="$PWD/dist/$package_dir/OffGrid.app/Contents/Resources/execution-runtime/offgrid-executor" \
+              go -C ../.. test ./cmd/offgrid-executor -run '^TestPinnedStdioEndpointRunsRealExecutor$' -count=1 -timeout 5m
             node ../../scripts/test/test-desktop-startup.mjs "dist/$package_dir/OffGrid.app/Contents/MacOS/OffGrid"
             node ../../scripts/test/test-packaged-browser.mjs "dist/$package_dir/OffGrid.app/Contents/MacOS/OffGrid"
             node ../../scripts/test/test-desktop-theme.mjs "dist/$package_dir/OffGrid.app/Contents/MacOS/OffGrid"

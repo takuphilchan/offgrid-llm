@@ -63,8 +63,11 @@ Folder import is an advanced offline option. See [download recovery](model-disco
 for cancellation, resume, repair and removal.
 
 **A model download does not install its executable runtime.** The updated native
-desktop build packages Whisper and Piper runtimes; recognition and voice model
-weights remain separate downloads. Older installations and external services may
+desktop build packages Whisper; Windows and Linux also package Piper. macOS
+desktop and native CLI bundles omit Piper because its pinned upstream archive
+lacks a required library. Bundled macOS Piper playback remains unavailable and
+unqualified; this limitation does not close the planned speech requirement.
+Recognition and voice model weights remain separate downloads. Older installations and external services may
 still lack those runtimes. Re-downloading weights will not fix a missing runtime:
 update the matching desktop/service build. Qwen and other architectures have
 different runtime requirements; a Hugging Face listing alone does not establish
@@ -74,7 +77,7 @@ category through **Set up recognition** or **Set up spoken responses**.
 | Model family | Execution in this implementation |
 | --- | --- |
 | Whisper | Native desktop runtime packaged; requires compatible Whisper weights |
-| Piper | Native desktop runtime packaged; requires ONNX voice weights and configuration |
+| Piper | Runtime packaged on Windows/Linux; unavailable in macOS bundles; requires ONNX voice weights and configuration |
 | Qwen3-ASR | Requires the reviewed local Qwen ASR runtime and complete package |
 | Qwen3-TTS CustomVoice | Supported read-aloud adapter; requires its local runtime; real synthesis is not qualified by the recorded local checks |
 | Qwen3-TTS Base / VoiceDesign | Not supported for response read-aloud; Base requires reference audio, and OffGrid does not introduce voice cloning |

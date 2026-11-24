@@ -543,7 +543,9 @@ jobs:
           cmake --build . --config Release -j $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
       - name: Download Piper
-        if: steps.existing.outputs.skip != 'true'
+        # Match desktop packaging: the upstream macOS archive lacks its
+        # required libespeak-ng.1.dylib. Do not ship an unusable engine.
+        if: matrix.platform != 'darwin' && steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           mkdir -p /tmp/piper
@@ -558,12 +560,6 @@ jobs:
               PIPER_URL="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz"
             else
               PIPER_URL="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz"
-            fi
-          elif [ "$PLATFORM" = "darwin" ]; then
-            if [ "$ARCH" = "arm64" ]; then
-              PIPER_URL="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_aarch64.tar.gz"
-            else
-              PIPER_URL="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_x64.tar.gz"
             fi
           elif [ "$PLATFORM" = "windows" ]; then
             PIPER_URL="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip"
@@ -606,7 +602,7 @@ jobs:
         env:
           GOOS: ${{ matrix.platform }}
           GOARCH: ${{ matrix.arch }}
-          CGO_ENABLED: 0
+          CGO_ENABLED: ${{ matrix.platform == 'darwin' && '1' || '0' }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
@@ -622,6 +618,14 @@ jobs:
 
           env -u GOOS -u GOARCH go run ./tools/executor-pack --output "$PWD/execution-runtime" --version "$VERSION" --goos "${{ matrix.platform }}" --goarch "${{ matrix.arch }}"
 
+      - name: Verify native Darwin bundled authority
+        if: matrix.platform == 'darwin' && steps.existing.outputs.skip != 'true'
+        shell: bash
+        run: |
+          node -e 'require("./apps/desktop/service-pack.cjs").verifyServiceVersion("./offgrid",process.argv[1].replace(/^v/,""))' '${{ steps.version.outputs.version }}'
+          OFFGRID_TEST_PACKAGED_EXECUTOR="$PWD/execution-runtime/offgrid-executor" \
+            go test ./cmd/offgrid-executor -run '^TestPinnedStdioEndpointRunsRealExecutor$' -count=1 -timeout 5m
+
       - name: Create bundle
         if: steps.existing.outputs.skip != 'true'
         shell: bash
@@ -632,7 +636,9 @@ jobs:
           
           mkdir -p "$BUNDLE_NAME"
           mkdir -p "$BUNDLE_NAME/audio/whisper"
-          mkdir -p "$BUNDLE_NAME/audio/piper"
+          if [ "${{ matrix.platform }}" != "darwin" ]; then
+            mkdir -p "$BUNDLE_NAME/audio/piper"
+          fi
           cp -R execution-runtime "$BUNDLE_NAME/execution-runtime"
           cp offgrid-document-worker${{ matrix.platform == 'windows' && '.exe' || '' }} "$BUNDLE_NAME/"
           cp runtimes/pdfium/assets/NOTICE.txt "$BUNDLE_NAME/document-NOTICE.txt"
@@ -676,10 +682,11 @@ jobs:
             fi
             chmod +x "$BUNDLE_NAME/audio/whisper/whisper" "$BUNDLE_NAME/audio/whisper/whisper-cli"
             
-            # Copy piper
-            cp -r /tmp/piper/piper/* "$BUNDLE_NAME/audio/piper/" 2>/dev/null || \
-              cp /tmp/piper/piper "$BUNDLE_NAME/audio/piper/" 2>/dev/null || true
-            chmod +x "$BUNDLE_NAME/audio/piper/"* 2>/dev/null || true
+            if [ "${{ matrix.platform }}" != "darwin" ]; then
+              cp -r /tmp/piper/piper/* "$BUNDLE_NAME/audio/piper/" 2>/dev/null || \
+                cp /tmp/piper/piper "$BUNDLE_NAME/audio/piper/"
+              chmod +x "$BUNDLE_NAME/audio/piper/"* 2>/dev/null || true
+            fi
           fi
           
           # Create install script
@@ -802,7 +809,8 @@ jobs:
           
           This installs:
           - offgrid and llama-server to /usr/local/bin
-          - whisper.cpp and piper to ~/.offgrid-llm/audio/
+          - whisper.cpp to ~/.offgrid-llm/audio/; Piper is also installed on Linux
+          - macOS does not include Piper: the upstream runtime lacks a required library
           - Web UI to /var/lib/offgrid/web/ui/
           EOF
           fi
@@ -833,7 +841,7 @@ jobs:
           
           - **LLM Inference**: Chat with local AI models
           - **Speech-to-Text**: Transcribe audio with whisper.cpp
-          - **Text-to-Speech**: Generate speech with Piper
+          - **Text-to-Speech**: Piper runtime included on Linux/Windows; matching voice models are required separately. macOS Piper is unavailable pending a complete, qualified runtime.
           - **Web UI**: Access at http://localhost:11611/ui
           
           ## Documentation
@@ -1009,10 +1017,10 @@ jobs:
               -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
               -o build/linux/offgrid ./cmd/offgrid
           elif [ "${{ matrix.os }}" = "macos" ]; then
-            GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build \
+            GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 CC=clang MACOSX_DEPLOYMENT_TARGET=15.0 go build \
               -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
               -o build/macos/offgrid-amd64 ./cmd/offgrid
-            GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build \
+            GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 CC=clang MACOSX_DEPLOYMENT_TARGET=15.0 go build \
               -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
               -o build/macos/offgrid-arm64 ./cmd/offgrid
           else
@@ -1078,6 +1086,15 @@ jobs:
           echo "Build completed. Listing dist directory:"
         shell: bash
           
+      - name: Verify native Darwin desktop authority
+        if: matrix.os == 'macos' && steps.existing.outputs.skip != 'true'
+        shell: bash
+        run: |
+          package_dir=mac
+          if [[ "$(node -p process.arch)" == arm64 ]]; then package_dir=mac-arm64; fi
+          OFFGRID_TEST_PACKAGED_EXECUTOR="$PWD/apps/desktop/dist/$package_dir/OffGrid.app/Contents/Resources/execution-runtime/offgrid-executor" \
+            go test ./cmd/offgrid-executor -run '^TestPinnedStdioEndpointRunsRealExecutor$' -count=1 -timeout 5m
+
       - name: List build output
         if: steps.existing.outputs.skip != 'true'
         working-directory: apps/desktop

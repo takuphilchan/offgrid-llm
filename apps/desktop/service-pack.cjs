@@ -5,6 +5,9 @@ const { execFileSync } = require('node:child_process');
 
 function verifyServiceVersion(binary, expected, inspect = file => execFileSync('go', ['version', '-m', file], { encoding: 'utf8', windowsHide: true })) {
   const metadata = inspect(binary);
+  if (/\bGOOS=darwin\b/.test(metadata) && !/\bCGO_ENABLED=1\b/.test(metadata)) {
+    throw Error(`Bundled Darwin service requires its native ACL inspector (CGO_ENABLED=1): ${binary}`);
+  }
   const flags = metadata.split(/\r?\n/).find(line => /\s-ldflags=/.test(line)) || '';
   const versions = [...flags.matchAll(/(?:^|[\s"'])main\.Version=([^\s"'\\]+)/g)].map(match => match[1].replace(/^v(?=\d)/, ''));
   if (versions.length !== 1 || versions[0] !== expected) {

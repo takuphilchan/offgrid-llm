@@ -51,6 +51,10 @@ func run(ctx context.Context, args []string) error {
 	if err := pack.Validate(*version); err != nil {
 		return err
 	}
+	buildEnv, err := executorBuildEnv(os.Environ(), runtime.GOOS, *platform, *architecture)
+	if err != nil {
+		return err
+	}
 	root, err := os.Getwd()
 	if err != nil {
 		return err
@@ -68,7 +72,7 @@ func run(ctx context.Context, args []string) error {
 		goFile += ".exe"
 	}
 	command := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", goFile), "build", "-trimpath", "-ldflags", "-X main.Version="+pack.Version, "-o", path, "./cmd/offgrid-executor")
-	command.Env = append(os.Environ(), "GOOS="+*platform, "GOARCH="+*architecture, "CGO_ENABLED=0", "GOTOOLCHAIN=local", "GOPROXY=off")
+	command.Env = buildEnv
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
 	if err = command.Run(); err != nil {
@@ -106,4 +110,15 @@ func run(ctx context.Context, args []string) error {
 	}
 	fmt.Fprintln(os.Stdout, filepath.Join(*output, "execution-pack.json"))
 	return nil
+}
+
+func executorBuildEnv(base []string, host, platform, architecture string) ([]string, error) {
+	env := append(append([]string(nil), base...), "GOOS="+platform, "GOARCH="+architecture, "CGO_ENABLED=0", "GOTOOLCHAIN=local", "GOPROXY=off")
+	if platform == "darwin" {
+		if host != "darwin" {
+			return nil, errors.New("Darwin executor requires a native macOS SDK and ACL inspector; cross-compiling without cgo is unsupported")
+		}
+		env = append(env, "CGO_ENABLED=1", "CC=clang", "MACOSX_DEPLOYMENT_TARGET=15.0")
+	}
+	return env, nil
 }
