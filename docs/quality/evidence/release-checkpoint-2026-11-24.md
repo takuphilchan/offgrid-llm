@@ -209,3 +209,52 @@ activation, cleared search and the original heading visibility plus focus.
 All 44 navigation/discovery cases passed in the isolated fixture; see
 `build/release-navigation-search-corrected-20261125.log`. No production search
 behavior was changed or native-language review claimed.
+
+## Packaged runtime and startup audit follow-up — 2026-11-25
+
+CI [45448945038](https://github.com/takuphilchan/offgrid-llm/actions/runs/45448945038)
+at `56999407` passed the native Windows, Intel macOS and ARM64 macOS jobs,
+including Windows installation/reinstallation/uninstallation. Linux passed Go,
+race, speech acquisition/restart, desktop, native AT-SPI and browser companion
+checks. The required browser outcome gate correctly failed the overall job:
+2,996 browser cases passed, 76 were skipped and five rendered-locale inventory
+cases sampled only two home-screen elements. This run is not release approval.
+The complete Linux log is retained at `build/release-ci7-linux.log`.
+
+The local Windows candidate from `56999407` passed isolated hidden packaged
+startup, then installed with exit code 0 after a verified private backup. All
+73 checked installed application, service and UI payload files matched the
+candidate. Receipts are `build/release-56999407-hidden-startup.json`,
+`build/preinstall-release-56999407-backup.json`,
+`build/release-56999407-install-result.json` and
+`build/release-56999407-installed-byte-proof.json`. These receipts qualify that
+candidate only; later source changes still require matching build/install proof.
+
+Release preflight found that Darwin service and executor packaging forced cgo
+off, selecting an ACL-authority implementation that always refuses setup. The
+packaging correction requires the native Darwin inspector and exercises actual
+bundled executors through the existing private-host integration contract. Local
+Windows packer and packaged-executor checks passed (4.489 s and 7.422 s), as did
+three service-metadata tests and workflow lint. Native Darwin execution of the
+corrected packages remains required; the preceding native results do not prove
+the new packaged configuration. Native macOS CLI bundles also now omit the same
+incomplete Piper archive already excluded by desktop packaging. Bundled macOS
+Piper synthesis remains unavailable and its qualification requirement stays open.
+
+The locale failures were reproduced by holding startup animation frames after
+network idle: the rendered inventory contained only the startup brand and status.
+The audit now waits for startup removal, removal of root inert state and the
+visible application/home surface before sampling. Element-count, translation and
+overflow assertions are unchanged. All 29 production locale audits passed across
+54 states each, with zero unresolved elements; this remains automated coverage,
+not native-language review. Reports are preserved under
+`build/rendered-audit-release-ci8-reports/`.
+
+The first added timer-based regression failed under load and was replaced with
+an explicitly held/released frame queue. That final regression failed against
+the original network-only waiter and passed after restoring the corrected helper.
+Evidence: `build/release-rendered-manual-gate-negative.log` and
+`build/release-rendered-manual-gate-final.log` (one pass, 29.1 s overall).
+`build/release-rendered-all-locales-fixed.log` retains both the 29 passing locale
+cases and the superseded timer-regression failure; it is not a wholly passing
+invocation. A fresh complete CI run is still required for the combined source.

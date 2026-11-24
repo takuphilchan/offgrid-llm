@@ -1,4 +1,4 @@
-import {test,expect} from '@playwright/test';
+import {test,expect,type Page} from '@playwright/test';
 import {craftFixture} from './helpers/craft-fixture';
 import registry from '../../desktop/language-registry.json' with {type:'json'};
 import {inputs,entriesFor,digest} from '../../../scripts/quality/translation-review.mjs';
@@ -7,6 +7,40 @@ import {writeFileSync} from 'node:fs';
 import {formatBytes} from '../src/features/models/model-format';
 
 const inventory=inputs();
+
+async function waitForAuditSurface(page:Page) {
+ await page.waitForLoadState('networkidle');
+ // Network quiet and the selected lang can precede React's two-frame startup
+ // handoff. Sampling then audits only the startup brand/status, not the route.
+ await expect(page.locator('html')).not.toHaveAttribute('data-workspace-booting','');
+ await expect(page.locator('#workspace-startup')).toHaveCount(0);
+ await expect(page.locator('#root')).not.toHaveAttribute('inert','');
+ await expect(page.locator('.app-shell')).toBeVisible();
+ if(new URL(page.url()).hash==='#/home')await expect(page.locator('.work-home')).toBeVisible();
+}
+
+test('rendered audit waits for startup presentation after network becomes idle',async({page})=>{
+ await craftFixture(page,'fr','light');
+ await page.addInitScript(()=>{
+  const frame=window.requestAnimationFrame.bind(window);
+  const queued=new Map<number,FrameRequestCallback>();let next=-1,held=true;
+  const cancel=window.cancelAnimationFrame.bind(window);
+  window.requestAnimationFrame=callback=>{if(!held)return frame(callback);const id=next--;queued.set(id,callback);return id;};
+  window.cancelAnimationFrame=id=>{if(id<0)queued.delete(id);else cancel(id);};
+  Object.assign(window,{releaseAuditFrames:()=>{held=false;for(const callback of queued.values())frame(callback);queued.clear();}});
+ });
+ await page.goto('/ui/#/home');
+ await page.waitForLoadState('networkidle');
+ await expect(page.locator('#workspace-startup')).toBeVisible();
+ expect((await page.evaluate(renderedText)).length).toBe(2);
+ const captured=waitForAuditSurface(page).then(()=>page.evaluate(renderedText));
+ // Keep the gate closed while giving an erroneous network-only waiter a turn
+ // to finish. Unlike a timed frame delay, CPU load cannot release this gate.
+ const premature=await Promise.race([captured,new Promise<null>(resolve=>setTimeout(()=>resolve(null),250))]);
+ expect(premature,'audit completed while the startup surface still owned presentation').toBeNull();
+ await page.evaluate(()=>(window as unknown as {releaseAuditFrames:()=>void}).releaseAuditFrames());
+ expect((await captured).length).toBeGreaterThan(15);
+});
 test.describe.configure({mode:'parallel'});
 // Collection success is not translation readiness. Normal/CI runs fail for every
 // unresolved element; only the explicit report-only command disables that gate.
@@ -55,7 +89,7 @@ for(const language of Object.keys(registry))test(`rendered text inventory: ${lan
  const fixtureDate=await page.evaluate(language=>new Date('2026-10-30T00:00:00Z').toLocaleDateString(language),language);
  const recentDate=await page.evaluate(language=>new Date('2026-10-30T00:00:00Z').toLocaleDateString(language,{month:'short',day:'numeric'}),language);
  const capture=async(name:string)=>{
-  await page.waitForLoadState('networkidle');
+  await waitForAuditSurface(page);
   const route=new URL(page.url()).hash.slice(2);
   const settingsHeadings:Record<string,string>={'settings/general':'preferences-title','settings/responses':'model-settings-title','settings/voice':'voice-settings-title','settings/terminal':'terminal-settings-title','settings/access':'access-settings-title','settings/service':'workspace-title','settings/appearance':'appearance-title'};
   if((name===route||name===route+'/expanded'||name.startsWith('narrow/settings'))&&settingsHeadings[route])await expect(page.locator('#'+settingsHeadings[route])).toBeVisible();
