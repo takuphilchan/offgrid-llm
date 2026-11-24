@@ -58,7 +58,11 @@ func TestPinnedStdioEndpointRunsRealExecutor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { endpoint.Close() })
+	t.Cleanup(func() {
+		if err := endpoint.Close(); err != nil {
+			t.Errorf("pinned fixture endpoint cleanup: %v", err)
+		}
+	})
 	current, err := endpoint.Check(ctx, b)
 	if err != nil || current != config {
 		t.Fatal(current, err)

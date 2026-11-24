@@ -149,3 +149,40 @@ updates stale terminal navigation selectors. All 29 locales have 1,719 authored
 messages; native-language review remains pending. Eleven quality tests and the
 isolated headless terminal display passed. This does not replace packaged native
 PTY verification on the Windows runner.
+
+The integrated Windows `go test ./...` at `43a4e92f` failed only in executor
+fixture cleanup: Windows refused deletion of the isolated executor executable.
+The failure log and exact fixture were preserved. Read-only inspection found
+ordinary file attributes, owner/SYSTEM full-control ACLs and no surviving fixture
+executor. Ten initial endpoint repetitions, forty repetitions with shutdown
+errors explicitly asserted, and the full executor package subsequently passed
+(32.150 s, 120.418 s and 5.949 s). The assertions now expose previously discarded
+`Close()` errors; they are diagnostics, not a demonstrated production fix for
+the original access-denied result. That result remains unexplained. Evidence:
+`build/release-full-windows-43a4e92f.log`,
+`build/release-executor-cleanup-observed.log` and
+`build/release-executor-cleanup-full.log`.
+
+## Confirmed terminal restoration correction
+
+CI `45421272452` on Intel macOS identified the exact terminal difference:
+`Lflag` changed from 1483 to 536872395, adding only `PENDIN` (`0x20000000`).
+[Apple's terminal implementation](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/kern/tty.c)
+sets this flag when canonical mode is restored with `TIOCSETA`. The Darwin
+restore helper now uses `TIOCSETAF` to flush input atomically with restoration;
+the existing preflush, exact state comparison, non-echo and unread-suffix checks
+remain intact. Other platforms retain their existing restoration operation.
+
+That run passed all execution contracts on Intel macOS (25.458 s). Its remaining
+executor failure was cold compilation inside the shutdown fixture's ten-second
+startup window. The fixture now compiles first, then launches a real supervisor
+and child through the owned worker. Startup/shutdown deadlines and late-effect
+checks are unchanged; supported platforms explicitly require verified descendant
+settlement, while Darwin must retain uncertainty.
+
+The combined correction passed the full Windows Go suite, including CLI
+(6.723 s) and executor (6.921 s):
+`build/release-full-windows-terminal-fix.log`. Native Linux executor and secret/PTY
+checks passed in 1.165 s and 1.277 s, respectively:
+`build/macos-terminal-restore-linux-login.log`. Darwin arm64 compilation passed;
+actual Darwin execution and the final exact-source CI gate remain required.

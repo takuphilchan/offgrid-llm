@@ -83,7 +83,7 @@ func readWorkspaceTerminalSecret(ctx context.Context, input *os.File, output io.
 			secret = nil
 			resultErr = errors.Join(resultErr, errors.New("could not discard pending protected terminal input"))
 		}
-		if err := term.Restore(input.Fd(), state); err != nil {
+		if err := restoreWorkspaceTerminal(input, state); err != nil {
 			clear(secret)
 			secret = nil
 			resultErr = errors.Join(resultErr, errors.New("could not restore terminal input state"))

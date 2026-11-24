@@ -34,7 +34,11 @@ func testEndpointWorkerPreparation(t *testing.T, binary, digest string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { e.Close() })
+	t.Cleanup(func() {
+		if err := e.Close(); err != nil {
+			t.Errorf("prepared fixture endpoint cleanup: %v", err)
+		}
+	})
 	req := execution.WorkingCopyRequest{RequestID: "prepare-once", Parent: b, WorkerRunID: "child", InstructionVersion: 1, Permissions: config.Permissions, MaxBytes: 1024}
 	status, err := e.BeginWorkerPreparation(ctx, req)
 	if err != nil || status.State != "accepted" {

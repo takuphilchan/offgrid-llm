@@ -15,7 +15,7 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/testhost"
 )
 
-// Exercise the actual pinned worker, including a child spawned by go run.
+// Exercise the actual pinned worker, including a separately spawned child.
 // Immediate supervisor kill used to leave that child alive and its receipt
 // dispatched. All effects are restricted to this test's disposable directory.
 func testEndpointCommandShutdown(t *testing.T, binary, digest string) {
@@ -31,11 +31,34 @@ func testEndpointCommandShutdown(t *testing.T, binary, digest string) {
 		t.Fatal(err)
 	}
 	source := `package main
-import("os";"time")
-func main(){os.WriteFile("started",[]byte("ready"),0600);time.Sleep(3*time.Second);os.WriteFile("late",[]byte("not stopped"),0600)}
+import("os";"os/exec";"time")
+func main(){
+ if len(os.Args)>1 && os.Args[1]=="child" {
+  if os.WriteFile("started",[]byte("ready"),0600)!=nil {os.Exit(2)}
+  time.Sleep(3*time.Second)
+  if os.WriteFile("late",[]byte("not stopped"),0600)!=nil {os.Exit(3)}
+  return
+ }
+ self,err:=os.Executable();if err!=nil {os.Exit(4)}
+ child:=exec.Command(self,"child");if child.Run()!=nil {os.Exit(5)}
+}
 `
 	if err := os.WriteFile(filepath.Join(root, "fixture.go"), []byte(source), 0600); err != nil {
 		t.Fatal(err)
+	}
+	ext := ""
+	if runtime.GOOS == "windows" {
+		ext = ".exe"
+	}
+	// Compile before the shutdown deadline, using the test compiler environment.
+	// The owned command still spawns a real descendant, but cold compilation is
+	// no longer mistaken for a command that failed to start inside ten seconds.
+	fixture := filepath.Join(root, "shutdown-fixture"+ext)
+	buildCtx, buildCancel := context.WithTimeout(context.Background(), time.Minute)
+	defer buildCancel()
+	build := exec.CommandContext(buildCtx, filepath.Join(runtime.GOROOT(), "bin", "go"+ext), "build", "-o", fixture, filepath.Join(root, "fixture.go"))
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build shutdown fixture: %v\n%s", err, output)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -44,11 +67,7 @@ func main(){os.WriteFile("started",[]byte("ready"),0600);time.Sleep(3*time.Secon
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { endpoint.Close() })
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-	args, _ := json.Marshal(execution.ProcessSpec{Program: filepath.Join(runtime.GOROOT(), "bin", "go"+ext), Arguments: []string{"run", "fixture.go"}})
+	args, _ := json.Marshal(execution.ProcessSpec{Program: fixture})
 	r := execution.Request{Version: 1, ID: "start-fixture", OperationID: "start-fixture", Binding: b, Operation: "process_start", Arguments: args, Approved: true}
 	response, err := endpoint.Call(ctx, r)
 	if err != nil || response.Error != "" || response.Receipt == nil || response.Receipt.State != "dispatched" {
@@ -89,7 +108,7 @@ func main(){os.WriteFile("started",[]byte("ready"),0600);time.Sleep(3*time.Secon
 		}
 		return
 	}
-	if err != nil || receipt.State != "complete" || json.Unmarshal(receipt.Result, &process) != nil || process.State != "cancelled" || process.ExitCode == nil {
+	if err != nil || receipt.State != "complete" || json.Unmarshal(receipt.Result, &process) != nil || process.State != "cancelled" || process.ExitCode == nil || !execution.ProcessDescendantsSettled(process) {
 		t.Fatal("shutdown did not persist observed command termination", receipt, process, err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "late")); !os.IsNotExist(err) {
