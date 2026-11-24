@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -109,7 +110,29 @@ func TestLocalEndpointAdmissionDoesNotAcceptForgedExistingJob(t *testing.T) {
 }
 
 func TestLocalEndpointBackgroundJobOutlivesStartRequestButCannotRestartAfterCancel(t *testing.T) {
+	for _, unproven := range []bool{false, true} {
+		name := "native cleanup"
+		if unproven {
+			name = "unproven cleanup"
+		}
+		t.Run(name, func(t *testing.T) { testBackgroundJobCancellation(t, unproven) })
+	}
+}
+
+func testBackgroundJobCancellation(t *testing.T, forceUnproven bool) {
 	w, b, _ := workerFixture(t)
+	if forceUnproven {
+		// Exercise the real owned process but withhold its cleanup proof. This
+		// deterministically covers revoked receipt authority on every platform.
+		w.Session.startProcess = func(command *exec.Cmd) (func() error, func() error, func() error, error) {
+			stop, wait, release, err := startOwned(command)
+			if err != nil {
+				return stop, wait, release, err
+			}
+			return stop, wait, func() error { return errors.Join(release(), ErrHostUnavailable) }, nil
+		}
+	}
+	unproven := forceUnproven || runtime.GOOS == "darwin"
 	w.Session.config.Permissions.Processes = true
 	w.AuthorizeProcess = func(context.Context, Binding, ProcessSpec, bool) error { return nil } // isolated fixture approval, not production policy
 	e := NewLocalEndpoint(w)
@@ -135,16 +158,51 @@ func TestLocalEndpointBackgroundJobOutlivesStartRequestButCannotRestartAfterCanc
 	if err != nil || actual.State != "running" {
 		t.Fatal("request completion killed background job", actual, err)
 	}
-	if err = e.Cancel(ctx, b); runtime.GOOS == "darwin" {
+	if err = e.Cancel(ctx, b); unproven {
 		if !errors.Is(err, ErrHostUnavailable) || w.Processes.cleanupConfirmed() {
-			t.Fatal("Darwin cancellation invented descendant retirement", err)
+			t.Fatal("cancellation invented descendant retirement", err)
 		}
 	} else if err != nil {
 		t.Fatal(err)
 	}
-	actual, err = w.Processes.Inspect(ctx, b, process.Handle)
-	if err != nil || actual.State != "cancelled" {
-		t.Fatal("stop acknowledged before termination", actual, err)
+	// Cancellation waits for the owned supervisor. Public inspection requires
+	// live authority and can already be revoked by receipt settlement below.
+	w.Processes.mu.Lock()
+	owned := w.Processes.processes[process.Handle]
+	w.Processes.mu.Unlock()
+	if owned == nil || owned.binding != b {
+		t.Fatal("cancelled command lost its exact owner")
+	}
+	select {
+	case <-owned.done:
+	default:
+		t.Fatal("stop acknowledged before supervisor termination")
+	}
+	actual = owned.snapshot()
+	if actual.State != "cancelled" || actual.ExitCode == nil {
+		t.Fatal("stop acknowledged before termination", actual)
+	}
+	receiptDone := make(chan struct{})
+	go func() { w.finishing.Wait(); close(receiptDone) }()
+	select {
+	case <-receiptDone:
+	case <-ctx.Done():
+		t.Fatal("cancelled command receipt did not settle", ctx.Err())
+	}
+	_, inspectErr := w.Processes.Inspect(ctx, b, process.Handle)
+	wantReceipt := "complete"
+	if unproven {
+		wantReceipt = "uncertain"
+		if !errors.Is(inspectErr, ErrAuthority) || ProcessDescendantsSettled(actual) || ProcessDescendantState(actual) != "unknown" {
+			t.Fatal("unproven cleanup retained inspection authority or invented settlement", actual, inspectErr)
+		}
+	} else if inspectErr != nil || !ProcessDescendantsSettled(actual) {
+		t.Fatal("verified cancellation lost its terminal observation", actual, inspectErr)
+	}
+	receipt, receiptErr := w.Journal.Inspect(ctx, r)
+	var persisted ProcessResult
+	if receiptErr != nil || receipt.State != wantReceipt || json.Unmarshal(receipt.Result, &persisted) != nil || persisted.Handle != actual.Handle || persisted.State != "cancelled" || persisted.ExitCode == nil || *persisted.ExitCode != *actual.ExitCode || ProcessDescendantsSettled(persisted) != !unproven {
+		t.Fatal("cancellation lost its durable terminal outcome", receipt, persisted, receiptErr)
 	}
 	if err = e.Admit(ctx, b); !errors.Is(err, ErrAuthority) {
 		t.Fatal("cancelled job resurrected", err)

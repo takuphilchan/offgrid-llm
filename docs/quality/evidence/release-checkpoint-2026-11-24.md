@@ -308,3 +308,29 @@ exact 2,000 ms boundary. Three installer contract tests, source-size and maintai
 developer-layout checks also passed. No local interactive installer or personal
 screen capture was used. Actual native installer qualification remains required;
 these tests do not certify responsiveness of the final package.
+
+CI [45477817256](https://github.com/takuphilchan/offgrid-llm/actions/runs/45477817256)
+at `c405d1cf` subsequently passed the full Windows job. Its actual installer,
+reinstall and uninstall Finish observations were 21, 11 and 10 ms, respectively
+(`build/release-ci10-windows.log`). ARM64 macOS exposed a separate test race:
+after unproven descendant cleanup, asynchronous receipt settlement intentionally
+revokes the session, so public process inspection can correctly return
+`execution_authority_denied`. The old test incorrectly required that authority
+to remain usable. A real-process fixture with withheld cleanup proof reproduced
+the same failure on Linux in 0.016 s.
+
+The corrected test immediately requires the exact owned supervisor's done signal
+and cancelled exit result without waiting away an early acknowledgment. It then
+waits within the existing context for receipt settlement and verifies denied
+public inspection plus the uncertain, same-handle cancelled receipt for unproven
+cleanup. Verified cleanup still requires a completed receipt. Linux race checks
+passed twenty repetitions (9.539 s); Windows repetition checks passed (14.071 s),
+followed by the final context-bounded variant (1.174 s). No production authority
+was relaxed. A bounded scan found no other confirmed instance of this test error.
+
+The earlier cgo packaging correction also copied the computer companion's macOS
+15 deployment target into service/executor builds without an approved general
+minimum. Those new overrides are removed; native cgo/clang and the existing
+companion policy remain. Builds retain the normal Go/SDK or explicitly inherited
+target. Packer tests passed (4.113 s) and workflow lint passed. This correction
+does not qualify older macOS versions. Final exact-source CI remains required.
