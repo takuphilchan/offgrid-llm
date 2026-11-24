@@ -1802,6 +1802,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "pt-PT": {
@@ -3607,6 +3615,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "it": {
@@ -5412,6 +5428,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "ru": {
@@ -7217,6 +7241,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "uk": {
@@ -9022,6 +9054,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "tr": {
@@ -10827,6 +10867,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "zh-Hans": {
@@ -12632,6 +12680,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "zh-Hant": {
@@ -14437,6 +14493,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "ja": {
@@ -16242,6 +16306,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "ko": {
@@ -18047,6 +18119,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "id": {
@@ -19852,6 +19932,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "vi": {
@@ -21657,6 +21745,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "hi": {
@@ -23462,6 +23558,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "bn": {
@@ -25267,6 +25371,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "ta": {
@@ -27072,6 +27184,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "th": {
@@ -28877,6 +28997,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "fil": {
@@ -30682,6 +30810,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "ur": {
@@ -32487,6 +32623,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "fa": {
@@ -34292,6 +34436,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "he": {
@@ -36097,6 +36249,14 @@
       "hiddenRow": "Hidden row",
       "hiddenColumn": "Hidden column",
       "note": "Retained extraction metadata. Formulas are not recalculated; display text may differ from the original file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microphone",
+      "system": "System default",
+      "lost": "The microphone disconnected. Choose a microphone and try again. Your draft is unchanged."
+    },
+    "i18n/talk:interruption": {
+      "": "Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak."
     }
   },
   "fr": {

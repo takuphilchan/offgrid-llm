@@ -310,7 +310,8 @@ try {
  assert.ok(promptPadding>0);
  await input.pressSequentially(`function prompt { 'PS '+('x'*${promptPadding})+'> ' }`);await input.press('Enter');
  await expect.poll(()=>terminal.evaluate(()=>{const b=tabs.get(current).term.buffer.active;return b.getLine(b.baseY+b.cursorY)?.translateToString().trim();})).toBe('PS '+'x'.repeat(promptPadding)+'>');
- await terminal.getByTitle('Return to Chat',{exact:true}).click();
+ await expect(terminal.locator('#chat')).toHaveAccessibleName('Back to workspace');
+ await terminal.locator('#chat').click();
  await page.getByRole('button',{name:'Open terminal',exact:true}).click();
  await expect(terminal.getByRole('tab',{name:'PowerShell'})).toHaveCount(2);
  // Existing tabs remain in the DOM while hidden. Wait for the native visibility
@@ -355,7 +356,8 @@ try {
  // Keep unfinished input through Chat/Terminal changes. No new shell or key replay.
  await input.pressSequentially("[Console]::WriteLine(('RETURN_' + 'EXACT'))");
  await input.press('ArrowLeft');
- await terminal.getByTitle('Return to Chat',{exact:true}).click();
+ await expect(terminal.locator('#chat')).toHaveAccessibleName('Back to workspace');
+ await terminal.locator('#chat').click();
  await expect(page.locator('main.workspace')).not.toHaveAttribute('inert');
  await page.getByRole('button',{name:'Open terminal',exact:true}).click();
  await expect(input).toBeFocused();

@@ -2050,6 +2050,14 @@
       "hiddenRow": "Linha oculta",
       "hiddenColumn": "Coluna oculta",
       "note": "Metadados de extração preservados. As fórmulas não são recalculadas; o texto exibido pode diferir do arquivo original."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microfone",
+      "system": "Padrão do sistema",
+      "lost": "O microfone foi desconectado. Escolha um microfone e tente novamente. Seu rascunho não foi alterado."
+    },
+    "i18n/talk:interruption": {
+      "": "A interrupção por voz não está disponível para este microfone. Selecione Falar novamente para parar a reprodução e falar."
     }
   },
   "pt-PT": {
@@ -4103,6 +4111,14 @@
       "hiddenRow": "Linha oculta",
       "hiddenColumn": "Coluna oculta",
       "note": "Metadados de extração preservados. As fórmulas não são recalculadas; o texto apresentado pode diferir do ficheiro original."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microfone",
+      "system": "Predefinição do sistema",
+      "lost": "O microfone foi desligado. Escolha um microfone e tente novamente. O seu rascunho não foi alterado."
+    },
+    "i18n/talk:interruption": {
+      "": "A interrupção por voz não está disponível para este microfone. Selecione Falar novamente para parar a reprodução e falar."
     }
   },
   "it": {
@@ -6156,6 +6172,14 @@
       "hiddenRow": "Riga nascosta",
       "hiddenColumn": "Colonna nascosta",
       "note": "Metadati di estrazione conservati. Le formule non vengono ricalcolate; il testo visualizzato può differire dal file originale."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Microfono",
+      "system": "Predefinito di sistema",
+      "lost": "Il microfono è stato scollegato. Scegli un microfono e riprova. La bozza non è stata modificata."
+    },
+    "i18n/talk:interruption": {
+      "": "L’interruzione vocale non è disponibile per questo microfono. Seleziona Parla di nuovo per interrompere la riproduzione e parlare."
     }
   },
   "ru": {
@@ -8209,6 +8233,14 @@
       "hiddenRow": "Скрытая строка",
       "hiddenColumn": "Скрытый столбец",
       "note": "Сохранённые метаданные извлечения. Формулы не пересчитываются; отображаемый текст может отличаться от исходного файла."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Микрофон",
+      "system": "По умолчанию в системе",
+      "lost": "Микрофон отключён. Выберите микрофон и повторите попытку. Ваш черновик не изменён."
+    },
+    "i18n/talk:interruption": {
+      "": "Прерывание голосом недоступно для этого микрофона. Выберите «Повторите», чтобы остановить воспроизведение и говорить."
     }
   },
   "uk": {
@@ -10262,6 +10294,14 @@
       "hiddenRow": "Прихований рядок",
       "hiddenColumn": "Прихований стовпець",
       "note": "Збережені метадані видобування. Формули не перераховуються; відображуваний текст може відрізнятися від вихідного файлу."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Мікрофон",
+      "system": "Типовий для системи",
+      "lost": "Мікрофон від’єднано. Виберіть мікрофон і спробуйте ще раз. Вашу чернетку не змінено."
+    },
+    "i18n/talk:interruption": {
+      "": "Переривання голосом недоступне для цього мікрофона. Виберіть «Повторіть», щоб зупинити відтворення й говорити."
     }
   },
   "tr": {
@@ -12315,6 +12355,14 @@
       "hiddenRow": "Gizli satır",
       "hiddenColumn": "Gizli sütun",
       "note": "Saklanan çıkarma meta verileri. Formüller yeniden hesaplanmaz; görüntülenen metin özgün dosyadan farklı olabilir."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Mikrofon",
+      "system": "Sistem varsayılanı",
+      "lost": "Mikrofonun bağlantısı kesildi. Bir mikrofon seçip yeniden deneyin. Taslağınız değişmedi."
+    },
+    "i18n/talk:interruption": {
+      "": "Bu mikrofonla sesli kesme kullanılamıyor. Oynatmayı durdurup konuşmak için Tekrar konuş seçeneğini seçin."
     }
   },
   "zh-Hans": {
@@ -14368,6 +14416,14 @@
       "hiddenRow": "隐藏的行",
       "hiddenColumn": "隐藏的列",
       "note": "保留的提取元数据。公式不会重新计算，显示文本可能与原始文件不同。"
+    },
+    "i18n/microphone:recovery": {
+      "device": "麦克风",
+      "system": "系统默认",
+      "lost": "麦克风已断开连接。请选择一个麦克风后重试。您的草稿未更改。"
+    },
+    "i18n/talk:interruption": {
+      "": "此麦克风无法通过语音打断播放。请选择“请再说一遍”来停止播放并开始说话。"
     }
   },
   "zh-Hant": {
@@ -16421,6 +16477,14 @@
       "hiddenRow": "隱藏的列",
       "hiddenColumn": "隱藏的欄",
       "note": "保留的擷取中繼資料。公式不會重新計算，顯示文字可能與原始檔案不同。"
+    },
+    "i18n/microphone:recovery": {
+      "device": "麥克風",
+      "system": "系統預設",
+      "lost": "麥克風已中斷連線。請選擇一個麥克風後再試一次。您的草稿未變更。"
+    },
+    "i18n/talk:interruption": {
+      "": "此麥克風無法透過語音中斷播放。請選擇「再說一次」來停止播放並開始說話。"
     }
   },
   "ja": {
@@ -18474,6 +18538,14 @@
       "hiddenRow": "非表示の行",
       "hiddenColumn": "非表示の列",
       "note": "保持された抽出メタデータです。数式は再計算されず、表示テキストは元のファイルと異なる場合があります。"
+    },
+    "i18n/microphone:recovery": {
+      "device": "マイク",
+      "system": "システムの既定",
+      "lost": "マイクの接続が切れました。マイクを選択してもう一度お試しください。下書きは変更されていません。"
+    },
+    "i18n/talk:interruption": {
+      "": "このマイクでは音声による割り込みを利用できません。「もう一度話してください」を選択すると再生が停止し、話せるようになります。"
     }
   },
   "ko": {
@@ -20527,6 +20599,14 @@
       "hiddenRow": "숨겨진 행",
       "hiddenColumn": "숨겨진 열",
       "note": "보존된 추출 메타데이터입니다. 수식은 다시 계산되지 않으며 표시 텍스트는 원본 파일과 다를 수 있습니다."
+    },
+    "i18n/microphone:recovery": {
+      "device": "마이크",
+      "system": "시스템 기본값",
+      "lost": "마이크 연결이 끊어졌습니다. 마이크를 선택하고 다시 시도하세요. 초안은 변경되지 않았습니다."
+    },
+    "i18n/talk:interruption": {
+      "": "이 마이크에서는 음성으로 재생을 중단할 수 없습니다. 다시 말하기를 선택하여 재생을 멈추고 말하세요."
     }
   },
   "hi": {
@@ -22580,6 +22660,14 @@
       "hiddenRow": "छिपी हुई पंक्ति",
       "hiddenColumn": "छिपा हुआ स्तंभ",
       "note": "सुरक्षित रखा गया निष्कर्षण मेटाडेटा। सूत्रों की दोबारा गणना नहीं होती; प्रदर्शित पाठ मूल फ़ाइल से अलग हो सकता है।"
+    },
+    "i18n/microphone:recovery": {
+      "device": "माइक्रोफ़ोन",
+      "system": "सिस्टम डिफ़ॉल्ट",
+      "lost": "माइक्रोफ़ोन का कनेक्शन टूट गया। माइक्रोफ़ोन चुनें और फिर कोशिश करें। आपका ड्राफ़्ट नहीं बदला है।"
+    },
+    "i18n/talk:interruption": {
+      "": "इस माइक्रोफ़ोन से बोलकर बीच में रोकना उपलब्ध नहीं है। प्लेबैक रोकने और बोलने के लिए फिर से बोलें चुनें।"
     }
   },
   "bn": {
@@ -24633,6 +24721,14 @@
       "hiddenRow": "লুকানো সারি",
       "hiddenColumn": "লুকানো কলাম",
       "note": "সংরক্ষিত নিষ্কাশন মেটাডেটা। সূত্র পুনরায় গণনা করা হয় না; প্রদর্শিত পাঠ্য মূল ফাইল থেকে আলাদা হতে পারে।"
+    },
+    "i18n/microphone:recovery": {
+      "device": "মাইক্রোফোন",
+      "system": "সিস্টেমের ডিফল্ট",
+      "lost": "মাইক্রোফোনের সংযোগ বিচ্ছিন্ন হয়েছে। একটি মাইক্রোফোন বেছে নিয়ে আবার চেষ্টা করুন। আপনার খসড়া অপরিবর্তিত আছে।"
+    },
+    "i18n/talk:interruption": {
+      "": "এই মাইক্রোফোনে কথা বলে প্লেব্যাক থামানো যায় না। প্লেব্যাক থামিয়ে কথা বলতে আবার বলুন বেছে নিন।"
     }
   },
   "ta": {
@@ -26686,6 +26782,14 @@
       "hiddenRow": "மறைக்கப்பட்ட வரிசை",
       "hiddenColumn": "மறைக்கப்பட்ட நெடுவரிசை",
       "note": "பாதுகாக்கப்பட்ட பிரித்தெடுப்பு மீத்தரவு. சூத்திரங்கள் மீண்டும் கணக்கிடப்படுவதில்லை; காட்சியுரை மூலக் கோப்பிலிருந்து வேறுபடலாம்."
+    },
+    "i18n/microphone:recovery": {
+      "device": "மைக்ரோஃபோன்",
+      "system": "கணினியின் இயல்புநிலை",
+      "lost": "மைக்ரோஃபோனின் இணைப்பு துண்டிக்கப்பட்டது. ஒரு மைக்ரோஃபோனைத் தேர்ந்தெடுத்து மீண்டும் முயற்சிக்கவும். உங்கள் வரைவு மாறவில்லை."
+    },
+    "i18n/talk:interruption": {
+      "": "இந்த மைக்ரோஃபோனில் பேசுவதன் மூலம் ஒலிப்பை இடைமறிக்க முடியாது. ஒலிப்பை நிறுத்திப் பேச, மீண்டும் பேசுங்கள் என்பதைத் தேர்ந்தெடுக்கவும்."
     }
   },
   "ur": {
@@ -28739,6 +28843,14 @@
       "hiddenRow": "پوشیدہ قطار",
       "hiddenColumn": "پوشیدہ کالم",
       "note": "محفوظ کردہ اخراج کا میٹا ڈیٹا۔ فارمولے دوبارہ شمار نہیں کیے جاتے؛ دکھایا گیا متن اصل فائل سے مختلف ہو سکتا ہے۔"
+    },
+    "i18n/microphone:recovery": {
+      "device": "مائیکروفون",
+      "system": "سسٹم کا طے شدہ",
+      "lost": "مائیکروفون کا رابطہ منقطع ہو گیا ہے۔ مائیکروفون منتخب کریں اور دوبارہ کوشش کریں۔ آپ کا مسودہ تبدیل نہیں ہوا۔"
+    },
+    "i18n/talk:interruption": {
+      "": "اس مائیکروفون سے بول کر پلے بیک روکنا دستیاب نہیں ہے۔ پلے بیک روکنے اور بولنے کے لیے دوبارہ بولیں منتخب کریں۔"
     }
   },
   "fa": {
@@ -30792,6 +30904,14 @@
       "hiddenRow": "ردیف پنهان",
       "hiddenColumn": "ستون پنهان",
       "note": "فرادادهٔ استخراج حفظ‌شده. فرمول‌ها دوباره محاسبه نمی‌شوند؛ متن نمایشی ممکن است با فایل اصلی متفاوت باشد."
+    },
+    "i18n/microphone:recovery": {
+      "device": "میکروفون",
+      "system": "پیش‌فرض سیستم",
+      "lost": "اتصال میکروفون قطع شد. یک میکروفون انتخاب کنید و دوباره تلاش کنید. پیش‌نویس شما تغییری نکرده است."
+    },
+    "i18n/talk:interruption": {
+      "": "قطع پخش با صحبت کردن برای این میکروفون در دسترس نیست. برای توقف پخش و صحبت کردن، «دوباره صحبت کنید» را انتخاب کنید."
     }
   },
   "he": {
@@ -32845,6 +32965,14 @@
       "hiddenRow": "שורה מוסתרת",
       "hiddenColumn": "עמודה מוסתרת",
       "note": "מטא־נתונים שמורים של החילוץ. הנוסחאות אינן מחושבות מחדש; טקסט התצוגה עשוי להיות שונה מהקובץ המקורי."
+    },
+    "i18n/microphone:recovery": {
+      "device": "מיקרופון",
+      "system": "ברירת המחדל של המערכת",
+      "lost": "המיקרופון התנתק. בחר מיקרופון ונסה שוב. הטיוטה שלך לא השתנתה."
+    },
+    "i18n/talk:interruption": {
+      "": "אי אפשר להפסיק את ההשמעה באמצעות דיבור במיקרופון הזה. בחר ״דבר שוב״ כדי לעצור את ההשמעה ולדבר."
     }
   },
   "id": {
@@ -34898,6 +35026,14 @@
       "hiddenRow": "Baris tersembunyi",
       "hiddenColumn": "Kolom tersembunyi",
       "note": "Metadata ekstraksi yang disimpan. Rumus tidak dihitung ulang; teks tampilan dapat berbeda dari berkas asli."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Mikrofon",
+      "system": "Default sistem",
+      "lost": "Mikrofon terputus. Pilih mikrofon dan coba lagi. Draf Anda tidak berubah."
+    },
+    "i18n/talk:interruption": {
+      "": "Interupsi dengan suara tidak tersedia untuk mikrofon ini. Pilih Bicara lagi untuk menghentikan pemutaran dan berbicara."
     }
   },
   "vi": {
@@ -36951,6 +37087,14 @@
       "hiddenRow": "Hàng ẩn",
       "hiddenColumn": "Cột ẩn",
       "note": "Siêu dữ liệu trích xuất được lưu giữ. Công thức không được tính lại; văn bản hiển thị có thể khác tệp gốc."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Micrô",
+      "system": "Mặc định hệ thống",
+      "lost": "Micrô đã ngắt kết nối. Chọn một micrô rồi thử lại. Bản nháp của bạn không thay đổi."
+    },
+    "i18n/talk:interruption": {
+      "": "Micrô này không hỗ trợ ngắt phát bằng giọng nói. Chọn Nói lại để dừng phát và nói."
     }
   },
   "th": {
@@ -39004,6 +39148,14 @@
       "hiddenRow": "แถวที่ซ่อน",
       "hiddenColumn": "คอลัมน์ที่ซ่อน",
       "note": "ข้อมูลเมตาจากการสกัดที่เก็บไว้ ไม่มีการคำนวณสูตรใหม่ ข้อความแสดงผลอาจต่างจากไฟล์ต้นฉบับ"
+    },
+    "i18n/microphone:recovery": {
+      "device": "ไมโครโฟน",
+      "system": "ค่าเริ่มต้นของระบบ",
+      "lost": "ไมโครโฟนถูกตัดการเชื่อมต่อ เลือกไมโครโฟนแล้วลองอีกครั้ง ฉบับร่างของคุณยังไม่เปลี่ยนแปลง"
+    },
+    "i18n/talk:interruption": {
+      "": "ไมโครโฟนนี้ไม่รองรับการพูดแทรกเพื่อหยุดเสียง เลือก พูดอีกครั้ง เพื่อหยุดการเล่นเสียงแล้วพูด"
     }
   },
   "fil": {
@@ -41057,6 +41209,14 @@
       "hiddenRow": "Nakatagong row",
       "hiddenColumn": "Nakatagong column",
       "note": "Napanatiling metadata ng pagkuha. Hindi muling kinakalkula ang mga formula; maaaring iba ang ipinapakitang teksto sa orihinal na file."
+    },
+    "i18n/microphone:recovery": {
+      "device": "Mikropono",
+      "system": "Default ng system",
+      "lost": "Nadiskonekta ang mikropono. Pumili ng mikropono at subukang muli. Hindi nagbago ang iyong draft."
+    },
+    "i18n/talk:interruption": {
+      "": "Hindi magagamit ang pagputol gamit ang boses para sa mikroponong ito. Piliin ang Magsalita muli upang ihinto ang playback at magsalita."
     }
   },
   "fr": {
