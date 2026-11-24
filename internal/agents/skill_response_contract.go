@@ -51,9 +51,11 @@ func (r *Runner) repairSkillAnswer(task *Task, answer string) (bool, error) {
 		valid = valid && contract.Matches(answer)
 	}
 	if valid {
+		resolveAuxiliaryModelRepair(task, "skill_answer")
 		return false, nil
 	}
 	cp := task.Checkpoint
+	chargeAuxiliaryModelRepair(task, "skill_answer")
 	cp.SkillAnswerRepairs++
 	feedback := "The proposed answer did not match the complete response format of a loaded reviewed skill. Correct only the answer to satisfy all output-format requirements in the already loaded instructions. All earlier work and evidence remain saved. No tools are available during this correction; do not repeat actions or claim new effects."
 	task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "response_contract_rejected", Content: feedback, Timestamp: time.Now().UTC()})

@@ -130,3 +130,33 @@
   .settings-panel > select { width: min(100%, 20rem); justify-self: start; }
   .activity-page > div > .task-workspace, .activity-page > .activity-diagnostics { max-width: none; margin-inline: 0; }
 }
+
+/* One navigation and content rhythm across management destinations. */
+@layer workspace {
+ .workspace :is(.models-workspace,.knowledge-workspace,.activity-page,.management-list-panel) { max-width:var(--measure-workspace); margin-inline:auto; }
+
+ .workspace-section-heading { align-items:flex-start; }
+ .workspace-section-heading h2 { font-weight:var(--weight-heading); letter-spacing:var(--tracking-title); }
+ .workspace-section-heading p { font-size:var(--type-ui); }
+ .workspace-empty { padding:var(--space-8) var(--space-4); border:1px dashed var(--line-strong); border-radius:var(--radius-panel); background:var(--surface-1); }
+ .workspace-empty > p:first-child { color:var(--text); font-size:var(--type-body); font-weight:var(--weight-medium); }
+ .workspace-empty .action-group { margin-block-start:var(--space-1); }
+ .history-empty.workspace-empty { padding:var(--space-3); border:0; background:transparent; }
+ .workspace-notice { border-radius:var(--radius-md); font-size:var(--type-ui); }
+ .workspace-notice.inline-error { border-inline-start:3px solid var(--red); }
+ .app-shell .workspace .workspace-view-nav > :is(a,button) svg { flex:none; }
+}
+@layer controls {
+ .app-shell .workspace .workspace-view-nav { display:flex; align-items:center; flex-wrap:wrap; gap:var(--space-1); padding:var(--space-1); border:1px solid var(--line); border-radius:var(--radius-panel); background:var(--surface-2); width:fit-content; max-width:100%; margin-block:0; }
+ .app-shell .workspace .workspace-view-nav > :is(a,button) { display:inline-flex; align-items:center; justify-content:center; gap:var(--space-2); min-height:40px; margin:0; padding:8px 14px; border:1px solid transparent; border-radius:var(--radius-sm); background:transparent; color:var(--muted); font-size:var(--type-ui); font-weight:var(--weight-medium); text-decoration:none; white-space:normal; text-align:start; box-shadow:none; }
+ .app-shell .workspace .workspace-view-nav > :is(a,button):hover { background:var(--accent-soft); color:var(--text); }
+ .app-shell .workspace .workspace-view-nav > :is([aria-current=page],[aria-pressed=true]) { background:var(--surface-1); color:var(--text); border-color:transparent; box-shadow:none; }
+ /* Activity keeps its established underline navigation, without a second
+    segmented container or a filled selected tab above the state filters. */
+ .app-shell .workspace .activity-page > .workspace-view-nav { gap:24px; padding:0; width:100%; border:0; border-block-end:1px solid var(--separator); border-radius:0; background:transparent; }
+ .app-shell .workspace .activity-page > .workspace-view-nav > button { padding:8px 0; border:0; border-block-end:2px solid transparent; border-radius:0; background:transparent; }
+ .app-shell .workspace .activity-page > .workspace-view-nav > button[aria-pressed=true] { border-block-end-color:var(--text); }
+ .app-shell .workspace .workspace-view-nav > :is(a,button):focus-visible { outline:2px solid var(--text); outline-offset:2px; }
+ @media(pointer:coarse) { .app-shell .workspace .workspace-view-nav > :is(a,button) { min-height:44px; } }
+ @media(forced-colors:active) { .app-shell .workspace .workspace-view-nav > :is([aria-current=page],[aria-pressed=true]) { outline:2px solid Highlight; outline-offset:-2px; } }
+}

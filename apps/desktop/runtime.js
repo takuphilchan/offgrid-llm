@@ -99,6 +99,9 @@ class DesktopRuntime extends EventEmitter {
       Math.max(1, Math.min(2000, this.options.timeoutMs - (Date.now() - this.attemptStarted))), this.abort.signal, this.child ? 'owned' : 'external');
     let result = await probe();
     if (this.closing) return this.snapshot();
+    if (this.requireFreshOwnedStart && !this.child && result.state !== 'offline') {
+      return this.publish({state:'maintenance',reason:'The original workspace cannot resume because its address is occupied or unavailable. No external service was attached.'});
+    }
     if (this.state.workspaceMode === 'isolated' && !this.child && result.state !== 'offline') {
       return this.publish({ state: 'unavailable', reason: 'The selected local port is already occupied. Choose Start desktop workspace again to try another port; no existing service was changed.' });
     }
@@ -135,13 +138,18 @@ class DesktopRuntime extends EventEmitter {
       }
       if (this.closing) return this.snapshot();
       // A parent container/CLI environment must not expose this local child.
-      const child = this.options.spawn(this.options.binary, ['serve'], {
-        windowsHide: true, detached: false, stdio: ['ignore', 'pipe', 'pipe'],
+      const binaryPin = this.options.ownedStdio ? await (this.options.pinBinary || require('./workspace-maintenance-files').binaryPin)(this.options.binary) : null;
+      if (this.closing) return this.snapshot();
+      const child = this.options.spawn(this.options.binary, this.options.ownedStdio ? ['serve','--desktop-owned-stdio'] : ['serve'], {
+        windowsHide: true, detached: false, stdio: [this.options.ownedStdio ? 'pipe' : 'ignore', 'pipe', 'pipe'],
         env: { ...process.env, OFFGRID_HOST: '127.0.0.1', OFFGRID_PORT: new URL(this.url).port,
           OFFGRID_DATA_DIR: this.workspace.data, OFFGRID_MODELS_DIR: this.workspace.models,
           OFFGRID_UI_DIR: this.options.uiDir }
       });
       this.child = child;
+      child.__ownedStdio = this.options.ownedStdio === true;
+      child.__binaryPin = binaryPin;
+      child.stdin?.on('error',()=>{});
       // Drain pipes without synchronously logging every token/request to the
       // Electron main process or exposing raw model output in startup errors.
       child.stdout?.resume();
@@ -166,31 +174,54 @@ class DesktopRuntime extends EventEmitter {
     return this.snapshot();
   }
 
-  stop() {
+  stop(requireDrain = false, expectedChild = null) {
+    if (requireDrain && this.stopping && !this.strictDrain) return Promise.reject(Error('service_stop_unconfirmed'));
     if (this.stopping) return this.stopping;
-    this.stopping = this.stopOwned().finally(() => { this.stopping = null; });
+    this.strictDrain = requireDrain;
+    this.stopping = this.stopOwned(requireDrain, expectedChild).finally(() => { this.stopping = null;this.strictDrain=false; });
     return this.stopping;
   }
 
-  async stopOwned() {
+  async stopOwned(requireDrain = false, expectedChild = null) {
+    const captured = this.child;
     this.closing = true;
     clearTimeout(this.reconnectTimer);
     this.abort?.abort();
     await this.pending;
     const child = this.child;
+    if (requireDrain && (!child || child !== captured || child !== expectedChild || !child.__ownedStdio || !child.stdin)) throw Error('service_stop_unconfirmed');
     if (!child) return;
     await new Promise((resolve, reject) => {
       let timer, acknowledgement;
       const clear = () => { clearTimeout(timer); clearTimeout(acknowledgement); child.removeListener('exit', done); };
-      const done = () => { clear(); if (this.child === child) this.child = null; resolve(); };
+      const done = (code, signal) => { clear(); if (this.child === child) this.child = null; if(requireDrain&&(code!==0||signal))reject(Error('service_drain_failed'));else resolve(); };
       const unconfirmed = () => { clear(); reject(Error('service_stop_unconfirmed')); };
       child.once('exit', done);
       timer = setTimeout(() => {
+        if(requireDrain){unconfirmed();return;}
         acknowledgement = setTimeout(unconfirmed, this.options.stopAckMs ?? 1000);
         try { child.kill('SIGKILL'); } catch { unconfirmed(); }
-      }, this.options.stopGraceMs ?? 5000);
-      try { child.kill('SIGTERM'); } catch { unconfirmed(); }
+      }, requireDrain ? this.options.maintenanceGraceMs ?? 45000 : this.options.stopGraceMs ?? 5000);
+      try { if(child.__ownedStdio)child.stdin.end();else child.kill('SIGTERM'); } catch { unconfirmed(); }
     });
+  }
+
+  async stopForMaintenance(expectedChild) {
+    if(this.state.state!=='ready'||this.pending||this.closing||this.child!==expectedChild||!expectedChild?.__ownedStdio)throw Error('maintenance_owned_service_required');
+    this.maintenanceHeld=true;this.maintenanceDrained=false;
+    this.publish({state:'maintenance'});
+    await this.stop(true,expectedChild);
+    this.maintenanceDrained=true;
+    return this.snapshot();
+  }
+
+  async resumeAfterMaintenance() {
+    if(!this.maintenanceHeld||!this.maintenanceDrained||this.child||this.stopping)throw Error('maintenance_resume_unavailable');
+    this.requireFreshOwnedStart=true;this.closing=false;
+    const result=await this.connect();
+    if(result.state==='ready'&&this.child){this.requireFreshOwnedStart=false;this.maintenanceHeld=false;this.maintenanceDrained=false;this.maintenanceAdmissionHold=false;}
+    else this.closing=true;
+    return result;
   }
 }
 

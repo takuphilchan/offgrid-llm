@@ -121,6 +121,8 @@ func (s *WorkingCopies) Prepare(ctx context.Context, source *Session, req Workin
 		return record, err
 	}
 	record = WorkingCopyRecord{ID: id, State: "preparing", Source: req.Parent, WorkerRunID: req.WorkerRunID, ReservedBytes: req.MaxBytes, InputBytes: manifest.Bytes, ManifestDigest: manifestDigest}
+	environment := source.environment.descriptor()
+	record.Environment = &environment
 	record.Purpose = req.Purpose
 	data, _ := json.Marshal(record)
 	tx, err := s.db.BeginTx(copyCtx, nil)
@@ -139,6 +141,9 @@ func (s *WorkingCopies) Prepare(ctx context.Context, source *Session, req Workin
 	if _, err = tx.Exec(`INSERT INTO worker_copies(id,digest,state,reserved_bytes,record,manifest) VALUES(?,?,'preparing',?,?,?)`, id, requestDigest, req.MaxBytes, data, manifestData); err != nil {
 		return record, err
 	}
+	if _, err = tx.Exec(`INSERT INTO worker_copy_ownership(copy_id,version,identity,empty,in_use) VALUES(?,1,'',0,0)`, id); err != nil {
+		return record, err
+	}
 	if err = tx.Commit(); err != nil {
 		return record, err
 	}
@@ -149,6 +154,9 @@ func (s *WorkingCopies) Prepare(ctx context.Context, source *Session, req Workin
 	}()
 	// Capacity is committed before creating the first copied byte.
 	if err = s.root.Mkdir(id, 0700); err != nil {
+		return record, err
+	}
+	if err = s.recordCopyOwnership(copyCtx, id); err != nil {
 		return record, err
 	}
 	if err = s.root.Mkdir(id+"/content", 0700); err != nil {

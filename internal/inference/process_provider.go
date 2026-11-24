@@ -27,6 +27,7 @@ type ProcessProvider struct {
 	cmd        *exec.Cmd
 	stdin      io.WriteCloser
 	stdout     *bufio.Scanner
+	output     io.Closer
 	descriptor ProviderDescriptor
 	resources  ProviderResources
 	mu         sync.Mutex
@@ -54,6 +55,14 @@ func (p *ProcessProvider) rejectStartup(cause error) error {
 }
 
 func StartProcessProvider(ctx context.Context, command string, args []string, descriptor ProviderDescriptor, env []string) (*ProcessProvider, error) {
+	return startProcessProviderInDirectory(ctx, command, args, descriptor, env, "")
+}
+
+func startProcessProviderInDirectory(ctx context.Context, command string, args []string, descriptor ProviderDescriptor, env []string, directory string) (*ProcessProvider, error) {
+	return startProcessProviderUsing(ctx, command, args, descriptor, env, directory, startProviderProcess)
+}
+
+func startProcessProviderUsing(ctx context.Context, command string, args []string, descriptor ProviderDescriptor, env []string, directory string, start func(*exec.Cmd) (func(*exec.Cmd) error, error)) (*ProcessProvider, error) {
 	if command == "" {
 		return nil, errors.New("provider worker command is required")
 	}
@@ -67,25 +76,34 @@ func StartProcessProvider(ctx context.Context, command string, args []string, de
 	// lifetime to the first generation context would kill a resident provider
 	// after that request and make reuse/recovery unreliable.
 	cmd := exec.Command(command, args...)
+	cmd.Dir = directory
 	configureBackgroundProcess(cmd)
 	cmd.Env = append([]string{}, env...)
-	stdin, err := cmd.StdinPipe()
+	childInput, stdin, err := os.Pipe()
 	if err != nil {
 		return nil, fmt.Errorf("open provider stdin: %w", err)
 	}
-	stdout, err := cmd.StdoutPipe()
+	stdout, childOutput, err := os.Pipe()
 	if err != nil {
 		stdin.Close()
+		childInput.Close()
 		return nil, fmt.Errorf("open provider stdout: %w", err)
 	}
+	cmd.Stdin, cmd.Stdout = childInput, childOutput
 	cmd.Stderr = io.Discard
-	if err := startOwnedProcess(cmd); err != nil {
+	terminate, err := start(cmd)
+	// A namespace launcher can fail before exec.Cmd.Start. Owning both pipe
+	// pairs here prevents its untouched Cmd from retaining child-side handles.
+	childInput.Close()
+	childOutput.Close()
+	if err != nil {
 		stdin.Close()
+		stdout.Close()
 		return nil, fmt.Errorf("start provider worker: %w", err)
 	}
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-	p := &ProcessProvider{cmd: cmd, stdin: stdin, stdout: scanner, descriptor: descriptor, readSlot: make(chan struct{}, 1), closedCh: make(chan struct{}), seen: make(map[string]struct{}), terminate: terminateProviderProcess}
+	p := &ProcessProvider{cmd: cmd, stdin: stdin, stdout: scanner, output: stdout, descriptor: descriptor, readSlot: make(chan struct{}, 1), closedCh: make(chan struct{}), seen: make(map[string]struct{}), terminate: terminate}
 	ready := make(chan error, 1)
 	go func() {
 		line, err := p.readLine()
@@ -256,9 +274,9 @@ func (p *ProcessProvider) readLineWithContext(ctx context.Context) ([]byte, erro
 	case <-ctx.Done():
 		// A timed-out worker has an unknown output boundary. Terminating it
 		// also unblocks Scan before another request can be admitted.
-		_ = p.cmd.Process.Kill()
+		closeErr := p.Close()
 		<-ready
-		return nil, ctx.Err()
+		return nil, errors.Join(ctx.Err(), closeErr)
 	}
 }
 
@@ -292,7 +310,7 @@ func (p *ProcessProvider) write(ctx context.Context, value any) error {
 	}
 	// An owned worker may stop reading while its pipe fills. A context check
 	// before Write alone cannot keep Stop responsive: Write itself can block.
-	// Kill only this worker on cancellation, which also invalidates the stream
+	// Retire only this runtime on cancellation, which invalidates the stream
 	// boundary so the request cannot be retried on this process.
 	written := make(chan error, 1)
 	go func() {
@@ -305,13 +323,16 @@ func (p *ProcessProvider) write(ctx context.Context, value any) error {
 	case err := <-written:
 		return err
 	case <-ctx.Done():
-		_ = p.cmd.Process.Kill()
 		_ = p.stdin.Close()
+		// The Stop/control path must not wait for process-tree retirement. A
+		// generation or health call waits for the same Close result before its
+		// admission can settle; a failed proof retains the package lease.
+		go func() { _ = p.Close() }()
 		return ctx.Err()
 	}
 }
 
-func (p *ProcessProvider) Generate(ctx context.Context, req ProviderRequest, callback func(ProviderEvent) error) error {
+func (p *ProcessProvider) Generate(ctx context.Context, req ProviderRequest, callback func(ProviderEvent) error) (resultErr error) {
 	if err := req.Validate(); err != nil {
 		return err
 	}
@@ -326,6 +347,16 @@ func (p *ProcessProvider) Generate(ctx context.Context, req ProviderRequest, cal
 	}
 	if len(req.Tools) != 0 {
 		return errors.New("native provider tool decisions are not qualified")
+	}
+	usageLimit := req.ContextLength
+	if p.descriptor.Provider == ProviderONNX {
+		count, err := validateONNXEmbeddingPrompt(req, p.descriptor)
+		if err != nil {
+			return err
+		}
+		// Context is a per-input limit. Embedding usage sums independently
+		// admitted inputs; it must never authorize a longer individual input.
+		usageLimit *= count
 	}
 	releaseRead, err := p.acquireRead(ctx)
 	if err != nil {
@@ -347,15 +378,18 @@ func (p *ProcessProvider) Generate(ctx context.Context, req ProviderRequest, cal
 		Operation string          `json:"operation"`
 		Request   ProviderRequest `json:"request"`
 	}{"generate", req}); err != nil {
-		_ = p.cmd.Process.Kill()
-		return err
+		return errors.Join(err, p.Close())
 	}
 	clean := false
 	defer func() {
 		// A malformed, truncated, or aborted stream leaves the worker's next
 		// response boundary unknown. Do not feed it another request.
 		if !clean {
-			_ = p.cmd.Process.Kill()
+			// Retirement can expose final worker output after cancellation (for
+			// example a process footer on the closing pipe). Keep that protocol
+			// failure, but do not lose the caller's cancellation classification.
+			closeErr := p.Close()
+			resultErr = errors.Join(resultErr, ctx.Err(), closeErr)
 		}
 	}()
 	finished := make(chan struct{})
@@ -371,7 +405,7 @@ func (p *ProcessProvider) Generate(ctx context.Context, req ProviderRequest, cal
 			select {
 			case <-finished:
 			case <-time.After(2 * time.Second):
-				_ = p.cmd.Process.Kill()
+				_ = p.Close()
 			}
 		}
 	}()
@@ -401,8 +435,11 @@ func (p *ProcessProvider) Generate(ctx context.Context, req ProviderRequest, cal
 		if err := validateProviderEvent(event); err != nil {
 			return err
 		}
-		if event.Usage != nil && req.ContextLength > 0 && event.Usage.TotalTokens > req.ContextLength {
+		if event.Usage != nil && usageLimit > 0 && event.Usage.TotalTokens > usageLimit {
 			return errors.New("provider usage exceeds the admitted request context")
+		}
+		if event.Type == ProviderEventEmbeddings && p.descriptor.Provider != ProviderONNX || p.descriptor.Provider == ProviderONNX && (event.Type == ProviderEventDelta || event.Type == ProviderEventTool) {
+			return errors.New("provider result does not match the admitted capability")
 		}
 		if event.Resources != nil {
 			if event.Type != ProviderEventDone {
@@ -441,49 +478,6 @@ func (p *ProcessProvider) Generate(ctx context.Context, req ProviderRequest, cal
 	}
 }
 
-func validateProviderEvent(event ProviderEvent) error {
-	if event.Descriptor != nil ||
-		(event.Type != ProviderEventDelta && event.Text != "") ||
-		(event.Type != ProviderEventTool && len(event.Tool) != 0) ||
-		(event.Type != ProviderEventDone && event.FinishReason != "") ||
-		(event.Type != ProviderEventError && event.Error != nil) ||
-		(event.Type != ProviderEventUsage && event.Type != ProviderEventDone && event.Usage != nil) ||
-		(event.Type != ProviderEventDone && event.Resources != nil) {
-		return errors.New("provider generation event contains fields from another event type")
-	}
-	if event.Usage != nil {
-		usage := event.Usage
-		if usage.PromptTokens < 0 || usage.CompletionTokens < 0 || usage.TotalTokens < 0 || usage.TotalTokens != usage.PromptTokens+usage.CompletionTokens {
-			return errors.New("provider token usage is inconsistent")
-		}
-	}
-	switch event.Type {
-	case ProviderEventDelta:
-		if event.Text == "" {
-			return errors.New("provider delta cannot be empty")
-		}
-	case ProviderEventTool:
-		if len(event.Tool) == 0 || !json.Valid(event.Tool) {
-			return errors.New("provider tool decision must be valid JSON")
-		}
-	case ProviderEventUsage:
-		if event.Usage == nil {
-			return errors.New("provider usage event has no token counts")
-		}
-	case ProviderEventDone:
-		if event.FinishReason != "stop" && event.FinishReason != "length" && event.FinishReason != "cancelled" && event.FinishReason != "tool_calls" {
-			return errors.New("provider terminal event has no supported finish reason")
-		}
-	case ProviderEventError:
-		if event.Error == nil || event.Error.Code == "" || event.Error.Message == "" {
-			return errors.New("provider error event is incomplete")
-		}
-	default:
-		return fmt.Errorf("provider emitted unsupported event type %q", event.Type)
-	}
-	return nil
-}
-
 func (p *ProcessProvider) Cancel(ctx context.Context, cancellationID string) error {
 	p.mu.Lock()
 	closed := p.closed
@@ -497,7 +491,7 @@ func (p *ProcessProvider) Cancel(ctx context.Context, cancellationID string) err
 	}{"cancel", cancellationID})
 }
 
-func (p *ProcessProvider) Health(ctx context.Context) error {
+func (p *ProcessProvider) Health(ctx context.Context) (resultErr error) {
 	releaseRead, err := p.acquireRead(ctx)
 	if err != nil {
 		return err
@@ -515,7 +509,7 @@ func (p *ProcessProvider) Health(ctx context.Context) error {
 	healthy := false
 	defer func() {
 		if !healthy {
-			_ = p.cmd.Process.Kill()
+			resultErr = errors.Join(resultErr, p.Close())
 		}
 	}()
 	if err := p.write(ctx, map[string]string{"operation": "health"}); err != nil {
@@ -561,6 +555,9 @@ func (p *ProcessProvider) Close() error {
 	close(p.closedCh)
 	p.mu.Unlock()
 	_ = p.stdin.Close()
+	if p.output != nil {
+		_ = p.output.Close()
+	}
 	closeErr := p.terminate(p.cmd)
 	if closeErr == nil && p.release != nil {
 		p.release()

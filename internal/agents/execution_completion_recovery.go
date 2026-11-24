@@ -31,6 +31,7 @@ func (r *Runner) repairExecutionCompletion(task *Task, cause error) (bool, error
 	if !task.Config.TaskFirst || task.Config.ExecutionRequestVersion != execution.AccessRequestVersion || !errors.As(cause, &pending) || cp == nil || cp.ExecutingCall != "" || len(cp.Calls) != 0 {
 		return false, nil
 	}
+	chargeAuxiliaryModelRepair(task, "workspace_completion")
 	cp.WorkspaceCompletionRepairs++
 	feedback := pending.Error() + ". Keep the original task and existing process handle. This proposed answer was not accepted as completion."
 	cp.Messages = append(cp.Messages, api.ChatMessage{Role: "system", Content: feedback})

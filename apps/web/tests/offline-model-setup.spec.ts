@@ -83,7 +83,9 @@ test('first-use import ends with explicit model choice and returns to the retain
     imported = true;
     return r.fulfill({ status: 201, json: { model_id: 'offline', filename: 'offline.gguf', size: 1024 ** 2, sha256: 'a'.repeat(64), inventory_refreshed: true } });
   });
-  await page.goto('/ui/#/chat/new');
+  // First use starts at the application entry. An explicit new-chat deep link
+  // intentionally bypasses the guide and keeps its inline readiness action.
+  await page.goto('/ui/');
   await page.locator('.workspace-setup').getByRole('button', { name: 'Close guide', exact: true }).click();
   await page.locator('.composer textarea').fill('Keep my first question');
   await page.evaluate(() => { location.hash = '#/models/import'; });

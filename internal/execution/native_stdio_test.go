@@ -15,6 +15,18 @@ func TestNativeHostSeedRejectsRemoteAuthorityAndUnsafePermissions(t *testing.T) 
 	if err := r.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	for _, paths := range [][]string{{"relative"}, make([]string, 17)} {
+		bad := r
+		bad.ProtectedDirectories = paths
+		if bad.Validate() == nil {
+			t.Fatal("invalid private protected roots accepted")
+		}
+	}
+	withProtection := r
+	withProtection.ProtectedDirectories = []string{t.TempDir()}
+	if err := withProtection.Validate(); err != nil {
+		t.Fatal(err)
+	}
 	for _, change := range []func(*NativeHostRequest){func(r *NativeHostRequest) { r.Service = "https://remote.invalid" }, func(r *NativeHostRequest) { r.Service = "http://user:secret@127.0.0.1:11611" }, func(r *NativeHostRequest) { r.Service += "/foreign" }, func(r *NativeHostRequest) { r.Service += "?token=secret" }, func(r *NativeHostRequest) { r.Folder = "relative" }, func(r *NativeHostRequest) { r.Permissions = Permissions{Read: true, Processes: true} }, func(r *NativeHostRequest) { r.Protocol = 2 }, func(r *NativeHostRequest) { r.Pairing.Actor = "" }} {
 		bad := r
 		change(&bad)

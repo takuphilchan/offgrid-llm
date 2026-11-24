@@ -8,7 +8,7 @@ import { SidebarContext, SidebarSlot } from '../../components/shell/SidebarSlot'
 import { interaction } from '../../i18n/interaction';
 import { ChatFailureNotice } from './ChatFailureNotice';
 import { useConversationConfiguration } from './agent-configuration';
-import { restoreCanonicalConfiguration, useCanonicalConversation } from './useCanonicalConversation';
+import { canonicalSpeechSource, restoreCanonicalConfiguration, useCanonicalConversation } from './useCanonicalConversation';
 import { CanonicalInputActivity, ConversationInputMode, pendingCanonicalInputs } from './CanonicalInputActivity';
 import { ConversationSettings } from './ConversationSettings';
 import { conversationInputText } from '../../i18n/conversation-input';
@@ -18,6 +18,7 @@ import { ChatWorkBlocker } from './ChatWorkBlocker';
 import { inspectConversationWork, reviewConversationWork, submitComposerInput } from './chat-input';
 import { useWorkspaceRefresh } from '../../lib/workspace-refresh';
 import { useContext, useDeferredValue, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useComposerSizing } from './useComposerSizing';
 import { workspaceRefinement } from '../../i18n/workspace-refinement';
 import { api, APIError, type ChatMessage, type ChatSession, type SessionTurn } from '../../api/client';
 import { composerAttachmentLabel } from '../../i18n/composer';
@@ -33,10 +34,11 @@ import { SessionResponseError, type ChatMetrics, type ChatPhase } from '../../ap
 import {useResponsePreferences} from './useResponsePreferences';
 import {CanonicalResponsePreview} from './CanonicalResponsePreview';
 import { VoiceInputButton } from '../../components/VoiceInputButton';
-import { ResponseSpeech, stopSpeechEvent } from '../../lib/response-speech';
+import { stopSpeechEvent } from '../../lib/response-speech';
 import { voiceText } from '../../i18n/voice';
 import { talkText } from '../../i18n/talk';
-import { useTalkIdentity, useTalkMode } from './useTalkMode';
+import { useTalkDismiss, useTalkIdentity, useTalkMode } from './useTalkMode';
+import { useTalkCapture } from './useTalkCapture';
 import {TalkSurface} from './TalkSurface';
 import { useChatSpeech } from './useChatSpeech';
 import { useKnowledgeReadiness } from './useKnowledgeReadiness';
@@ -86,7 +88,7 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
   const { preferences: voicePreferences } = useVoicePreferences();
   const talk = useTalkMode();
   const { state: talkState, setState: setTalkState, cycle: talkCycle, active: talkActive, revision: talkRevision } = talk;
-  const { speakResponses, speechState, setSpeechState, speechError, setSpeechError, checkingSpeech, speech, stopSpeech, toggleSpeech, beginSpeech } = useChatSpeech(voicePreferences, locale);
+  const { speakResponses, speechState, speechError, setSpeechError, checkingSpeech, speech, stopSpeech, stopSpeechFor, finishSpeech, toggleSpeech, beginSpeech, retainSpeechIntent } = useChatSpeech(voicePreferences, locale);
   const [responseSettingsOpen, setResponseSettingsOpen] = useState(false);
   const sessionKey = draftKey(draftScope, 'active-chat');
   const preferencesKey = `offgrid.chat.preferences:${encodeURIComponent(scope)}`;
@@ -100,10 +102,9 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
   const pageDraft=useDraft(draftScope,'chat-source-page',activeName);
   let selectedPage: {id:string;revision:string;page:number;name:string;session:string}|undefined;
   try {const value=JSON.parse(pageDraft.value);if(value.session===activeName&&typeof value.id==='string'&&typeof value.revision==='string'&&Number.isInteger(value.page)&&value.page>0)selectedPage=value;}catch{/* No explicit page scope. */}
-
   const [knowledge, setKnowledge] = useWorkspaceState('chat.knowledge', false);
   const scopeCopy = knowledgeScope[locale];
-  const {settled:capabilitiesSettled,sourceScopes,sourceInputs,conversationAdmission,scopedReady,imageServiceReady,imageOrientationReady,fileServiceReady,executionRequestable}=useChatCapabilities(scope);
+  const {settled:capabilitiesSettled,inputOptions,sourceScopes,sourceInputs,conversationAdmission,scopedReady,imageServiceReady,imageOrientationReady,fileServiceReady,executionRequestable}=useChatCapabilities(scope);
   const [canonicalID, setCanonicalID] = useState('');
   const agentConfiguration=useConversationConfiguration(), {agent,key:agentKey,restrictions}=agentConfiguration;
   const folder = useConversationFolder(activeName, canonicalID), {value: executionWorkspace, change: setExecutionWorkspace} = folder;
@@ -122,7 +123,7 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
   const canSendInstruction = linkedUnsettled && linkedRun?.can_steer === true;
   const workBlocked = !canonicalID && linkedUnsettled && !canSendInstruction;
   const jobCopy = conversationWorkText[locale];
-  const spokenJob = useRef('');
+  const spokenJob = useRef<{runID: string; turnID: string; session: string; current: () => boolean} | null>(null);
   const submittedJob = useRef('');
   const [loading, setLoading] = useState(true);
   const [requestedAgent, consumeRequestedAgent] = useWorkspaceState<typeof agent>('chat.requestedAgent', null);
@@ -161,8 +162,8 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
   const historyRevision = useRef(0);
   const canonical = useCanonicalConversation(activeName, canonicalID, {
     receive: (session, turn) => {setConversation(session.messages); setSessions(current => [session, ...current.filter(item => item.name !== session.name)]); setLinkedTurn(turn);},
-    answered: answer => {speech.current?.finish(answer); if (onboardingPending) onFirstResponse();},
-    unavailable: () => {stopSpeech(); if (talkActive.current) {talkActive.current = false; setTalkState('needs_attention');}},
+    answered: (answer, input) => {finishSpeech(answer, canonicalSpeechSource(activeName, input)); if (onboardingPending) onFirstResponse();},
+    unavailable: input => {if (stopSpeechFor(canonicalSpeechSource(activeName, input)) && talkActive.current) {talkActive.current = false; setTalkState('needs_attention');}},
   });
   const permissions = useWorkspace();
   const { sources: selectedSources, transfer: transferSources, clear: clearSources, unsaved:sourcesUnsaved } = useKnowledgeSources(activeName, loading, permissions.knowledge, setKnowledge);
@@ -195,13 +196,11 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
     work.rememberChat(activeName, linkedRun.status, linkedRun.run_id);
     if (workSettled(linkedRun.status)) {
       void refreshLinkedConversation(linkedTurn).catch(reason => { if (currentLinked.current?.id === linkedTurn.id) setError(reason instanceof Error ? reason.message : text.common.error); });
-      if (spokenJob.current === linkedRun.run_id) {
-        spokenJob.current = '';
-        if (linkedRun.status === 'completed' && speakResponses && linkedRun.output) {
+      if (spokenJob.current?.runID === linkedRun.run_id) {
+        const intent = spokenJob.current; spokenJob.current = null;
+        if (intent.current() && intent.turnID === linkedTurn.id && intent.session === activeName && linkedRun.status === 'completed' && speakResponses && linkedRun.output) {
           // Begin the audio deadline only when the parent's final response is ready to speak.
-          stopSpeech();
-          speech.current = new ResponseSpeech(setSpeechState, setSpeechError, voicePreferences, locale);
-          speech.current.finish(linkedRun.output);
+          beginSpeech(false, talk, mounted, {sessionKey: activeName, requestID: linkedTurn.id}, {kind: 'session', session: activeName, turnID: linkedTurn.id, runID: linkedRun.run_id}).finish(linkedRun.output);
         }
       }
     }
@@ -248,7 +247,7 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
     const revision = ++selectionRevision.current;
     const settingsRevision = agentConfiguration.reset();
     controller.current?.abort(); controller.current = null; activeTurn.current = null; setBusy(false); setCheckingTurn(Boolean(session)); setError('');
-    setLinkedTurn(null); setRecoveryNeeded(false); spokenJob.current = ''; submittedJob.current = '';
+    setLinkedTurn(null); setRecoveryNeeded(false); spokenJob.current = null; submittedJob.current = '';
     const name = session?.name ?? '';
     setCanonicalID(session?.canonical_id ?? '');
     canonical.replyID.current = '';
@@ -326,13 +325,13 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
     try { setSessions(await api.sessions()); }
     catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); }
   });
-  useLayoutEffect(followConversation, [conversation, busy, streamed, phase, linkedRun?.event_cursor, linkedRun?.status, error]);
+  useLayoutEffect(() => {
+    // The empty draft has no transcript to follow. Its ResizeObserver already
+    // follows later content; avoid a forced layout before anything has arrived.
+    if (conversation.length || busy || streamed || linkedRun || error) followConversation();
+  }, [conversation, busy, streamed, phase, linkedRun?.event_cursor, linkedRun?.status, error]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; selectionRevision.current++; controller.current?.abort(); }; }, []);
-  useEffect(() => {
-    if (!composerInput.current) return;
-    composerInput.current.style.height = '0';
-    composerInput.current.style.height = `${Math.min(composerInput.current.scrollHeight, 160)}px`;
-  }, [draft]);
+  useComposerSizing(composerInput, draft);
   const startNew = () => {
     if (deleteItems) return;
     activate(undefined);
@@ -352,18 +351,19 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
     const revision=selectionRevision.current;
     return createFileConversation({scope:draftScope,prompt:draft.trim(),model:effectiveModel,draft:composerDraftKey,images:imageDraft,valid:()=>mounted.current&&revision===selectionRevision.current,accept:created=>{select(created.name);if(newConversation)activate(created);else setActiveName(created.name);transferSources(created.name);writeDraft(sessionKey,created.name);setSessions(current=>[created,...current]);}});
   });
-  const send = async (voicePrompt?: string, fromTalk = false): Promise<boolean> => {
+  const send = async (voicePrompt?: string, fromTalk = false, audible: () => boolean = () => true): Promise<boolean> => {
     setErrorAction('request');
+    const inputMode = fromTalk ? 'auto' : canonical.inputMode, answeringQuestion = canonical.isAnsweringQuestion(inputMode);
     if (!fromTalk && talkActive.current) { talkActive.current = false; talkRevision.current++; setTalkState('off'); }
     const prompt = (voicePrompt ?? draft).trim();
     if (fromTalk && !talkActive.current) return false;
-    if ((!prompt&&!imageDraft.images.length&&!fileDraft.files.length) || (!canonical.answeringQuestion && (!effectiveModel || unavailableModel)) || busy || checkingTurn || missingSession || controller.current || deleteItems || imageDraft.processing || fileDraft.processing || fileDraft.pendingHandoff) return false;
-    if ((canonicalID || conversationAdmission) && !prompt) return false;
+    if ((!prompt&&!imageDraft.images.length&&!fileDraft.files.length) || (!answeringQuestion && (!effectiveModel || unavailableModel)) || busy || checkingTurn || missingSession || controller.current || deleteItems || imageDraft.processing || fileDraft.processing || fileDraft.pendingHandoff) return false;
+    if ((canonicalID || conversationAdmission) && !prompt && (!inputOptions || !sourceInputs || answeringQuestion || canonical.inputMode==='new_work')) return false;
     if(fileDraft.blocker){setError(fileDraft.blocker);return false;}
     if(imageDraft.blocker){setError(imageDraft.blocker,imageDraft.blockerCode);return false;}
-    if (!canonical.answeringQuestion && selectedSources.length && (!scopedReady || linkedUnsettled)) { setError(linkedUnsettled ? scopeCopy.active : scopeCopy.unsupported); return false; }
+    if (!answeringQuestion && selectedSources.length && (!scopedReady || linkedUnsettled)) { setError(linkedUnsettled ? scopeCopy.active : scopeCopy.unsupported); return false; }
     if(selectedSources.some(source=>source.page||source.block_ids?.length)&&!sourceScopes){setError(scopeCopy.unsupported);return false;}
-    if (canonicalID && !sourceInputs && (imageDraft.images.length || fileDraft.files.length || (!canonical.answeringQuestion && (selectedSources.length || knowledge)))) { setError(conversationInputText[locale]); return false; }
+    if (canonicalID && !sourceInputs && (imageDraft.images.length || fileDraft.files.length || (!answeringQuestion && (selectedSources.length || knowledge)))) { setError(conversationInputText[locale]); return false; }
     if (linkedUnsettled && !canonicalID) {
       if (!linkedRun || !canSendInstruction) { reviewLinkedWork(); return false; }
       setBusy(true); setError('');
@@ -382,7 +382,7 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
       finally { if (sameView()) setBusy(false); }
       return false;
     }
-    if (!canonical.answeringQuestion && (agent || folder.changed) && executionWorkspace && !executionReady) { setError(executionWorkspaceText[locale].unavailable); return false; }
+    if (!answeringQuestion && (agent || folder.changed) && executionWorkspace && !executionReady) { setError(executionWorkspaceText[locale].unavailable); return false; }
     const revision = selectionRevision.current;
     const currentView = () => mounted.current && revision === selectionRevision.current;
     const requestController = new AbortController();
@@ -390,7 +390,8 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
     window.dispatchEvent(new Event(stopSpeechEvent));
     setSpeechError('');
     const talkTurnRevision = talkRevision.current;
-    if (!canonical.answeringQuestion && (speakResponses || fromTalk) && (!agent || canonicalID || conversationAdmission)) beginSpeech(fromTalk, talk, mounted);
+    if (!answeringQuestion && (speakResponses || fromTalk) && (!fromTalk || audible()) && (!agent || canonicalID || conversationAdmission)) beginSpeech(fromTalk, talk, mounted, {sessionKey: activeName || composerDraftKey, requestID});
+    const speechIntent = speakResponses ? retainSpeechIntent() : undefined;
     const responseSpeech = speech.current;
     controller.current = requestController;
     const submitted = voicePrompt ?? draft;
@@ -419,9 +420,9 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
         writeDraft(sessionKey, sessionName);
         setSessions(current => [created, ...current]);
       }
-      const canonicalEligible = canonicalID || (conversationAdmission && !linkedUnsettled && (sourceInputs || (!images.length && !attachments.length && !knowledge && !selectedSources.length && !conversation.some(message => message.images?.length || message.attachments?.length))));
+      const canonicalEligible = canonicalID || ((conversationAdmission || inputOptions) && !linkedUnsettled && (sourceInputs || (!images.length && !attachments.length && !knowledge && !selectedSources.length && !conversation.some(message => message.images?.length || message.attachments?.length))));
       if (canonicalEligible) {
-        await canonical.send({name: sessionName, id: canonicalID, key: draftKey(draftScope, 'canonical-request', sessionName), content: prompt, attachments, images, knowledgeDocuments: selectedSources.filter(source=>!source.page&&!source.block_ids?.length).map(source => source.id), knowledgeSelections:selectedSources.filter(source=>source.page||source.block_ids?.length).map(source=>({document_id:source.id,revision:source.revision!,page:source.page,block_ids:source.block_ids})), useKnowledge: knowledge, model: effectiveModel, profile: agent ?? undefined, restrictions, folder: executionReady || !executionWorkspace ? folder.command : undefined, folderApplied: folder.accepted, origin: voicePrompt === undefined ? 'typed' : 'dictation', error: text.common.error, imported: id => {if (currentView()) setCanonicalID(id);}}, draftKey(draftScope, 'chat', sessionName), submitted, currentView);
+        await canonical.send({name: sessionName, id: canonicalID, key: draftKey(draftScope, 'canonical-request', sessionName), content: prompt, responseProfile: inputOptions ? (profile==='extended'?'extended':'interactive') : undefined, maxTokens: inputOptions ? maxTokens : undefined, attachments, images, knowledgeDocuments: selectedSources.filter(source=>!source.page&&!source.block_ids?.length).map(source => source.id), knowledgeSelections:selectedSources.filter(source=>source.page||source.block_ids?.length).map(source=>({document_id:source.id,revision:source.revision!,page:source.page,block_ids:source.block_ids})), useKnowledge: knowledge, model: effectiveModel, profile: agent ?? undefined, restrictions, folder: executionReady || !executionWorkspace ? folder.command : undefined, folderApplied: folder.accepted, origin: voicePrompt === undefined ? 'typed' : 'dictation', error: text.common.error, imported: id => {if (currentView()) setCanonicalID(id);}}, draftKey(draftScope, 'chat', sessionName), submitted, currentView, input => {responseSpeech?.bindSource(canonicalSpeechSource(sessionName, input)); if (fromTalk && input.incorporation === 'worker_answer' && input.applied_at) talk.resumeAfterInput(true);}, inputMode);
         clearSubmittedDraft(draftKey(draftScope,'chat-images',sessionName),submittedImages);
         return true;
       }
@@ -441,13 +442,14 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
         setConversation(current => [...current, { role: 'user', content: prompt }]);
         setLinkedTurn(accepted.turn); setRecoveryNeeded(false); setStreamed('');
         submittedJob.current = accepted.job.run_id;
-        spokenJob.current = accepted.job.run_id;
+        if (speechIntent?.()) spokenJob.current = {runID: accepted.job.run_id, turnID: accepted.turn.id, session: sessionName, current: speechIntent};
         return false;
       }
       setLinkedTurn(null); setRecoveryNeeded(false);
       setConversation(current => [...current, { role: 'user', content: prompt,images,attachments }]);
       activeTurn.current = { name: sessionName, id: requestID };
       work.rememberChat(sessionName, 'pending');
+      responseSpeech?.bindSource({kind: 'session', session: sessionName, turnID: requestID});
       const result = await api.streamSession(sessionName, prompt, model, knowledge || selectedSources.length > 0, profile, maxTokens, event => {
         if (!currentView()) return;
         if (event.type === 'phase') setPhase(event.phase);
@@ -509,15 +511,14 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
     stopSpeech();
     if (cancelTurn && controller.current) void stop();
   };
-  useEffect(() => {
-    const dismiss = () => { talk.reset(); stopSpeech(); };
-    const visibility = () => { if (document.hidden) dismiss(); };
-    window.addEventListener('offgrid-desktop-dismiss', dismiss);
-    document.addEventListener('visibilitychange', visibility);
-    return () => { window.removeEventListener('offgrid-desktop-dismiss', dismiss); document.removeEventListener('visibilitychange', visibility); };
-  }, []);
-  const startTalk = () => talk.start({ eligible: !agent && !!effectiveModel && !unavailableModel && !busy && !loading && !checkingTurn && !linkedUnsettled && !missingSession, hasDraft: !!(draft.trim() || imageDraft.images.length || fileDraft.files.length), preferences: voicePreferences, locale, unavailable: voiceCopy.speechUnavailable, draftError: talkCopy.draft, setError: setSpeechError });
+  useTalkDismiss(talk.reset, stopSpeech);
+  const startTalk = () => talk.start({ eligible: (!agent || !!canonicalID) && !!effectiveModel && !unavailableModel && !busy && !loading && !checkingTurn && (!linkedUnsettled || !!canonicalID) && !missingSession, hasDraft: !!(draft.trim() || imageDraft.images.length || fileDraft.files.length), preferences: voicePreferences, locale, unavailable: voiceCopy.speechUnavailable, draftError: talkCopy.draft, setError: setSpeechError });
   const onTalkTranscript = (value: string) => talk.acceptTranscript(value, composerDraftKey, transcript => send(transcript, true));
+  // Saving the first utterance changes its draft key, not the owned Talk capture.
+  // Conversation navigation resets Talk explicitly through activate().
+  const talkCapture = useTalkCapture(talk, () => !busy && !loading && !checkingTurn && !canonical.pendingAnswer,
+    () => { window.dispatchEvent(new Event(stopSpeechEvent)); stopSpeech(); }, composerDraftKey,
+    (transcript, audible) => send(transcript, true, audible));
   const speakAgain = () => talk.speakAgain(busy, stopSpeech);
   useTalkIdentity(`${effectiveModel}:${agentKey}`, () => { if (talkActive.current || talkState === 'checking') stopTalk(true); });
   const { lastAssistant, linkedOutputSaved } = conversationOutputState(conversation, linkedTurn?.id);
@@ -529,7 +530,7 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
   const commandLayout = talkState !== 'off' ? 'voice' : conversation.length || generating || error || speechError || imageDraft.images.length || fileDraft.files.length || draft.length > 160 ? 'work' : 'input';
   const voiceVisible = useCommandWindowLayout(commandLayout);
   const stopCurrent = async () => { if (canonicalActive) { try { await canonical.control(canonicalActive, 'stop'); } catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); } } else await stop(); };
-  const showTalkAction = !agent && (talkRunning || (!generating && !draft.trim() && !imageDraft.images.length && !fileDraft.files.length && !fileDraft.pendingHandoff));
+  const showTalkAction = (!agent || !!canonicalID) && (talkRunning || ((!generating || !!canonicalID && !busy) && !draft.trim() && !imageDraft.images.length && !fileDraft.files.length && !fileDraft.pendingHandoff));
   const showStop=generating && !(canonicalID && !busy && draft.trim());
   return <DocumentWorkspace scope={`${draftScope}:${activeName}`} addFile={fileServiceReady&&!loading&&!busy&&!checkingTurn&&!missingSession&&!fileDraft.processing&&fileDraft.files.length<8?fileDraft.chooseFile:undefined} selectPage={sourceInputs?(source,page)=>{if(source.attachment?.session===activeName){pageDraft.setValue(JSON.stringify({...source.attachment,page,name:source.name}));requestAnimationFrame(()=>composerInput.current?.focus());}}:undefined}><div className="chat-workspace">
     <TerminalContextDialog sessions={sessions} current={activeName} disabled={loading||busy||checkingTurn||talkRunning} accept={(name,value)=>{const key=draftKey(draftScope,'chat',name);const previous=readDraft(key);writeDraft(key,previous?`${previous}\n\n${value}`:value);activate(sessions.find(session=>session.name===name));}}/>
@@ -537,7 +538,6 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
     <SidebarSlot action><button className="new-chat-button" title={text.chat.newChat} aria-label={text.chat.newChat} disabled={!!deleteItems} onClick={() => { sidebar.close(); startNew(); }}><Icon name="plus" size={18} /><span>{text.chat.newChat}</span></button></SidebarSlot>
     <SidebarSlot><ConversationHistory sessions={sessions} activeName={activeName} busy={busy} loading={loading} locked={!!deleteItems} notice={historyNotice} select={activate} remove={setDeleteItems} refresh={() => void loadSessions()} /></SidebarSlot>
     <div className="chat-layout">
-      {!agent && (!model || unavailableModel || onboardingPending) && <div className="setup-inline" role="status"><span>{unavailableModel ? chatReadiness[locale].unavailable : model ? text.onboarding.firstReplyHint : chatReadiness[locale].setup}</span>{(!model || unavailableModel) && <button className="secondary-button" onClick={() => { handoff.begin({ origin: '#/chat', destination: 'models', draft: { kind: 'chat', id: activeName } }); onOpenModels(); }}>{text.onboarding.chooseModel}</button>}</div>}
 <div ref={conversationPane} className="conversation" tabIndex={0} {...scrollEvents} onPointerDownCapture={event => inspectConversationWork(event.target,followOutput,userScrollUntil)} onFocusCapture={event => inspectConversationWork(event.target,followOutput,userScrollUntil)}>
         <div ref={conversationContent} className="conversation-content">
         {conversation.length === 0 && !loading && !error && <WorkHome sessions={sessions} open={session=>{activate(session);location.hash='#/chat';}} addFile={fileDraft.chooseFile}/>}
@@ -557,6 +557,7 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
       {showLatest && <button type="button" className="secondary-button chat-latest" onClick={event => { userScrollUntil.current = 0; followOutput.current = true; const pane = conversationPane.current; pane?.focus({ preventScroll: true }); if(pane) pane.dataset.keyboardFocus = String(event.detail === 0); setShowLatest(false); requestAnimationFrame(() => { pane?.scrollTo({ top: pane.scrollHeight, behavior: 'instant' }); }); }}>{refinement.latest}</button>}
       {canonicalID && <CanonicalInputActivity id={canonicalID} inputs={canonical.inputs} control={canonical.control} error={canonical.error} question={canonical.question} mode={canonical.inputMode} chooseMode={canonical.setInputMode} disabled={busy || canonical.pendingAnswer} />}
       {workBlocked && <ChatWorkBlocker run={linkedRun} review={reviewLinkedWork} refresh={refreshJob} startNew={startNew} />}
+      {unavailableModel && <p className="chat-readiness" role="status">{chatReadiness[locale].unavailable}</p>}
       <div className="composer composer-compact" onPaste={imageDraft.paste} onDragOver={imageDraft.dragOver} onDrop={event=>{const files=[...event.dataTransfer.files];if(fileServiceReady&&files.some(file=>!file.type.startsWith('image/'))){event.preventDefault();void fileDraft.add(files);}else imageDraft.drop(event);}}>
         {selectedPage&&<div className="composer-source-scope"><Icon name="file" size={16}/><span><bdi>{selectedPage.name}</bdi> · {knowledgeUnitLabels[locale].page} {selectedPage.page}</span><button type="button" className="icon-button" aria-label={scopeCopy.clear} title={scopeCopy.clear} onClick={()=>pageDraft.setValue('')}><Icon name="close" size={16}/></button></div>}
         <div className="composer-input">{fileDraft.preview}{imageDraft.preview}<textarea ref={composerInput} value={draft} onChange={event => { if (talkActive.current) stopTalk(false); setDraft(event.target.value); }} onKeyDown={event => submitComposerInput(event, async () => { await send(); })} placeholder={text.chat.placeholder} aria-label={text.chat.placeholder} rows={1} disabled={loading || checkingTurn} /><small className="sr-only">{text.chat.enterHint}</small>{fileDraft.recovery}{imageDraft.blocker&&<p className="image-input-notice" role="status">{imageDraft.blocker}{imageDraft.blockerCode==='vision_projector_unavailable'&&<button type="button" className="text-button" onClick={()=>{handoff.begin({origin:'#/chat',destination:'models',draft:{kind:'chat',id:activeName}});onOpenModels();}}>{text.onboarding.chooseModel}</button>}</p>}</div>
@@ -579,16 +580,16 @@ export function ChatPage({ onInitialReady, scope, models, model, setModel, onboa
           </UtilityPopover>
           </div>
       <div className="composer-actions">
-        {agent ? <button type="button" className="composer-pinned-model text-button" title={effectiveModel} aria-label={text.chat.model} onClick={()=>setResponseSettingsOpen(true)}><span className="model-trigger-name"><span className="model-label-regular">{compactModelName(effectiveModel)||text.chat.model}</span><span className="model-label-narrow">{compactModelName(effectiveModel,14)||text.chat.model}</span></span><Icon name="chevron-down" size={14}/></button> : <ModelSelect compact models={models} value={model} onChange={value=>{agentConfiguration.invalidate();setModel(value);}} />}
-        {generating&&!showStop&&<button type="button" className="icon-button" aria-label={text.chat.stop} title={text.chat.stop} onClick={()=>void stopCurrent()}><Icon name="stop" size={18}/></button>}
+        {agent ? <button type="button" className="composer-pinned-model text-button" title={effectiveModel} aria-label={text.chat.model} onClick={()=>setResponseSettingsOpen(true)}><span className="model-trigger-name"><span className="model-label-regular">{compactModelName(effectiveModel)||text.chat.model}</span><span className="model-label-narrow">{compactModelName(effectiveModel,14)||text.chat.model}</span></span><Icon name="chevron-down" size={14}/></button> : <ModelSelect compact models={models} value={model} onChange={value=>{agentConfiguration.invalidate();setModel(value);}} onOpenModels={() => { handoff.begin({ origin: '#/chat', destination: 'models', draft: { kind: 'chat', id: activeName } }); onOpenModels(); }} />}
+        {generating&&(!showStop||showTalkAction)&&<button type="button" className="icon-button" aria-label={text.chat.stop} title={text.chat.stop} onClick={()=>void stopCurrent()}><Icon name="stop" size={18}/></button>}
         {talkState === 'off' && <VoiceInputButton compact contextKey={composerDraftKey} disabled={loading || checkingTurn || busy} onTranscript={value => { const previous = readDraft(composerDraftKey); setDraft(previous ? `${previous} ${value}` : value); }} />}
-        {showTalkAction && talkState === 'off' && <button type="button" className="talk-control talk-toggle" aria-label={talkCopy.start} title={talkCopy.start} disabled={loading || checkingTurn || busy || !effectiveModel || unavailableModel || linkedUnsettled} onClick={() => void startTalk()}><Icon name="waveform" size={19} /></button>}
-        {!showTalkAction && <button className="composer-submit" data-generating={generating} title={showStop ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} aria-label={showStop ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} disabled={showStop ? false : loading || checkingTurn || missingSession || ((canonicalID || conversationAdmission) && !draft.trim()) || (!draft.trim()&&!imageDraft.images.length&&!fileDraft.files.length) || fileDraft.processing || !!fileDraft.blocker || imageDraft.processing || !!imageDraft.blocker || (!canonical.answeringQuestion && (!effectiveModel || unavailableModel)) || (linkedUnsettled && !canSendInstruction && !canonicalID)} onClick={showStop ? () => void stopCurrent() : () => void send()}>{showStop ? <Icon name="stop" size={18} /> : <><span className="sr-only">{canSendInstruction ? jobCopy.update : text.chat.send}</span><Icon name="arrow-up" size={18} /></>}</button>}
+        {showTalkAction && talkState === 'off' && <button type="button" className="talk-control talk-toggle" aria-label={talkCopy.start} title={talkCopy.start} disabled={loading || checkingTurn || busy || !effectiveModel || unavailableModel || (linkedUnsettled && !canonicalID)} onClick={() => void startTalk()}><Icon name="waveform" size={19} /></button>}
+        {!showTalkAction && <button className="composer-submit" data-generating={generating} title={showStop ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} aria-label={showStop ? text.chat.stop : canSendInstruction ? jobCopy.update : text.chat.send} disabled={showStop ? false : loading || checkingTurn || missingSession || ((canonicalID || conversationAdmission) && !draft.trim() && (!inputOptions || !sourceInputs || canonical.answeringQuestion || canonical.inputMode==='new_work')) || (!draft.trim()&&!imageDraft.images.length&&!fileDraft.files.length) || fileDraft.processing || !!fileDraft.blocker || imageDraft.processing || !!imageDraft.blocker || (!canonical.answeringQuestion && (!effectiveModel || unavailableModel)) || (linkedUnsettled && !canSendInstruction && !canonicalID)} onClick={showStop ? () => void stopCurrent() : () => void send()}>{showStop ? <Icon name="stop" size={18} /> : <><span className="sr-only">{canSendInstruction ? jobCopy.update : text.chat.send}</span><Icon name="arrow-up" size={18} /></>}</button>}
       </div>
         </div>
         {executionWorkspace && <div className="composer-source-scope"><Icon name="folder" size={15}/><span dir="auto">{executionWorkspace.root}</span></div>}
         {talkState === 'off' && <ComposerSpeech presentation="status" enabled={speakResponses} checking={checkingSpeech} busy={busy} state={speechState} error={speechError} toggle={toggleSpeech} stop={stopSpeech} />}
-        {voiceVisible && <TalkSurface state={talkState} error={speechError} retry={() => void startTalk()} canRetry={!draft.trim()&&!busy} interrupt={speakAgain} end={() => { stopTalk(); if (generating) void stopCurrent(); }} renderCapture={(onLevel,onPhase) => talkState === 'listening' || talkState === 'transcribing' ? <VoiceInputButton key={`talk-${talkCycle}`} compact autoStart contextKey={composerDraftKey} disabled={loading || checkingTurn || busy} onTranscript={onTalkTranscript} onFailure={message => talk.fail(message, setSpeechError)} onSilence={talk.silence} onPhaseChange={phase=>{talk.capturePhase(phase);onPhase(phase);}} onLevel={onLevel}/> : null}/>}
+        {voiceVisible && <TalkSurface state={talkState} error={speechError} retry={() => void startTalk()} canRetry={!draft.trim()&&!busy} interrupt={speakAgain} canInterrupt={!!canonicalID && !busy && !canonical.pendingAnswer} end={() => { stopTalk(); if (generating) void stopCurrent(); }} renderCapture={(onLevel,onPhase,onCapability) => talkRunning && talkActive.current ? <VoiceInputButton key={`talk-${talk.session.current}`} compact autoStart contextKey={talk.session.current} disabled={loading || checkingTurn || busy} continuous={{sessionID:talk.session.current, monitoring:!busy&&!loading&&!checkingTurn&&!canonical.pendingAnswer, fallbackListening:talkState==='listening'||talkState==='transcribing', playbackActive:speechState==='playing', onCapability, ...talkCapture}} onTranscript={onTalkTranscript} onFailure={message => talk.fail(message, setSpeechError)} onSilence={talk.silence} onPhaseChange={phase=>{talk.capturePhase(phase);onPhase(phase);}} onLevel={onLevel}/> : null}/>}
         {agent && <div className="composer-active-context">{agent && <span className="composer-active-agent"><Icon name="agents" size={15}/>{agent.settings.name}</span>}
 
           {agent?.settings.computer && restrictions.computer !== false && <TaskAccessPolicy value={computerPolicy} onChange={setComputerPolicy} disabled={busy} scope="desktop" workspace={permissions.workspace} />}

@@ -147,7 +147,7 @@ func (j *Journal) validationEvidence(ctx context.Context, binding Binding, input
 		}
 		check := ValidationCheck{OperationID: request.OperationID, Command: spec, RequestDigest: requestDigest, ReceiptDigest: digest(result), State: "uncertain"}
 		var process ProcessResult
-		if state == "complete" && json.Unmarshal(result, &process) == nil && process.Handle != "" && process.Runtime != nil && process.Runtime.Settled {
+		if state == "complete" && json.Unmarshal(result, &process) == nil && process.Handle != "" && process.Runtime != nil && process.Runtime.Settled && ProcessDescendantsSettled(process) {
 			check.State, check.ExitCode = process.State, process.ExitCode
 		} else if state == "rejected" {
 			check.State = "rejected"

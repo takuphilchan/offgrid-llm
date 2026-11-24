@@ -59,6 +59,11 @@ func (r *Runner) continueWorker(scope ControlScope, c api.WorkerCommand, explici
 		if err != nil {
 			return nil, err
 		}
+		if !explicitUser {
+			if err := r.manager.acceptRootModelProgress(r.manager.tasks[root.ID], root); err != nil {
+				return nil, err
+			}
+		}
 		newAttempt := r.manager.tasks[root.ID] == nil
 		if newAttempt {
 			root.Prompt, root.Origin.TurnID = c.Payload.Content, c.RequestID
@@ -85,6 +90,17 @@ func (r *Runner) continueWorker(scope ControlScope, c api.WorkerCommand, explici
 		// deliverable or delegation rationale as if it described this request.
 		spec.ExpectedResult, spec.Reason = "", ""
 		next := &Task{ID: "run-" + runID(), ParentID: root.ID, Actor: scope.Actor, Model: old.Model, Prompt: spec.Goal, Status: TaskPending, Config: previous.Config, CreatedAt: time.Now().UTC(), Worker: previous.Worker, InstructionVersion: root.InstructionVersion, ControlEpoch: root.ControlEpoch + 1, AssignmentVersion: old.AssignmentVersion + 1, Checkpoint: &Checkpoint{Messages: previous.Checkpoint.Messages}, Context: previous.Context, ContextArchive: previous.ContextArchive}
+		next.Checkpoint.AuxiliaryModelRepairs = newAuxiliaryModelRepairs()
+		inheritInputBudget(root, next)
+		if root.Checkpoint.ModelBudget == nil && modelGraphEnabled(parent) {
+			root.Checkpoint.ModelBudget, err = r.manager.initialModelGraphBudget(parent)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if err = transferModelCorrections(root, old, next); err != nil {
+			return nil, err
+		}
 		if previous.Checkpoint.WorkerEnvironment != nil {
 			retained, err := retainedWorkerInput(parent, previous)
 			if err != nil {

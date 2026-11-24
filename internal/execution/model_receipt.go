@@ -36,7 +36,11 @@ func ModelReceipt(ref Reference, operation, original string, step int) string {
 	if process.State == "running" {
 		view["progress"], _ = json.Marshal("The command is still running. A complete wait/inspect receipt means the observation finished, NOT the command. Wait/inspect this same handle until it has an exit code; do not restart it or report completion.")
 	} else if process.ExitCode != nil {
-		view["progress"], _ = json.Marshal("The command ended. Report its actual exit code and observed output; do not restart it merely to obtain a response.")
+		progress := "The command ended. Report its actual exit code and observed output; do not restart it merely to obtain a response."
+		if !ProcessDescendantsSettled(process) {
+			progress = "The command leader has an observed exit code, but descendant termination is unverified. Report that distinction; do not claim verified worker completion, refund resources, or restart the command."
+		}
+		view["progress"], _ = json.Marshal(progress)
 	}
 	var receiptState string
 	if json.Unmarshal(receipt["state"], &receiptState) == nil {
@@ -58,8 +62,11 @@ func ModelReceipt(ref Reference, operation, original string, step int) string {
 // Interpret only a complete, consistent terminal receipt. Exit zero describes
 // the command's status, not correctness of its output or a larger task.
 func processOutcomeSummary(receiptState string, p ProcessResult) string {
-	if receiptState != "complete" || p.ExitCode == nil {
+	if receiptState != "complete" || !processLeaderExited(p) {
 		return ""
+	}
+	if !ProcessDescendantsSettled(p) {
+		return fmt.Sprintf("The command leader exited with code %d, but descendant termination is unverified. Its output and whole-worker completion remain unverified; do not restart the command.", *p.ExitCode)
 	}
 	if p.State == "exited" && *p.ExitCode == 0 {
 		return "This command completed successfully with exit code 0. Earlier rejected proposals were not dispatched and do not change this command's observed outcome. This does not establish the correctness of its output or completion of other work."

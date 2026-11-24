@@ -10,6 +10,9 @@ import (
 // reservations are persisted before local inference; missing usage and
 // interrupted generations retain their conservative charge on restart.
 type Checkpoint struct {
+	AuxiliaryModelRepairs        *AuxiliaryModelRepairs             `json:"auxiliary_model_repairs,omitempty"`
+	ModelBudget                  *ModelGraphBudget                  `json:"model_budget,omitempty"`
+	ModelSwitches                []ModelSwitch                      `json:"model_switches,omitempty"`
 	WorkerBudgetRequests         map[string]WorkerBudgetGrant       `json:"worker_budget_requests,omitempty"`
 	PartialSynthesis             bool                               `json:"partial_synthesis,omitempty"`
 	WorkerAnswerCommand          *api.WorkerCommand                 `json:"worker_answer_command,omitempty"`

@@ -25,9 +25,11 @@ func (s *Server) handleBrowserPairing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		Run      string `json:"run_id"`
-		Input    string `json:"input_id"`
-		Protocol int    `json:"protocol_version"`
+		Run      string                `json:"run_id"`
+		Input    string                `json:"input_id"`
+		Protocol int                   `json:"protocol_version"`
+		Previous string                `json:"previous_session"`
+		Mode     computer.ApprovalMode `json:"approval_mode"`
 	}
 	if r.Body != nil && r.ContentLength != 0 {
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
@@ -44,6 +46,10 @@ func (s *Server) handleBrowserPairing(w http.ResponseWriter, r *http.Request) {
 	var code string
 	var err error
 	if request.Protocol == computer.DesktopProtocolVersion {
+		if request.Previous != "" || request.Mode != "" {
+			writeError(w, "Invalid desktop pairing request", 400)
+			return
+		}
 		if s.agentManager == nil {
 			writeError(w, "Task unavailable", 409)
 			return
@@ -62,7 +68,29 @@ func (s *Server) handleBrowserPairing(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		code, err = s.browserHub.PairTaskCode(s.agentActor(r), request.Run, request.Input, s.workspaceID, mode)
-	} else if request.Run != "" || request.Input != "" || request.Protocol != 0 {
+	} else if request.Protocol == computer.ProtocolVersion {
+		if s.agentManager == nil {
+			writeError(w, "Task unavailable", 409)
+			return
+		}
+		task, ok := s.agentManager.GetTask(request.Run)
+		if !ok || task.Actor != s.agentActor(r) || task.Status != agents.TaskInput || task.PendingInput == nil || task.PendingInput.Kind != "computer" || task.PendingInput.Mode != "browser" || task.PendingInput.ID != request.Input || task.PendingInput.PreviousSession != request.Previous || task.AdmissionHeld || task.Config.Automation != nil {
+			writeError(w, "Task access request changed", 409)
+			return
+		}
+		if !request.Mode.Valid() || (task.Config.RequestedComputerApprovalMode != "" && task.Config.RequestedComputerApprovalMode != string(request.Mode)) || (task.Config.ComputerApprovalMode != "" && task.Config.ComputerApprovalMode != string(request.Mode)) {
+			writeError(w, "Browser approval policy changed", 409)
+			return
+		}
+		if s.rejectUnavailableTask(w, r, task) {
+			return
+		}
+		var requested []string
+		if request.Previous == "" {
+			requested = []string{task.PendingInput.URL}
+		}
+		code, err = s.browserHub.PairBrowserTaskCode(task.Actor, task.ID, request.Input, s.workspaceID, request.Previous, request.Mode, requested...)
+	} else if request.Run != "" || request.Input != "" || request.Protocol != 0 || request.Previous != "" || request.Mode != "" {
 		writeError(w, "Invalid pairing protocol", 400)
 		return
 	} else {
@@ -130,15 +158,24 @@ func (s *Server) browserTransport(next http.Handler) http.Handler {
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		if path == "/api/v2/computer/companion/pair" {
 			var req struct {
-				Code           string                   `json:"code"`
-				Origin         string                   `json:"origin"`
-				Protocol       int                      `json:"protocol_version"`
-				Title          string                   `json:"title"`
-				Target         *computer.TargetIdentity `json:"target"`
-				ApprovalMode   computer.ApprovalMode    `json:"approval_mode"`
-				NativeFeatures computer.NativeFeatures  `json:"native_features,omitempty"`
+				Code            string                   `json:"code"`
+				Origin          string                   `json:"origin"`
+				Protocol        int                      `json:"protocol_version"`
+				Title           string                   `json:"title"`
+				Target          *computer.TargetIdentity `json:"target"`
+				ApprovalMode    computer.ApprovalMode    `json:"approval_mode"`
+				NativeFeatures  computer.NativeFeatures  `json:"native_features,omitempty"`
+				BrowserFeatures computer.BrowserFeatures `json:"browser_features,omitempty"`
+				BrowserOrigins  []string                 `json:"browser_origins,omitempty"`
 			}
-			if decodeJSON(r, &req) != nil || req.NativeFeatures.Validate() != nil {
+			var encoded json.RawMessage
+			if decodeJSON(r, &encoded) != nil || json.Unmarshal(encoded, &req) != nil || req.NativeFeatures.Validate() != nil || req.BrowserFeatures.Validate() != nil || ((req.BrowserFeatures.Discovery != 0 || req.BrowserFeatures.Workspace != 0 || req.BrowserFeatures.Structured != 0 || req.BrowserFeatures.Transfers != 0 || len(req.BrowserOrigins) > 0) && req.Protocol != computer.ProtocolVersion) {
+				writeError(w, "Invalid pairing request", 400)
+				return
+			}
+			// The additive transfer contract accepts no supplied binding or
+			// conflicting metadata. Preserve legacy decoding for older peers.
+			if req.BrowserFeatures.Transfers == 1 && computer.DecodeControlMessage(encoded, &req) != nil {
 				writeError(w, "Invalid pairing request", 400)
 				return
 			}
@@ -153,7 +190,7 @@ func (s *Server) browserTransport(next http.Handler) http.Handler {
 			} else if req.Protocol == computer.ControlProtocolVersion && req.Target != nil && req.Origin == "" {
 				session, token, err = s.browserHub.PairNativeFeatures(req.Code, req.Title, *req.Target, req.Protocol, req.ApprovalMode, req.NativeFeatures)
 			} else if req.Target == nil && req.Title == "" && req.NativeFeatures.Documents == 0 {
-				session, token, err = s.browserHub.Pair(req.Code, req.Origin, req.Protocol, req.ApprovalMode)
+				session, token, err = s.browserHub.PairBrowserFeatures(req.Code, req.Origin, req.Protocol, req.ApprovalMode, req.BrowserFeatures, req.BrowserOrigins)
 			} else {
 				err = computer.ErrControlScope
 			}
@@ -161,7 +198,17 @@ func (s *Server) browserTransport(next http.Handler) http.Handler {
 				writeError(w, "Pairing expired, invalid or another session is active", 403)
 				return
 			}
-			writeJSON(w, 200, map[string]any{"session": session, "token": token})
+			response := map[string]any{"session": session, "token": token}
+			binding, bindingErr := session.FileBinding()
+			if bindingErr != nil {
+				s.browserHub.StopSession(session.Actor, session.ID)
+				writeError(w, "Browser transfer binding unavailable", 403)
+				return
+			}
+			if binding != nil {
+				response["file_binding"] = binding
+			}
+			writeJSON(w, 200, response)
 			return
 		}
 		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")

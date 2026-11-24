@@ -29,6 +29,10 @@ import { modelBundles } from '../../i18n/model-bundles';
 import { workspaceAudit } from '../../i18n/workspace-audit';
 import { OfflineModelImport } from './OfflineModelImport';
 import { catalogDescription } from '../../i18n/catalog-descriptions';
+import { InferenceEndpointModels } from './InferenceEndpointModels';
+import { EndpointOwnerPanel } from './EndpointOwnerPanel';
+import { useModelOperations } from './use-model-operations';
+import { PackageTransfers } from './PackageTransfers';
 
 function fileName(path: string): string {
   return path.split('/').pop() ?? path;
@@ -46,11 +50,14 @@ function downloadFor(model: CatalogModel, progress: Record<string, DownloadProgr
 export function ModelsPage({ models, selected, setSelected, onRefresh, onImportRefresh, onboardingPending }: { models: Model[]; selected: string; setSelected: (model: string) => void; onRefresh: () => Promise<void>; onImportRefresh: () => Promise<void>; onboardingPending: boolean }) {
   const { messages: text, locale , language} = useI18n();
   const { admin } = useWorkspace();
+  const packageOperations = useModelOperations();
   const [bundles, setBundles] = useState(false);
   const [offlineImport, setOfflineImport] = useState(false);
+  const [endpointOwner, setEndpointOwner] = useState(false);
+  const [endpointRevision, setEndpointRevision] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    void api.systemIdentity(controller.signal).then(value => { if (!controller.signal.aborted) { setBundles(value.capabilities?.includes('gguf-bundles-v1') === true); setOfflineImport(value.capabilities?.includes('gguf-offline-import-v1') === true); } }).catch(() => {});
+    void api.systemIdentity(controller.signal).then(value => { if (!controller.signal.aborted) { setBundles(value.capabilities?.includes('gguf-bundles-v1') === true); setOfflineImport(value.capabilities?.includes('gguf-offline-import-v1') === true); setEndpointOwner(value.capabilities?.includes('inference-endpoint-owner-v1') === true); } }).catch(() => {});
     return () => controller.abort();
   }, []);
   const [category, setCategory] = useWorkspaceState<ModelCategory>('models.category', 'language');
@@ -81,7 +88,10 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
   const categories: ModelCategory[] = ['language', 'embeddings', 'speech_recognition', 'speech_generation'];
   const categoryCopy = modelAcquisition[locale];
   const categoryModels = models.filter(model => category === 'embeddings' ? model.type === 'embedding' : supportsChat(model));
-  const visibleModels = categoryModels.filter(model => model.id.toLocaleLowerCase(language).includes(filter.trim().toLocaleLowerCase(language)));
+  const matchingModels = categoryModels.filter(model => model.id.toLocaleLowerCase(language).includes(filter.trim().toLocaleLowerCase(language)));
+  // ONNX selectors are compatibility projections of package-owned models.
+  // Their mutations belong to the typed package panel, never legacy file APIs.
+  const visibleModels = matchingModels.filter(model => model.engine !== 'onnx' && !model.id.startsWith('endpoint:'));
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
   const progressRevision = useRef(0);
   const [discarding, setDiscarding] = useState<DownloadProgress | null>(null);
@@ -205,24 +215,24 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
     finally { setOperation(''); }
   };
 
-  const transfers = Object.values(progress).filter(item => item.status !== 'complete' && !(view === 'discover' && discoverySource === 'curated' && filteredCatalog.some(model => `${model.id}.gguf` === item.file_name)));
+  const transfers = Object.values(progress).filter(item => item.status !== 'complete' && !(!packageMode && view === 'discover' && discoverySource === 'curated' && filteredCatalog.some(model => `${model.id}.gguf` === item.file_name)));
   return <div className="stack models-workspace">
     {discarding && <ConfirmDialog title={categoryCopy.discard} body={`${discarding.file_name}\n\n${categoryCopy.discardConfirm}`} confirmLabel={categoryCopy.discard} confirm={discard} close={() => setDiscarding(null)} />}
     <div className="model-library-toolbar"><LibraryNavigation view={view} source={discoverySource} change={(next,source)=>{setView(next);if(next==='discover')setDiscoverySources(old=>({...old,[category]:source}));}} />
     <label className="model-category-control"><span>{categoryCopy.category}</span><select className="model-category-filter" value={category} onChange={event=>setCategory(event.target.value as ModelCategory)}>{categories.map(value=><option key={value} value={value}>{categoryCopy[value]}</option>)}</select></label></div>
     <p className="model-search-hint">{view === 'discover' ? text.guidance.discovery : category === 'language' ? text.guidance.languageModels : category === 'embeddings' ? text.guidance.embeddingModels : text.guidance.speechModels}</p>
     <div id="model-library-panel" className="stack">
-    {packageMode ? <PackageModels key={category} category={category} view={view} discoverySource={discoverySource} onDiscover={discover} /> : <>
+    {error && <div className="inline-error" role="alert">{error}<button disabled={loading} onClick={() => void load()}>{text.common.refresh}</button></div>}
+    {progressError && <div className="inline-error" role="alert">{progressError}<button onClick={() => void load()}>{text.common.retry}</button></div>}
+    {packageMode ? <PackageModels key={category} category={category} view={view} discoverySource={discoverySource} onDiscover={discover} operations={packageOperations.operations} refreshOperations={packageOperations.refresh} /> : <>
     {confirmDelete && <ConfirmDialog title={confirmDelete} body={workflow[locale].deleteModel} close={() => setConfirmDelete('')} confirm={async () => { const item = models.find(model => model.id === confirmDelete); if (item) await remove(item); }} />}
     {needsChatModel && !importDestination && <div className="setup-guidance" role="status"><strong>{text.onboarding.chooseModel}</strong><p>{text.onboarding.modelHint}</p></div>}
     {readyForFirstChat && <div className="setup-guidance"><p>{text.onboarding.firstReplyHint}</p><a className="primary-button" href="#/chat">{text.onboarding.startChat}</a></div>}
     {admin && offlineImport && category === 'language' && importDestination && <OfflineModelImport onRefresh={onImportRefresh} />}
     {view === 'discover' && discoverySource === 'search' && (admin ? <ModelSearch key={category} bundles={bundles} category={category} models={models} progress={progress} busy={operation !== ''} download={download} cancel={cancel} /> : <p className="permission-notice">{interaction[locale].adminOnly}</p>)}
-    {error && <div className="inline-error" role="alert">{error}<button disabled={loading} onClick={() => void load()}>{text.common.refresh}</button></div>}
-    {progressError && <div className="inline-error" role="alert">{progressError}<button onClick={() => void load()}>{text.common.retry}</button></div>}
     {view === 'installed' && <section className="model-section" aria-label={text.models.installed}>
       <SectionHeading title={`${text.models.installed} · ${categoryModels.length}`} actions={!!categoryModels.length && <SearchField id="installed-model-search" className="model-installed-search" label={modelLibrary(locale).filterInstalled} value={filter} onChange={value => setFilters(old => ({ ...old, [category]: value }))} />} />
-      {visibleModels.length === 0 ? <EmptyState title={categoryModels.length ? modelLibrary(locale).noMatches : text.models.empty} action={<button type="button" className="secondary-button" onClick={() => { if (categoryModels.length) { setFilters(old => ({ ...old, [category]: '' })); document.getElementById('installed-model-search')?.focus(); } else discover(); }}>{categoryModels.length ? workspaceRefinement[locale].clear : text.models.discover}</button>} /> : <div className="installed-models">{visibleModels.map(model => <article className={selected === model.id ? 'installed-model selected' : 'installed-model'} key={model.id}>
+      {matchingModels.length === 0 ? <EmptyState title={categoryModels.length ? modelLibrary(locale).noMatches : text.models.empty} action={<button type="button" className="secondary-button" onClick={() => { if (categoryModels.length) { setFilters(old => ({ ...old, [category]: '' })); document.getElementById('installed-model-search')?.focus(); } else discover(); }}>{categoryModels.length ? workspaceRefinement[locale].clear : text.models.discover}</button>} /> : <div className="installed-models">{visibleModels.map(model => <article className={selected === model.id ? 'installed-model selected' : 'installed-model'} key={model.id}>
         <ModelIdentity model={{ ...legacyDisplay(model, catalog.find(item => installedCatalogModel(item, [model]))), name: readableModelName(model.id) }} />
         {verifications[model.id] && <div className="verification model-verification" role="status"><strong>{verifications[model.id].file_name}</strong><span>{verifications[model.id].message}</span><span>{verifications[model.id].sha256}</span></div>}
         <div className="model-actions">
@@ -238,12 +248,9 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
         </div>
       </article>)}</div>}
     </section>}
-    {!!transfers.length && <details className="model-transfers" open={transfers.some(item => isActiveDownload(item) || item.status === 'failed')}><summary>{workspaceAudit(locale).downloads} · {transfers.length}</summary><div className="stack">{transfers.map(item => {
-      const catalogItem = catalog.find(model => `${model.id}.gguf` === item.file_name);
-      const source = item.repository && item.source_file && item.model_id ? { id: item.model_id, repo: item.repository, file: item.source_file, quant: item.quantization ?? '' } : catalogItem;
-      return <article className="catalog-card" key={item.file_name}><h3>{catalogItem?.name ?? item.file_name}</h3><ModelDownloadProgress download={item} /><div className="catalog-actions">{isActiveDownload(item) ? <button className="danger-button" disabled={!admin || operation !== ''} onClick={() => void cancel(item)}>{text.models.cancel}</button> : <button className="primary-button" disabled={!admin || operation !== '' || !source} onClick={() => { if (source) void download(source, item.enable_knowledge === true); }}>{text.models.resume}</button>}{!isActiveDownload(item) && <button className="text-button" disabled={!admin || operation !== ''} onClick={() => setDiscarding(item)}><Icon name="trash" size={16} />{categoryCopy.discard}</button>}</div></article>;
-    })}</div></details>}
-    {view === 'installed' && category === 'language' && <LanguagePackageModels />}
+    {view === 'installed' && (category === 'language' || category === 'embeddings') && <LanguagePackageModels key={category} category={category} filter={filter} onChanged={onRefresh} />}
+    {view === 'installed' && category === 'language' && <InferenceEndpointModels models={models} filter={filter} selected={selected} setSelected={setSelected} onChanged={onRefresh} refreshToken={endpointRevision} />}
+    {view === 'installed' && category === 'language' && admin && endpointOwner && <EndpointOwnerPanel onChanged={async () => { try { await onRefresh(); } finally { setEndpointRevision(value => value + 1); } }}/>}
     {admin && offlineImport && category === 'language' && !importDestination && <details className="model-offline-import"><summary>{categoryCopy.advanced}</summary><OfflineModelImport onRefresh={onImportRefresh} /></details>}
     {view === 'discover' && discoverySource === 'curated' && <section className="model-section">
       <SectionHeading title={modelLibrary(locale).curated} />
@@ -268,6 +275,13 @@ export function ModelsPage({ models, selected, setSelected, onRefresh, onImportR
       })}</div>}
     </section>}
     </>}
+    <PackageTransfers {...packageOperations} legacyCount={transfers.length} legacyActive={transfers.some(item => isActiveDownload(item) || item.status === 'failed')}>
+    {transfers.map(item => {
+      const catalogItem = catalog.find(model => `${model.id}.gguf` === item.file_name);
+      const source = item.repository && item.source_file && item.model_id ? { id: item.model_id, repo: item.repository, file: item.source_file, quant: item.quantization ?? '' } : catalogItem;
+      return <article className="catalog-card" key={item.file_name}><h3>{catalogItem?.name ?? item.file_name}</h3><ModelDownloadProgress download={item} /><div className="catalog-actions">{isActiveDownload(item) ? <button className="danger-button" disabled={!admin || operation !== ''} onClick={() => void cancel(item)}>{text.models.cancel}</button> : <button className="primary-button" disabled={!admin || operation !== '' || !source} onClick={() => { if (source) void download(source, item.enable_knowledge === true); }}>{text.models.resume}</button>}{!isActiveDownload(item) && <button className="text-button" disabled={!admin || operation !== ''} onClick={() => setDiscarding(item)}><Icon name="trash" size={16} />{categoryCopy.discard}</button>}</div></article>;
+    })}
+    </PackageTransfers>
     </div>
   </div>;
 }

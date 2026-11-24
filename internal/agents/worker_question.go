@@ -63,7 +63,7 @@ func (r *Runner) requestWorkerQuestion(task *Task, call api.ToolCall) error {
 	task.Status, task.SchedulerReady = TaskInput, false
 	data, _ := json.Marshal(q)
 	task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "worker_question", ToolName: call.Function.Name, ToolArgs: call.Function.Arguments, ToolResult: string(data), Timestamp: q.RequestedAt})
-	return r.persist(task)
+	return r.persistModelProgress(task)
 }
 
 func answerWorkerQuestion(task, parent *Task, command api.WorkerCommand) error {

@@ -13,8 +13,7 @@ import { desktopCompatibility } from '../../i18n/desktop-compatibility';
 import { VoiceSettings } from '../../components/VoiceSettings';
 import { ComposerResponseLimits } from '../chat/ComposerOptions';
 import {useResponsePreferences} from '../chat/useResponsePreferences';
-import {responseDisplay} from '../../i18n/response-display';
-import { settingsNavigation, settingsSections, type SettingsSection as BaseSettingsSection } from '../../i18n/settings-navigation';
+import { settingsNavigation, settingsSections } from '../../i18n/settings-navigation';
 import { SearchField } from '../../components/SearchField';
 import { computerStatus } from '../../i18n/computer-status';
 import './settings.css';
@@ -27,8 +26,10 @@ import { SidebarSlot } from '../../components/shell/SidebarSlot';
 import { Icon, type IconName } from '../../components/Icon';
 import { ActionCard } from '../../components/ActionCard';
 import { profileSelectionPrompt } from '../../i18n/agent-profiles';
+import {WorkspaceRecoverySettings} from './WorkspaceRecoverySettings';
+import {usePreferenceSaveStates} from '../../lib/usePreferenceSaveStates';
+import {settingsTargets, type SettingsSection, type SettingTarget} from './settings-discovery';
 
-type SettingsSection = BaseSettingsSection | 'appearance' | 'shortcuts' | 'storage';
 const sectionIcons: Record<SettingsSection, IconName> = { general: 'settings', appearance: 'palette', shortcuts: 'quick-window', storage: 'drive', models: 'models', voice: 'mic', terminal: 'terminal', access: 'shield', advanced: 'info' };
 
 type Health = 'checking' | 'ready' | 'offline';
@@ -52,40 +53,32 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
   const { messages: text, locale, language, available, setLocale, translationNotice } = useI18n();
   const { admin, knowledge, scope } = useWorkspace();
   const copy = settingsNavigation[locale];
-  const sectionKeys: SettingsSection[] = ['general','appearance','models','voice',...(window.electron?.setCommandShortcut ? ['shortcuts' as const] : []),'terminal','access',...(window.electron?.getPaths ? ['storage' as const] : []),'advanced'];
-  const [focusTarget,setFocusTarget] = useState<string|null>(null);
+  const sectionKeys: SettingsSection[] = ['general','appearance','models','voice',...(window.electron?.setCommandShortcut ? ['shortcuts' as const] : []),'terminal','access','storage','advanced'];
+  const [focusTarget,setFocusTarget] = useState<SettingTarget|null>(null);
   const [section, setSection] = useState<SettingsSection>('general');
   const [query, setQuery] = useState('');
-  const [unsaved, setUnsaved] = useState<string[]>([]);
-  useEffect(()=>{const saved=(event:Event)=>{const {key,saved}= (event as CustomEvent<{key:string;saved:boolean}>).detail;if(key==='offgrid.appearance.v1')return;setUnsaved(keys=>saved?keys.filter(item=>item!==key):[...new Set([...keys,key])]);};window.addEventListener('offgrid-preference-save',saved);return()=>window.removeEventListener('offgrid-preference-save',saved);},[]);
-  const settingTargets = [
-    {id:'language',section:'general',label:text.common.language,selector:'#settings-language'},
-    {id:'theme',section:'appearance',label:text.shell.theme,selector:'#setting-theme button'},
-    {id:'appearance',section:'appearance',label:personalization[locale][0],selector:'#setting-appearance'},
-    {id:'text-size',section:'appearance',label:personalization[locale][3],selector:'#appearance-text-size'},
-    {id:'motion',section:'appearance',label:personalization[locale][4],selector:'#setting-appearance input'},
-    {id:'responses',section:'models',label:text.chatStreaming.responseLimit+' '+responseDisplay(locale).label,selector:'#model-settings-title'},
-    {id:'voice',section:'voice',label:copy.sections[2],selector:'#voice-settings-title'},
-    {id:'terminal',section:'terminal',label:copy.sections[3],selector:'#terminal-settings-title'},
-    {id:'quick-window',section:'shortcuts',label:desktopCommand(locale).title,selector:'#desktop-command-shortcut'},
-    {id:'access',section:'access',label:copy.sections[4],selector:'#access-settings-title'},
-    {id:'service',section:'advanced',label:text.settings.service,selector:'#workspace-title'}
-  ] as const;
-  const searchTargets = query.trim() ? settingTargets.filter(item=>item.label.toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language))) : [];
+  const preferenceStates = usePreferenceSaveStates();
+  const settingTargets = settingsTargets(text, locale).filter(item => sectionKeys.includes(item.section));
+  const searchableText = (item: SettingTarget) => item.label + ' ' + (item.keywords ?? '');
+  const searchTargets = query.trim() ? settingTargets.filter(item=>item.searchable !== false && searchableText(item).toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language))) : [];
   const revealSetting = (id: string) => {
-    if(sectionKeys.includes(id as SettingsSection)){setQuery('');setFocusTarget(null);setSection(id as SettingsSection);return;}
-    const item=settingTargets.find(item=>item.id===id);if(!item)return;
-    setQuery('');setSection(item.section);setFocusTarget(item.selector);
+    const item=settingTargets.find(item=>item.id===id);
+    if(item){setQuery('');setSection(item.section);setFocusTarget(item);return;}
+    if(sectionKeys.includes(id as SettingsSection)){setQuery('');setSection(id as SettingsSection);setFocusTarget({id,section:id as SettingsSection,label:id,selector:'.settings-group:not([hidden]) h2'});}
   };
-  useEffect(()=>{if(!focusTarget)return;const element=document.querySelector<HTMLElement>(focusTarget);if(element){if(!element.matches('input,select,button'))element.tabIndex=-1;element.focus();element.scrollIntoView({block:'nearest'});setFocusTarget(null);}},[focusTarget,section,query]);
+  useEffect(()=>{if(!focusTarget)return;const element=document.querySelector<HTMLElement>(focusTarget.selector) ?? (focusTarget.fallback ? document.querySelector<HTMLElement>(focusTarget.fallback) : null);if(element){if(!element.matches('input,select,button,a,summary'))element.tabIndex=-1;element.focus();element.scrollIntoView({block:'nearest'});setFocusTarget(null);}},[focusTarget,section,query]);
   useEffect(()=>{const navigate=()=>{const parts=location.hash.split('/');if(parts[1]==='settings'&&parts[2])revealSetting(parts[2]);};navigate();window.addEventListener('hashchange',navigate);return()=>window.removeEventListener('hashchange',navigate);},[locale]);
   const preferencesKey = 'offgrid.chat.preferences:' + encodeURIComponent(scope);
   const [preferences, updatePreferences] = useResponsePreferences(preferencesKey);
-  const terms = [text.common.language+' '+text.shell.theme+' '+text.settings.showGuide+' '+personalization[locale].join(' ')+' '+palettes.map(id=>paletteLabel(id,'light')+' '+paletteLabel(id,'dark')).join(' '), text.chatStreaming.profile+' '+text.chatStreaming.responseLimit+' '+text.nav.models, text.nav.models, 'Aa', text.settings.computerUse+' '+text.shell.storage, text.settings.service+' '+text.settings.version+' API'];
+  const terms: Partial<Record<SettingsSection,string>> = { general:text.common.language+' '+text.settings.showGuide, appearance:text.shell.theme+' '+personalization[locale].join(' ')+' '+palettes.map(id=>paletteLabel(id,'light')+' '+paletteLabel(id,'dark')).join(' '), models:text.chatStreaming.profile+' '+text.chatStreaming.responseLimit+' '+text.nav.models, terminal:'Aa', access:text.settings.computerUse, storage:text.shell.modelsPath+' '+text.shell.dataPath, advanced:text.settings.service+' '+text.settings.version+' API', shortcuts:desktopCommand(locale).shortcut };
   const sectionTitle = (key: SettingsSection) => key === 'appearance' ? personalization[locale][0] : key === 'shortcuts' ? desktopCommand(locale).title : key === 'storage' ? text.shell.storage : copy.sections[settingsSections.indexOf(key)];
   const description = (key: SettingsSection) => key === 'appearance' ? personalization[locale][9] : key === 'shortcuts' ? desktopCommand(locale).background : key === 'storage' ? workspaceManagement(locale).desktopStorage : copy.descriptions[settingsSections.indexOf(key)];
-  const matches = sectionKeys.filter(key => (sectionTitle(key)+' '+description(key)+' '+(key === 'appearance' ? terms[0] : key === 'shortcuts' ? desktopCommand(locale).shortcut : key === 'storage' ? text.shell.modelsPath+' '+text.shell.dataPath : terms[settingsSections.indexOf(key)])+' '+settingTargets.filter(item=>item.section===key).map(item=>item.label).join(' ')).toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language)));
+  const matches = sectionKeys.filter(key => (sectionTitle(key)+' '+description(key)+' '+(terms[key]??'')+' '+settingTargets.filter(item=>item.section===key).map(searchableText).join(' ')).toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language)));
+  const searchResults = [...searchTargets, ...matches.filter(key=>!searchTargets.some(item=>item.section===key)&&(!searchTargets.length||sectionTitle(key).toLocaleLowerCase(language).includes(query.trim().toLocaleLowerCase(language)))).map(key=>({id:key,section:key,label:sectionTitle(key)}))];
   const shown = (key: SettingsSection) => query.trim() ? matches.includes(key) : key === section;
+  const unsaved = Object.keys(preferenceStates).filter(key => preferenceStates[key] === 'unsaved'
+    && (!key.startsWith('offgrid.chat.preferences:') || key === preferencesKey)
+    && !(shown('appearance') && ['offgrid.appearance.v1', 'desktop-presentation'].includes(key)));
   const [details, setDetails] = useState<Details>({});
   const [error, setError] = useState('');
   const [desktopPaths, setDesktopPaths] = useState<DesktopPaths | null>(null);
@@ -151,10 +144,11 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
     {inSidebar ? <SidebarSlot>{navigation}</SidebarSlot> : navigation}
     <div className="settings-content">
     {!!unsaved.length && <p role="status">{personalization[locale][10]}</p>}
-    {!!searchTargets.length && <nav className="settings-results" aria-label={copy.search}>{searchTargets.map(item=><a key={item.id} href={`#/settings/${item.id}`} onClick={()=>revealSetting(item.id)}>{item.label}</a>)}</nav>}
+    {!!query.trim() && !!searchResults.length && <nav className="settings-results" aria-label={copy.search}><h2>{copy.search}</h2><ul>{searchResults.map(item=><li key={item.id}><a href={`#/settings/${item.id}`} onClick={()=>revealSetting(item.id)}><Icon name={sectionIcons[item.section]} size={20}/><span><strong>{item.label}</strong><small>{item.label===sectionTitle(item.section)?description(item.section):sectionTitle(item.section)}</small></span><Icon name="chevron-right" size={16}/></a></li>)}</ul></nav>}
     {query.trim() && !matches.length && <p role="status">{copy.empty}</p>}
     {error && <div className="inline-error" role="alert">{error}</div>}
     {backend?.reason && <div className="inline-error" role="alert">{backend.reason}</div>}
+    <div className="settings-groups" hidden={!!query.trim()}>
     <section hidden={!shown('general')} className="settings-group" aria-labelledby="preferences-title">
       <SectionHeading title={sectionTitle('general')} description={description('general')} id="preferences-title" />
       <div className="settings-panel"><label htmlFor="settings-language">{text.common.language}</label><select id="settings-language" value={language} aria-describedby={translationNotice ? 'translation-notice' : undefined} onChange={event => setLocale(event.target.value as LanguageCode)}>{available.filter(item=>!item.preview).map(item => <option key={item.code} value={item.code}>{item.label}</option>)}<optgroup label={personalization[locale][5]}>{available.filter(item=>item.preview).map(item => <option key={item.code} value={item.code}>{item.label}</option>)}</optgroup></select></div>
@@ -183,7 +177,7 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
       <SectionHeading title={sectionTitle('voice')} description={description('voice')} id="voice-settings-title" /><VoiceSettings inline />
     </section>}
     {shown('shortcuts') && <section className="settings-group" aria-labelledby="shortcuts-settings-title"><SectionHeading title={sectionTitle('shortcuts')} id="shortcuts-settings-title"/><DesktopCommandSettings /></section>}
-    {shown('storage') && <section className="settings-group" aria-labelledby="storage-settings-title"><SectionHeading title={sectionTitle('storage')} description={description('storage')} id="storage-settings-title"/>{desktopPaths ? <div className="settings-card desktop-local-paths"><dl><div><dt>{text.shell.modelsPath}</dt><dd>{desktopPaths.models}</dd></div><div><dt>{text.shell.dataPath}</dt><dd>{desktopPaths.data}</dd></div></dl></div> : <p role="status">{unknown}</p>}</section>}
+    {shown('storage') && <section className="settings-group" aria-labelledby="storage-settings-title"><SectionHeading title={sectionTitle('storage')} description={window.electron?description('storage'):undefined} id="storage-settings-title"/>{desktopPaths && <div className="settings-card desktop-local-paths"><dl><div><dt>{text.shell.modelsPath}</dt><dd>{desktopPaths.models}</dd></div><div><dt>{text.shell.dataPath}</dt><dd>{desktopPaths.data}</dd></div></dl></div>}<WorkspaceRecoverySettings /></section>}
     <section hidden={!shown('terminal')} className="settings-group" aria-labelledby="terminal-settings-title">
       <SectionHeading title={sectionTitle('terminal')} description={description('terminal')} id="terminal-settings-title" />
       {window.electron?.openTerminal ? <ActionCard icon="terminal" title={copy.terminal} description="OffGrid CLI" onClick={() => void window.electron!.openTerminal!().catch(reason => setError(reason instanceof Error ? reason.message : text.common.error))} /> : <p>{copy.browser}</p>}
@@ -213,6 +207,7 @@ export function SettingsPage({ health, themeChoice, onThemeChange, onShowOnboard
 
     </details>
     </section>
+    </div>
     </div>
   </div>;
 }

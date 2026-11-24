@@ -137,7 +137,7 @@ print(json.dumps(c.sessions.submit_agent_turn('cross-client', 'Explain the fixtu
 	case <-ctx.Done():
 		t.Fatal("job did not start")
 	}
-	browser := run("node", filepath.Join(root, "dev", "scripts", "test-agent-cross-clients.mjs"), server.URL, id, bobKey)
+	browser := run("node", filepath.Join(root, "scripts", "test", "test-agent-cross-clients.mjs"), server.URL, id, bobKey)
 	if browser["job_id"] != id || browser["steered"] != true {
 		t.Fatal(browser)
 	}

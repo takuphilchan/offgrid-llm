@@ -19,6 +19,12 @@ export function WorkspaceHelp({ close }: { close:()=>void }) {
   const root=useRef<HTMLElement>(null), article=useRef<HTMLElement>(null);
   const topics=helpArticles(locale,text,!!window.electron);
   const matches=findHelpArticles(topics,query), active=matches.find(item=>item.id===selected)??matches[0];
+  const focusArticle=()=>requestAnimationFrame(()=>{
+    const target=article.current, scroll=root.current?.querySelector<HTMLElement>('.help-scroll');
+    if(!target||!scroll)return;
+    target.focus({preventScroll:true});
+    scroll.scrollTop+=target.getBoundingClientRect().top-scroll.getBoundingClientRect().top;
+  });
   useEffect(()=>{
     const previous=document.activeElement as HTMLElement|null;
     root.current?.querySelector<HTMLInputElement>('input[type="search"]')?.focus();
@@ -28,11 +34,12 @@ export function WorkspaceHelp({ close }: { close:()=>void }) {
     if(event.key==='Escape'&&!event.nativeEvent.isComposing){event.preventDefault();event.stopPropagation();close();}
   }}>
     <header className="help-heading"><div><h2 id="workspace-help-title">{copy.help}</h2><p>{labels.browse}</p></div><button type="button" className="icon-button utility-button" onClick={close} aria-label={copy.close} title={copy.close}><Icon name="close" size={18}/></button></header>
-    <div className="help-search"><SearchField label={labels.search} value={query} onChange={setQuery}/><span className="help-result-count" role="status" aria-live="polite">{matches.length} · {labels.topics}</span></div>
+    <div className="help-scroll">
+    <div className="help-search"><SearchField label={labels.search} value={query} onChange={setQuery}/><span className="sr-only" role="status" aria-live="polite">{matches.length} · {labels.topics}</span></div>
     <div className="help-layout">
       <nav className="help-topics" aria-label={labels.topics}>
-        {matches.map(topic=><button type="button" key={topic.id} aria-current={active?.id===topic.id?'page':undefined} onClick={()=>{setSelected(topic.id);requestAnimationFrame(()=>article.current?.focus());}}><Icon name={topic.icon} size={19}/><span>{topic.title}</span><Icon name="chevron-right" size={14}/></button>)}
-        <button type="button" className="help-setup" onClick={()=>{setQuery('');setSelected('models');requestAnimationFrame(()=>article.current?.focus());}}><Icon name="home" size={19}/><span>{text.settings.showGuide}</span></button>
+        {matches.map(topic=><button type="button" key={topic.id} aria-current={active?.id===topic.id?'page':undefined} onClick={()=>{setSelected(topic.id);focusArticle();}}><Icon name={topic.icon} size={19}/><span>{topic.title}</span><Icon name="chevron-right" size={14}/></button>)}
+        <button type="button" className="help-setup" onClick={()=>{setQuery('');setSelected('models');focusArticle();}}><Icon name="home" size={19}/><span>{text.settings.showGuide}</span></button>
       </nav>
       {active ? <article ref={article} tabIndex={-1} className="help-article" aria-labelledby="help-article-title" key={active.id}>
         <span className="help-article-icon"><Icon name={active.icon} size={26}/></span>
@@ -40,6 +47,6 @@ export function WorkspaceHelp({ close }: { close:()=>void }) {
         {active.sections.map((section,index)=><section key={index}>{section.title&&<h4>{section.title}</h4>}{section.paragraphs.map((body,i)=><p key={i}>{body}</p>)}</section>)}
         <div className="help-destinations">{active.links.map(link=><a className="help-destination" key={link.href} href={link.href} onClick={()=>{if(link.category){setCategory(link.category);setView('installed');}close();}}><span>{link.label}</span><Icon name="chevron-right" size={16}/></a>)}</div>
       </article> : <div className="help-empty"><Icon name="search" size={28}/><p>{labels.empty}</p><button className="text-button" type="button" onClick={()=>setQuery('')}>{labels.browse}</button></div>}
-    </div>
+    </div></div>
   </section>;
 }

@@ -3,15 +3,16 @@
      while attachments and current authority remain part of the visible draft. */
   .chat-page .composer.composer-compact {
     display: grid; grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center; gap: 8px; padding: 12px; border-radius: 24px;
+    align-items: center; gap: 6px; padding: 10px; border-radius: 20px;
     border-color: var(--separator); box-shadow: none;
   }
   .composer.composer-compact > .composer-input { grid-column: 1 / -1; grid-row: 1; min-width: 0; }
-  .composer.composer-compact .composer-input textarea { display: block; width: 100%; min-height: 48px; padding: 8px; font-size: var(--type-body, 16px); }
+  .composer.composer-compact .composer-input textarea { display: block; width: 100%; min-height: 48px; field-sizing: content; padding: 8px; font-size: var(--type-body, 16px); }
   /* The editor has one boundary: focus belongs to the enclosing composer,
      not a second bright rectangle inside the text area. */
-  .chat-page .composer.composer-compact:has(textarea:focus-visible) { border-color: var(--muted); }
+  .chat-page .composer.composer-compact:has(textarea:focus-visible) { border-color: color-mix(in srgb, var(--text) 50%, var(--surface-1)); }
   .composer.composer-compact textarea:focus-visible { outline: none; }
+  .chat-page .chat-layout > .chat-readiness { flex-shrink:0; width:min(800px,100%); margin:0 auto 10px; padding:0 4px; color:var(--muted); font-size:var(--type-meta); line-height:1.5; }
   @media (forced-colors: active), (prefers-contrast: more) {
     .chat-page .composer.composer-compact:has(textarea:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; }
   }

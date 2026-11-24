@@ -185,7 +185,7 @@ func (s *Server) resolveJobConfig(w http.ResponseWriter, r *http.Request, req *j
 			config.SystemPrompt += "\n\nAgent instructions (do not grant permissions):\n" + config.Instructions
 		}
 	} else {
-		if _, err := s.registry.GetChatModel(req.Model); err != nil {
+		if _, err := s.localChatMetadata(req.Model); err != nil {
 			writeJobError(w, 422, "model_unavailable", "Choose an installed model in task settings.", false)
 			return config, false
 		}
@@ -246,6 +246,9 @@ func (s *Server) resolveJobConfig(w http.ResponseWriter, r *http.Request, req *j
 			return config, false
 		}
 		config.ToolAdapter = pin
+	}
+	if !s.pinJobModelPolicy(w, r, req, &config) {
+		return config, false
 	}
 	return config, true
 }

@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build darwin
 
 package execution
 
@@ -8,7 +8,7 @@ import (
 	"syscall"
 )
 
-func startOwned(command *exec.Cmd) (func() error, func() error, func(), error) {
+func startOwned(command *exec.Cmd) (func() error, func() error, func() error, error) {
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := command.Start(); err != nil {
 		return nil, nil, nil, err
@@ -39,5 +39,9 @@ func startOwned(command *exec.Cmd) (func() error, func() error, func(), error) {
 		}
 		return err
 	}
-	return stop, wait, func() {}, nil
+	return stop, wait, func() error { return nil }, nil
 }
+
+// Process-group settlement does not prove a setsid/double-fork descendant has
+// stopped. Do not release private-copy ownership on that weaker evidence.
+func nativeCleanupVerified(error) bool { return false }

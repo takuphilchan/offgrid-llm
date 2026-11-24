@@ -225,3 +225,11 @@
     }
   }
 }
+
+@layer workspace {
+ .task-list-item { padding:var(--space-4); border-radius:var(--radius-md); }
+ .task-list-item span { font-size:var(--type-ui); line-height:var(--leading-prose); }
+ .task-list-item :is(small,time) { font-size:var(--type-meta); }
+ .task-list-item:focus-visible { outline:2px solid var(--text); outline-offset:2px; }
+ .task-list li + li { border-block-start:1px solid var(--separator); }
+}

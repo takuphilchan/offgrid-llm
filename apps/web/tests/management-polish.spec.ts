@@ -50,10 +50,17 @@ for (const theme of ['light', 'dark']) test(`composer uses one restrained focus 
   await editor.fill('Keep this draft');
   await expect(editor).toBeFocused();
   await expect(editor).toHaveCSS('outline-style', 'none');
-  expect(await composer.evaluate(el => getComputedStyle(el).borderTopColor)).toBe(await composer.evaluate(el => {
-    const probe = document.createElement('span'); probe.style.color = 'var(--muted)'; el.append(probe);
-    const color = getComputedStyle(probe).color; probe.remove(); return color;
-  }));
+  // Verify the visible boundary, independent of a particular theme token or
+  // Chromium's rgb()/color(srgb) serialization of the selected focus color.
+  expect(await composer.evaluate(el => {
+    const rgb = (color:string) => {const values=(color.match(/[\d.]+/g)??[]).map(Number);return color.startsWith('color(srgb ')?values.slice(0,3):values.slice(0,3).map(n=>n/255);};
+    const luminance = (color:string) => rgb(color).map(n=>n<=.04045?n/12.92:((n+.055)/1.055)**2.4).reduce((total,n,i)=>total+n*[.2126,.7152,.0722][i],0);
+    const probe=document.createElement('span');probe.style.color='var(--surface-1)';el.append(probe);
+    const background=luminance(getComputedStyle(probe).color),border=luminance(getComputedStyle(el).borderTopColor);probe.remove();
+    return (Math.max(background,border)+.05)/(Math.min(background,border)+.05);
+  })).toBeGreaterThanOrEqual(3);
+  await expect(composer).toHaveCSS('border-top-style','solid');
+  await expect(composer).toHaveCSS('border-top-width','1px');
   await page.screenshot({path: `../../build/composer-focus-${theme}-20261106.png`});
   await page.emulateMedia({ forcedColors: 'active' });
   await expect(composer).toHaveCSS('outline-style', 'solid');

@@ -3,15 +3,10 @@ const byId = id => document.getElementById(id);
 const bridge = window.electron;
 let actionPending = false;
 let preferences = bridge?.presentation;
-const welcome = window.OffGridStartupWelcome?.create(byId('startup-welcome'), preferences?.locale, preferences?.startupOverrides);
 let lastState;
-const started = performance.now();
-const clock = setInterval(() => { byId('startup-elapsed').textContent = new Intl.NumberFormat(document.documentElement.lang || 'en', { style:'unit', unit:'second', unitDisplay:'short' }).format(Math.floor((performance.now()-started)/1000)); }, 1000);
-window.addEventListener('pagehide', () => { clearInterval(clock); welcome?.dispose(); }, {once:true});
 const t = key => preferences?.copy?.[key] ?? key;
 function applyPresentation(value) {
   preferences = value;
-  welcome?.setLocale(value.locale,value.startupOverrides);
   document.documentElement.lang = value.locale;
   document.documentElement.dir = value.direction === 'rtl' || value.locale === 'ar' ? 'rtl' : 'ltr';
   document.documentElement.dataset.theme = value.effectiveTheme;
@@ -54,8 +49,6 @@ function render(state) {
   }
   byId('technical-reason').hidden = !state.reason;
   byId('technical-reason').textContent = state.reason || '';
-  welcome?.setPaused(!busy && !ready && !state.autoReconnect);
-  byId('startup-elapsed').hidden = !(busy || ready || state.autoReconnect);
   byId('desktop-version').textContent = state.desktopVersion || '—';
   byId('service-version').textContent = state.version || t(busy ? 'checking' : 'unknown');
   byId('address').textContent = state.url || '—';

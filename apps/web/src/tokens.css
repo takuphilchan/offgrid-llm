@@ -83,6 +83,7 @@
     --motion-distance: 4px;
     --press-distance: 1px;
     --measure-copy: 70ch;
+    --measure-workspace: 72rem;
   }
   :root[lang='ar'] { --leading-ui: 1.65; --leading-prose: 1.8; --tracking-title: 0; --tracking-label: 0; }
 }

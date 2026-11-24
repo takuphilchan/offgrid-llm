@@ -188,11 +188,16 @@ selected-window/managed-browser flow remains a narrower access mode; it is not
 the retired setup page. Web users hand off to the matching installed desktop
 application; a container alone cannot supply a host runtime.
 
-Page addresses retain paths, queries and fragments within the selected site.
+Page addresses retain paths, queries and fragments within the explicitly
+approved sites. The browser access form accepts up to 15 additional public HTTPS
+origins, including resource sites. The native confirmation lists the exact set;
+matching components allow up to eight task-owned tabs. Unknown fields, paths or
+credentials in an additional origin, changed consent scope and unsupported
+expanded scope fail before launch. Legacy services retain their one-site flow.
 For a trusted VPN using fake DNS, Network settings offers explicit trusted-VPN
 routing with a local confirmation. Direct routing remains the default; failures
 never silently broaden network access. TLS checks remain enabled, and redirects
-and resources outside the selected origin stay blocked. Host dispatch results
+and resources outside the approved origin set stay blocked. Host dispatch results
 are journaled before acknowledgment so a lost reply cannot repeat an input.
 
 Native selected-window control is wired through the matching host pack for
@@ -328,3 +333,83 @@ Windows x64 is the only enabled terminal platform in this preview.
 CI preserves
 installer `diagnostics/` and probe evidence on failure, excluding installer
 binaries and installed application directories.
+
+## Trusted workspace recovery bridge
+
+The optional `workspaceRecoveryProtocol: 1` bridge exposes only backup/verify/restore
+operation and encryption choices, status, cancellation, and explicit original-workspace
+resume. It accepts no renderer-supplied paths, commands, credentials or service URLs.
+The main process requires a current administrator and a ready owned service with
+matching workspace/build identity. External services are not stopped or assigned
+guessed local data paths. Native file dialogs select new destinations and key files;
+passphrases use the existing isolated host dialog, never the service renderer.
+
+The host pins selected file/directory identities and the bundled executable digest,
+rechecks authority across asynchronous selection/confirmation, closes companion and
+terminal admission, and stops the existing computer/execution/terminal owners. The
+owned service's private stdin EOF then requests its existing application drain.
+Only an acknowledged zero exit permits the fixed `workspace --desktop-stdio` helper.
+Failed or timed-out drain is not followed by maintenance. The helper uses bounded
+private frames and reports compact verified counts, publication state and necessary
+retained-path diagnostics; complete manifests and raw diagnostics stay out of the UI.
+
+Cancel, navigation, session changes, lock/suspend and quit revoke pending authority.
+Cancellation waits for the helper's result and exit; an unconfirmed child stays owned
+and prevents a successful quit/resume claim. Restored data is published to a new
+directory and is never activated. Explicit Resume starts only the original data
+directory and refuses an occupied service address. Models and configuration outside
+the workspace need separate backups. Filesystem identity checks do not claim protection
+against every check-to-syscall race by a hostile process running as the same OS user.
+
+`npm --prefix apps/desktop test` runs isolated host contracts. A real production-binary
+service-to-maintenance fixture can also be run without touching an installed workspace:
+
+```powershell
+go build -ldflags '-X main.Version=desktop-recovery-fixture' -o build/qualification-tools/offgrid-maintenance.exe ./cmd/offgrid
+$env:OFFGRID_RECOVERY_TEST_BINARY = (Resolve-Path build/qualification-tools/offgrid-maintenance.exe).Path
+node --test apps/desktop/test/workspace-maintenance-integration.test.js
+Remove-Item Env:OFFGRID_RECOVERY_TEST_BINARY
+```
+
+That fixture supplies native dialog answers and uses only disposable data/configuration
+and a private loopback service. The administrator controls are under Settings → Storage
+and backup (`#/settings/recovery`). Their status and explicit Resume remain available
+while maintenance stops the owned service; an actual authentication failure still
+revokes access. Browser and externally managed editions show host-local guidance.
+The 49 shared renderer/host messages have source translations for all 29 supported
+locales; native linguistic and participant qualification remains separate.
+
+The full hidden Electron composition requires Node 24 and uses the built renderer, production preload,
+real host secret/confirmation dialogs and the production Go binary. Build the web
+renderer first, then run with the same explicitly built fixture binary above:
+
+```powershell
+npm --prefix apps/web run build
+$env:OFFGRID_RECOVERY_TEST_BINARY = (Resolve-Path build/qualification-tools/offgrid-maintenance.exe).Path
+$env:OFFGRID_RECOVERY_ELECTRON_TEST = '1'
+node --test apps/desktop/test/workspace-recovery-electron.test.js
+Remove-Item Env:OFFGRID_RECOVERY_TEST_BINARY,Env:OFFGRID_RECOVERY_ELECTRON_TEST
+```
+
+This opts into hidden native Electron windows, a 32 MiB random disposable workspace,
+private loopback service and private child pipes. It never reads the installed
+profile, registers shortcuts/protocols or opens personal applications. Within recovery
+dialogs, only native file-picker answers are injected. Unrelated platform IPC uses
+minimal fixture responses, and computer/execution/terminal owners have no active
+children; the Go service, drain and archive operations are real. On Windows a hidden fixture helper holds an
+extracted file without delete sharing to exercise a real retained-stage failure;
+it releases its own handle before test cleanup. Secret-dialog screenshots, traces
+and clipboard collection are disabled. After child drain, a bounded scan checks
+all disposable service/Chromium files for the test passphrase as UTF-8, UTF-16LE
+and UTF-16BE before deletion.
+
+The journey seeds historical running, dispatched and uncertain task snapshots;
+the real service imports them without replay and keeps their interrupted/uncertain
+state through explicit restarts. A read-only SQLite check inspects the disconnected
+restored copy, including saved intents and an unchanged effect sentinel.
+The journey covers backup, wrong passphrase, corrupt ciphertext, checked restore,
+active cancellation, a competing destination, retained plaintext reporting and
+explicit original-workspace resume. The Windows retention case does not run on
+other systems. Native file-picker interaction, real screen-reader/participant
+usability, installed Windows/Linux/macOS editions and physical crash recovery
+remain open in [the encrypted-backup change](../../openspec/changes/encrypted-workspace-backups/tasks.md).

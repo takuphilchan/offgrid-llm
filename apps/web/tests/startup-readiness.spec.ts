@@ -1,8 +1,8 @@
 import {expect,test,type Page} from '@playwright/test';
 import {craftFixture} from './helpers/craft-fixture';
 import {mkdirSync} from 'node:fs';
-import {createRequire} from 'node:module';
-const {messages:greetings}=createRequire(import.meta.url)('../../desktop/startup-welcome.js') as {messages:Record<string,string[]>};
+import {startupCopy} from '../src/lib/workspace-startup';
+import {languageRegistry,type LanguageCode} from '../src/i18n/language';
 
 function latch(){let release!:()=>void;const promise=new Promise<void>(resolve=>{release=resolve;});return {promise,release};}
 async function boot(page:Page,theme='light',reduced=false){
@@ -66,35 +66,46 @@ test('capability discovery finishes before Chat is revealed',async({page})=>{
   await expect(page.locator('.composer textarea')).toBeEnabled();
 });
 
-for(const theme of ['light','dark']) for(const reduce of ['none','app','system']) test(`startup motion, live elapsed time and recovery ${theme} ${reduce}`,async({page})=>{
+for(const theme of ['light','dark']) for(const reduce of ['none','app','system']) test(`compact startup preserves the mark and honors motion preferences ${theme} ${reduce}`,async({page})=>{
   await boot(page,theme,reduce==='app');await page.emulateMedia({reducedMotion:reduce==='system'?'reduce':'no-preference'});
   await page.route('**/v1/models',()=>{});
   await page.goto('/ui/#/chat');const splash=page.locator('#workspace-startup');
-  await expect(splash).toBeVisible();
-  await expect(splash.locator('.startup-brand svg path').first()).toHaveCSS('animation-name',reduce==='none'?'startup-layer-top':'none');
-  await expect(splash.locator('.startup-spinner')).toHaveCount(0);
-  const initialGreeting=await splash.locator('.startup-welcome').textContent();
-  expect(greetings.en).toContain(initialGreeting);
+  await expect(splash).toBeVisible();const mark=splash.locator('.startup-brand svg');
+  await expect(mark).toHaveCSS('animation-name',reduce==='none'?'startup-breathe':'none');
+  await expect(mark).toHaveCSS('width','38px');
+  for(const path of await mark.locator('path').all())await expect(path).toHaveCSS('transform','none');
+  await expect(splash.locator('.startup-welcome,.startup-elapsed')).toHaveCount(0);
+  await expect(splash.locator('.startup-stage')).toHaveText('Opening your workspace');
+  await expect(splash.locator('button')).toBeHidden();
   if(reduce==='none') {
-    const mark=splash.locator('.startup-brand svg path').first();
-    const first=await mark.evaluate(el=>getComputedStyle(el).transform);
-    await expect.poll(()=>mark.evaluate(el=>getComputedStyle(el).transform)).not.toBe(first);
+    const opacity=await mark.evaluate(el=>getComputedStyle(el).opacity);
+    await expect.poll(()=>mark.evaluate(el=>getComputedStyle(el).opacity)).not.toBe(opacity);
   }
-  const time=await splash.locator('.startup-elapsed').textContent();
-  await expect(splash.locator('.startup-elapsed')).not.toHaveText(time!);
-  await expect.poll(()=>splash.locator('.startup-welcome').textContent(),{timeout:15000}).not.toBe(initialGreeting);
-  expect(greetings.en).toContain(await splash.locator('.startup-welcome').textContent());
-  if(reduce==='none') await expect(splash.locator('.startup-welcome')).toHaveCSS('transition-duration','0.2s, 0.2s');
-  else expect(await splash.locator('.startup-welcome').evaluate(el=>parseFloat(getComputedStyle(el).transitionDuration))).toBeLessThanOrEqual(.00001);
+  const bounds=await splash.locator('.startup-content').boundingBox();expect(bounds!.height).toBeLessThan(100);
   mkdirSync('../../build/ui-craft/startup',{recursive:true});
-  await page.screenshot({path:`../../build/ui-craft/startup/${theme}-${reduce}.png`});
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:`../../build/ui-craft/startup/compact-${theme}-${reduce}.png`});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth&&document.documentElement.scrollHeight<=innerHeight)).toBe(true);
+});
+
+test('access failure keeps the same entrance and Retry reaches the ready workspace',async({page})=>{
+  await boot(page);let failing=true;
+  await page.route('**/v1/users/me',async route=>failing?route.fulfill({status:503,json:{error:{message:'The workspace is temporarily unavailable.'}}}):route.fallback());
+  await page.goto('/ui/#/home');const splash=page.locator('#workspace-startup');
+  await expect(splash).toHaveAttribute('data-startup-state','recovery');
+  await expect(splash.locator('.startup-brand svg')).toHaveCSS('width','38px');
+  await expect(splash.locator('.startup-brand svg')).toHaveCSS('animation-name','none');
+  await expect(splash.locator('.startup-message')).toHaveText('The workspace is temporarily unavailable.');
+  await expect(page.locator('#root')).toHaveAttribute('inert','');
+  failing=false;await splash.getByRole('button',{name:'Retry connection',exact:true}).click();
+  await expect(splash).toHaveCount(0);await expect(page.locator('#root')).not.toHaveAttribute('inert');
 });
 
 test('a failed application bundle still has a local startup surface and a retry',async({page})=>{
   await boot(page);
-  await page.route('**/src/main.tsx',route=>route.abort());
-  await page.route('**/ui/assets/index-*.js',route=>route.abort());
+  // Vite may retry an entry with a cache-busting query after a source update.
+  // Keep the simulated bundle outage in force for those requests as well.
+  await page.route(/\/src\/main\.tsx(?:\?.*)?$/,route=>route.abort());
+  await page.route(/\/ui\/assets\/index-[^/]+\.js(?:\?.*)?$/,route=>route.abort());
   await page.clock.install();await page.goto('/ui/#/home');
   await expect(page.locator('#workspace-startup')).toBeVisible();
   await page.clock.fastForward(30001);
@@ -102,26 +113,27 @@ test('a failed application bundle still has a local startup surface and a retry'
   await expect(page.locator('#root')).toHaveAttribute('inert','');
 });
 
-test('all 29 startup languages rotate without overflow on narrow screens',async({page})=>{
-  await boot(page,'light',true);await page.setViewportSize({width:360,height:740});
-  // Isolate the local startup surface from network deadlines while advancing
-  // several minutes of greeting rotation. Recovery after API timeouts is tested above.
-  await page.route('**/src/main.tsx',route=>route.abort());
-  await page.route('**/ui/assets/index-*.js',route=>route.abort());
+test('all 29 startup languages fit narrow and short screens without a moving layout',async({page})=>{
+  await boot(page,'light',true);
+  await page.route(/\/src\/main\.tsx(?:\?.*)?$/,route=>route.abort());await page.route(/\/ui\/assets\/index-[^/]+\.js(?:\?.*)?$/,route=>route.abort());
   await page.clock.install();await page.goto('/ui/#/chat');
-  const welcome=page.locator('.startup-welcome');await expect(welcome).toBeVisible();
-  for(const [locale,copy] of Object.entries(greetings)) {
-    await page.evaluate(locale=>{
-      document.documentElement.lang=locale;document.documentElement.dir=['ar','ur','fa','he'].includes(locale)?'rtl':'ltr';
-      window.dispatchEvent(new CustomEvent('offgrid-workspace-startup',{detail:{locale}}));
-    },locale);
-    await expect(welcome).toHaveText(copy[0]);
-    for(let i=1;i<3;i++) {
-      await page.clock.fastForward(5200);await expect(welcome).toHaveText(copy[i]);
-      expect(await welcome.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+  const splash=page.locator('#workspace-startup');
+  for(const [locale,definition] of Object.entries(languageRegistry)) {
+    const copy=startupCopy(locale as LanguageCode);
+    await page.evaluate(({locale,copy,direction})=>{
+      document.documentElement.dir=direction;
+      window.dispatchEvent(new CustomEvent('offgrid-workspace-startup',{detail:{locale,copy}}));
+    },{locale,copy,direction:definition.direction});
+    for(const size of [{width:360,height:740},{width:480,height:220}]) {
+      await page.setViewportSize(size);await expect(splash.locator('.startup-stage')).toHaveText(copy.opening);
+      expect(await splash.evaluate(el=>el.scrollWidth<=el.clientWidth&&el.scrollHeight<=el.clientHeight)).toBe(true);
     }
-    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   }
+  await page.clock.fastForward(30001);
+  await expect(splash.locator('.startup-stage')).toHaveText(startupCopy('fil').reconnecting);
+  await expect(splash.getByRole('button')).toBeVisible();
+  await page.emulateMedia({forcedColors:'active'});
+  await page.keyboard.press('Tab');await expect(splash.getByRole('button')).toBeFocused();
 });
 
 test('pointer scrolling never outlines a message; transcript keyboard navigation stays visible',async({page})=>{

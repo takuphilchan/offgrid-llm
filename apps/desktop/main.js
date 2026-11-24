@@ -10,6 +10,7 @@ const { normalize: normalizePresentation, readCopy, languages, catalog: themeCat
 const {localizedCopy,overrides:localeOverrides}=require('./locale-messages');
 const { createTrayFeedback } = require('./tray-feedback');
 const { ComputerRuntime, parseComputerLink } = require('./computer-runtime');
+const { computerPrincipal } = require('./computer-browser-control');
 const { createApplicationLauncher } = require('./application-launcher');
 const { ExecutionRuntime } = require('./execution-runtime');
 const { FolderTrust } = require('./folder-trust');
@@ -43,6 +44,7 @@ const binaryRoot = app.isPackaged ? path.join(process.resourcesPath, 'bin') : pa
 const binaryName = process.platform === 'win32' ? 'offgrid.exe' : process.platform === 'darwin' ? 'offgrid-' + (process.arch === 'arm64' ? 'arm64' : 'amd64') : 'offgrid';
 const workspace = root => ({ config: root, models: path.join(root, 'models'), data: path.join(root, 'data') });
 const runtime = new DesktopRuntime({
+  ownedStdio: true,
   url: 'http://127.0.0.1:' + port, version: app.getVersion(), binary: path.join(binaryRoot, binaryName), uiDir,
   workspace: workspace(configRoot), isolatedWorkspace: workspace(path.join(configRoot, 'desktop-workspace')),
   attachments: attachmentStore(configRoot),
@@ -70,7 +72,11 @@ let computerCopy;
 const computerText = () => localizedCopy(computerCopy??{},presentation.locale,'i18n/computer-experience:copy');
 const computer = new ComputerRuntime({
   root: computerRoot, directory:path.join(configRoot,'computer'), fork:(...args)=>utilityProcess.fork(...args),
-  service:()=> { if(runtime.state.state!=='ready') throw Error('service_unavailable'); return runtime.url; },
+  browserWorkspaceRoots:()=>{
+    if(execution.pending||execution.child&&!execution.resource||execution.state==='uncertain')throw Error('execution_scope_unavailable');
+    return execution.resource?[execution.resource.root]:[];
+  },
+  service:()=> { if(runtime.state.state!=='ready'||runtime.maintenanceAdmissionHold) throw Error('service_unavailable'); return runtime.url; },
   identity: async url => {
     const response=await fetch(url+'/api/v2/system',{redirect:'error',signal:AbortSignal.timeout(5000)});
     if(!response.ok) throw Error('service_unavailable'); return response.json();
@@ -92,16 +98,12 @@ const computer = new ComputerRuntime({
   principal: async service => {
     if(!mainWindow||mainWindow.isDestroyed()||!isTrustedPage(mainWindow.webContents.getURL(),service,LOADING_URL))throw Error('computer_scope_violation');
     const response=await mainWindow.webContents.session.fetch(service+'/v1/users/me',{credentials:'include',redirect:'error',signal:AbortSignal.timeout(5000)});
-    if(!response.ok)throw Error('computer_scope_violation');
-    const account=await response.json();
-    if(account.auth_required===false)return 'local-admin';
-    if(account.auth_required!==true||account.authenticated!==true||account.user?.role!=='admin')throw Error('computer_scope_violation');
-    return account.user.id;
+    return computerPrincipal(response);
   },
-  confirm: async (origin, service, networkMode, approvalMode) => {
+  confirm: async (origin, service, networkMode, approvalMode, scope) => {
     const text=computerText();
     const result=await showAppMessage(mainWindow,{type:'question',title:text.consentTitle,message:text.consentTitle,
-      detail:`${origin}\n${service}\n\n${copy('approvalPolicy')}: ${copy(({ask_every_time:'askEveryTime',scoped_changes:'scopedChanges',full_task:'fullTask'})[approvalMode]??'askEveryTime')}\n\n${text.consentBody}${networkMode==='trusted-vpn'?'\n\n'+text.networkWarning:''}`,buttons:[text.cancel,text.allow],defaultId:0,cancelId:0,noLink:true});
+      detail:`${origin}\n${service}\n\n${text.website}\n${scope.origins.join('\n')}\n\n${copy('approvalPolicy')}: ${copy(({ask_every_time:'askEveryTime',scoped_changes:'scopedChanges',full_task:'fullTask'})[approvalMode]??'askEveryTime')}\n\n${scope.maxTabs===8?text.workspaceConsent:text.consentBody}${networkMode==='trusted-vpn'?'\n\n'+text.networkWarning:''}`,buttons:[text.cancel,text.allow],defaultId:0,cancelId:0,noLink:true});
     return result.response===1;
   }
 });
@@ -115,8 +117,8 @@ async function executionFetch(service,endpoint,method='GET'){
   if(!response.ok)throw Error('execution_service_unavailable');return response.json();
 }
 const folderTrust=new FolderTrust(path.join(configRoot,'folder-trust'),safeStorage);
-const execution=new ExecutionRuntime({trust:folderTrust,root:executionRoot,directory:path.join(configRoot,'execution-hosts'),version:app.getVersion(),spawn,
-  service:()=>{if(runtime.state.state!=='ready')throw Error('execution_service_unavailable');return runtime.url;},
+const execution=new ExecutionRuntime({trust:folderTrust,root:executionRoot,directory:path.join(configRoot,'execution-hosts'),protectedDirectories:[path.join(configRoot,'computer')],version:app.getVersion(),spawn,
+  service:()=>{if(runtime.state.state!=='ready'||runtime.maintenanceAdmissionHold)throw Error('execution_service_unavailable');return runtime.url;},
   identity:service=>executionFetch(service,'/api/v2/system'),
   principal:async service=>{const account=await executionFetch(service,'/v1/users/me');if(account.auth_required===false)return 'local-admin';if(account.auth_required===true&&account.authenticated===true&&typeof account.user?.id==='string'&&account.user.id)return account.user.id;throw Error('execution_scope_changed');},
   pairing:service=>executionFetch(service,'/api/v2/execution/pairing','POST'),
@@ -238,7 +240,7 @@ async function createMainWindow() {
     ...require('./branding.cjs').windowChrome(process.platform, effectiveTheme(), terminalPalette()),
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js'), backgroundThrottling: true, spellcheck: true, additionalArguments: ['--offgrid-presentation=' + Buffer.from(JSON.stringify(presentationSnapshot())).toString('base64')] }
   });
-  terminal = require('./terminal-dock').createTerminalDock({electron:require('electron'),showMessage:showAppMessage,window:mainWindow,host:app.isPackaged?path.join(process.resourcesPath,'terminal-runtime','offgrid-terminal-host.exe'):path.join(__dirname,'../../build/terminal-runtime/win-x64/offgrid-terminal-host.exe'),cli:path.join(binaryRoot,binaryName),service:()=>runtime.url,presentation:()=>({theme:effectiveTheme(),locale:presentation.locale,palette:terminalPalette(),reduceMotion:presentation.appearance?.reduceMotion===true,translations:localeOverrides[presentation.locale]?.['desktop/terminal']??{}})});
+  terminal = require('./terminal-dock').createTerminalDock({admit:()=>!runtime.maintenanceAdmissionHold,electron:require('electron'),showMessage:showAppMessage,window:mainWindow,host:app.isPackaged?path.join(process.resourcesPath,'terminal-runtime','offgrid-terminal-host.exe'):path.join(__dirname,'../../build/terminal-runtime/win-x64/offgrid-terminal-host.exe'),cli:path.join(binaryRoot,binaryName),service:()=>runtime.url,presentation:()=>({theme:effectiveTheme(),locale:presentation.locale,palette:terminalPalette(),reduceMotion:presentation.appearance?.reduceMotion===true,translations:localeOverrides[presentation.locale]?.['desktop/terminal']??{}})});
   if (state.isMaximized) mainWindow.maximize();
   // A first launch can spend several seconds in Windows reputation scanning
   // and Chromium initialization. Put a real native surface on screen as soon
@@ -275,11 +277,14 @@ async function createMainWindow() {
     if (!mainWindow.webContents.getURL().startsWith(LOADING_URL)) void mainWindow.loadFile(path.join(__dirname, 'loading.html'));
   });
   mainWindow.webContents.on('render-process-gone', () => {
+    recovery.invalidate();
     void computer.stop();
     void execution.stop();
     runtime.publish({ state: 'error', reason: 'The workspace window stopped responding. Retry to reopen it; the service and saved work have not been stopped.' });
     void mainWindow.loadFile(path.join(__dirname, 'loading.html'));
   });
+  mainWindow.webContents.on('did-start-navigation',(_event,_url,isInPlace,isMainFrame)=>{if(isMainFrame&&!isInPlace)recovery.invalidate();});
+  mainWindow.on('closed',()=>recovery.invalidate());
   for (const event of ['resize', 'move', 'maximize', 'unmaximize']) {
     mainWindow.on(event, () => { clearTimeout(saveTimer); saveTimer = setTimeout(saveWindowState, 500); });
   }
@@ -352,12 +357,13 @@ function handleTrustedIPC(channel, handler, startupOnly = false) {
     if (!isTrustedSender(event, mainWindow?.webContents, runtime.url, LOADING_URL) ||
         (startupOnly && event.senderFrame.url !== LOADING_URL)) throw new Error('Untrusted desktop IPC sender');
     const loading = event.senderFrame.url === LOADING_URL;
-    if (!workspaceChannelAllowed(channel, runtime.state.state === 'ready', loading)) throw new Error('Desktop workspace access is not ready');
+    if (!workspaceChannelAllowed(channel, runtime.state.state === 'ready'&&!runtime.maintenanceAdmissionHold, loading)) throw new Error('Desktop workspace access is not ready');
     return handler(...args);
   });
 }
 
 handleTrustedIPC('get-api-url', () => runtime.url);
+const recovery=require('./workspace-maintenance-host').createWorkspaceRecovery({runtime,dialog,window:()=>mainWindow,showMessage:showAppMessage,locale:()=>presentation.locale,computer,execution,terminal:()=>terminal,handle:handleTrustedIPC});
 // Only the isolated preload caption exposes these buttons. No contextBridge
 // window-control method is provided to service content.
 handleTrustedIPC('window-chrome-action', action => require('./branding.cjs').controlWindow(mainWindow, action, commandWindow.snapshot().mode === 'compact'));
@@ -390,7 +396,9 @@ handleTrustedIPC('get-backend-info', () => runtime.snapshot());
 handleTrustedIPC('execution-start', request=>execution.start(request));
 handleTrustedIPC('execution-status', ()=>execution.status());
 handleTrustedIPC('execution-stop', ()=>execution.stop());
-handleTrustedIPC('computer-status', () => ({...computer.state, active:!!computer.child||!!computer.pending, installed:fs.existsSync(path.join(computerRoot,'manifest.json'))}));
+handleTrustedIPC('computer-status', () => ({...computer.state,...computer.browserControl.status(), active:!!computer.child||!!computer.pending, installed:fs.existsSync(path.join(computerRoot,'manifest.json'))}));
+handleTrustedIPC('computer-takeover-access', request => computer.browserControl.takeover(request));
+handleTrustedIPC('computer-browser-resume', request => computer.browserControl.resume(request));
 handleTrustedIPC('computer-start', request => {
   const upload=request?.uploadGrant ? uploadGrants.get(request.uploadGrant) : undefined;
   if(request?.uploadGrant && !upload)throw Error('computer_upload_invalid');
@@ -477,12 +485,13 @@ app.whenReady().then(async () => {
   if (!customHome && !installerTest) commandWindow.configure(shortcut);
   // Qualification/alternate profiles must not change the user's default handler.
   if(app.isPackaged && !installerTest && !customHome) app.setAsDefaultProtocolClient('offgrid');
-  powerMonitor.on('lock-screen',()=>{void computer.stop();void execution.stop();});
-  powerMonitor.on('suspend',()=>{void computer.stop();void execution.stop();});
+  powerMonitor.on('lock-screen',()=>{recovery.invalidate();void computer.stop();void execution.stop();});
+  powerMonitor.on('suspend',()=>{recovery.invalidate();void computer.stop();void execution.stop();});
   // Cookie removal/replacement includes logout and account changes. Do not let
   // an old actor's host permission survive until a renderer happens to refresh.
   mainWindow.webContents.session.cookies.on('changed',(_event,cookie)=>{
-    if(cookie.name==='session'&&(computer.desktopAccess||computer.pending))void computer.stop();
+    if(cookie.name==='session')recovery.invalidate();
+    if(cookie.name==='session'&&(computer.desktopAccess||computer.pending||computer.browserControl.context))void computer.stop();
     if(cookie.name==='session')void execution.stop();
   });
   mainWindow.on('unresponsive', () => { void computer.stop();void execution.stop(); });
@@ -507,7 +516,7 @@ app.on('before-quit', event => {
   void (async () => {
     await require('./shutdown').shutdownDesktop({
       save: async () => { await saveWindowState(); await presentationQueue; await commandPreferenceQueue.catch(() => {}); },
-      computer, execution, terminal, runtime,
+      computer, execution, terminal, runtime, recovery,
     });
     tray?.destroy();
     shutdownComplete = true;

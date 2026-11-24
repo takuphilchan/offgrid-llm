@@ -39,7 +39,7 @@ func readOnlyBuiltin(d capabilities.Descriptor) bool {
 			return true
 		}
 	}
-	if capabilities.TrustedNativeRead(d) {
+	if capabilities.TrustedNativeRead(d) || capabilities.TrustedBrowserRead(d) {
 		return true
 	}
 	if d.Source != "builtin" || d.Namespace != "tools" || d.Kind != capabilities.Read {

@@ -53,11 +53,12 @@
   :is(.history-row, .task-history-row):hover .history-item-menu, .history-item-menu:focus-visible { opacity: 1; }
   .history-item-actions p { margin: 8px 0 0; }
   .utility-action-panel { padding: 4px; scrollbar-gutter: auto; border-radius: 8px; }
-  .utility-action-panel .utility-popover-content { gap: 2px; }
-  .utility-action-panel button { width: 100%; min-height: 34px; padding: 6px 10px; line-height: 20px; font-size: var(--type-ui); font-weight: var(--weight-regular); justify-content: flex-start; text-align: start; background: transparent; border: 0; border-radius: 5px; }
-  .utility-action-panel button:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
-  .utility-action-panel p { padding: 6px; font-size: 13px; line-height: 1.5; }
-  @media (pointer: coarse) { .utility-action-panel button { min-height: 44px; } }
+  .utility-action-panel > .utility-popover-content { gap: 2px; }
+  /* A compact menu owns its immediate actions, not forms in nested popovers. */
+  :is(.utility-action-panel > .utility-popover-content > button, .utility-action-panel > .utility-popover-content > .utility-popover > button) { width: 100%; min-height: 34px; padding: 6px 10px; line-height: 20px; font-size: var(--type-ui); font-weight: var(--weight-regular); justify-content: flex-start; text-align: start; background: transparent; border: 0; border-radius: 5px; }
+  :is(.utility-action-panel > .utility-popover-content > button, .utility-action-panel > .utility-popover-content > .utility-popover > button):hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
+  .utility-action-panel > .utility-popover-content > p { padding: 6px; font-size: 13px; line-height: 1.5; }
+  @media (pointer: coarse) { :is(.utility-action-panel > .utility-popover-content > button, .utility-action-panel > .utility-popover-content > .utility-popover > button) { min-height: 44px; } }
   .history-work-choice { border: 0; border-block-start: 0; padding: 16px 0 0; margin: 16px 0; min-width: 0; }
   .history-work-choice legend { font-weight: var(--weight-medium); padding: 0 8px 0 0; }
   .history-work-choice label { display: flex; align-items: start; gap: 10px; padding-block: 8px; font-size: 14px; cursor: pointer; }

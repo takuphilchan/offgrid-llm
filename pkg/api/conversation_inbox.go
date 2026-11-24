@@ -5,6 +5,8 @@ import "time"
 // Input is accepted independently of inference readiness. A missing focus uses
 // the conversation's current focus; an explicit empty focus is unbound input.
 type ConversationInboxInput struct {
+	ResponseProfile     string                           `json:"response_profile,omitempty"`
+	MaxTokens           int                              `json:"max_tokens,omitempty"`
 	KnowledgeSelections []ConversationKnowledgeSelection `json:"knowledge_selections,omitempty"`
 	UseKnowledge        bool                             `json:"use_knowledge,omitempty"`
 	SourceSession       string                           `json:"source_session,omitempty"`

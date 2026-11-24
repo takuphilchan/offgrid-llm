@@ -51,6 +51,60 @@ func TestComputerReceiptRecoversLostAcknowledgmentAfterRestart(t *testing.T) {
 	}
 }
 
+func TestBrowserReceiptRecoversDispatchWithoutInventingVerification(t *testing.T) {
+	dir := t.TempDir()
+	m, task := receiptFixture(t, dir)
+	args := json.RawMessage(`{"observation_id":"seen","element":"1"}`)
+	_, err := m.updateTask(task.ID, func(task *Task) error {
+		task.Config.ComputerDriver = "browser"
+		task.Checkpoint.Calls[0].Function = api.FunctionCall{Name: "browser_click", Arguments: string(args)}
+		task.Checkpoint.ExecutingCapability = &capabilities.Descriptor{Name: "browser_click", Namespace: "computer", Source: "local-companion", Kind: capabilities.Computer, Risk: capabilities.RiskHigh, Revision: capabilities.BrowserEffectsRevision}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := `{"effect_status":"dispatched","dispatched":true,"verified":false,"observation_status":"unavailable"}`
+	if err := m.RecordComputerReceipt(task.ID, "alice", "session", "call", "browser_click", args, result); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := NewManagerWithPersistence(nil, nil, nil, dir).GetTask(task.ID)
+	if got.Status != TaskInterrupted || len(got.Steps) != 1 || got.Steps[0].ToolResult != result || got.Checkpoint.ExecutingCall != "" || got.Result != "" {
+		t.Fatalf("unsafe recovery: %+v", got)
+	}
+	if recoverComputerReceipt(got) {
+		t.Fatal("receipt applied twice")
+	}
+}
+
+func TestBrowserReadIntentSurvivesRestartWithoutMutationUncertainty(t *testing.T) {
+	for _, revision := range []string{"", capabilities.BrowserEffectsRevision} {
+		dir := t.TempDir()
+		m, task := receiptFixture(t, dir)
+		_, err := m.updateTask(task.ID, func(task *Task) error {
+			task.Config.ComputerDriver = "browser"
+			cp := task.Checkpoint
+			cp.Calls[0].Function = api.FunctionCall{Name: "browser_observe", Arguments: `{}`}
+			cp.ExecutingCapability = &capabilities.Descriptor{Name: "browser_observe", Namespace: "computer", Source: "local-companion", Kind: capabilities.Computer, Risk: capabilities.RiskLow, Revision: revision}
+			if revision != "" {
+				cp.ReadOnlyCall = "call"
+				cp.ReadOnlyCapability = cp.ExecutingCapability
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := NewManagerWithPersistence(nil, nil, nil, dir).GetTask(task.ID)
+		if revision == "" && got.Status != TaskUncertain {
+			t.Fatal("legacy read reinterpreted")
+		}
+		if revision != "" && (got.Status != TaskInterrupted || got.Checkpoint.ExecutingCall != "") {
+			t.Fatal("reviewed read needs mutation reconciliation")
+		}
+	}
+}
+
 func TestComputerReceiptRejectsMismatchesAndDoesNotInferSuccess(t *testing.T) {
 	for _, change := range []string{"actor", "session", "call", "tool", "arguments", "revision", "remote", "conflict", "invalid-json"} {
 		t.Run(change, func(t *testing.T) {

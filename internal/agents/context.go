@@ -47,7 +47,7 @@ func (r *Runner) prepareContextWithContext(ctx context.Context, task *Task, tool
 		window = r.ContextWindow(task)
 	}
 	if task.Checkpoint.InputBudget != nil {
-		window = task.Checkpoint.InputBudget.Window
+		window = task.Checkpoint.InputBudget.modelWindow()
 	}
 	if window <= 0 {
 		window = 4096

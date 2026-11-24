@@ -108,6 +108,40 @@ test('library pagination bounds mounted cards and search resets the page',async(
  await page.locator('#knowledge-document-search').fill('');await expect(page.locator('.resource-card').first()).toContainText('Record 00.txt');
 });
 
+for(const locale of ['en','ar'] as const)test(`returning to library restores the filtered page and selection: ${locale}`,async({page})=>{
+ await setup(page,locale,locale==='ar'?'dark':'light');
+ const writes:string[]=[];page.on('request',request=>{if(request.method()!=='GET')writes.push(new URL(request.url()).pathname);});
+ let count=65;
+ await page.route('**/v1/documents',r=>r.fulfill({json:{documents:Array.from({length:count},(_,i)=>({id:`record-${i}`,name:`Record ${String(i).padStart(2,'0')}.txt`,size:128,index_status:'ready',source_retained:true,collection_id:source.id,collection_revision:1}))}}));
+ await page.reload();await expect(page.locator('.resource-card')).toHaveCount(30);
+ await page.locator('#knowledge-document-search').fill('Record');
+ const pagination=page.locator('.library-pagination'),copy=documentReader(locale);
+ await pagination.getByRole('button',{name:copy.next,exact:true}).click();
+ await pagination.getByRole('button',{name:copy.next,exact:true}).click();
+ await expect(page.locator('.resource-card')).toHaveCount(5);
+ await page.locator('.resource-card').first().getByRole('checkbox').check();
+ await page.evaluate(()=>location.hash='#/chat/new');
+ await page.locator('.composer textarea').fill('Keep the document list context');
+ await page.evaluate(()=>location.hash='#/knowledge');
+ await expect(page.locator('#knowledge-document-search')).toHaveValue('Record');
+ await expect(page.locator('.resource-card').first()).toContainText('Record 60.txt');
+ await expect(page.locator('.resource-card').first().getByRole('checkbox')).toBeChecked();
+ // A shorter fresh list must still show a valid page, with no empty phantom page.
+ await page.evaluate(()=>location.hash='#/chat');count=35;
+ await page.evaluate(()=>location.hash='#/knowledge');
+ await expect(page.locator('.resource-card').first()).toContainText('Record 30.txt');
+ await expect(page.locator('.resource-card')).toHaveCount(5);
+ await expect(pagination.getByRole('button',{name:copy.next,exact:true})).toBeDisabled();
+ await page.locator('#knowledge-document-search').fill('Record 0');
+ await expect(page.locator('.resource-card').first()).toContainText('Record 00.txt');
+ await page.locator('#knowledge-document-search').fill('Record');
+ await expect(page.locator('.resource-card')).toHaveCount(30);
+ await expect(page.locator('.resource-card').first()).toContainText('Record 00.txt');
+ await page.evaluate(()=>location.hash='#/chat');
+ await expect(page.locator('.composer textarea')).toHaveValue('Keep the document list context');
+ expect(writes).toEqual([]);
+});
+
 test('member search is bounded and preserves unseen roles at 200% text size',async({page})=>{
  const state=await setup(page,'en','dark');await page.route('**/v1/users',r=>r.fulfill({json:{users:Array.from({length:100},(_,i)=>({id:`person-${i}`,username:`Person ${i}`,role:'user'}))}}));
  await page.setViewportSize({width:640,height:850});await page.evaluate(()=>{document.documentElement.style.fontSize='200%';});

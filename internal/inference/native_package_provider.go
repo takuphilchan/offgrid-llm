@@ -41,6 +41,8 @@ func (w TrustedNativeWorker) dependencyIdentity() (string, error) {
 		required = []string{"mlx", "mlx-lm", "transformers"}
 	case ProviderTransformers:
 		required = []string{"torch", "transformers", "safetensors"}
+	case ProviderONNX:
+		required = []string{"onnxruntime", "onnx", "numpy", "tokenizers"}
 	default:
 		return "", errors.New("unsupported native worker dependencies")
 	}

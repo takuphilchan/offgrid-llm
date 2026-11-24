@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "OffGrid isolated attachment network probe",
+  "version": "0.0.1",
+  "permissions": ["debugger", "declarativeNetRequest"],
+  "host_permissions": ["https://*.offgrid-fixture.example/*"],
+  "background": {"service_worker": "worker.js"}
+}

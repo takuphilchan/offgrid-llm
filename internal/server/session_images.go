@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Server) sessionImageReady(model string) error {
-	metadata, err := s.registry.GetChatModel(model)
+	metadata, err := s.localChatMetadata(model)
 	if err == nil && metadata.ProjectorPath != "" {
 		if info, err := os.Stat(metadata.ProjectorPath); err == nil && info.Mode().IsRegular() && info.Size() > 0 {
 			return nil

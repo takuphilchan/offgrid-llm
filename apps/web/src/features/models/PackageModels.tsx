@@ -15,7 +15,6 @@ import { ModelIdentity } from './ModelIdentity';
 import { packageCatalogDisplay, packageDisplay } from './model-display';
 import { modelLibrary } from '../../i18n/model-library';
 import type { LibraryView } from './LibraryNavigation';
-import { PackageOperation } from './PackageOperation';
 import { SearchField } from '../../components/SearchField';
 import { ModelChoice } from '../../components/ModelChoice';
 import { EmptyState, SectionHeading } from '../../components/WorkspacePresentation';
@@ -24,7 +23,7 @@ import { catalogDescription } from '../../i18n/catalog-descriptions';
 
 const packageOf = (operation: ModelOperation) => operation.target.kind === 'package' ? operation.target.package : undefined;
 
-export function PackageModels({ category, view, discoverySource='curated', onDiscover }: { category: ModelCategory; view: LibraryView; discoverySource?:'curated'|'search'; onDiscover: () => void }) {
+export function PackageModels({ category, view, discoverySource='curated', onDiscover, operations, refreshOperations }: { category: ModelCategory; view: LibraryView; discoverySource?:'curated'|'search'; onDiscover: () => void; operations: ModelOperation[]; refreshOperations: () => Promise<void> }) {
   const { messages: text, locale , language} = useI18n();
   const copy = modelAcquisition[locale], readiness = speechModels[locale];
   const feedback = operationFeedback(locale);
@@ -32,7 +31,6 @@ export function PackageModels({ category, view, discoverySource='curated', onDis
   const { admin } = useWorkspace();
   const [catalog, setCatalog] = useState<TypedCatalogModel[]>([]);
   const [installed, setInstalled] = useState<InstalledTypedModel[]>([]);
-  const [operations, setOperations] = useState<ModelOperation[]>([]);
   const [query, setQuery] = useWorkspaceState(`models.${category}.query`, '');
   const [repositories, setRepositories] = useWorkspaceState<{ id: string; size_bytes?: number }[] | null>(`models.${category}.results`, null);
   const [discovery, setDiscovery] = useWorkspaceState<PackageDiscovery | null>(`models.${category}.discovery`, null);
@@ -43,21 +41,15 @@ export function PackageModels({ category, view, discoverySource='curated', onDis
   const [installRequest, setInstallRequest] = useWorkspaceState(`models.${category}.request`, '');
   const [mutating, setMutating] = useState(false), [loading, setLoading] = useState(true), [error, setError] = useState('');
   const [inventoryError, setInventoryError] = useState(''), [catalogError, setCatalogError] = useState('');
-  const [operationsError, setOperationsError] = useState('');
   const busy = mutating || metadata.pending;
   const [confirm, setConfirm] = useState<{ title: string; body: string; run: () => Promise<unknown> } | null>(null);
   const lock = useRef(false), mounted = useRef(true), inventoryRevision = useRef(0), catalogRevision = useRef(0);
   const load = async (signal?: AbortSignal) => {
     const revision = ++inventoryRevision.current;
-    const [items, work] = await Promise.allSettled([api.typedModels(undefined, signal), admin ? api.modelOperations(signal) : Promise.resolve([])]);
+    const items = await api.typedModels(undefined, signal);
     if (!mounted.current || signal?.aborted || revision !== inventoryRevision.current) return;
     // Unknown/corrupt packages remain visible so they can be removed/repaired.
-    if (items.status === 'fulfilled') {
-      setInstalled(items.value.filter(item => item.kind === 'package' && (!item.category || item.category === category))); setInventoryError('');
-    } else setInventoryError(items.reason instanceof Error ? items.reason.message : text.common.error);
-    if (work.status === 'fulfilled') {
-      setOperations(work.value.filter(o => { const m = packageOf(o); return m && (category === 'speech_recognition' ? m.capabilities.includes('transcription') : m.capabilities.includes('speech_synthesis')); })); setOperationsError('');
-    } else setOperationsError(work.reason instanceof Error ? work.reason.message : text.common.error);
+    setInstalled(items.filter(item => item.kind === 'package' && (!item.category || item.category === category))); setInventoryError('');
   };
   const refreshInventory = async (signal?: AbortSignal) => {
     const revision = inventoryRevision.current + 1;
@@ -90,7 +82,7 @@ export function PackageModels({ category, view, discoverySource='curated', onDis
   const perform = async (run: () => Promise<unknown>) => {
     if (lock.current) return;
     lock.current = true; setMutating(true); setError('');
-    try { await run(); await refreshInventory(); }
+    try { await run(); await Promise.all([refreshInventory(), refreshOperations()]); }
     catch (reason) { if (mounted.current) setError(reason instanceof Error ? reason.message : text.common.error); throw reason; }
     finally { lock.current = false; if (mounted.current) setMutating(false); }
   };
@@ -125,7 +117,6 @@ export function PackageModels({ category, view, discoverySource='curated', onDis
     }
   };
   const accepted = operations.find(o => o.request_id === installRequest);
-  const availableOperations = operations.filter(o => !o.discarded && (o.state !== 'complete' || o.retained_bytes > 0));
   const filtered = installed.filter(item => `${item.id} ${item.name}`.toLocaleLowerCase(language).includes(filter.trim().toLocaleLowerCase(language)));
 
   const downloadDetails = preview && <div className="package-download-details">
@@ -141,7 +132,6 @@ export function PackageModels({ category, view, discoverySource='curated', onDis
     {view === 'discover' && <p className="model-search-hint">{copy.runtimeNotice}</p>}
     {error && <div className="inline-error" role="alert">{error}<button className="secondary-button" disabled={busy} onClick={() => void refreshInventory()}>{feedback.checkStatus}</button></div>}
     {inventoryError && <div className="inline-error" role="alert">{inventoryError}<button className="secondary-button" disabled={busy} onClick={() => void refreshInventory()}>{text.common.refresh}</button></div>}
-    {operationsError && <div className="inline-error" role="alert">{copy.operations}: {operationsError}<button className="secondary-button" disabled={busy} onClick={() => void refreshInventory()}>{feedback.checkStatus}</button></div>}
     {metadata.failure && <div className="inline-error" role="alert">{metadata.failure.message}<button className="secondary-button" disabled={mutating} onClick={() => { if (metadata.failure) void metadata.run(metadata.failure.action); }}>{metadata.failure.action.label}</button></div>}
     {view === 'installed' && <section className="model-section" aria-label={text.models.installed} aria-busy={loading}>
       <SectionHeading title={`${text.models.installed} · ${installed.length}`} actions={!!installed.length && <SearchField id="package-model-search" className="model-installed-search" label={modelLibrary(locale).filterInstalled} value={filter} onChange={setFilter} />} />
@@ -165,10 +155,6 @@ export function PackageModels({ category, view, discoverySource='curated', onDis
           </div>
         </article>;
       })}</div>
-    </section>}
-    {!!availableOperations.length && <section className="model-section" aria-label={copy.operations}>
-      <h2>{copy.operations}</h2>
-      {availableOperations.map(o => <PackageOperation key={o.id} operation={o} disabled={!admin || busy} control={action => void perform(() => api.controlModelOperation(o.id, action)).catch(() => {})} discard={() => setConfirm({ title: copy.discard, body: copy.discardConfirm, run: () => api.controlModelOperation(o.id, 'discard') })} />)}
     </section>}
     {view === 'discover' && discoverySource === 'search' && <section className="model-section" aria-label="Hugging Face">
       <div className="section-heading"><h2>Hugging Face</h2></div>
@@ -202,7 +188,7 @@ export function PackageModels({ category, view, discoverySource='curated', onDis
         {!discovery && catalogReview === item.id && downloadDetails}
       </article>)}</div>
     </section>}
-    <SpeechPackages importOnly onChanged={load} />
+    <SpeechPackages importOnly category={category} onChanged={load} />
     {confirm && <ConfirmDialog title={confirm.title} body={confirm.body} confirmLabel={confirm.title === copy.discard ? copy.discard : confirm.title.startsWith(copy.repair) ? copy.repair : undefined} close={() => setConfirm(null)} confirm={async () => { await perform(confirm.run); }} />}
   </>;
 }

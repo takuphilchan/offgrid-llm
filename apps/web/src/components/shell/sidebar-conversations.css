@@ -62,3 +62,11 @@
  @media(pointer:coarse) { .sidebar .nav-link,.sidebar-detail .sidebar-create .new-chat-button { min-height:44px; } }
  @media(forced-colors:active) { .sidebar .nav-link.active { outline:1px solid Highlight; } }
 }
+
+@layer workspace {
+ /* A selected destination has a positional cue as well as a surface change. */
+ .sidebar .nav-link.active::before { content:""; position:absolute; inset-inline-start:0; inset-block:12px; inline-size:3px; border-radius:2px; background:currentColor; }
+ /* Drawer labels remain inline even when keyboard focus activates the rail tooltip. */
+ @media(max-width:1023px) { .sidebar .nav-link[data-label-open] span { position:static; transform:none; padding:0; border:0; background:transparent; color:inherit; box-shadow:none; white-space:normal; } }
+ @media(forced-colors:active) { .sidebar .nav-link.active::before { background:Highlight; } }
+}

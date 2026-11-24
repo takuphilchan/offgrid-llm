@@ -74,11 +74,13 @@ func (r *Runner) ResolveComputerInput(id, actor, inputID string, config AgentCon
 			cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: string(result)})
 		}
 		cp.Calls = nil
-		cp.ProposalRepairs = 0
-		cp.NativeReadRepair = nil
-		cp.ProposalUnresolved = false
-		cp.ProposalTool = ""
-		cp.WorkflowEditPending = false
+		// Attaching access resolves its own rejected request, not an unrelated
+		// write, read or workflow obligation retained from earlier work.
+		if !initial && toolName == "request_computer_access" && cp.ProposalTool == toolName && cp.NativeReadRepair == nil && !cp.WorkflowEditPending && !cp.PreEffectRepair {
+			cp.ProposalRepairs = 0
+			cp.ProposalUnresolved = false
+			cp.ProposalTool = ""
+		}
 		task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "input_resolved", ToolName: toolName, ToolResult: string(result), Timestamp: time.Now().UTC()})
 		config.ComputerStepOffset = len(task.Steps)
 		task.LastAccess = input
@@ -88,6 +90,9 @@ func (r *Runner) ResolveComputerInput(id, actor, inputID string, config AgentCon
 			return err
 		}
 		task.Status, task.Error, task.ErrorCode = TaskPending, "", ""
+		if !initial && toolName == "request_computer_access" && task.ParentID == "" {
+			return r.manager.acceptRootModelProgress(r.manager.tasks[id], task)
+		}
 		return nil
 	})
 	if err == nil {

@@ -15,3 +15,16 @@ const copy = defineMessages<TalkCopy>("i18n/talk:copy", {
   zu: { start: 'Khuluma', stop: 'Misa ukukhuluma', checking: 'Ukuhlola izwi', listening: 'Ukulalela', transcribing: 'Ukubhala izwi', thinking: 'Ukulungisa impendulo', speaking: 'Ukukhuluma', again: 'Khuluma futhi', attention: 'Ingxoxo imisiwe. Hlola okusalungiswa nempendulo yakamuva.', draft: 'Thumela noma sula okusalungiswa ngaphambi kokuqala.' },
 });
 export const talkText = (locale: LocaleCode) => copy[locale];
+
+const interruption = defineMessages<string>('i18n/talk:interruption', {
+  en: 'Speech interruption is unavailable for this microphone. Choose Speak again to stop playback and speak.',
+  fr: 'L’interruption vocale est indisponible avec ce microphone. Choisissez Parler à nouveau pour arrêter la lecture et parler.',
+  es: 'La interrupción por voz no está disponible con este micrófono. Elige Hablar de nuevo para detener la reproducción y hablar.',
+  de: 'Sprachunterbrechung ist mit diesem Mikrofon nicht verfügbar. Wählen Sie Erneut sprechen, um die Wiedergabe zu stoppen und zu sprechen.',
+  ar: 'المقاطعة بالصوت غير متاحة لهذا الميكروفون. اختر تحدث مجددًا لإيقاف التشغيل والتحدث.',
+  sw: 'Kukatiza kwa sauti hakupatikani kwa maikrofoni hii. Chagua Zungumza tena ili kusimamisha uchezaji na kuzungumza.',
+  sn: 'Kudimburira nezwi hakuwaniki pamaikorofoni iyi. Sarudza Taura zvakare kuti umise kuridza uye utaure.',
+  nd: 'Ukuphazamisa ngelizwi akutholakali ngalombhobho. Khetha Khuluma futhi ukuze umise ukudlala ukhulume.',
+  zu: 'Ukuphazamisa ngezwi akutholakali kulo makrofoni. Khetha Khuluma futhi ukuze umise ukudlala bese ukhuluma.',
+});
+export const talkInterruptionText = (locale: LocaleCode) => interruption[locale];

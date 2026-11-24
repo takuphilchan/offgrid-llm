@@ -74,3 +74,19 @@ test('newer journal schema is rejected without downgrading',async t=>{
   db.exec('PRAGMA user_version=99');db.close();
   assert.throws(()=>new DispatchJournal(path),/journal_incompatible/);
 });
+
+test('ignored intent writes and altered completed receipts cannot authorize dispatch or verified replay',async t=>{
+  const path=await fixture(t),journal=new DispatchJournal(path);
+  try{
+    journal.db.exec("CREATE TRIGGER ignored_intent BEFORE INSERT ON dispatch BEGIN SELECT RAISE(IGNORE); END");
+    assert.throws(()=>journal.prepare(action,'scope'),/action_uncertain/);
+    journal.db.exec('DROP TRIGGER ignored_intent');
+    assert.equal(journal.prepare(action,'scope').execute,true);
+    journal.db.exec("CREATE TRIGGER altered_receipt AFTER UPDATE ON dispatch BEGIN UPDATE dispatch SET reply='{}' WHERE id=NEW.id; END");
+    assert.throws(()=>journal.complete(action.id,reply),/action_uncertain/);
+    assert.throws(()=>journal.prepare(action,'scope'),/action_uncertain/);
+    journal.db.exec('DROP TRIGGER altered_receipt');
+    journal.complete(action.id,reply);
+    assert.deepEqual(journal.prepare(action,'scope'),{execute:false,reply});
+  }finally{journal.close();}
+});

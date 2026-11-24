@@ -104,6 +104,9 @@ type PackageCatalogEntry struct {
 }
 
 func packageCategory(m ModelPackageManifest) ModelCategory {
+	if slices.Contains(m.Capabilities, CapabilityEmbeddings) {
+		return CategoryEmbeddings
+	}
 	if slices.Contains(m.Capabilities, CapabilityChat) {
 		return CategoryLanguage
 	}
@@ -199,6 +202,11 @@ type InstalledModel struct {
 func Inventory(legacy []api.Model, packages []PackageState, category ModelCategory) []InstalledModel {
 	result := []InstalledModel{}
 	for _, m := range legacy {
+		// The v1 selector projection is not a second legacy installation. The
+		// package row below owns removal, integrity and readiness in this view.
+		if strings.HasPrefix(m.ID, ONNXEmbeddingPrefix) {
+			continue
+		}
 		cat, caps := CategoryLanguage, []ModelCapability{CapabilityChat}
 		if m.Type == "embedding" {
 			cat, caps = CategoryEmbeddings, []ModelCapability{CapabilityEmbeddings}

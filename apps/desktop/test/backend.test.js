@@ -10,6 +10,14 @@ test('offline and recovery pages retain local Stop, never new host authority', (
     for(const channel of ['computer-desktop-enable','computer-desktop-start','computer-start','computer-targets','get-paths']) assert.equal(workspaceChannelAllowed(channel,false,loading),false);
   }
 });
+test('only the admitted workspace renderer can control maintenance while its service is stopped',()=>{
+ for(const channel of ['workspace-recovery-status','workspace-recovery-cancel','workspace-recovery-resume']){
+  assert.equal(workspaceChannelAllowed(channel,false,false),true);
+  assert.equal(workspaceChannelAllowed(channel,true,true),false);
+ }
+ assert.equal(workspaceChannelAllowed('workspace-recovery-start',false,false),false);
+ assert.equal(workspaceChannelAllowed('workspace-recovery-start',true,false),true);
+});
 
 const hash = 'a'.repeat(64);
 const identity = { product: 'offgrid', version: '0.4.3', api_version: 2, revision: 'abc', ui_build_id: hash, capabilities: ['sessions-v1', 'chat-streaming-v1', 'durable-agent-runs-v1'], desktop_bridge: {status:'ready',schema_version:1,protocol:1,ui_build_id:hash} };

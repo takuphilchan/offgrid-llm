@@ -14,6 +14,10 @@
   .model-select-name { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
   .model-select-options small { color: var(--muted); overflow-wrap: anywhere; font-size: var(--type-caption); line-height: 1.5; }
   .model-select-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: inherit; }
+  .model-select-empty { margin: 4px; color: var(--muted); font-size: var(--type-meta); line-height: 1.5; }
+  .model-select-library { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; padding: 6px 10px; text-decoration: none; border-radius: 6px; }
+  .model-select-library:hover { background: var(--surface-2); }
+  :root[dir=rtl] .model-select-library > svg { transform: scaleX(-1); }
 }
 @layer controls {
  .composer { container:composer / inline-size; }

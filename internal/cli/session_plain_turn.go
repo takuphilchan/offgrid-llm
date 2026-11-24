@@ -43,13 +43,24 @@ func RunPlainConversationTurn(ctx context.Context, client *serviceclient.Client,
 			break
 		}
 		switch arg {
-		case "--file", "--attachment", "--model", "--request-id", "--image", "--answer", "--intent", "--page", "--knowledge-document", "--knowledge-selection":
+		case "--file", "--attachment", "--model", "--request-id", "--image", "--answer", "--intent", "--page", "--knowledge-document", "--knowledge-selection", "--response-profile", "--max-tokens":
 			if i+1 == len(args) {
 				return Usage("%s needs a value", arg)
 			}
 			i++
 			value := args[i]
 			switch arg {
+			case "--response-profile":
+				if value != "interactive" && value != "extended" {
+					return Usage("--response-profile must be interactive or extended")
+				}
+				request.ResponseProfile = value
+			case "--max-tokens":
+				n, err := strconv.Atoi(value)
+				if err != nil || n < 1 || n > 4096 {
+					return Usage("--max-tokens must be between 1 and 4096")
+				}
+				request.MaxTokens = n
 			case "--page":
 				n, err := strconv.Atoi(value)
 				if err != nil || n < 1 {
@@ -137,10 +148,10 @@ func RunPlainConversationTurn(ctx context.Context, client *serviceclient.Client,
 	}
 	if saved.CanonicalID != "" && !hasSources {
 		if questionID != "" {
-			return sendCanonicalInput(ctx, client, saved.CanonicalID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: "answer", QuestionID: questionID}, out, jsonMode)
+			return sendCanonicalInput(ctx, client, saved.CanonicalID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: "answer", QuestionID: questionID, ResponseProfile: request.ResponseProfile, MaxTokens: request.MaxTokens}, out, jsonMode)
 		}
 		if intent != "" {
-			return sendCanonicalInput(ctx, client, saved.CanonicalID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: intent}, out, jsonMode)
+			return sendCanonicalInput(ctx, client, saved.CanonicalID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: intent, ResponseProfile: request.ResponseProfile, MaxTokens: request.MaxTokens}, out, jsonMode)
 		}
 		return sendCanonicalConversation(ctx, client, saved.CanonicalID, request, out, jsonMode)
 	}
@@ -148,12 +159,15 @@ func RunPlainConversationTurn(ctx context.Context, client *serviceclient.Client,
 		return Usage("--answer requires a saved canonical conversation question")
 	}
 	if len(paths)+len(ids)+len(request.Images) == 0 && !request.Knowledge && serviceclient.PlainSessionCanMigrate(saved) {
-		if identity, e := client.Identity(ctx); e == nil && identity.Supports("conversation-input-admission-v1") {
+		if identity, e := client.Identity(ctx); e == nil && (identity.Supports("conversation-input-admission-v1") || identity.Supports("conversation-input-options-v1")) {
+			if !identity.Supports("conversation-input-admission-v1") {
+				return fmt.Errorf("New conversation admission is disabled; saved work remains available for inspection and controls")
+			}
 			conversation, e := client.ImportSessionConversation(ctx, name, request.RequestID)
 			if e != nil {
 				return e
 			}
-			return sendCanonicalInput(ctx, client, conversation.ID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: intent}, out, jsonMode)
+			return sendCanonicalInput(ctx, client, conversation.ID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: intent, ResponseProfile: request.ResponseProfile, MaxTokens: request.MaxTokens}, out, jsonMode)
 		}
 	}
 	if intent != "" && saved.CanonicalID == "" {
@@ -201,7 +215,7 @@ func RunPlainConversationTurn(ctx context.Context, client *serviceclient.Client,
 		for i, ref := range request.Attachments {
 			refs[i] = api.ConversationAttachment{ID: ref.ID, Revision: ref.Revision, Page: page}
 		}
-		return sendCanonicalInput(ctx, client, saved.CanonicalID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: intent, SourceSession: name, Attachments: refs, Images: request.Images, KnowledgeDocuments: knowledgeIDs, KnowledgeSelections: knowledgeSelections, UseKnowledge: request.Knowledge}, out, jsonMode)
+		return sendCanonicalInput(ctx, client, saved.CanonicalID, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", Intent: intent, SourceSession: name, Attachments: refs, Images: request.Images, KnowledgeDocuments: knowledgeIDs, KnowledgeSelections: knowledgeSelections, UseKnowledge: request.Knowledge, ResponseProfile: request.ResponseProfile, MaxTokens: request.MaxTokens}, out, jsonMode)
 	}
 	return sendPlainConversation(ctx, client, name, request, out, jsonMode)
 }

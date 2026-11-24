@@ -29,12 +29,13 @@ for(const [theme,palette] of [['light','slate'],['dark','offgrid']] as const) {
   await expect(page.locator('html')).toHaveAttribute('data-startup-state','loading');
   await expect(page.locator('#technical')).toBeHidden();await expect(page.locator('#recovery')).toBeHidden();
   expect(await page.locator('html').evaluate(el=>getComputedStyle(el).getPropertyValue('--bg').trim())).toBe(presentation.palette['surface-0']);
-  const brandLayer=page.locator('header svg path').first();
-  await expect(brandLayer).toHaveCSS('animation-name','startup-layer-top');
+  const brandLayer=page.locator('header svg');
+  await expect(brandLayer).toHaveCSS('animation-name','startup-breathe');
   await page.screenshot({path:info.outputPath('startup-'+theme+'.png')});
   await page.emulateMedia({reducedMotion:'reduce'});await expect(brandLayer).toHaveCSS('animation-name','none');
   await page.evaluate(()=>(window as any).startupFixtureState({state:'unavailable',reason:'Fixture service is stopped',managedByDesktop:true}));
   await expect(page.locator('#retry')).toBeVisible();await expect(page.locator('#technical')).toBeVisible();await expect(page.locator('#separate')).toBeHidden();
+  await expect(page.locator('#technical')).toHaveCSS('border-top-width','0px');
   await page.setViewportSize({width:390,height:700});await page.screenshot({path:info.outputPath('recovery-'+theme+'.png')});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  });

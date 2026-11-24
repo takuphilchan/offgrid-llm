@@ -42,9 +42,10 @@ func (b *browserRunTools) ValidateExecutionCompletion(task *agents.Task) error {
 	if err := agents.ValidateInputWrites(task); err != nil {
 		return err
 	}
-	states := map[string]string{}
-	references := map[string]execution.Reference{}
-	var order []string
+	type processIdentity struct{ host, session, handle string }
+	states := map[processIdentity]string{}
+	references := map[processIdentity]execution.Reference{}
+	var order []processIdentity
 	for _, step := range task.Steps {
 		if step.Type != "action" || !strings.HasPrefix(step.ToolName, "workspace_process_") {
 			continue
@@ -61,27 +62,33 @@ func (b *browserRunTools) ValidateExecutionCompletion(task *agents.Task) error {
 		if json.Unmarshal(result.Receipt.Result, &process) != nil || process.Handle == "" {
 			return fmt.Errorf("Process completion is unverified: inspect the owned process before finishing")
 		}
+		identity := processIdentity{result.Host, result.Session, process.Handle}
 		if step.ToolName != "workspace_process_start" {
-			if _, known := states[process.Handle]; !known {
+			if _, known := states[identity]; !known {
 				return fmt.Errorf("Process result does not match a recorded start")
 			}
 		} else {
-			if _, known := states[process.Handle]; !known {
-				order = append(order, process.Handle)
+			if _, known := states[identity]; !known {
+				order = append(order, identity)
 			}
 			if (result.Receipt.State == "dispatched" || result.Receipt.State == "complete") && task.Config.Execution != nil && result.Host == task.Config.Execution.Host && result.Session == task.Config.Execution.Session {
-				references[process.Handle] = *task.Config.Execution
+				references[identity] = *task.Config.Execution
 			}
 		}
 		if process.State != "running" && process.ExitCode == nil {
 			return fmt.Errorf("Process exit evidence is incomplete")
 		}
-		states[process.Handle] = process.State
+		states[identity] = process.State
+		if process.State != "running" && (result.Receipt.State != "complete" || !execution.ProcessDescendantsSettled(process)) {
+			states[identity] = "uncertain"
+		} else if process.State == "running" && result.Receipt.State != "complete" && result.Receipt.State != "dispatched" {
+			states[identity] = "uncertain"
+		}
 	}
-	for _, handle := range order {
-		state := states[handle]
+	for _, identity := range order {
+		state := states[identity]
 		if state == "running" {
-			return &agents.ExecutionPending{Handle: handle, Reference: references[handle]}
+			return &agents.ExecutionPending{Handle: identity.handle, Reference: references[identity]}
 		}
 		if state != "exited" && state != "failed" && state != "cancelled" && state != "timed_out" {
 			return fmt.Errorf("A workspace command is still running or unverified. Inspect/wait for its actual exit before finishing; do not restart it")

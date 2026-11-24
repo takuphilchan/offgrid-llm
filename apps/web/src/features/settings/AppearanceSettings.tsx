@@ -4,6 +4,8 @@ import {personalization} from '../../i18n/personalization';
 import {themeChooser} from '../../i18n/theme-chooser';
 import {Icon} from '../../components/Icon';
 import {restoreFocus} from '../../lib/restore-focus';
+import {reportPreferenceSave} from '../../lib/preferences';
+import {usePreferenceSaveStates} from '../../lib/usePreferenceSaveStates';
 import {appearanceDefaults,applyAppearance,availablePalettes,paletteTokens,paletteLabel,readAppearance,saveAppearance,type Appearance,type Palette,type PaletteMode} from '../../appearance';
 
 export function ThemeSample({id,mode}:{id:Palette;mode:PaletteMode}) {
@@ -45,20 +47,25 @@ function ThemeChooser({initial,initialMode,onApply,onClose}:{initial:Appearance;
 }
 
 export function AppearanceSettings() {
- const {locale}=useI18n(),c=personalization[locale];
- const [value,setValue]=useState(readAppearance),[picker,setPicker]=useState<PaletteMode|null>(null),[saved,setSaved]=useState<boolean|null>(null);
+ const {locale,messages}=useI18n(),c=personalization[locale];
+ const [value,setValue]=useState(readAppearance),[picker,setPicker]=useState<PaletteMode|null>(null),[attempted,setAttempted]=useState(false);
+ const states=usePreferenceSaveStates(), outcomes=[states['offgrid.appearance.v1'],states['desktop-presentation']];
+ const failed=outcomes.includes('unsaved'),pending=outcomes.includes('pending');
  useEffect(()=>{const sync=()=>{setValue(readAppearance());setPicker(null);};sync();window.addEventListener('offgrid-appearance',sync);return()=>{window.removeEventListener('offgrid-appearance',sync);applyAppearance();};},[]);
- function commit(next:Appearance){setSaved(saveAppearance(next));setValue(next);setPicker(null);}
+ function commit(next:Appearance){
+  if(window.electron?.setPresentation)reportPreferenceSave('desktop-presentation','pending');
+  saveAppearance(next);setAttempted(true);setValue(next);setPicker(null);
+ }
  return <div className="appearance-settings" id="setting-appearance" tabIndex={-1}>
   <p className="appearance-scope">{c[9]}</p>
   <div className="settings-card appearance-values">
-  <div className="theme-summaries">{(['light','dark'] as const).map(mode=><div className="appearance-preference-row" key={mode}><span>{c[mode==='light'?1:2]}</span><button type="button" className="theme-summary" aria-haspopup="dialog" aria-label={c[mode==='light'?1:2]+': '+(value[mode]==='contrast'?c[12]:paletteLabel(value[mode],mode))} onClick={()=>setPicker(mode)}>
+  <div className="theme-summaries">{(['light','dark'] as const).map(mode=><div className="appearance-preference-row" key={mode}><span>{c[mode==='light'?1:2]}</span><button type="button" className="theme-summary" data-setting={mode+'-theme'} aria-haspopup="dialog" aria-label={c[mode==='light'?1:2]+': '+(value[mode]==='contrast'?c[12]:paletteLabel(value[mode],mode))} onClick={()=>setPicker(mode)}>
    <ThemeSample id={value[mode]} mode={mode}/><strong>{value[mode]==='contrast'?c[12]:paletteLabel(value[mode],mode)}</strong><Icon name="chevron-down" size={16}/>
   </button></div>)}</div>
   <div className="appearance-preference-row"><label htmlFor="appearance-text-size">{c[3]}</label><select id="appearance-text-size" value={value.textSize} onChange={event=>commit({...value,textSize:Number(event.target.value)})}>{[100,110,125,150].map(n=><option key={n} value={n}>{n}%</option>)}</select></div>
   <div className="appearance-preference-row"><label htmlFor="appearance-motion">{c[4]}</label><input id="appearance-motion" type="checkbox" checked={value.reduceMotion} onChange={event=>commit({...value,reduceMotion:event.target.checked})}/></div>
   </div>
-  <div className="appearance-footer"><p role="status">{saved===false?c[10]:saved===true?c[11]:''}</p><button type="button" className="text-button" onClick={()=>commit({...appearanceDefaults})}>{c[8]}</button></div>
+  <div className="appearance-footer"><p role="status">{failed?c[10]:attempted?(pending?messages.common.loading:c[11]):''}</p><button type="button" className="text-button" onClick={()=>commit({...appearanceDefaults})}>{c[8]}</button></div>
   {picker&&<ThemeChooser initial={value} initialMode={picker} onApply={commit} onClose={()=>setPicker(null)}/>}
  </div>;
 }

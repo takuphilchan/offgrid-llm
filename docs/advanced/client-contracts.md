@@ -461,16 +461,46 @@ Activity details retain run history and precise mailbox delivery states. The
 ordinary CLI chat has corresponding worker controls; `agent worker command`
 accepts the same typed JSON envelope for noninteractive callers.
 
-The CLI and existing Chat UI use canonical input for eligible text conversations
-when the service advertises `conversation-input-admission-v1`. Admission remains
-disabled by default; `conversation-inputs-v1` advertises observation and control
-support separately, so disabling admission does not hide accepted work. Existing
-document/image workflows retain their prior admission path until unified modality
-admission is available. Canonical conversations reject unsupported additional
-document/image/Knowledge selections with the draft retained.
+The CLI and Chat UI use canonical input for eligible conversations when the
+service advertises `conversation-input-admission-v1`. New service configuration
+enables this path by default; an explicit `enable_conversation_preview: false`
+or `OFFGRID_ENABLE_CONVERSATION_PREVIEW=false` disables new admission. Observation,
+controls and exact retries of already accepted inputs remain available. Updated
+clients do not fall back to legacy generation when the service advertises input
+format support but disables admission. Explicit legacy API routes retain their
+existing contract. Source-capable Chat uses the shared canonical source path;
+named CLI conversations with legacy source history retain their existing flow
+until their interactive source migration is supported.
+
+`conversation-input-options-v1` advertises `response_profile` (`interactive` or
+`extended`) and `max_tokens` (0–4096). The accepted input pins these settings before
+model qualification: interactive uses the configured chat context, extended uses
+the model's available context, and output is capped by one quarter of that window.
+Zero or omission preserves the existing canonical output limit; omitted profile
+preserves the existing canonical context allocation. Explicit retry must retain
+these fields with the original envelope. This format capability remains advertised
+after admission is disabled. Older services keep the previous text contract; the
+CLI rejects explicitly requested options if support is absent, while older-service
+Chat requests retain their previous canonical defaults.
+
+With both input-options and source-input capabilities, ordinary image/file input
+may have an empty caption. Ownership, revisions, image capability and source access
+are still checked. Its saved caption remains empty and it cannot create an inferred
+work objective. Explicit new work, corrections and clarification answers still
+require text. Unsupported source combinations retain the draft.
 
 The UI returns the composer after durable acceptance and observes inbox activity
 independently of focused work. Reload does not submit, approve or continue work.
+
+New foreground turns can use `task_find_tools` to search a separately pinned,
+currently authorized metadata inventory. Search returns at most eight capability
+descriptions per page, marked as requiring work admission. It does not expose
+callable provider schemas, contact hosts, grant approval or execute tools. Current
+actor, profile and conversation restrictions and provider identities are checked
+before ranking. Previously saved metadata remains historical evidence. Native tool
+qualification and foreground execution restrictions still apply; historical runs
+without the new metadata pin keep their original behavior.
+
 Stop targets the chosen input; work controls remain on the work indicator. The
 full request envelope is retained for explicit retry after unknown transport
 outcomes. Optional specialization pins its revision, and submitting from a stale

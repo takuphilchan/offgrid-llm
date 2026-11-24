@@ -6,6 +6,7 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/internal/computer"
 	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
@@ -32,14 +33,24 @@ func (b *browserRunTools) Capability(name string) (capabilities.Descriptor, bool
 	return b.RunTools.Capability(name)
 }
 
-func browserToolsForVision(enabled bool) []api.Tool {
+func browserToolsForVision(enabled bool, discovery ...bool) []api.Tool {
 	tools := browserTools()
-	if enabled {
-		return tools
-	}
+	structured := len(discovery) >= 3 && discovery[0] && discovery[1] && discovery[2]
 	filtered := make([]api.Tool, 0, len(tools)-1)
 	for _, tool := range tools {
-		if tool.Function.Name != "browser_capture" {
+		if computer.BrowserStructuredTool(tool.Function.Name) && !structured {
+			continue
+		}
+		if tool.Function.Name == "browser_inspect" && (len(discovery) == 0 || !discovery[0]) {
+			continue
+		}
+		if computer.BrowserWorkspaceTool(tool.Function.Name) && (len(discovery) < 2 || !discovery[1]) {
+			continue
+		}
+		if enabled || tool.Function.Name != "browser_capture" {
+			if structured {
+				tool = structuredBrowserToolDescription(tool)
+			}
 			filtered = append(filtered, tool)
 		}
 	}
@@ -190,7 +201,7 @@ func (b *browserRunTools) ToolsForTaskContext(ctx context.Context, task *agents.
 				}
 			}
 		} else {
-			tools = append(tools, browserToolsForVision(b.server.registry != nil && b.server.computerVisionReady(task.Model))...)
+			tools = append(tools, browserToolsForVision(b.server.registry != nil && b.server.computerVisionReady(task.Model), b.browserDiscoveryAvailable(task), b.browserWorkspaceAvailable(task), b.browserStructuredAvailable(task))...)
 		}
 	}
 	if task.Config.TaskFirst && task.ParentID == "" {

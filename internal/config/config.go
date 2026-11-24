@@ -12,7 +12,10 @@ import (
 
 // Config holds application configuration
 type Config struct {
-	EnableConversationPreview bool `yaml:"enable_conversation_preview" json:"enable_conversation_preview"`
+	InferenceEndpointsFile           string `yaml:"inference_endpoints_file" json:"inference_endpoints_file"`
+	InferenceEndpointOwnerPolicyFile string `yaml:"inference_endpoint_owner_policy_file" json:"inference_endpoint_owner_policy_file"`
+	ONNXEmbeddingRuntimeFile         string `yaml:"onnx_embedding_runtime_file" json:"onnx_embedding_runtime_file"`
+	EnableConversationPreview        bool   `yaml:"enable_conversation_preview" json:"enable_conversation_preview"`
 
 	// Server settings
 	ServerPort             int    `yaml:"server_port" json:"server_port"`
@@ -140,27 +143,31 @@ func LoadConfig() *Config {
 	defaultDataDir := filepath.Join(filepath.Dir(defaultModelsDir), "data")
 
 	return &Config{
-		ServerPort:      getEnvInt("OFFGRID_PORT", 11611),
-		ServerHost:      getEnv("OFFGRID_HOST", "localhost"),
-		ModelsDir:       getEnv("OFFGRID_MODELS_DIR", defaultModelsDir),
-		DataDir:         getEnv("OFFGRID_DATA_DIR", defaultDataDir),
-		DefaultModel:    getEnv("OFFGRID_DEFAULT_MODEL", ""),
-		MaxContextSize:  getEnvInt("OFFGRID_MAX_CONTEXT", 65536),
-		ChatContextSize: getEnvInt("OFFGRID_CHAT_CONTEXT", 8192),
-		NumThreads:      getEnvInt("OFFGRID_NUM_THREADS", 0), // 0 = auto-detect
-		MaxMemoryMB:     uint64(getEnvInt("OFFGRID_MAX_MEMORY_MB", 4096)),
-		MaxModels:       getEnvInt("OFFGRID_MAX_MODELS", 3), // Cache up to 3 models for fast switching
-		EnableGPU:       getEnvBool("OFFGRID_ENABLE_GPU", false),
-		NumGPULayers:    getEnvInt("OFFGRID_GPU_LAYERS", 0),
-		BatchSize:       getEnvInt("OFFGRID_BATCH_SIZE", 512), // Higher batch for throughput
-		FlashAttention:  getEnvBool("OFFGRID_FLASH_ATTENTION", true),
-		KVCacheType:     getEnv("OFFGRID_KV_CACHE_TYPE", "q8_0"),
-		UseMmap:         getEnvBool("OFFGRID_USE_MMAP", true),
-		UseMlock:        getEnvBool("OFFGRID_USE_MLOCK", false),
-		ContBatching:    getEnvBool("OFFGRID_CONT_BATCHING", true), // Better throughput
-		InferenceSlots:  getEnvInt("OFFGRID_INFERENCE_SLOTS", 1),
-		LowMemoryMode:   getEnvBool("OFFGRID_LOW_MEMORY", false),
-		AdaptiveContext: getEnvBool("OFFGRID_ADAPTIVE_CONTEXT", true),
+		EnableConversationPreview:        getEnvBool("OFFGRID_ENABLE_CONVERSATION_PREVIEW", true),
+		InferenceEndpointsFile:           getEnv("OFFGRID_INFERENCE_ENDPOINTS_FILE", ""),
+		InferenceEndpointOwnerPolicyFile: getEnv("OFFGRID_INFERENCE_ENDPOINT_OWNER_POLICY_FILE", ""),
+		ONNXEmbeddingRuntimeFile:         getEnv("OFFGRID_ONNX_EMBEDDING_RUNTIME_FILE", ""),
+		ServerPort:                       getEnvInt("OFFGRID_PORT", 11611),
+		ServerHost:                       getEnv("OFFGRID_HOST", "localhost"),
+		ModelsDir:                        getEnv("OFFGRID_MODELS_DIR", defaultModelsDir),
+		DataDir:                          getEnv("OFFGRID_DATA_DIR", defaultDataDir),
+		DefaultModel:                     getEnv("OFFGRID_DEFAULT_MODEL", ""),
+		MaxContextSize:                   getEnvInt("OFFGRID_MAX_CONTEXT", 65536),
+		ChatContextSize:                  getEnvInt("OFFGRID_CHAT_CONTEXT", 8192),
+		NumThreads:                       getEnvInt("OFFGRID_NUM_THREADS", 0), // 0 = auto-detect
+		MaxMemoryMB:                      uint64(getEnvInt("OFFGRID_MAX_MEMORY_MB", 4096)),
+		MaxModels:                        getEnvInt("OFFGRID_MAX_MODELS", 3), // Cache up to 3 models for fast switching
+		EnableGPU:                        getEnvBool("OFFGRID_ENABLE_GPU", false),
+		NumGPULayers:                     getEnvInt("OFFGRID_GPU_LAYERS", 0),
+		BatchSize:                        getEnvInt("OFFGRID_BATCH_SIZE", 512), // Higher batch for throughput
+		FlashAttention:                   getEnvBool("OFFGRID_FLASH_ATTENTION", true),
+		KVCacheType:                      getEnv("OFFGRID_KV_CACHE_TYPE", "q8_0"),
+		UseMmap:                          getEnvBool("OFFGRID_USE_MMAP", true),
+		UseMlock:                         getEnvBool("OFFGRID_USE_MLOCK", false),
+		ContBatching:                     getEnvBool("OFFGRID_CONT_BATCHING", true), // Better throughput
+		InferenceSlots:                   getEnvInt("OFFGRID_INFERENCE_SLOTS", 1),
+		LowMemoryMode:                    getEnvBool("OFFGRID_LOW_MEMORY", false),
+		AdaptiveContext:                  getEnvBool("OFFGRID_ADAPTIVE_CONTEXT", true),
 		// Fast model switching
 		PrewarmModels:              getEnvBool("OFFGRID_PREWARM_MODELS", true),
 		SmartMlock:                 getEnvBool("OFFGRID_SMART_MLOCK", true),

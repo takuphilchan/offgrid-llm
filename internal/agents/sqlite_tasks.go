@@ -68,6 +68,9 @@ func validateTaskIdentityStatus(task *Task) error {
 }
 
 func validateStoredTask(task *Task) error {
+	if err := validateStoredModelCorrections(task); err != nil {
+		return err
+	}
 	if !validWorkerPolicy(task.Config.WorkerPolicy) || task.Config.ResultIdentityVersion < 0 || task.Config.ResultIdentityVersion > 1 {
 		return fmt.Errorf("unsupported or invalid worker policy")
 	}
@@ -87,7 +90,7 @@ func validateStoredTask(task *Task) error {
 		return fmt.Errorf("invalid conversation inbox fence: %w", err)
 	}
 	if config := task.Config.ConversationConfiguration; config != nil {
-		if config.Version != 1 || task.Origin == nil || (task.Config.Profile == nil) != (config.Profile == nil) || config.Profile != nil && config.Profile.Digest != task.Config.Profile.Digest || config.Model != task.Model {
+		if config.Version != 1 || task.Origin == nil || (task.Config.Profile == nil) != (config.Profile == nil) || config.Profile != nil && config.Profile.Digest != task.Config.Profile.Digest || !validAcceptedConversationModel(task, config.Model) {
 			return fmt.Errorf("invalid accepted conversation configuration")
 		}
 	}

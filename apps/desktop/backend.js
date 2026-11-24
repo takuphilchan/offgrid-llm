@@ -104,7 +104,8 @@ function isTrustedSender(event, contents, serverURL, loadingURL) {
 // Caller must still validate the exact trusted sender. Offline recovery may
 // revoke/read local control, never start it or grant new access.
 function workspaceChannelAllowed(channel, ready, loading) {
-  if (['computer-stop','computer-stop-access','computer-status','execution-stop','execution-status'].includes(channel)) return true;
+  if(channel.startsWith('workspace-recovery-'))return !loading&&(ready||['workspace-recovery-status','workspace-recovery-cancel','workspace-recovery-resume'].includes(channel));
+  if (['computer-stop','computer-stop-access','computer-status','computer-takeover-access','execution-stop','execution-status'].includes(channel)) return true;
   if (loading) return !channel.startsWith('computer-') && !channel.startsWith('execution-') && !['get-paths','select-directory'].includes(channel);
   return ready || ['get-backend-info','get-server-status'].includes(channel);
 }

@@ -6,6 +6,16 @@ import { basename, join } from 'node:path';
 import { chromium } from 'playwright';
 import {publicPage, pinnedDestination, startEgress} from './network.mjs';
 import {classifyBrowserAction} from './approval-policy.mjs';
+import {BrowserFailure, browserRead} from './browser-outcome.mjs';
+import {assertFresh, observePage} from './browser-observation.mjs';
+import {browserOrigins, allowsBrowserURL} from './browser-scope.mjs';
+import {describeControl, documentState, installDocumentRevision} from './browser-dom.mjs';
+import {BrowserFrames} from './browser-frames.mjs';
+import {documentText} from './browser-text.mjs';
+import {captureBrowser} from './browser-capture.mjs';
+import {BrowserUploadStore} from './browser-file-snapshot.mjs';
+import {BrowserOwnedUploadStore} from './browser-owned-upload-store.mjs';
+import {registerFileReadback, verifySelectedBrowserFile} from './browser-file-readback.mjs';
 export {publicIPv4} from './network.mjs';
 
 // Validate before touching the page. The service repeats this check before
@@ -14,6 +24,9 @@ export function validateBrowserAction(kind, args) {
   const schemas = {
     browser_observe: {}, browser_navigate: {url:'string'}, browser_verify: {text:'string'},
     browser_capture: {observation_id:'string'},
+    browser_inspect: {observation_id:'string',cursor:'string'},
+    browser_search: {role:'string',name:'string',text:'string'},
+    browser_frames: {}, browser_frame_select:{frame_id:'string',document_id:'string'},
     browser_click: {observation_id:'string',element:'string'},
     browser_download: {observation_id:'string',element:'string'},
     browser_upload: {observation_id:'string',element:'string'},
@@ -28,34 +41,26 @@ export function validateBrowserAction(kind, args) {
       Object.entries(schema).some(([key,type]) => typeof args[key] !== type)) throw Error('Invalid browser action arguments.');
   for (const [key,value] of Object.entries(args)) {
     if (typeof value !== 'string') continue;
-    const limit = key === 'text' ? (kind === 'browser_verify' ? 1000 : 4000) : key === 'url' ? 2048 : 128;
-    if (Buffer.byteLength(value, 'utf8') > limit || (key !== 'text' && !value.trim()) ||
+    const limit = key === 'text' ? (kind === 'browser_search' ? 256 : kind === 'browser_verify' ? 1000 : 4000) : key === 'name' ? 256 : key === 'url' ? 2048 : 128;
+    if (Buffer.byteLength(value, 'utf8') > limit || (kind!=='browser_search'&&key !== 'text' && !value.trim()) ||
         (kind === 'browser_verify' && !value.trim())) throw Error('Browser action argument exceeds scope.');
   }
-}
-
-// Runs in the isolated browser. Use the same accessible-name checks when
-// observing and immediately before input; labels are not security-neutral.
-function describeControl(el) {
-  const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => document.getElementById(id)?.textContent || '').join(' ');
-  const labels = Array.from(el.labels || []).map(label => label.innerText).join(' ');
-  const names = [el.type, el.name, el.id, el.autocomplete, el.getAttribute('aria-label'), labelledBy, labels, el.getAttribute('placeholder')].join(' ');
-  return { tag: el.tagName.toLowerCase(), type: el.getAttribute('type') || '',
-    label: (el.getAttribute('aria-label') || labelledBy.trim() || labels.trim() || el.getAttribute('placeholder') || el.innerText || el.getAttribute('name') || '').slice(0, 160),
-    sensitive: /password|passcode|secret|credential|token|username|one[- ]time[- ]code|verification[- ]code|credit[- ]card|card[- ]number|cc-number|cc-csc|cvv|cvc/i.test(names) };
+  if(kind==='browser_search'&&(![args.role,args.name,args.text].some(value=>value.trim())||!['','button','link','textbox','checkbox','radio','switch','combobox','option','tab','menuitem'].includes(args.role)))throw Error('Use a supported role or a literal name/text query.');
 }
 
 export class BrowserDriver {
-  static async open(origin, { headless = false, testLoopback = false, networkMode = 'direct', downloadDir, upload } = {}) {
+  static async open(origin, { headless = false, testLoopback = false, networkMode = 'direct', downloadDir, upload, additionalOrigins = [], managedTabs = false } = {}) {
     const url = new URL(origin);
     if (url.username || url.password ||
        (!testLoopback && (url.protocol !== 'https:' || isIP(url.hostname)))) throw Error('Select a public HTTPS origin.');
     if (testLoopback && (url.hostname !== '127.0.0.1' || url.protocol !== 'http:')) throw Error('Test fixture must be IPv4 loopback.');
     if (!['direct','trusted-vpn'].includes(networkMode) || (testLoopback && networkMode !== 'direct')) throw Error('network_mode_invalid');
     if (!testLoopback) publicPage(origin);
-    const egress = testLoopback ? null : await startEgress(await pinnedDestination(origin,networkMode));
+    const allowedOrigins = browserOrigins(origin, additionalOrigins, testLoopback);
+    const egress = testLoopback ? null : await startEgress(await Promise.all(allowedOrigins.map(site => pinnedDestination(site,networkMode))));
     let browser;
     try {
+      await registerFileReadback();
       browser = await chromium.launch({ headless, ...(egress ? {proxy:{server:egress.server,bypass:'<-loopback>'}} : {}), args: [
         '--disable-quic', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'
       ] });
@@ -65,22 +70,22 @@ export class BrowserDriver {
         let allowed = false;
         try {
           const destination = new URL(route.request().url());
-          allowed = destination.origin === url.origin && !destination.username && !destination.password;
+          allowed = allowsBrowserURL(allowedOrigins,destination.href);
           if (!allowed && blockedOrigins.size < 20) blockedOrigins.add(destination.origin);
         } catch { /* deny */ }
         return allowed ? route.continue() : route.abort('blockedbyclient');
       });
       await context.routeWebSocket('**/*', socket => socket.close());
-      await context.addInitScript(() => {
-        window.__offgridRevision = 0;
-        new MutationObserver(() => window.__offgridRevision++).observe(document, { childList: true, subtree: true, characterData: true, attributes: true });
-        for (const type of ['input', 'change']) document.addEventListener(type, () => window.__offgridRevision++, true);
-      });
+      await context.addInitScript(installDocumentRevision);
       const page = await context.newPage();
       page.setDefaultTimeout(8000);
       page.on('dialog', dialog => void dialog.dismiss());
-      context.on('page', popup => { if (popup !== page) void popup.close(); });
-      const driver = new BrowserDriver(browser, page, url.origin, {downloadDir,upload});
+      const driver = new BrowserDriver(browser, page, url.origin, {downloadDir,upload,allowedOrigins});
+      context.on('page', popup => {
+        if (popup === page) return;
+        if (managedTabs && driver.registerTab) driver.registerTab(popup);
+        else void popup.close().catch(()=>{});
+      });
       driver.egress = egress;
       driver.blockedOrigins = blockedOrigins;
       try { await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 20000 }); }
@@ -88,12 +93,49 @@ export class BrowserDriver {
       return driver;
     } catch (error) { try { await browser?.close(); } finally { await egress?.close(); } throw error; }
   }
-  constructor(browser, page, origin, {downloadDir,upload} = {}) { Object.assign(this, { browser, page, origin, downloadDir, upload, elements: new Map(), observation: '', revision: -1 }); }
-  async close() { try { await this.browser.close(); } finally { await this.egress?.close(); } }
+  constructor(browser, page, origin, {downloadDir,upload,uploadStore,allowedOrigins=[origin]} = {}) {
+    Object.assign(this, { browser, page, origin, downloadDir, upload, allowedOrigins, elements: new Map(), observation: '', revision: -1, documentID:randomUUID() });
+    this.uploadStore=uploadStore??new BrowserUploadStore();
+    this.frames=new BrowserFrames(this);
+    page.on('framenavigated', frame => {if(frame===page.mainFrame()){this.documentID=randomUUID();this.observation='';}});
+  }
+  allows(value) {return allowsBrowserURL(this.allowedOrigins,value);}
+  context() {return this.frames.current();}
+  disableFileTransfers(){this.fileTransfersDisabled=true;this.upload=undefined;}
+  bindFileTask(directory,binding,checkStorage) {
+    if(this.stopping||this.fileBindingPending)return Promise.reject(Error('upload_store_unavailable'));
+    const pending=(async()=>{
+      if(this.uploadStore instanceof BrowserOwnedUploadStore)this.uploadStore.rebind(binding);
+      else {
+        // A legacy selected File may still refer to its snapshot. Never replace
+        // that owner or infer stronger authority from a new service capability.
+        if(this.uploadStore.snapshot||this.uploadStore.verifier)throw Error('upload_store_scope_invalid');
+        this.uploadStore=await BrowserOwnedUploadStore.open({directory,binding});
+      }
+      this.checkFileStorage=checkStorage;this.fileTransfersDisabled=false;
+    })();
+    this.fileBindingPending=pending;
+    return pending.finally(()=>{if(this.fileBindingPending===pending)this.fileBindingPending=null;});
+  }
+  async close() {
+    this.stopping=true;
+    this.uploadStore?.stopPreparing();
+    try {
+      // Stop can race post-pairing owner creation. Keep the resulting store
+      // attached to this browser until both process closure and cleanup settle.
+      await this.fileBindingPending?.catch(()=>{});
+      this.uploadStore?.stopPreparing();
+      await this.browser.close();
+      if(this.browser.isConnected())throw Error('computer_stop_unconfirmed');
+      if(!this.uploadStore?.closed)await this.uploadStore?.browserClosed?.();
+      await this.uploadStore?.close();
+    }
+    finally { await this.egress?.close(); }
+  }
   async stateDigest() {
     // Property writes need not emit DOM mutations or input events. Keep only a
     // digest locally; field values never enter observations, events or logs.
-    const state = await this.page.evaluate(() => JSON.stringify(Array.from(document.querySelectorAll('input, textarea, select')).map(el => [el.value, el.checked, el.selectedIndex, el.disabled, el.readOnly])));
+    const state = await this.context().evaluate(documentState);
     return createHash('sha256').update(state).digest('hex');
   }
   async observe() {
@@ -107,92 +149,84 @@ export class BrowserDriver {
       }
     }
   }
-  async observeOnce() {
-    if (this.page.isClosed() || new URL(this.page.url()).origin !== this.origin) throw Error('Target unavailable or outside scope.');
-    this.elements.clear(); this.observation = randomUUID();
-    const initialRevision = await this.page.evaluate(() => window.__offgridRevision);
-    const initialState = await this.stateDigest();
-    const controls = await this.page.locator('button, input:not([type="hidden"]), textarea, select, a[href], [role="button"]').elementHandles();
-    const elements = [];
-    for (const handle of controls.slice(0, 400)) {
-      if (elements.length >= 80) break;
-      if (!await handle.isVisible()) continue;
-      const info = await handle.evaluate(describeControl);
-      if (info.sensitive) continue;
-      const id = String(elements.length + 1);
-      const state = await handle.evaluate(el => ({disabled:el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true',
-        ...(el.tagName === 'SELECT' ? {multiple:el.multiple, options:Array.from(el.options).slice(0,100).map((option,index) => ({id:String(index+1),label:option.label.slice(0,160),disabled:option.disabled || (option.parentElement.tagName === 'OPTGROUP' && option.parentElement.disabled),selected:option.selected}))} : {}),
-        ...(el.tagName === 'INPUT' && el.type === 'checkbox' ? {checked:el.checked} : {})}));
-      let href;
-      if (info.tag === 'a') {
-        const candidate = await handle.getAttribute('href');
-        try { const link = new URL(candidate, this.page.url()); if (link.origin === this.origin && !link.username && !link.password && link.href.length <= 2048) href = link.href; } catch { /* do not expose unsafe destinations */ }
-      }
-      this.elements.set(id, handle); elements.push({ id, tag: info.tag, type: info.type, label: info.label, ...(href ? {href} : {}), ...state });
+  async observeOnce() { return observePage(this,describeControl); }
+  async execute(kind, args, fileAction) {
+    // Scope loss is terminal even for reads. Input-started is local to this
+    // execution, so no subsequent read can erase an uncertain effect.
+    if (this.page.isClosed() || !this.allows(this.page.url())) throw Error('Target unavailable or outside scope.');
+    let inputStarted = false;
+    try {
+      return await this.executeAction(kind, args, () => { inputStarted = true; }, fileAction);
+    } catch (error) {
+      if (inputStarted||error.message==='computer_stop_unconfirmed') throw error;
+      throw new BrowserFailure(browserRead(kind) ? 'computer_browser_observation_failed' : 'computer_browser_precondition_failed', error.message);
     }
-    const title = await this.page.title();
-    const text = (await this.page.locator('body').innerText()).slice(0,10000);
-    this.revision = await this.page.evaluate(() => window.__offgridRevision);
-    this.observedURL = this.page.url(); this.observedAt = Date.now();
-    this.formDigest = await this.stateDigest();
-    if (this.revision !== initialRevision || this.formDigest !== initialState) {
-      this.observation = '';
-      throw Error('observation_changed');
-    }
-    // No field values, screenshots, cookies or password content are collected.
-    return { observation_id: this.observation, url: this.observedURL, title,
-      text, elements, blocked_origins: Array.from(this.blockedOrigins ?? []),
-      controls_limited: controls.length > 400 || elements.length >= 80 };
   }
-  async execute(kind, args) {
+  async withObservation(receipt) {
+    try { return {...await this.observe(), ...receipt, observation_status:'available'}; }
+    catch {
+      this.observation = '';
+      return {...receipt, observation_status:'unavailable', message:'Input completed. Inspect the page to establish its outcome; do not repeat the input because its observation is unavailable.'};
+    }
+  }
+  async afterEdit(check, readback) {
+    let verified=false, verification_status='unavailable';
+    try {verified=await readback();verification_status=verified?'verified':'mismatch';}catch{/* input already returned; keep its receipt */}
+    return this.withObservation({effect_status:verified?'completed':'dispatched',dispatched:true,verified,verification_status,check,changed:true});
+  }
+  async executeAction(kind, args, beginInput, fileAction) {
     validateBrowserAction(kind, args);
-    if (this.page.isClosed() || new URL(this.page.url()).origin !== this.origin) throw Error('Target unavailable or outside scope.');
+    if(['browser_upload','browser_download'].includes(kind)&&this.fileTransfersDisabled)throw Error('Protected file transfers are unavailable.');
+    if (this.page.isClosed() || !this.allows(this.page.url())) throw Error('Target unavailable or outside scope.');
+    if(kind==='browser_frames')return this.frames.list();
+    if(kind==='browser_frame_select')return this.frames.select(args);
+    if(kind!=='browser_navigate')await this.frames.assertScope();
     if (kind === 'browser_observe') return this.observe();
+    if (kind === 'browser_inspect') return observePage(this,describeControl,args);
+    if (kind === 'browser_search') return observePage(this,describeControl,undefined,args);
     if (kind === 'browser_navigate') {
       const url = new URL(args.url);
-      if (url.origin !== this.origin || url.username || url.password) throw Error('Navigation is outside approved origin.');
+      if (!this.allows(url.href)) throw Error('Navigation is outside approved origins.');
       this.observation = '';
+      this.frames.selectMain();
+      beginInput();
       await this.page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      return this.observe();
+      return this.withObservation({dispatched:true,effect_status:'completed',verified:false});
     }
     if (kind === 'browser_verify') {
       if (typeof args.text !== 'string' || !args.text.trim() || args.text.length > 1000) throw Error('Expected text is required.');
-      const verified = (await this.page.locator('body').innerText()).includes(args.text);
-      return { verified, check: 'page_contains_text', text: args.text, url: this.page.url() };
+      const verified = (await this.context().evaluate(documentText)).includes(args.text);
+      return { verified, check: 'page_contains_text', text: args.text, url: this.context().url(),...this.frames.provenance() };
     }
     if (!['browser_capture','browser_click','browser_download','browser_upload','browser_fill','browser_select','browser_set_checked'].includes(kind)) throw Error('Unsupported browser action.');
-    if (args.observation_id !== this.observation || Date.now() - this.observedAt > 120000 ||
-        this.page.url() !== this.observedURL || await this.page.evaluate(() => window.__offgridRevision) !== this.revision ||
-        await this.stateDigest() !== this.formDigest) throw Error('Stale observation; inspect the page again.');
+    await assertFresh(this,args,kind==='browser_capture');
     if (kind === 'browser_capture') {
-      const viewport = this.page.viewportSize();
-      if (!viewport || viewport.width < 1 || viewport.height < 1 || viewport.width > 8192 || viewport.height > 8192 || viewport.width * viewport.height > 32 * 1024 * 1024) throw Error('Browser surface exceeds the vision safety limit.');
-      const mask = this.page.locator('input[type="password"], input[autocomplete="current-password"], input[autocomplete="new-password"], input[autocomplete="one-time-code"], input[autocomplete="cc-number"], input[autocomplete="cc-csc"], [data-offgrid-private]');
-      const content = await this.page.screenshot({type:'png',animations:'disabled',caret:'hide',mask:[mask],maskColor:'#000'});
-      if (!content.length || content.length > 5 * 1024 * 1024) throw Error('Browser capture exceeds the vision safety limit.');
-      return {captured:true,observation_id:this.observation,media_type:'image/png',width:viewport.width,height:viewport.height,data:content.toString('base64')};
+      return captureBrowser(this);
     }
     const handle = this.elements.get(args.element);
     if (!handle || !await handle.isVisible()) throw Error('Unknown or hidden element.');
     if ((await handle.evaluate(describeControl)).sensitive) throw Error('Credential/payment entry requires manual takeover.');
     if (!await handle.isEnabled()) throw Error('Disabled control cannot be changed.');
-    this.observation = '';
+    if(kind!=='browser_upload')this.observation = '';
     if (kind === 'browser_select') {
       const index = Number(args.option) - 1;
-      if (!/^(?:[1-9][0-9]?|100)$/.test(args.option) || !await handle.evaluate((el,index) =>
+      if (!/^[1-9][0-9]{0,8}$/.test(args.option) || !this.observedOptions?.get(args.element)?.has(args.option) || !await handle.evaluate((el,index) =>
         el.tagName === 'SELECT' && !el.multiple && !!el.options[index] && !el.options[index].disabled &&
         !(el.options[index].parentElement.tagName === 'OPTGROUP' && el.options[index].parentElement.disabled), index)) throw Error('Select one enabled option ID from the observation.');
+      beginInput();
       await handle.selectOption({index});
-      if (!await handle.evaluate((el,index) => el.selectedIndex === index, index)) throw Error('Selection could not be verified.');
-      return {...await this.observe(), verified:true, check:'selected_option_matches', changed:true};
+      return this.afterEdit('selected_option_matches',()=>handle.evaluate((el,index)=>el.selectedIndex===index,index));
     }
     if (kind === 'browser_set_checked') {
-      if (!await handle.evaluate(el => el.tagName === 'INPUT' && el.type === 'checkbox')) throw Error('Only a native checkbox is supported.');
-      await handle.setChecked(args.checked);
-      if (await handle.isChecked() !== args.checked) throw Error('Checkbox change could not be verified.');
-      return {...await this.observe(), verified:true, check:'checked_state_matches', changed:true};
+      const checked=await handle.evaluate(el=>el.tagName==='INPUT'&&el.type==='checkbox'?{native:true,value:el.checked}:['checkbox','switch'].includes(el.getAttribute('role'))&&['true','false'].includes(el.getAttribute('aria-checked'))?{native:false,value:el.getAttribute('aria-checked')==='true'}:null);
+      if(!checked)throw Error('Use a native checkbox or a custom checkbox/switch with explicit boolean checked state.');
+      if(checked.value===args.checked)return this.withObservation({effect_status:'completed',dispatched:false,verified:true,verification_status:'verified',check:'checked_state_matches',changed:false});
+      beginInput();
+      if(checked.native)await handle.setChecked(args.checked);else await handle.click();
+      return this.afterEdit('checked_state_matches',()=>handle.evaluate((el,expected)=>el.isConnected&&(el.tagName==='INPUT'&&el.type==='checkbox'?el.checked===expected:el.getAttribute('aria-checked')===String(expected)),args.checked));
     }
     if (kind === 'browser_download') {
+      await this.checkFileStorage?.();
       if (!this.downloadDir) throw Error('Download staging is unavailable.');
       await mkdir(this.downloadDir, {recursive:true, mode:0o700});
       const suggested = await handle.getAttribute('download') || await handle.getAttribute('aria-label') || 'download';
@@ -200,6 +234,7 @@ export class BrowserDriver {
       // Observe both promises immediately: either the click or the download
       // wait can fail first. A late rejection must not crash the companion.
       // Dispatch once; failure still leaves the action for reconciliation.
+      beginInput();
       const [download] = await Promise.all([
         this.page.waitForEvent('download', {timeout: 15000}),
         handle.click(),
@@ -210,47 +245,69 @@ export class BrowserDriver {
       const file = await stat(target);
       if (!file.isFile() || file.size > 512 * 1024 * 1024) throw Error('Downloaded artifact is invalid.');
       const sha256 = await fileDigest(target);
-      return {downloaded:true, verified:true, artifact:{name:safeName,size:file.size,sha256,staged:true}};
+      return {effect_status:'completed',dispatched:true,downloaded:true, verified:true, artifact:{name:safeName,size:file.size,sha256,staged:true}};
     }
     if (kind === 'browser_upload') {
       if (!this.upload || !/^[a-f0-9]{32}$/.test(this.upload.id) || !/^[a-f0-9]{64}$/.test(this.upload.sha256)) throw Error('No user-selected upload is available.');
       if (!await handle.evaluate(el=>el.tagName==='INPUT' && el.type==='file' && !el.multiple)) throw Error('Only one native file input is supported.');
-      const current=await stat(this.upload.path);
-      if (!current.isFile() || current.size!==this.upload.size || await fileDigest(this.upload.path)!==this.upload.sha256) throw Error('Selected upload changed; select it again.');
-      await handle.setInputFiles(this.upload.path);
-      const verified=await handle.evaluate((el,name)=>el.files?.length===1 && el.files[0].name===name,this.upload.name);
-      if(!verified)throw Error('Upload selection could not be verified.');
-      return {uploaded:true,verified:true,file:{grant:this.upload.id,name:this.upload.name,size:this.upload.size,sha256:this.upload.sha256}};
+      const grant=this.upload;
+      await this.checkFileStorage?.();
+      const snapshot=await this.uploadStore.get(grant,fileAction);
+      await assertFresh(this,args);
+      if(this.uploadStore instanceof BrowserOwnedUploadStore){
+        await this.checkFileStorage?.();
+        await this.uploadStore.inUse(snapshot,fileAction,this.frames.provenance().frame_document_id);
+        await assertFresh(this,args);
+      }
+      if(this.stopping||snapshot.abort.signal.aborted||this.upload!==grant)throw Error('Upload grant is no longer available.');
+      this.observation='';
+      beginInput();
+      await handle.setInputFiles(snapshot.path);
+      const selected=await verifySelectedBrowserFile(handle,snapshot,{signal:snapshot.abort.signal,timeoutMs:120000});
+      return {effect_status:'completed',dispatched:true,uploaded:true,verified:true,check:'file_input_matches_grant',verification_scope:'file_input_selection',
+        file:{grant:grant.id,...selected},message:'Approved file selected. Remote receipt has not been verified.'};
     }
     if (kind === 'browser_fill') {
       if (typeof args.text !== 'string' || args.text.length > 4000) throw Error('Text exceeds scope.');
       if ((await handle.evaluate(describeControl)).sensitive) throw Error('Credential/payment entry requires manual takeover.');
+      beginInput();
       await handle.fill(args.text);
-      if (await handle.inputValue() !== args.text) throw Error('Field change could not be verified.');
       // Return fresh, scoped state after the mutation. Never make the model
       // guess whether old element IDs/observations can be reused.
-      return { ...await this.observe(), verified: true, check: 'field_value_matches', changed: true };
+      return this.afterEdit('field_value_matches',async()=>{
+        if(!await handle.evaluate(el=>el.isConnected))return false;
+        return await handle.evaluate(el=>el.isContentEditable)?await handle.innerText()===args.text:await handle.inputValue()===args.text;
+      });
     }
+    beginInput();
     await handle.click();
-    return { ...await this.observe(), dispatched: true, verified: false, message: 'Click dispatched. This is a fresh observation; independently verify the requested result.' };
+    return this.withObservation({effect_status:'dispatched',dispatched:true,verified:false,message:'Click dispatched. Independently verify the requested result.'});
   }
 
   async prepare(kind, args) {
+    if (this.page.isClosed() || !this.allows(this.page.url())) throw Error('Target unavailable or outside scope.');
+    try { return await this.prepareAction(kind,args); }
+    catch(error) { throw new BrowserFailure('computer_browser_precondition_failed',error.message); }
+  }
+  async prepareAction(kind, args) {
+    if(['browser_upload','browser_download'].includes(kind)&&this.fileTransfersDisabled)throw Error('Protected file transfers are unavailable.');
     validateBrowserAction(kind, args);
-    if (this.page.isClosed() || new URL(this.page.url()).origin !== this.origin) throw Error('Target unavailable or outside scope.');
-    if (['browser_observe','browser_capture','browser_verify'].includes(kind)) return {prepared:true,approval_class:'read_only'};
+    if (this.page.isClosed() || !this.allows(this.page.url())) throw Error('Target unavailable or outside scope.');
+    if (['browser_observe','browser_capture','browser_verify','browser_inspect','browser_search','browser_frames','browser_frame_select'].includes(kind)) return {prepared:true,approval_class:'read_only'};
     if (kind === 'browser_navigate') {
       const url = new URL(args.url);
-      if (url.origin !== this.origin || url.username || url.password) throw Error('Navigation is outside approved origin.');
+      if (!this.allows(url.href)) throw Error('Navigation is outside approved origins.');
       return {prepared:true,approval_class:'reversible'};
     }
-    if (args.observation_id !== this.observation || Date.now() - this.observedAt > 120000 || this.page.url() !== this.observedURL ||
-        await this.page.evaluate(() => window.__offgridRevision) !== this.revision || await this.stateDigest() !== this.formDigest) throw Error('Stale observation; inspect the page again.');
+    await assertFresh(this,args);
     const handle = this.elements.get(args.element);
     if (!handle || !await handle.isVisible() || !await handle.isEnabled()) throw Error('Unknown, hidden, or disabled element.');
     const control = await handle.evaluate(describeControl);
     control.riskText = await handle.evaluate(el => `${document.title} ${el.closest('form')?.innerText?.slice(0,1000) ?? ''}`);
-    const approvalClass = classifyBrowserAction(kind, control);
+    let approvalClass = classifyBrowserAction(kind, control);
+    // Custom checked-state actions dispatch a website click. Its semantic role
+    // is useful for verification, not proof that the handler has no other effect.
+    if(kind==='browser_set_checked'&&!(control.tag==='input'&&control.type==='checkbox')&&approvalClass!=='forbidden')approvalClass='consequential';
     return {prepared:true,approval_class:approvalClass};
   }
 }

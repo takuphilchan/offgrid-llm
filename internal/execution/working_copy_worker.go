@@ -20,6 +20,8 @@ type PreparedWorker struct {
 	closeErr      error
 	done          chan struct{}
 	requestDigest string
+	settleMu      sync.Mutex
+	settled       bool
 }
 
 func (w *PreparedWorker) Close() error {
@@ -35,7 +37,23 @@ func (w *PreparedWorker) Close() error {
 		w.closeErr = errors.Join(w.closeErr, w.Endpoint.Worker.Session.Close(), w.Endpoint.Worker.Journal.Close())
 		close(w.done)
 	})
-	return w.closeErr
+	if w.closeErr != nil || !w.Endpoint.Worker.Processes.cleanupConfirmed() {
+		// Closing the endpoint can fail before Release reaches the store. Save
+		// that uncertainty here without clearing the lease or refunding bytes.
+		return errors.Join(ErrHostUnavailable, w.closeErr, w.store.recordWorkerUncertain(context.Background(), w.Record.ID, w.Record.Source))
+	}
+	// A failed settlement write may be retried only by this retained, closed
+	// owner. Restart cannot manufacture this proof or clear the durable lease.
+	w.settleMu.Lock()
+	defer w.settleMu.Unlock()
+	if w.settled {
+		return nil
+	}
+	if err := w.store.settleWorkerUse(context.Background(), w.Record.ID, w.Record.Source); err != nil {
+		return errors.Join(err, w.store.recordWorkerUncertain(context.Background(), w.Record.ID, w.Record.Source))
+	}
+	w.settled = true
+	return nil
 }
 
 func (w *PreparedWorker) Release(ctx context.Context) error {
@@ -102,10 +120,14 @@ func (e *LocalEndpoint) PrepareWorker(ctx context.Context, req WorkingCopyReques
 	b.Grant = grant
 	b.Revision = 1
 	config := Context{Version: ProtocolVersion, Binding: b, Backend: "local", Root: store.contentPath(record.ID), Directory: ".", Permissions: req.Permissions}
-	session, err := OpenSession(config)
+	if err = store.beginWorkerUse(copyCtx, record.ID, req.Parent); err != nil {
+		return nil, err
+	}
+	session, err := openSessionEnvironment(config, e.Worker.Session.environment)
 	if err != nil {
 		return nil, err
 	}
+	session.startProcess = e.Worker.Session.startProcess
 	actual, err := session.root.Stat(".")
 	if err != nil || record.rootInfo == nil || !os.SameFile(actual, record.rootInfo) {
 		session.Close()

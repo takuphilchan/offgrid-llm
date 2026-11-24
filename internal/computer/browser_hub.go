@@ -17,13 +17,16 @@ import (
 
 var ErrSession = errors.New("computer session unavailable; pair the local companion again")
 var ErrUncertain = errors.New("computer action outcome is uncertain; inspect the selected application before reconciling this task")
+var ErrBrowserPrecondition = errors.New("browser precondition failed before input")
+var ErrBrowserObservation = errors.New("browser observation failed without input")
 
 type BrowserAction struct {
-	ID            string          `json:"id"`
-	Kind          string          `json:"kind"`
-	Arguments     json.RawMessage `json:"arguments"`
-	Binding       *ControlBinding `json:"binding,omitempty"`
-	Authorization string          `json:"authorization,omitempty"`
+	ID            string              `json:"id"`
+	Kind          string              `json:"kind"`
+	Arguments     json.RawMessage     `json:"arguments"`
+	Binding       *ControlBinding     `json:"binding,omitempty"`
+	FileBinding   *BrowserFileBinding `json:"file_binding,omitempty"`
+	Authorization string              `json:"authorization,omitempty"`
 }
 type BrowserReply struct {
 	ID     string `json:"id"`
@@ -31,33 +34,37 @@ type BrowserReply struct {
 	Error  string `json:"error,omitempty"`
 }
 type BrowserSession struct {
-	ID             string            `json:"id"`
-	Origin         string            `json:"origin"`
-	ExpiresAt      time.Time         `json:"expires_at"`
-	Remaining      int               `json:"remaining_actions"`
-	State          string            `json:"state"`
-	RunID          string            `json:"run_id,omitempty"`
-	Actor          string            `json:"-"`
-	Driver         string            `json:"driver,omitempty"`
-	Target         *TargetIdentity   `json:"target,omitempty"`
-	ApprovalMode   ApprovalMode      `json:"approval_mode"`
-	Desktop        *DesktopAuthority `json:"desktop,omitempty"`
-	InputID        string            `json:"input_id,omitempty"`
-	NativeFeatures NativeFeatures    `json:"native_features,omitempty"`
-	authorized     bool
-	token          [32]byte
-	run            string
-	pending        *BrowserAction
-	replies        chan BrowserReply
-	delivered      bool
-	seen           time.Time
-	stopped        bool
+	ID               string            `json:"id"`
+	Origin           string            `json:"origin"`
+	ExpiresAt        time.Time         `json:"expires_at"`
+	Remaining        int               `json:"remaining_actions"`
+	State            string            `json:"state"`
+	RunID            string            `json:"run_id,omitempty"`
+	Actor            string            `json:"-"`
+	Driver           string            `json:"driver,omitempty"`
+	Target           *TargetIdentity   `json:"target,omitempty"`
+	ApprovalMode     ApprovalMode      `json:"approval_mode"`
+	Desktop          *DesktopAuthority `json:"desktop,omitempty"`
+	InputID          string            `json:"input_id,omitempty"`
+	NativeFeatures   NativeFeatures    `json:"native_features,omitempty"`
+	BrowserFeatures  BrowserFeatures   `json:"browser_features,omitempty"`
+	BrowserOrigins   []string          `json:"browser_origins,omitempty"`
+	authorized       bool
+	token            [32]byte
+	run              string
+	pending          *BrowserAction
+	replies          chan BrowserReply
+	delivered        bool
+	seen             time.Time
+	stopped          bool
+	browserWorkspace string
 }
 type pairing struct {
 	actor                 string
 	expires               time.Time
 	run, input, workspace string
 	mode                  ApprovalMode
+	browser               *browserPairScope
 }
 
 type transientCapture struct {
@@ -97,16 +104,20 @@ func (h *BrowserHub) PairTaskCode(actor, run, input, workspace string, mode Appr
 func (h *BrowserHub) pairCode(actor, run, input, workspace string, mode ApprovalMode) (string, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	return h.pairCodeLocked(pairing{actor: actor, run: run, input: input, workspace: workspace, mode: mode})
+}
+func (h *BrowserHub) pairCodeLocked(next pairing) (string, error) {
 	for k, p := range h.pairs {
-		if p.actor == actor || time.Now().After(p.expires) {
+		if p.actor == next.actor || time.Now().After(p.expires) {
 			delete(h.pairs, k)
 		}
 	}
-	if actor == "" || len(h.pairs) >= 16 {
+	if next.actor == "" || len(h.pairs) >= 16 {
 		return "", ErrSession
 	}
 	code := randomID() + randomID()
-	h.pairs[code] = pairing{actor: actor, expires: time.Now().Add(2 * time.Minute), run: run, input: input, workspace: workspace, mode: mode}
+	next.expires = time.Now().Add(2 * time.Minute)
+	h.pairs[code] = next
 	return code, nil
 }
 func (h *BrowserHub) Pair(code, origin string, protocol int, modes ...ApprovalMode) (*BrowserSession, string, error) {
@@ -123,7 +134,7 @@ func (h *BrowserHub) Pair(code, origin string, protocol int, modes ...ApprovalMo
 	if protocol != ProtocolVersion {
 		return nil, "", ErrSession
 	}
-	return h.pair(code, u.Scheme+"://"+u.Host, "browser", nil, mode, false)
+	return h.PairBrowserFeatures(code, u.Scheme+"://"+u.Host, protocol, mode, BrowserFeatures{})
 }
 
 // PairNative is the protocol-2 path. A browser-v1 grant is never translated
@@ -162,43 +173,9 @@ func (h *BrowserHub) pair(code, label, driver string, target *TargetIdentity, mo
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	p, ok := h.pairs[code]
-	if !ok || time.Now().After(p.expires) || !mode.Valid() {
-		return nil, "", ErrSession
-	}
-	if desktop != (p.run != "") || (desktop && p.mode != mode) {
-		return nil, "", ErrControlScope
-	}
-	for _, s := range h.sessions {
-		if h.live(s) {
-			return nil, "", fmt.Errorf("stop the existing computer session before pairing another")
-		}
-	}
-	delete(h.pairs, code)
-	// Old tokens, queues and observations must not accumulate across pairings.
-	h.sessions = map[string]*BrowserSession{}
-	h.captures = map[string]transientCapture{}
-	token := randomID() + randomID()
-	s := &BrowserSession{ID: randomID(), Actor: p.actor, Origin: label, Driver: driver, Target: target, ApprovalMode: mode, ExpiresAt: time.Now().Add(10 * time.Minute), Remaining: 100, token: sha256.Sum256([]byte(token)), seen: time.Now(), replies: make(chan BrowserReply, 1)}
-	s.NativeFeatures = features
-	if desktop {
-		s.run, s.RunID, s.InputID = p.run, p.run, p.input
-		s.Desktop = &DesktopAuthority{Workspace: p.workspace, Binding: ControlBinding{Actor: p.actor, Task: p.run, Companion: s.ID, Session: s.ID, Target: *target}}
-		s.ExpiresAt = time.Now().Add(DesktopConsentDuration)
-		s.Remaining = DesktopActionBudget
-	}
-	h.sessions[s.ID] = s
-	copy := *s
-	if s.Target != nil {
-		targetCopy := *s.Target
-		copy.Target = &targetCopy
-	}
-	copy.State = "ready"
-	if desktop {
-		copy.State = "awaiting_consent"
-	}
-	return &copy, token, nil
+	return h.pairLocked(code, label, driver, target, mode, desktop, features, BrowserFeatures{}, nil)
 }
+
 func (h *BrowserHub) live(s *BrowserSession) bool {
 	return !s.stopped && time.Now().Before(s.ExpiresAt) && time.Since(s.seen) < 30*time.Second
 }
@@ -216,6 +193,7 @@ func (h *BrowserHub) List(actor string) []BrowserSession {
 	for _, s := range h.sessions {
 		if s.Actor == actor && h.live(s) {
 			copy := *s
+			copy.BrowserOrigins = append([]string(nil), s.BrowserOrigins...)
 			if s.Target != nil {
 				targetCopy := *s.Target
 				copy.Target = &targetCopy
@@ -399,6 +377,10 @@ func (h *BrowserHub) Poll(token string) (*BrowserAction, error) {
 		binding := *s.pending.Binding
 		copy.Binding = &binding
 	}
+	if s.pending.FileBinding != nil {
+		binding := *s.pending.FileBinding
+		copy.FileBinding = &binding
+	}
 	return &copy, nil
 }
 
@@ -426,9 +408,13 @@ func (h *BrowserHub) Reply(token string, reply BrowserReply) error {
 	if len(reply.Result) > 48<<10 || len(reply.Error) > 1024 {
 		return fmt.Errorf("computer result too large")
 	}
-	if h.RecordReply != nil && s.Driver != "browser" {
+	if h.RecordReply != nil {
 		action := *s.pending
 		action.Arguments = append(json.RawMessage(nil), action.Arguments...)
+		if action.FileBinding != nil {
+			binding := *action.FileBinding
+			action.FileBinding = &binding
+		}
 		if err := h.RecordReply(s.Actor, s.ID, s.run, action, reply); err != nil {
 			return err
 		}
@@ -466,8 +452,29 @@ func (h *BrowserHub) ExecuteAuthorized(ctx context.Context, actor, id, run, call
 		h.mu.Unlock()
 		return "", ErrSession
 	}
+	fileBinding, err := s.FileBinding()
+	if err != nil {
+		h.mu.Unlock()
+		return "", err
+	}
 	// Dispatch is restricted by the enrolled driver, not by the model's choice
 	// of tool name. Even internal callers cannot send native actions to v1.
+	if kind == "browser_inspect" && (s.Driver != "browser" || s.BrowserFeatures.Discovery != 1) {
+		h.mu.Unlock()
+		return "", ErrControlScope
+	}
+	if BrowserWorkspaceTool(kind) && (s.Driver != "browser" || s.BrowserFeatures.Workspace != 1) {
+		h.mu.Unlock()
+		return "", ErrControlScope
+	}
+	if browserStructuredAction(kind, args) && (s.Driver != "browser" || s.BrowserFeatures.Structured != 1) {
+		h.mu.Unlock()
+		return "", ErrControlScope
+	}
+	if s.Driver == "browser" && !browserScopeAllows(s, kind, args) {
+		h.mu.Unlock()
+		return "", ErrBrowserPrecondition
+	}
 	if document && (s.NativeFeatures.Documents != NativeDocumentsVersion || s.Driver == "browser" || s.Target == nil) {
 		h.mu.Unlock()
 		return "", ErrDocumentUnavailable
@@ -481,7 +488,7 @@ func (h *BrowserHub) ExecuteAuthorized(ctx context.Context, actor, id, run, call
 		s.Remaining--
 	}
 	actionID := run + ":" + call
-	s.pending = &BrowserAction{ID: actionID, Kind: kind, Arguments: append(json.RawMessage{}, args...), Authorization: authorization}
+	s.pending = &BrowserAction{ID: actionID, Kind: kind, Arguments: append(json.RawMessage{}, args...), Authorization: authorization, FileBinding: fileBinding}
 	if s.Target != nil {
 		s.pending.Binding = &ControlBinding{Actor: actor, Task: run, Companion: s.ID, Session: s.ID, Target: *s.Target}
 	}
@@ -504,6 +511,20 @@ func (h *BrowserHub) ExecuteAuthorized(ctx context.Context, actor, id, run, call
 				// otherwise healthy controller. Unknown and scope-breaking failures
 				// remain terminal because their outcome cannot be established here.
 				switch reply.Error {
+				case "computer_browser_precondition_failed", "computer_browser_observation_failed":
+					if s.Driver != "browser" {
+						h.Stop(actor)
+						return "", ErrUncertain
+					}
+					if reply.Error == "computer_browser_precondition_failed" {
+						return "", ErrBrowserPrecondition
+					}
+					// Read-failure safety cannot be applied to a mutating action.
+					if kind != "browser_observe" && kind != "browser_capture" && kind != "browser_verify" && kind != "browser_inspect" && kind != "browser_tabs" && !BrowserStructuredTool(kind) {
+						h.Stop(actor)
+						return "", ErrUncertain
+					}
+					return "", ErrBrowserObservation
 				case "computer_target_not_selected":
 					return "", ErrTargetNotSelected
 				case "computer_application_not_ready":

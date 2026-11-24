@@ -30,7 +30,7 @@ func (s *Server) handleInferencePrepare(w http.ResponseWriter, r *http.Request) 
 		writeServiceError(w, err)
 		return
 	}
-	metadata, err := s.registry.GetChatModel(request.Model)
+	metadata, err := s.localChatMetadata(request.Model)
 	if err != nil || metadata.Format != "" && metadata.Format != "gguf" {
 		writeErrorWithCode(w, "Selected chat model is unavailable for preparation", http.StatusBadRequest, "model_unavailable")
 		return

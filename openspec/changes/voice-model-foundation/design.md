@@ -266,19 +266,20 @@ discard pending audio immediately. Provisional speech is labelled, not announced
 as verified task completion. This is chunked response speech, not native audio
 token streaming. The later approved Talk extension uses it for spoken replies.
 
-### Approved Talk interaction
+### Initial Talk interaction (2026-11-03; expanded below on 2026-11-22)
 
 Keep normal dictation and Talk separate. A local level detector observes the
 current microphone stream and ends capture after speech followed by a bounded
 pause; it never sends normal dictation. Manual Stop and the recording deadline
 remain available when level detection cannot establish an utterance.
 
-Talk is explicit and session-only in ordinary Chat. Preflight the selected ASR
+The initial alternating Talk implementation is explicit and session-only in ordinary Chat. Preflight the selected ASR
 and TTS packages before opening the microphone. Capture one utterance, pin its
 transcript and send one request through the existing Chat path and request ID.
 Speak the committed answer through ResponseSpeech; only natural playback
-completion starts another capture. Do not listen while the speaker is active,
-to avoid echo loops. The visible Speak again action can interrupt playback and
+completion starts another capture. This initial stage pauses capture during
+speaker playback to avoid echo loops; the natural voice extension below replaces
+that limitation with qualified interactive capture. The visible Speak again action can interrupt playback and
 return to listening. Errors, unavailable runtimes, changed context and unknown
 request outcomes stop the loop with the draft/evidence retained. Stop aborts the
 owned capture, transcription, generation and audio without replay. No new
@@ -319,3 +320,43 @@ Acquisition review is inline: one supported variant resolves automatically;
 multiple supported variants require selection. Conditions stay visible before
 Download. Keyword search uses the Hub rather than a Qwen shortcut. Search size
 must use byte metadata, never the safetensors parameter count.
+
+### Natural voice ownership and delivery (authorized 2026-11-22)
+
+The [interactive voice audit](../../../docs/quality/evidence/voice-interaction-audit-2026-11-22.md)
+records actual code gaps and current primary-source comparisons. Extend the
+existing microphone, response-speech and canonical turn owners; do not create a
+second voice executor or a separate conversational history. Session revisions
+fence all asynchronous permission, ASR, submission, generation and playback
+callbacks, including failures arriving after reset/restart.
+
+Capture and response activity need independent states. One explicitly owned
+capture stream observes qualified user speech during playback, retaining bounded
+pre-roll and distinguishing echo/noise. Local interruption silences output first;
+owned synthesis/generation cancellation and canonical work reconciliation follow.
+Speech onset is not a tool approval or proof that a job stopped. Finalized spoken
+corrections use the existing canonical inbox and active-work steering semantics.
+
+Track generated text, queued chunks and completed device playback separately.
+Interrupted partial chunks remain uncertain unless an adapter supplies verified
+alignment. Do not equate scheduling offsets with played content or claim the user
+heard a word from an audio timer. Preserve the canonical text and evidence while
+recording delivery state for subsequent voice context. Navigation, Stop, lost
+acknowledgements and reconnect never replay audio or conversation inputs.
+
+Current batch ASR, serialized ASR/TTS loading and fixed RMS silence endpointing
+are measured constraints, not a full-duplex solution. Integrate streaming and
+adaptive endpointing only through supported local adapters and shared resource
+admission. Keep explicit completion/interruption controls accessible; qualify
+speaker/headset echo, noise, backchannels, hesitation, languages and latency on
+actual hardware. Synthetic browser tests establish lifecycle ordering only.
+
+The 2026-11-24 correction accepts applied boolean/all echo cancellation independently
+of noise suppression, and attempts the all-output constraint only when advertised.
+Failed upgrades re-read actual settings; Stop/session changes fence configuration.
+Onset accumulates 180 ms of voiced frames across gaps of at most 80 ms, with an
+adaptive noise floor for quiet input. This remains energy-based endpointing, not
+semantic speech recognition or acoustic echo qualification. Automatic Talk removes
+the recording timer, retains explicit completion/discard, and anchors its exit
+control across capture phases. Tests must include quiet/gapped input, short noise
+spikes, no-button interruption/endpointing, and reduced-gain recorded speech.

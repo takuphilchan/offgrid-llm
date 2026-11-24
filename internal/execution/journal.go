@@ -58,7 +58,7 @@ func OpenJournal(directory string) (*Journal, error) {
 	}
 	var version int
 	err = db.QueryRow("PRAGMA user_version").Scan(&version)
-	if err == nil && version != 0 && version != 1 && version != 2 && version != 3 {
+	if err == nil && version != 0 && version != 1 && version != 2 && version != 3 && version != 4 {
 		err = ErrUnsupported
 	}
 	if err == nil && version == 0 {
@@ -68,7 +68,7 @@ func OpenJournal(directory string) (*Journal, error) {
 		db.Close()
 		return fail(err)
 	}
-	if _, err = db.Exec(`BEGIN; CREATE TABLE IF NOT EXISTS execution_process_requests(id TEXT PRIMARY KEY REFERENCES execution_operations(id),request BLOB NOT NULL,input_manifest TEXT NOT NULL); CREATE TABLE IF NOT EXISTS execution_replacements(operation TEXT PRIMARY KEY REFERENCES execution_operations(id),directory TEXT NOT NULL UNIQUE,target TEXT NOT NULL,expected TEXT NOT NULL,proposed TEXT NOT NULL,reserved_bytes INTEGER NOT NULL,state TEXT NOT NULL,receipt BLOB); PRAGMA user_version=3; COMMIT;`); err != nil {
+	if _, err = db.Exec(`BEGIN; CREATE TABLE IF NOT EXISTS execution_process_requests(id TEXT PRIMARY KEY REFERENCES execution_operations(id),request BLOB NOT NULL,input_manifest TEXT NOT NULL); CREATE TABLE IF NOT EXISTS execution_replacements(operation TEXT PRIMARY KEY REFERENCES execution_operations(id),directory TEXT NOT NULL UNIQUE,target TEXT NOT NULL,expected TEXT NOT NULL,proposed TEXT NOT NULL,reserved_bytes INTEGER NOT NULL,state TEXT NOT NULL,receipt BLOB); ` + processManifestSchema + ` PRAGMA user_version=4; COMMIT;`); err != nil {
 		db.Close()
 		return fail(err)
 	}

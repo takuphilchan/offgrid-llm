@@ -43,7 +43,7 @@ func (s *Server) InstallMeasuredAgentTools() error {
 		return errors.New("native agent runtime measurement owner is unavailable")
 	}
 	resources := *s.systemResources
-	m := &agentToolMeasurements{installations: entries, model: s.registry.GetChatModel,
+	m := &agentToolMeasurements{installations: entries, model: s.localChatMetadata,
 		hardware: func(ctx context.Context) (string, error) { return resource.QualificationHardwareID(ctx, &resources) },
 		installation: func(ctx context.Context) (func(), error) {
 			if err := ctx.Err(); err != nil {

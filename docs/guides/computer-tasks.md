@@ -62,17 +62,39 @@ tool set. This composition does not yet add tools to ordinary Chat turns.
 | Whole desktop for this task (Windows x64 preview) | One local task grant; OS-backed app discovery, recorded launch, window switching and structured controls | Validated zero-argument GUI registrations, 60 minutes/500 changes; no arbitrary commands, native vision, or direct filesystem grant |
 | Existing application window | Structured accessibility observations and supported typed edits, selections, activations, and fixed shortcuts | Only controls the driver can address and verify; not unrestricted pointer/keyboard input |
 | Existing browser window selected as an app | The native application's exposed accessibility controls | Not attachment to a personal browser profile through Playwright; support varies by browser and page |
-| Managed browser | Separate bundled Chromium session, constrained navigation, structured controls, and governed transfers | No personal profile import; cross-origin/authentication workflows remain limited |
+| Managed browser | Separate bundled Chromium session, explicitly approved sites, up to eight task tabs, searchable structured controls, explicit frame selection, manual takeover with renewed consent, and governed transfers | No personal profile import; signed-in attachment, transfer-integrity improvements and full workflow qualification remain unfinished. Manual-control integration has isolated evidence; cleanup/load failures remain under investigation |
 | Native vision | Not implemented as general native control in this checkout | Do not infer availability from a vision model or browser screenshot feature |
 
 Native workers exist for Windows UI Automation, macOS Accessibility, and Linux AT-SPI. Linux X11 shortcuts and Wayland portal input are not interchangeable; general Wayland capture/input remains unfinished. All native profiles still need the recorded workflow qualification gates. See the [driver documentation](../../apps/computer/README.md) and [quality evidence](../quality/README.md).
+
+### Select browser sites
+
+When a task requests a managed browser, enter its starting HTTPS page in
+**Website (HTTPS)**. **Additional sites** accepts up to 15 other public HTTPS
+origins, one per line, including any resource sites the page needs. Enter the
+scheme and host (and port when needed), without paths, query parameters or login
+credentials. For example, a starting article on `https://example.com` may need
+`https://cdn.example.com` for its resources. Sites mentioned by a page are never
+added automatically.
+
+The local OffGrid confirmation lists the exact approved sites and the selected
+approval policy. Matching desktop, companion and service versions allow up to
+eight separate task-owned tabs within that scope. The browser uses an isolated
+profile and does not import saved logins or personal tabs. Stop remains available
+locally. To add another site after starting, stop and explicitly approve a new
+session; changing a text field cannot expand an active grant.
+
+Older services keep the original one-site browser. Asking them for additional
+sites fails before a browser is launched. If the service, account or tab capability
+changes during confirmation, review and approve again. Network routing choices
+do not authorize private networks or sites outside the displayed set.
 
 ## Approve changes at the right level
 
 | Policy | Behavior inside the selected scope |
 | --- | --- |
 | Ask every time | Require exact-action approval for changes |
-| Approve scoped changes | Automatically permit only supported, locally classified reversible changes; ask for consequential or ambiguous actions |
+| Approve scoped changes | Automatically permit supported field/selection changes; arbitrary browser clicks require exact approval, including buttons labelled Save or Apply |
 | Full task access | Permit available typed actions, including supported consequential operations, within the approved scope |
 
 Full task access is not unrestricted OS access. Credential/payment entry, financial transactions, privilege changes, installation, arbitrary scripts, permanent deletion, and replay of uncertain actions remain blocked. The selected policy is fixed for that session; a model cannot broaden it. Unknown-effect controls are not automatically classified as harmless.
@@ -354,6 +376,22 @@ Managed-browser viewport images can be used only with compatible installed model
 ## Stop and recover
 
 Use **Pause**, **Take over**, or **Stop** in the task as appropriate. Take over revokes that task's computer session; the local emergency stop also works when the service cannot be reached. Stop is not undo: already dispatched effects may finish and must be inspected.
+
+With matching retained-browser support, **Take over** first stops new automation
+and waits for admitted input to settle. Wait for **You control the browser** before
+making manual changes. The separate task browser keeps its open tabs and signed-in
+state. **Reconnect access**, followed by **Resume this browser** and renewed local
+consent, returns that browser to the same saved task. The original approved sites,
+network mode and access policy still apply; an unapproved sign-in redirect remains
+blocked. Personal Chrome/Edge profiles are not imported by this flow.
+
+A pending or unconfirmed handoff is not proof that control has transferred.
+**Check resume** checks the same pending operation after a lost reply. Stop remains
+available, including during a service outage. If close cannot be confirmed, the
+host keeps ownership for a later Stop retry. Older browser hosts and native-control
+sessions retain their supported close/reconnect behavior. Installed-platform,
+real-model and human qualification are recorded separately in the
+[handoff evidence](../quality/evidence/browser-manual-takeover-2026-11-20.md).
 
 The updated Windows desktop uses the existing persistent in-app **Stop control**,
 File menu and tray, not a second floating Stop window. The in-app control remains

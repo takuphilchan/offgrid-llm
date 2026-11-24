@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/takuphilchan/offgrid-llm/internal/execution"
+	"github.com/takuphilchan/offgrid-llm/internal/testhost"
 )
 
 func TestExecutorSubprocess(t *testing.T) {
@@ -29,8 +30,9 @@ func TestExecutorSubprocess(t *testing.T) {
 }
 
 func TestPrivateStdioListsOnlyApprovedFolder(t *testing.T) {
+	testhost.Account(t)
 	root := t.TempDir()
-	grant := filepath.Join(t.TempDir(), "grant.json")
+	grant := filepath.Join(testhost.PrivateDirectory(t), "grant.json")
 	b := execution.Binding{Actor: "fixture", Workspace: "fixture-workspace", Host: "fixture-host", Session: "fixture-session", Grant: "fixture-grant", Job: "fixture-job", Revision: 1}
 	config := execution.Context{Version: 1, Binding: b, Backend: "local", Root: root, Directory: ".", Permissions: execution.Permissions{Read: true}}
 	data, _ := json.Marshal(config)
@@ -43,7 +45,7 @@ func TestPrivateStdioListsOnlyApprovedFolder(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "only-fixture.txt"), []byte("safe"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command(os.Args[0], "-test.run=^TestExecutorSubprocess$", "--", "--stdio", "--grant-file", grant, "--state-dir", filepath.Join(t.TempDir(), "journal"))
+	command := exec.Command(os.Args[0], "-test.run=^TestExecutorSubprocess$", "--", "--stdio", "--grant-file", grant, "--state-dir", filepath.Join(testhost.PrivateDirectory(t), "journal"))
 	token := strings.Repeat("c", 64)
 	command.Env = append(os.Environ(), "OFFGRID_EXECUTOR_TEST_CHILD=1", "OFFGRID_EXECUTOR_TOKEN="+token)
 	input, err := command.StdinPipe()

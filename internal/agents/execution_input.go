@@ -91,7 +91,16 @@ func (r *Runner) ResolveExecutionInputWithProject(id, actor, inputID string, res
 	var task *Task
 	var err error
 	if project == nil {
-		task, err = r.manager.updateTask(id, change)
+		task, err = r.manager.updateTask(id, func(task *Task) error {
+			duplicate := task.Actor == actor && task.ResolvedInputID == inputID && task.Config.Execution != nil && *task.Config.Execution == resource.Reference
+			if err := change(task); err != nil {
+				return err
+			}
+			if duplicate {
+				return nil
+			}
+			return r.manager.acceptRootModelProgress(r.manager.tasks[id], task)
+		})
 	} else {
 		task, err = r.manager.updateTaskControl(id, func(task *Task, tx *sql.Tx) error {
 			duplicate := task.Actor == actor && task.ResolvedInputID == inputID && task.Config.Execution != nil && *task.Config.Execution == resource.Reference
@@ -101,7 +110,10 @@ func (r *Runner) ResolveExecutionInputWithProject(id, actor, inputID string, res
 			if duplicate {
 				return nil
 			}
-			return bindExecutionProject(tx, task, resource, project)
+			if err := bindExecutionProject(tx, task, resource, project); err != nil {
+				return err
+			}
+			return r.manager.acceptRootModelProgress(r.manager.tasks[id], task)
 		})
 	}
 	if err == nil {

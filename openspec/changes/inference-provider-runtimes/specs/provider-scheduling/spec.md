@@ -2,6 +2,21 @@
 
 ## ADDED Requirements
 
+### Requirement: Failed embedding loads retain uncertain resources
+The shared embedding owner MUST retire a partially loaded or invalid-readiness
+implementation before releasing its resources. An unconfirmed cleanup MUST keep
+that implementation tracked without declaring it loaded/ready, record unresolved
+residency and block later provider or embedding allocation until explicit recovery.
+
+#### Scenario: Failed load cannot confirm cleanup
+- **WHEN** an embedding implementation fails loading or reports invalid dimensions and then fails unloading
+- **THEN** the original failure and retirement uncertainty are preserved, the implementation remains owned, and readiness stays false
+- **AND** a later embedding factory, native provider or legacy allocation cannot reuse its capacity
+
+#### Scenario: Final owner cleanup after a failed load
+- **WHEN** the service shuts down after a failed embedding load with unconfirmed retirement
+- **THEN** the same tracked implementation receives final cleanup and the prior uncertainty is not silently erased
+
 ### Requirement: Speculative reads respect host memory pressure
 Prewarming SHALL have bounded concurrency, bytes, duration and retained history.
 It SHALL stop on pause, memory pressure or read failure and SHALL NOT label a

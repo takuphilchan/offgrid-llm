@@ -6,24 +6,19 @@ React UI rather than maintaining a fork. A change to a workflow should therefore
 work in both environments unless it is explicitly guarded by a desktop
 capability.
 
-Shared surface tokens provide neutral sidebar/composer depth and lightly frosted
-utility menus and the command palette. Text remains opaque; primary actions use
-solid fills. Reduced transparency, increased contrast, forced colors and browsers
-without the required CSS support receive opaque surfaces. Effects are static and
-bounded to three decorative surface families. See the maintained
+Shared surface tokens provide flat neutral sidebar, composer, reader and floating
+menu surfaces. Text and menu backgrounds remain opaque; primary actions use solid
+fills. Opening a menu does not blur the workspace behind it. Retained functional
+progress fills honor increased contrast, forced colors and the diagnostic
+material switch. See the maintained
 [surface-material guide](../ux/gradients.md) for ownership and verification.
 
 ## Product structure
 
-The primary navigation is organized by user intent:
-
-- **Work** contains Chat, Activity and Agents.
-- **Library** contains Knowledge and Models.
-- **Settings** lives in the Workspace options footer menu.
-
-Work and Library have visible group labels in the expanded sidebar. Short
-windows and the collapsed rail retain a single vertical sequence of destinations;
-they do not turn the navigation into an unlabelled two-column grid.
+The destination rail opens Chat, Library, Activity and Models, with Settings at
+its foot. An adjacent context column holds recent conversations or searchable
+Settings categories. Agents remain available through **Settings → Models &
+responses → Agents**. Existing routes and deep links are retained.
 
 Feature behavior belongs under `apps/web/src/features/<feature>`. `App.tsx` owns
 only shell-level state: routing, authentication, service reachability, the
@@ -32,14 +27,12 @@ selected chat model, locale, theme, and onboarding. API access remains in
 error-decoding logic.
 
 The shared header shows the page title, quick actions and relevant work status.
-One 248px sidebar combines navigation with contextual Chat history and an early
-New chat action. It can collapse to a labelled 64px icon rail without disposing
-the composer. History scrolls independently; row actions use labelled menus with
-the existing deletion confirmation. The footer has one **Workspace options**
-menu containing Settings, refresh, language, appearance and account controls,
-with connection status below it. Below 1024px a labelled navigation button opens
-the expanded sidebar as a drawer; Escape/outside click closes it and restores
-focus. All six destinations remain available.
+New chat sits above recent work. The context column can collapse without
+disposing the composer, and history scrolls independently. Row actions use
+labelled menus with the existing deletion confirmation. Narrow windows use a
+navigation drawer; Escape/outside click closes it and restores focus. Language,
+appearance and account controls live in Settings. Returning from setup refreshes
+the relevant inventory and preserves the request's draft and identity.
 These controls do not grant permissions or restart active work.
 
 Management pages share a leading edge; Settings keeps a narrower reading measure.
@@ -50,11 +43,27 @@ menu for verification/removal. Selection does not load or download a model.
 The current choice is labelled **Selected**. Cancelled transfers remain under
 **Downloads**, collapsed by default; active or failed transfers remain expanded.
 
-Chat's **Context & response** panel contains response, retrieval and voice
-preferences. Microphone input, image attachment and active speech stopping remain
-in the composer. Voice metadata reads are cancelled when the panel closes.
+Chat's **Response settings** control exposes current context and links to the
+relevant configuration. Microphone input, file/image attachment and active speech
+stopping remain in the composer. Voice metadata reads are cancelled when its
+configuration panel closes.
+The composer has one model selector. Its menu lists installed models and opens
+Models with a return-to-draft handoff; an empty inventory explains setup inside
+that menu. A missing saved selection remains visible and blocks sending until
+the user replaces it. Ordinary menus and draft edits do not fade the full/browser
+workspace. Presentation transitions are reserved for voice swaps and compact
+native window resizing.
+The prompt editor grows with its text when the window narrows or native zoom
+changes, up to 160 CSS pixels before scrolling inside the field. Supported engines
+use native content sizing; older engines retain a bounded resize fallback.
+Resizing preserves the draft and never submits it.
 Knowledge places search and question entry together, with selected-source actions
-appearing only for the current selection. Activity separates saved work and
+appearing only for the current selection. Returning from another page retains
+the library filter, page and available selected sources within the same account
+and workspace session. Changing the filter starts at the first page; a shorter
+result list displays the last valid page. This session state does not restore
+removed or inaccessible sources and does not change library data.
+Activity separates saved work and
 **Schedules**; diagnostics stay secondary to work. Attention, Running, History
 and All work filters separate pending decisions from completed tasks. The header's
 Needs attention entry opens the matching filter without changing any work.
@@ -290,6 +299,19 @@ name as an explicit selection action. The saved selection remains untouched unti
 the user chooses. Choosing another model remains available beside that action.
 Connection status stays visible; connection explanations and the installed-model
 count are expandable. An unresolved health check cannot trigger model selection.
+
+Engine setup reads `/api/v2/runtime` separately from service and model readiness.
+Until a valid response arrives it reports Checking, without offering preparation.
+An unsupported endpoint has an explanatory state; a failed or malformed read has
+a read-only retry. Neither retains an actionable stale status. Preparation remains
+an explicit administrator action. Cancellation, a failed acknowledgment or an
+invalid success response requires a fresh status read before another attempt.
+Polling is serialized, and an earlier read cannot overwrite a later preparation
+result. Engine-ready means the service verified its startup requirements, not that
+a model has produced a successful response. The download explanation follows the
+service's `download_required` value; checking a configured GPU engine does not
+promise to install its drivers. Setup copy is authored in all 29 registered
+catalogs, with independent language review still required.
 
 Opening a document keeps the empty Chat heading compact and left-aligned so the
 source pane has visual priority. The draft, attachment controls and unread-content
@@ -705,21 +727,63 @@ permission for desktop control or a qualified visual-agent workflow.
 
 ## Settings navigation and ownership
 
-Settings provides six searchable sections: General, Models & responses, Voice,
-Terminal, Access & data, and Advanced/About. Search filters these sections and
-their control labels; it does not query remote content.
+Settings provides searchable sections for General, Appearance, Models & responses,
+Voice, Terminal, Access & data, Local storage, and About. Compatible desktop hosts
+also provide Quick window controls. Search filters these sections and their
+control labels; it does not query remote content.
 
-General owns interface language, appearance and the setup guide. Models &
+Search results link to individual response display/profile/limit, recognition
+model, speech model/voice, appearance, and desktop shortcut controls. Existing
+section links still work. Following a result focuses the control without opening
+its menu or changing its value. While voice metadata is unavailable, focus lands
+on the setting's explanation and is not moved again when the read finishes.
+Desktop shortcut results are omitted in the browser. The setup guide and
+diagnostics can be found without opening them automatically.
+
+General owns interface language and the setup guide. Appearance owns theme,
+palette, text size and reduced motion. Models &
 responses reuses Chat's account/workspace-scoped response preferences; it does
 not reconfigure the service or change a running task. Voice uses the existing
 recognition and synthesis preferences without starting recording or playback.
 Terminal links desktop users to the native terminal's display controls; the web
 app explains that boundary. Access & data retains computer-access status and
-explicit emergency Stop, with local paths identified only on desktop. Service
-identity and technical diagnostics live under Advanced/About.
+explicit emergency Stop. Local storage identifies desktop paths separately from
+service storage and checks recovery capability before offering operations.
+Service identity and technical diagnostics live under About.
 
-Preferences persist through their existing owners. Opening or searching Settings
+Preferences persist through their existing owners. If saving fails, the selected
+value remains active for the session and the unsaved notice survives navigation.
+Appearance waits for desktop confirmation before reporting Saved; an older
+response cannot overwrite the latest save outcome. Voice choices also disclose
+storage failure. Recovery requires another explicit change; returning to Settings
+does not replay a save or start audio.
+
+Opening or searching Settings
 does not grant access, start a terminal, load a model, or modify service limits.
 The section navigation collapses to a compact grid on narrow displays and
-supports the nine interface locales and RTL. Automated locale checks are not a
+supports the 29 interface language packs and RTL. Automated locale checks are not a
 substitute for human translation or screen-reader review.
+
+## Interface refinement (2026-11-21)
+
+The empty Chat view offers up to three recent conversations. Opening one uses
+the existing conversation history and preserves the unsent new-chat draft.
+Quick Access retains its compact input layout. If native zoom leaves too little
+room for its controls, it uses the existing larger work layout and keeps that
+size stable until the viewport widens. Resizing waits for CSS viewport geometry
+to catch up with the native window and does not submit or replace the draft.
+On wide workspace windows the
+top-bar Quick actions control shows its label and keyboard shortcut. The active
+rail destination has a positional marker; narrow navigation keeps its labels
+inside the drawer during keyboard focus.
+
+Models, Agents and Activity share a compact view-navigation treatment. Management
+screens use the existing typography, spacing and surface tokens, with clearer
+empty and recovery states. The palette, saved theme and language remain under
+the existing preferences.
+
+Completed work whose answer is already saved uses a smaller status summary.
+Inspect and verification status remain visible; profile name and revision live
+in Details. Approval, input, interrupted and uncertain-work controls keep their
+existing behavior and authority. See the [dated implementation evidence](../quality/evidence/interface-refinement-2026-11-21.md)
+for checks and integration boundaries.

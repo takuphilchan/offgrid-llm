@@ -126,7 +126,20 @@ func run() error {
 	directory := flag.String("state", "", "host dispatch-journal directory (not a service workspace)")
 	protocol := flag.Int("protocol", 2, "private host protocol (2 or 3)")
 	stopControl := flag.String("stop-control", "window", "Stop control owner (window or app); not an authorization")
-	flag.Parse()
+	browserStorage := flag.Bool("browser-storage", false, "private browser storage preparation only; no UI control")
+	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+		return err
+	}
+	if *browserStorage {
+		invalid := flag.NArg() != 0 || !filepath.IsAbs(*directory)
+		flag.Visit(func(f *flag.Flag) { invalid = invalid || f.Name != "state" && f.Name != "browser-storage" })
+		if invalid {
+			return errBrowserStorage
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return serveBrowserStorage(ctx, os.Stdin, os.Stdout, *directory)
+	}
 	if *directory == "" || flag.NArg() != 0 || (*protocol != 2 && *protocol != 3) {
 		return fmt.Errorf("use --state with an exclusive host journal directory; transport is private framed stdin/stdout")
 	}

@@ -10,12 +10,13 @@ import (
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/execution"
+	"github.com/takuphilchan/offgrid-llm/internal/testhost"
 )
 
 func testEndpointWorkerPreparation(t *testing.T, binary, digest string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	root, private := t.TempDir(), t.TempDir()
+	root, private := t.TempDir(), testhost.PrivateDirectory(t)
 	b := execution.Binding{Actor: "fixture", Workspace: "workspace", Host: "host", Session: "prepare", Grant: "grant", Revision: 1, Job: "parent"}
 	config := execution.Context{Version: 1, Binding: b, Backend: "local", Root: root, Directory: ".", Permissions: execution.Permissions{Read: true, Write: true}, WorkerCopies: execution.DefaultWorkingCopyPolicy()}
 	grant, state := filepath.Join(private, "grant.json"), filepath.Join(private, "state")

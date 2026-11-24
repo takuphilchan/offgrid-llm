@@ -246,15 +246,22 @@ func (r *Runner) executeRuntimeTool(ctx context.Context, task *Task, call api.To
 		if call.Function.Name == "task_expectations" {
 			return true, r.rejectProposal(task, &ToolAuthorizationError{Code: "invalid_task_expectations", Message: err.Error()}, workflowDeclarationGuidance(task))
 		}
+		if _, invalid := err.(*runtimeArgumentError); invalid || call.Function.Name == "task_plan" {
+			chargeAuxiliaryModelRepair(task, "metadata:"+call.Function.Name)
+		}
 		data, _ := json.Marshal(map[string]string{"error": "invalid_task_operation", "message": err.Error()})
 		result = string(data)
 	}
 	if err == nil {
+		resolveAuxiliaryModelRepair(task, "metadata:"+call.Function.Name)
 		resolveComputerToolSequence(task.Checkpoint, call.Function.Name)
 	}
 	task.Checkpoint.Messages = append(task.Checkpoint.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: result})
 	task.Checkpoint.Calls = nil
 	task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "task_metadata", ToolName: call.Function.Name, ToolArgs: call.Function.Arguments, ToolResult: result, Timestamp: time.Now().UTC()})
+	if err == nil {
+		return true, r.persistModelProgress(task)
+	}
 	return true, r.persist(task)
 }
 
@@ -262,10 +269,10 @@ func decodeRuntimeArguments(value string, target any) error {
 	d := json.NewDecoder(strings.NewReader(value))
 	d.DisallowUnknownFields()
 	if err := d.Decode(target); err != nil {
-		return err
+		return &runtimeArgumentError{cause: err}
 	}
 	if d.Decode(new(any)) != io.EOF {
-		return fmt.Errorf("Invalid task operation envelope")
+		return &runtimeArgumentError{cause: fmt.Errorf("Invalid task operation envelope")}
 	}
 	return nil
 }

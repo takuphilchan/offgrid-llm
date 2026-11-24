@@ -48,6 +48,10 @@ test('work redesign production navigation and memory against retained baseline',
     await new Promise<void>((resolve,reject)=>{const poll=()=>{if(performance.now()-start>10000){reject(Error('No immediate feedback'));return;}if(document.querySelector('button[aria-label="Stop"]'))requestAnimationFrame(()=>resolve());else requestAnimationFrame(poll);};requestAnimationFrame(poll);});return performance.now()-start;
    });
    await page.getByRole('button',{name:'Stop',exact:true}).last().click();
+   // Stop acknowledges cancellation before the final saved-state read settles.
+   // Include that read for both builds instead of sampling a timing-dependent count.
+   await expect(page.getByRole('button',{name:'Send',exact:true})).toBeEnabled();
+   await expect(page.locator('.page-failure')).toHaveCount(0);
    const sorted=[...navigation].sort((a,b)=>a-b);
    records[name]={navigation,p95:sorted[Math.ceil(sorted.length*.95)-1],heap,requests,acknowledgment};
   }finally{await context.close();}

@@ -2,7 +2,7 @@
   .model-transfers { border-block-end: 0; padding-block: var(--space-2); }
   .model-transfers > summary { width: fit-content; font-size: var(--type-ui); cursor: pointer; }
   .model-transfers > .stack { margin-block: var(--space-3); }
-  .models-workspace { display:flex; flex-direction:column; gap:20px; max-width:1120px; margin-inline:auto; }
+  .models-workspace { display:flex; flex-direction:column; gap:20px; max-width:var(--measure-workspace); margin-inline:auto; }
   .model-library-tabs { display: flex; flex-wrap: wrap; gap: 20px; grid-column: 1 / -1; border-block-end: 1px solid var(--separator); }
   .model-library-toolbar { display:flex; align-items:end; gap:16px; flex-wrap:wrap; }
   .model-library-navigation { display:flex; align-items:center; gap:4px; flex:0 1 auto; flex-wrap:wrap; min-width:0; padding:4px; border-radius:18px; background:color-mix(in srgb,var(--text) 4%,var(--surface-1)); }
@@ -98,4 +98,14 @@
 .offline-import-spinner { display: inline-block; inline-size: 1em; block-size: 1em; margin-inline-end: .5em; border: 2px solid var(--line); border-block-start-color: currentColor; border-radius: 50%; animation: offline-import-spin 1s linear infinite; }
 @keyframes offline-import-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .offline-import-spinner { animation: none; } }
+}
+
+@layer workspace {
+ .models-workspace .catalog-grid { gap:var(--space-4); }
+ .models-workspace .catalog-card { border-radius:var(--radius-panel); padding:var(--space-6); background:var(--surface-1); }
+ .models-workspace .catalog-card h3 { font-size:var(--type-section); line-height:var(--leading-ui); }
+ .models-workspace .catalog-card > p { line-height:var(--leading-prose); color:var(--muted); }
+ .models-workspace .model-library-toolbar { align-items:center; }
+ .models-workspace .model-transfers { padding:var(--space-3) var(--space-4); border:1px solid var(--line); border-radius:var(--radius-panel); background:var(--surface-2); }
+ @media(max-width:600px) { .models-workspace .catalog-card { padding:var(--space-4); } .models-workspace .model-category-control { margin-inline-start:0; width:100%; } }
 }

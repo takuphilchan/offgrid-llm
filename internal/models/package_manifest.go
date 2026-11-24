@@ -41,9 +41,11 @@ const (
 	EngineLlamaCPP       = "llama_cpp"
 	EngineMLX            = "mlx"
 	EngineTransformers   = "transformers"
+	EngineONNX           = "onnx"
 	FormatGGUF           = "gguf"
 	FormatMLXSafetensors = "mlx_safetensors"
 	FormatSafetensors    = "safetensors"
+	FormatONNX           = "onnx"
 )
 
 type ArtifactSource struct {
@@ -120,6 +122,7 @@ var packageLayouts = map[string]packageLayout{
 	"qwen3-tts":           {"qwen3-tts", map[string][]string{"weights": {".safetensors"}, "config": {".json"}}, []ModelCapability{CapabilitySynthesis, CapabilityIncrementalSynthesis}},
 	"mlx-text":            {"mlx-lm", map[string][]string{"weights": {".safetensors"}, "config": {".json"}, "tokenizer": {".json", ".model"}}, []ModelCapability{CapabilityChat}},
 	"transformers-text":   {"transformers", map[string][]string{"weights": {".safetensors"}, "config": {".json"}, "tokenizer": {".json", ".model"}}, []ModelCapability{CapabilityChat}},
+	"onnx-embedding":      {"onnx-embedding", map[string][]string{"weights": {".onnx"}, "config": {".json"}, "tokenizer": {".json"}}, []ModelCapability{CapabilityEmbeddings}},
 }
 
 func repeatablePackageRole(architecture, role string) bool {
@@ -188,7 +191,7 @@ func (m ModelPackageManifest) Validate() error {
 		return fmt.Errorf("package name and license are required")
 	}
 	if m.Engine != "" {
-		if !slices.Contains([]string{EngineLlamaCPP, EngineMLX, EngineTransformers}, m.Engine) {
+		if !slices.Contains([]string{EngineLlamaCPP, EngineMLX, EngineTransformers, EngineONNX}, m.Engine) {
 			return fmt.Errorf("unsupported inference engine %q", m.Engine)
 		}
 		if m.RunnerRevision == "" || !validPackageComponent(m.RunnerRevision) || slices.Contains([]string{"main", "master", "latest"}, m.RunnerRevision) {
@@ -198,7 +201,7 @@ func (m ModelPackageManifest) Validate() error {
 			return fmt.Errorf("adapter revision must be pinned")
 		}
 	}
-	if m.Format != "" && !slices.Contains([]string{FormatGGUF, FormatMLXSafetensors, FormatSafetensors}, m.Format) {
+	if m.Format != "" && !slices.Contains([]string{FormatGGUF, FormatMLXSafetensors, FormatSafetensors, FormatONNX}, m.Format) {
 		return fmt.Errorf("unsupported model format %q", m.Format)
 	}
 	if m.ContextLength < 0 {
@@ -222,6 +225,14 @@ func (m ModelPackageManifest) Validate() error {
 		return fmt.Errorf("unsupported package architecture %q", m.Architecture)
 	}
 	textPackage := m.Architecture == "mlx-text" || m.Architecture == "transformers-text"
+	embeddingPackage := m.Architecture == "onnx-embedding"
+	if embeddingPackage {
+		if err := validateONNXManifest(m); err != nil {
+			return err
+		}
+	} else if m.Engine == EngineONNX || m.Format == FormatONNX {
+		return fmt.Errorf("ONNX metadata requires the ONNX embedding architecture")
+	}
 	if textPackage {
 		expectedEngine, expectedFormat := EngineMLX, FormatMLXSafetensors
 		if m.Architecture == "transformers-text" {
@@ -235,7 +246,7 @@ func (m ModelPackageManifest) Validate() error {
 		if m.ToolCalling == "qualified" {
 			return fmt.Errorf("model package cannot self-qualify tool calling")
 		}
-	} else if m.Engine == EngineMLX || m.Engine == EngineTransformers || m.ModelFamily != "" {
+	} else if !embeddingPackage && (m.Engine == EngineMLX || m.Engine == EngineTransformers || m.ModelFamily != "") {
 		return fmt.Errorf("native text provider metadata is not valid for a speech package")
 	}
 	if m.Runtime.Adapter != layout.adapter || !validPackageComponent(m.Runtime.Revision) || slices.Contains([]string{"main", "master", "latest"}, m.Runtime.Revision) {
@@ -264,7 +275,7 @@ func (m ModelPackageManifest) Validate() error {
 		}
 		langs[l] = true
 	}
-	if textPackage && len(m.SampleRates) != 0 || !textPackage && (len(m.SampleRates) == 0 || len(m.SampleRates) > 16) {
+	if (textPackage || embeddingPackage) && len(m.SampleRates) != 0 || !textPackage && !embeddingPackage && (len(m.SampleRates) == 0 || len(m.SampleRates) > 16) {
 		return fmt.Errorf("sample rates are required")
 	}
 	rates := map[int]bool{}

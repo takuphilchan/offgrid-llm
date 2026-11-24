@@ -17,10 +17,15 @@ import (
 )
 
 func sendCanonicalConversation(ctx context.Context, client *serviceclient.Client, id string, request serviceclient.ConversationRequest, out io.Writer, jsonMode bool) error {
-	return sendCanonicalInput(ctx, client, id, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed"}, out, jsonMode)
+	return sendCanonicalInput(ctx, client, id, request.RequestID, api.ConversationInboxInput{Content: request.Content, Model: request.Model, Origin: "typed", ResponseProfile: request.ResponseProfile, MaxTokens: request.MaxTokens}, out, jsonMode)
 }
 
 func sendCanonicalInput(ctx context.Context, client *serviceclient.Client, id, requestID string, input api.ConversationInboxInput, out io.Writer, jsonMode bool) error {
+	if input.ResponseProfile != "" || input.MaxTokens != 0 || strings.TrimSpace(input.Content) == "" {
+		if err := client.RequireCapability(ctx, "conversation-input-options-v1"); err != nil {
+			return err
+		}
+	}
 	entry, err := client.SubmitSessionInput(ctx, id, requestID, input)
 	if err != nil {
 		return err

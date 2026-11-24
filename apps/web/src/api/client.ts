@@ -13,6 +13,8 @@ import { synthesisAPI } from './document-synthesis';
 import { compositionAPI } from './document-composition';
 import {readDocumentThumbnail} from './document-thumbnail';
 import {attachmentCorrectionAPI} from './attachment-corrections';
+import { validateInferenceEndpoints } from './inference-endpoints';
+import { endpointOwnerAPI } from './endpoint-owner';
 
 export type Model = components['schemas']['Model'];
 export type DocumentImport = components['schemas']['DocumentImport'];
@@ -22,6 +24,8 @@ export type ModelPackageState = components['schemas']['ModelPackageState'];
 export type ModelCategory = components['schemas']['ModelCategory'];
 export type TypedCatalogModel = components['schemas']['TypedCatalogModel'];
 export type InstalledTypedModel = components['schemas']['InstalledTypedModel'];
+export type InferenceEndpointStatus = components['schemas']['InferenceEndpointStatus'];
+export type InferenceEndpointManagement = components['schemas']['InferenceEndpointManagement'];
 export type ModelResolution = components['schemas']['ModelResolution'];
 export type PackageDiscovery = components['schemas']['PackageDiscovery'];
 export type ModelOperation = components['schemas']['ModelOperation'];
@@ -131,6 +135,14 @@ async function request<T>(path: string, init?: RequestInit, timeout = 30_000, de
 }
 
 export const api = {
+  endpointOwner: endpointOwnerAPI(request),
+  inferenceEndpoints: async (signal?: AbortSignal) => validateInferenceEndpoints(await request<InferenceEndpointManagement>('/api/v2/inference-endpoints', { signal })),
+  reviewInferenceEndpoint: async (input: components['schemas']['InferenceEndpointReview'] & { enabled: boolean }) => validateInferenceEndpoints(await request<InferenceEndpointManagement>('/api/v2/inference-endpoints/review', { method: 'POST', body: JSON.stringify(input) })),
+  probeInferenceEndpoint: async (input: Omit<components['schemas']['InferenceEndpointReview'], 'enabled'>) => {
+    const response = await request<{ model_id: string; connection_verified: true; qualified: false }>('/api/v2/inference-endpoints/probe', { method: 'POST', body: JSON.stringify(input) }, 25_000);
+    if (response?.model_id !== `endpoint:${input.id}@${input.revision}` || response.connection_verified !== true || response.qualified !== false) throw new APIError(clientMessage('response'), 502);
+    return response;
+  },
   collections: collectionAPI(request),
   analyses: analysisAPI(request),
   synthesis: synthesisAPI(request),

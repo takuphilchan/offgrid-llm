@@ -169,7 +169,7 @@ func (s *Server) modelContextWindow(modelID string) int {
 	}
 	var metadata *api.ModelMetadata
 	if s.registry != nil && modelID != "" {
-		metadata, _ = s.registry.GetChatModel(modelID)
+		metadata, _ = s.localChatMetadata(modelID)
 	}
 	return planContextWindow(contextPlanningInput{
 		OperatorMax: s.config.MaxContextSize, Adaptive: s.config.AdaptiveContext,

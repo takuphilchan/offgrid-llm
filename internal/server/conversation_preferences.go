@@ -5,6 +5,7 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
 	"github.com/takuphilchan/offgrid-llm/internal/capabilities"
+	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
 func (s *Server) effectiveConversationPreferences(r *http.Request, c *agents.Conversation, requestModel string) (*agents.EffectiveConversationPreferences, error) {
@@ -47,7 +48,7 @@ func (s *Server) resolveConversationRun(w http.ResponseWriter, r *http.Request, 
 	return s.resolveConversationRunBeforeInput(w, r, c, command, "")
 }
 
-func (s *Server) resolveConversationRunBeforeInput(w http.ResponseWriter, r *http.Request, c *agents.Conversation, command agents.ConversationCommand, beforeInput string, selectedEvidence ...bool) (agents.AgentConfig, string, bool) {
+func (s *Server) resolveConversationRunBeforeInput(w http.ResponseWriter, r *http.Request, c *agents.Conversation, command agents.ConversationCommand, beforeInput string, acceptedInput ...api.ConversationInboxInput) (agents.AgentConfig, string, bool) {
 	e, err := s.effectiveConversationPreferences(r, c, command.Payload.Input.Model)
 	if err != nil {
 		writeControlError(w, err)
@@ -58,10 +59,13 @@ func (s *Server) resolveConversationRunBeforeInput(w http.ResponseWriter, r *htt
 		return agents.AgentConfig{}, "", false
 	}
 	req := jobSubmitRequest{ConversationModelOverride: true, Prompt: command.Payload.Input.Content, Model: e.Model, ProfileID: e.ProfileID, ProfileRevision: e.ProfileRevision}
+	if len(acceptedInput) > 0 {
+		req.ResponseProfile = acceptedInput[0].ResponseProfile
+	}
 	// Validate the profile inventory here, but leave retrieval to the immutable
 	// source selector. A pinned passage must not trigger a broader semantic search
 	// or require an embedding model before its exact evidence is assembled.
-	req.DeferKnowledge = len(selectedEvidence) > 0 && selectedEvidence[0]
+	req.DeferKnowledge = len(acceptedInput) > 0 && len(acceptedInput[0].KnowledgeSelections) > 0
 	req.SelectedKnowledge = req.DeferKnowledge
 	if e.ProfileID != "" {
 		profile, loadErr := s.agentManager.GetProfile(s.workspaceID, s.agentActor(r), e.ProfileID, e.ProfileRevision)
@@ -74,6 +78,9 @@ func (s *Server) resolveConversationRunBeforeInput(w http.ResponseWriter, r *htt
 	config, ok := s.resolveJobConfig(w, r, &req)
 	if !ok {
 		return config, "", false
+	}
+	if len(acceptedInput) > 0 && acceptedInput[0].MaxTokens > 0 {
+		config.MaxTokens = min(acceptedInput[0].MaxTokens, config.ContextWindow/4)
 	}
 	config.DisableDelegation = !e.Delegation
 	// The conversation preview owns admission of the durable clarification

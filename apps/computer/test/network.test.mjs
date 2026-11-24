@@ -5,6 +5,16 @@ import {createServer as httpServer} from 'node:http';
 import {readFileSync} from 'node:fs';
 import {chromium} from 'playwright';
 import {pinnedDestination, publicPage, startEgress} from '../network.mjs';
+import {browserOrigins, allowsBrowserURL} from '../browser-scope.mjs';
+
+test('explicit site scope is bounded, canonical and cannot be expanded by URL tricks', () => {
+  const sites=browserOrigins('https://one.example/article',['https://two.example/']);
+  assert.deepEqual(sites,['https://one.example','https://two.example']);
+  assert.ok(Object.isFrozen(sites));
+  assert.ok(allowsBrowserURL(sites,'https://two.example/read?q=1'));
+  for(const url of ['http://two.example','https://one.example.evil.com','https://user@one.example','https://one.example:444'])assert.equal(allowsBrowserURL(sites,url),false);
+  for(const more of [['https://two.example/path'],['https://two.example/?key=x'],['https://127.0.0.1'],['http://two.example'],Array(16).fill('https://two.example'),{}])assert.throws(()=>browserOrigins('https://one.example',more));
+});
 
 test('real page addresses retain paths, queries and fragments but never embedded credentials or local addresses', () => {
   assert.equal(publicPage('https://example.com/article?q=hello#part').href,'https://example.com/article?q=hello#part');
@@ -40,7 +50,7 @@ test('real Chromium relay blocks redirect and subresource escapes, including loo
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   let browser,relay;
   try {
-    relay=await startEgress({hostname:'approved.example',port:server.address().port,address:'127.0.0.1'});
+    relay=await startEgress(['approved.example','second.example'].map(hostname=>({hostname,port:server.address().port,address:'127.0.0.1'})));
     browser=await chromium.launch({headless:true,proxy:{server:relay.server,bypass:'<-loopback>'}});
     // Self-signed certificates are accepted ONLY by this owned test fixture.
     // Production BrowserDriver never disables TLS verification.
@@ -48,6 +58,8 @@ test('real Chromium relay blocks redirect and subresource escapes, including loo
     const page=await context.newPage();
     const base=`https://approved.example:${server.address().port}`;
     await page.goto(base+'/redirect-approved');assert.equal(await page.locator('h1').textContent(),'Allowed article');
+    await page.goto(`https://second.example:${server.address().port}/article`);
+    assert.equal(await page.locator('h1').textContent(),'Allowed article');
     await page.goto(base+'/redirect-private').catch(()=>{});
     await page.goto(base+'/redirect-other').catch(()=>{});
     await page.goto(privateURL).catch(()=>{});

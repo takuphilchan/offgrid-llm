@@ -10,10 +10,26 @@ import (
 
 func (s *Server) recordComputerReply(actor, session, run string, action computer.BrowserAction, reply computer.BrowserReply) error {
 	effect, known := capabilities.NativeOperationEffect(action.Kind, capabilities.NativeEffectsRevision)
-	if !known || effect != capabilities.NativeChange || reply.Error != "" {
+	d, _ := browserDescriptor(action.Kind)
+	browser := capabilities.TrustedBrowserOperation(d) && d.Risk == capabilities.RiskHigh
+	if reply.Error != "" || (!browser && (!known || effect != capabilities.NativeChange)) {
 		return nil
 	}
-	if !recoverableComputerResult(reply.Result) {
+	if browser {
+		var receipt struct {
+			EffectStatus string `json:"effect_status"`
+			Dispatched   bool   `json:"dispatched"`
+		}
+		if json.Unmarshal([]byte(reply.Result), &receipt) != nil {
+			return computer.ErrUncertain
+		}
+		if receipt.EffectStatus == "" {
+			return nil
+		} // Legacy companions did not report effect stages.
+		if !receipt.Dispatched || (receipt.EffectStatus != "dispatched" && receipt.EffectStatus != "completed") {
+			return computer.ErrUncertain
+		}
+	} else if !recoverableComputerResult(reply.Result) {
 		return computer.ErrUncertain
 	}
 	prefix := run + ":"

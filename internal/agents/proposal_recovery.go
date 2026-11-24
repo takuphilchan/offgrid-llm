@@ -119,11 +119,18 @@ func advancedVerifiedApplicationRepair(task *Task, tool string) bool {
 
 // Only service-authored authorization failures are eligible. Never call this
 // after dispatch or interpret a provider's error text as permission to retry.
-func proposalRecovery(task *Task, tool string, failure *ToolAuthorizationError) string {
+func proposalRecovery(task *Task, tool string, failure *ToolAuthorizationError, descriptor ...capabilities.Descriptor) string {
 	if task.Checkpoint == nil || task.Checkpoint.ExecutingCall != "" {
 		return ""
 	}
 	switch failure.Code {
+	case "computer_browser_precondition_failed", "computer_browser_observation_failed":
+		if len(descriptor) != 1 || !capabilities.TrustedBrowserOperation(descriptor[0]) {
+			return ""
+		}
+		if task.Config.ComputerSession != "" && (task.Config.ComputerDriver == "browser" || task.Config.ComputerDriver == "") {
+			return "Inspect the existing page using browser_observe and use fresh observed controls within the current scope. No input was sent by this rejected call. Never repeat earlier dispatched input because its observation failed."
+		}
 	case "execution_program_repeated":
 		if task.Config.TaskFirst && task.ParentID == "" && task.Config.Execution != nil && tool == "workspace_process_start" {
 			return "No command was dispatched. The program field is the executable; arguments contains only what comes AFTER it. For go test ., use program=go and arguments=[\"test\",\".\"], not [\"go\",\"test\",\".\"]. Review the user's actual command and submit a corrected proposal yourself. Do not change the command's intended meaning, request broader access, or repeat any earlier dispatched process."
@@ -186,7 +193,7 @@ func (r *Runner) rejectProposal(task *Task, failure *ToolAuthorizationError, rec
 	cp := task.Checkpoint
 	cp.ProposalRepairs++
 	cp.ProposalUnresolved = true
-	if failure.Code == "host_access_required" || failure.Code == "tool_write_rejected" || failure.Code == "invalid_task_artifact" || failure.Code == "execution_input_selection_invalid" || failure.Code == "execution_write_precondition" {
+	if failure.Code == "host_access_required" || failure.Code == "tool_write_rejected" || failure.Code == "invalid_task_artifact" || failure.Code == "execution_input_selection_invalid" || failure.Code == "execution_write_precondition" || failure.Code == "computer_browser_precondition_failed" || failure.Code == "computer_browser_observation_failed" {
 		cp.PreEffectRepairs++
 	}
 	if failure.Code == "workflow_control_expectation_required" {
@@ -194,7 +201,7 @@ func (r *Runner) rejectProposal(task *Task, failure *ToolAuthorizationError, rec
 	}
 	if len(cp.Calls) > 0 {
 		cp.ProposalTool = cp.Calls[0].Function.Name
-		if !cp.PreEffectRepair && (failure.Code == "host_access_required" || failure.Code == "invalid_task_artifact" || failure.Code == "execution_input_selection_invalid") {
+		if !cp.PreEffectRepair && (failure.Code == "host_access_required" || failure.Code == "invalid_task_artifact" || failure.Code == "execution_input_selection_invalid" || failure.Code == "computer_browser_precondition_failed" || failure.Code == "computer_browser_observation_failed") {
 			cp.PreEffectRepair, cp.PreEffectRepairTool = true, cp.ProposalTool
 		}
 	}
@@ -227,6 +234,9 @@ func resolvePreEffectRepair(cp *Checkpoint, tool string, descriptor capabilities
 		original = cp.ProposalTool
 	}
 	repaired := tool == original && descriptor.Source == "builtin" && descriptor.Namespace == "tools"
+	if capabilities.TrustedBrowserOperation(descriptor) && tool == original {
+		repaired = true
+	}
 	if original == "task_save_artifact" {
 		repaired = workspaceArtifactCapability(tool, descriptor)
 	}

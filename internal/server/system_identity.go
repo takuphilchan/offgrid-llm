@@ -108,15 +108,20 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 	identity.Capabilities = append(identity.Capabilities, "gguf-bundles-v1")
 	identity.Capabilities = append(identity.Capabilities, "gguf-offline-import-v1")
 	identity.Capabilities = append(identity.Capabilities, "work-search-v1")
+	if s.endpointOwner != nil {
+		// Protocol support survives an unavailable owner/policy so clients can
+		// still offer inspection and explicit recovery. This grants no writes.
+		identity.Capabilities = append(identity.Capabilities, "inference-endpoint-owner-v1")
+	}
 	if s.agentManager != nil {
 		identity.Capabilities = append(identity.Capabilities, "work-summary-v1")
 		if s.agentRunner != nil && s.agentManager.ActivityReplaySupported() {
-			identity.Capabilities = append(identity.Capabilities, "conversation-inputs-v1")
+			identity.Capabilities = append(identity.Capabilities, "conversation-inputs-v1", "conversation-input-options-v1")
+			if s.sessionHandlers != nil && s.sessionHandlers.agentServer == s {
+				identity.Capabilities = append(identity.Capabilities, "conversation-source-inputs-v1", "conversation-source-scopes-v1")
+			}
 			if s.config != nil && s.config.EnableConversationPreview {
 				identity.Capabilities = append(identity.Capabilities, "conversation-input-admission-v1")
-				if s.sessionHandlers != nil && s.sessionHandlers.agentServer == s {
-					identity.Capabilities = append(identity.Capabilities, "conversation-source-inputs-v1", "conversation-source-scopes-v1")
-				}
 			}
 		}
 	}
@@ -124,7 +129,7 @@ func (s *Server) handleSystemIdentity(w http.ResponseWriter, r *http.Request) {
 		identity.Capabilities = append(identity.Capabilities, "native-execution-preview-v1", "execution-access-request-v1")
 	}
 	if s.browserHub != nil {
-		identity.Capabilities = append(identity.Capabilities, "native-computer-sessions-v2", "native-document-negotiation-v1")
+		identity.Capabilities = append(identity.Capabilities, "native-computer-sessions-v2", "native-document-negotiation-v1", "browser-discovery-v1", "browser-workspace-v1", "browser-structured-v1", "browser-task-pairing-v1")
 		if s.agentRunner != nil && s.agentManager != nil && s.agentManager.ActivityReplaySupported() {
 			identity.Capabilities = append(identity.Capabilities, "task-first-agents-v2", "task-desktop-sessions-v3")
 		}

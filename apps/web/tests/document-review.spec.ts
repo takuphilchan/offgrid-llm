@@ -7,11 +7,16 @@ import { workflow } from '../src/i18n/workflow';
 import { documentReader } from '../src/i18n/document-reader';
 import { languageRegistry, type LanguageCode } from '../src/i18n/language';
 import { documentFormatLimits } from '../src/i18n/document-format-limits';
+import { documentComparison } from '../src/i18n/document-comparison';
+import { documentNavigation } from '../src/i18n/document-navigation';
+import { documentCell } from '../src/i18n/document-cell';
+import { presentation } from '../src/i18n/presentation';
+import type { DocumentBlock } from '../src/api/client';
 
 const original = 'Applications close 31 July. <script>untrusted()</script> 中文';
 const hash = (text:string) => createHash('sha256').update(text).digest('hex');
-async function setup(page:Page, locale:LanguageCode='en', format='txt') {
- await craftFixture(page,locale,'light');
+async function setup(page:Page, locale:LanguageCode='en', format='txt', cell?:DocumentBlock['cell'], theme:'light'|'dark'='light') {
+ await craftFixture(page,locale,theme);
  const state = { revision:'extraction-first', text:original, writes:[] as any[], reads:[] as URL[], fail:false, staleReceipt:false, readonly:false, truncated:false, invalid:false, pagination:false, failRead:false };
  const document = {id:'notes',name:'Policy.txt',content_type:'text/plain',size:200,chunk_count:1,source_retained:true,original_retained:false,extraction_revision:'extraction-first'};
  await page.route('**/v1/documents/source?**',r=>r.fulfill({json:{document,content:original,truncated:false}}));
@@ -21,7 +26,7 @@ async function setup(page:Page, locale:LanguageCode='en', format='txt') {
   const pinned=url.searchParams.get('revision') || state.revision;
   const text=pinned==='extraction-first'?original:state.text;
   const offset=Number(url.searchParams.get('offset') || 0), editable=!state.readonly && pinned===state.revision && !state.truncated;
-  return r.fulfill({json:{document_id:state.invalid?'other':'notes',revision:pinned,format,coverage:format==='txt'?undefined:{format,status:'text_only',total_units:1,readable_units:1,review_units:[1]},method:'native',units:[{id:'section-1',kind:'section',index:1,name:'Policy',span:{start:0,end:500},state:'ready'}],blocks:[{id:offset?'later':'clause',unit_id:'section-1',kind:'paragraph',span:{start:0,end:Buffer.byteLength(text)},method:'native',text:offset?'Later evidence':text,text_sha256:hash(text),editable,truncated:state.truncated,metadata_omitted:false}],offset,total_blocks:state.pagination?2:1,next_offset:state.pagination&&!offset?1:null,relationships:[],relationship_offset:0,total_relationships:0,next_relationship_offset:null,can_correct:!state.readonly && pinned===state.revision}});
+  return r.fulfill({json:{document_id:state.invalid?'other':'notes',revision:pinned,format,coverage:format==='txt'?undefined:{format,status:'text_only',total_units:1,readable_units:1,review_units:[1]},method:'native',units:[{id:'section-1',kind:'section',index:1,name:'Policy',span:{start:0,end:500},state:'ready'}],blocks:[{id:offset?'later':'clause',unit_id:'section-1',kind:cell?'cell':'paragraph',cell,span:{start:0,end:Buffer.byteLength(text)},method:'native',text:offset?'Later evidence':text,text_sha256:hash(text),editable,truncated:state.truncated,metadata_omitted:false}],offset,total_blocks:state.pagination?2:1,next_offset:state.pagination&&!offset?1:null,relationships:[],relationship_offset:0,total_relationships:0,next_relationship_offset:null,can_correct:!state.readonly && pinned===state.revision}});
  });
  await page.route('**/v1/documents/corrections',r=>{
   const body=r.request().postDataJSON(); state.writes.push(body);
@@ -34,6 +39,95 @@ async function setup(page:Page, locale:LanguageCode='en', format='txt') {
  await page.getByRole('button',{name:documentReview(locale).title,exact:true}).click();
  return state;
 }
+
+for(const locale of Object.keys(languageRegistry) as LanguageCode[]) test(`retained cell values stay distinct, inert and localized: ${locale}`,async({page},info)=>{
+ await page.setViewportSize({width:390,height:760});
+ const formula='HYPERLINK("https://untrusted.example", "<img src=x onerror=alert(1)>")';
+ const state=await setup(page,locale,'xlsx',{reference:'B7',value:'45000',formula,cached_value:'45000',hidden:true});
+ const details=page.locator('.document-cell-details'),copy=documentComparison(locale);
+ await expect(details.locator('summary')).toHaveText(copy.metadata);
+ await details.locator('summary').focus();await page.keyboard.press('Enter');
+ await expect(details.locator('dt')).toHaveText([copy.value,copy.formula,copy.cached]);
+ await expect(details.locator('dd')).toHaveText(['45000',formula,'45000']);
+ await expect(details).toContainText(documentNavigation(locale).hidden);
+ await expect(details.locator('img,iframe,a,script')).toHaveCount(0);
+ await expect(page.locator('.document-review')).toContainText(documentFormatLimits(locale,'xlsx')!);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ expect(state.writes).toEqual([]);
+ if(['en','ar'].includes(locale)){await details.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath(`cell-details-${locale}.png`)});}
+});
+
+for(const locale of Object.keys(languageRegistry) as LanguageCode[]) test(`cell format, merge and shared-formula evidence survives inspection: ${locale}`,async({page},info)=>{
+ await page.setViewportSize({width:390,height:760});
+ const state=await setup(page,locale,'xlsx',{
+  reference:'B7',value:'45000',display:'2023-03-15',display_state:'deterministic_format',value_type:'number',
+  number_format:'yyyy-mm-dd',number_format_id:0,date_system:'1900',formula_type:'shared',formula_anchor:'B2',
+  formula_reference:'B2:B8',shared_formula_index:0,result_state:'missing_cache',merged_range:'B7:C8',row_span:2,column_span:2,
+  horizontal_merge:true,vertical_merge:true,hidden:true,hidden_reasons:['sheet','row','column'],
+ });
+ const details=page.locator('.document-cell-details'),copy=documentCell(locale),common=documentComparison(locale);
+ await expect(details).not.toHaveAttribute('open','');
+ await details.locator('summary').focus();await page.keyboard.press('Enter');
+ const value=(label:string)=>details.locator('dl > div').filter({has:page.getByText(label,{exact:true})}).locator('dd');
+ await expect(value(common.value)).toHaveText('45000');
+ await expect(value(copy.display)).toHaveText('2023-03-15');
+ await expect(value(copy.displayState)).toHaveText('deterministic_format');
+ await expect(value(copy.format)).toHaveText('yyyy-mm-dd');
+ await expect(value(copy.formatID)).toHaveText('0');
+ await expect(value(copy.dateSystem)).toHaveText('1900');
+ await expect(value(copy.formulaAnchor)).toHaveText('B2');
+ await expect(value(copy.formulaRange)).toHaveText('B2:B8');
+ await expect(value(copy.sharedFormulaID)).toHaveText('0');
+ await expect(value(common.cached)).toHaveText(presentation[locale].unknown);
+ await expect(value(copy.resultState)).toHaveText('missing_cache');
+ await expect(value(copy.mergedRange)).toHaveText('B7:C8');
+ await expect(value(copy.rows)).toHaveText(new Intl.NumberFormat(locale).format(2));
+ await expect(details).toContainText(copy.note);
+ for(const flag of ['horizontal','vertical','hiddenSheet','hiddenRow','hiddenColumn'] as const)await expect(details).toContainText(copy[flag]);
+ if(locale!=='en')expect(copy.note).not.toEqual(documentCell('en').note);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ expect(state.writes).toEqual([]);
+ await details.locator('summary').focus();await page.keyboard.press('Enter');
+ await expect(details.locator('summary')).toBeFocused();await expect(details).not.toHaveAttribute('open','');
+ if(['en','ar'].includes(locale)){
+  await page.keyboard.press('Enter');await details.scrollIntoViewIfNeeded();
+  await page.screenshot({path:info.outputPath(`cell-evidence-${locale}.png`)});
+ }
+});
+
+test('table merge metadata remains available without a stored value or formula',async({page})=>{
+ const state=await setup(page,'en','pptx',{reference:'R1C1',row_span:3,column_span:2,vertical_merge:true});
+ await page.locator('.document-cell-details summary').click();
+ await expect(page.locator('.document-cell-details dd')).toHaveText(['3','2']);
+ await expect(page.locator('.document-cell-details')).toContainText(documentCell('en').vertical);
+ expect(state.writes).toEqual([]);
+});
+
+test('unrendered cell text remains source evidence without client-side date conversion',async({page})=>{
+ await setup(page,'en','xlsx',{reference:'B7',value:'60',display:'60',display_state:'unrendered',number_format:'[unsupported]',date_system:'1900',result_state:'literal'});
+ await page.locator('.document-cell-details summary').click();
+ await expect(page.locator('.document-cell-details dd')).toHaveText(['60','60','unrendered','[unsupported]','1900','literal']);
+});
+
+for(const locale of ['en','ar'] as const)test(`cell inspection remains readable in dark and forced colors: ${locale}`,async({page},info)=>{
+ await page.setViewportSize({width:900,height:620});
+ const state=await setup(page,locale,'xlsx',{reference:'A1',value:'0',display:'0.00',number_format:'0.00',formula:'SUM(B1:B3)',cached_value:'0',hidden:true},'dark');
+ const details=page.locator('.document-cell-details');
+ await details.locator('summary').focus();await page.keyboard.press('Enter');await details.scrollIntoViewIfNeeded();
+ await expect(details.locator('dd')).toHaveText(['0','0.00','0.00','SUM(B1:B3)','0']);
+ await page.screenshot({path:info.outputPath(`cell-dark-${locale}.png`)});
+ await page.emulateMedia({forcedColors:'active'});
+ await details.locator('summary').focus();await page.keyboard.press('Enter');await page.keyboard.press('Enter');
+ await expect(details.locator('summary')).toBeFocused();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ expect(state.writes).toEqual([]);
+});
+
+for(const cached of [undefined,'']) test(`formula cache preserves ${cached===undefined?'unknown':'empty'} state`,async({page})=>{
+ await setup(page,'en','xlsx',{reference:'B7',formula:'1+1',cached_value:cached});
+ await page.locator('.document-cell-details summary').click();
+ await expect(page.locator('.document-cell-details dd')).toHaveText(['1+1',cached===undefined?presentation.en.unknown:'""']);
+});
 
 for(const locale of Object.keys(languageRegistry) as LanguageCode[]) for(const format of ['docx','xlsx','pptx']) test(`Office extraction limits in ${locale}: ${format}`,async({page})=>{
  await page.setViewportSize({width:390,height:844});

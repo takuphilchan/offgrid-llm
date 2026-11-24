@@ -2,8 +2,24 @@ package execution
 
 import (
 	"fmt"
+	"os"
+	"runtime"
+
 	"golang.org/x/sys/windows"
 )
+
+func folderHandleIdentity(file *os.File) (string, error) {
+	var info windows.ByHandleFileInformation
+	err := windows.GetFileInformationByHandle(windows.Handle(file.Fd()), &info)
+	runtime.KeepAlive(file)
+	if err != nil {
+		return "", err
+	}
+	if info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY == 0 || info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+		return "", ErrPath
+	}
+	return fmt.Sprintf("win:%x:%x:%x:%x:%x", info.VolumeSerialNumber, info.FileIndexHigh, info.FileIndexLow, info.CreationTime.HighDateTime, info.CreationTime.LowDateTime), nil
+}
 
 func folderIdentity(path string) (string, error) {
 	p, err := windows.UTF16PtrFromString(path)

@@ -81,6 +81,9 @@ func (h *BrowserHub) DesktopScope(actor, id, run, input, workspace string) (bool
 		return false, err
 	}
 	if s.Desktop == nil {
+		if s.Driver == "browser" && s.InputID != "" && (s.run != run || s.InputID != input || s.browserWorkspace != workspace) {
+			return false, ErrControlScope
+		}
 		return false, nil
 	}
 	if !s.authorized || s.run != run || s.InputID != input || s.Desktop.Workspace != workspace {
@@ -94,8 +97,11 @@ func (h *BrowserHub) DesktopScope(actor, id, run, input, workspace string) (bool
 // active controller, not parallel browser/native ownership.
 func sessionAllowsTool(driver, tool string) bool {
 	if driver == "" || driver == "browser" {
+		if BrowserStructuredTool(tool) {
+			return true
+		}
 		switch tool {
-		case "browser_observe", "browser_capture", "browser_navigate", "browser_click", "browser_fill", "browser_select", "browser_set_checked", "browser_download", "browser_upload", "browser_verify", "computer_prepare":
+		case "browser_observe", "browser_inspect", "browser_capture", "browser_navigate", "browser_click", "browser_fill", "browser_select", "browser_set_checked", "browser_download", "browser_upload", "browser_verify", "browser_tabs", "browser_tab_open", "browser_tab_select", "browser_tab_close", "computer_prepare":
 			return true
 		}
 		return false

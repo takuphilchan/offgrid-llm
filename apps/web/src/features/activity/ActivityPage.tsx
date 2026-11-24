@@ -42,7 +42,7 @@ export function ActivityPage({ health, taskFirst = false }: { health: Health; ta
   if (!taskFirst && !inspecting) return <LegacyActivity health={health} />;
   return <div className="stack activity-page">
     {!inspecting && <p className="model-search-hint">{text.guidance.activity}</p>}
-    {!inspecting && <div className="model-library-tabs" role="group" aria-label={text.nav.activity}>
+    {!inspecting && <div className="model-library-tabs workspace-view-nav" role="group" aria-label={text.nav.activity}>
       <button className="secondary-button" aria-pressed={view === 'work'} onClick={() => setView('work')}>{text.shell.work}</button>
       <button className="secondary-button" aria-pressed={view === 'schedules'} onClick={() => { setSchedulesVisited(true); setView('schedules'); }}>{agentSchedulesText[locale].title}</button>
     </div>}

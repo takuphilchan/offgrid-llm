@@ -64,6 +64,9 @@ func (s *Server) callNativeTextAgent(ctx context.Context, task *agents.Task, mes
 	if len(tools) != 0 || task.ParentID != "" || task.Config.ComputerSession != "" || task.Config.RequestedComputerScope != "" || len(task.Config.NativeExpectations) != 0 || len(task.Config.AllowedTools) != 0 || len(task.Config.AllowedCapabilities) != 0 || len(task.Config.DelegateProfiles) != 0 {
 		return nil, errors.New("native text job cannot use tools, delegates, or computer access")
 	}
+	if isEndpointModel(task.Model) {
+		ctx = withEndpointActor(ctx, task.Actor)
+	}
 	descriptor, selected, err := s.selectNativeChat(ctx, task.Model)
 	if err != nil {
 		return nil, err
@@ -248,7 +251,7 @@ func (s *Server) handleAgentRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Agent runtime unavailable", 503)
 		return
 	}
-	if _, err := s.registry.GetChatModel(req.Model); err != nil {
+	if _, err := s.localChatMetadata(req.Model); err != nil {
 		writeError(w, "Model not found", 404)
 		return
 	}

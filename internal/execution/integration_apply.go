@@ -73,14 +73,15 @@ func applyIntegrationStep(ctx context.Context, target, private *os.Root, step in
 			return receipt, &MutationError{Cause: err, Effects: "unknown"}
 		}
 		if change.Result.Kind == "file" {
-			receipt.ResultDigest, err = replacementFileDigest(context.WithoutCancel(ctx), targetView, name, limit)
+			var resultInfo os.FileInfo
+			receipt.ResultDigest, resultInfo, err = observeReplacementFile(context.WithoutCancel(ctx), targetView, name, limit)
 			if err != nil {
 				return receipt, err
 			}
 			if receipt.ResultDigest != change.Result.SHA256 {
 				return receipt, ErrConflict
 			}
-			if err = syncReplacementFile(targetView, name); err != nil {
+			if err = syncReplacementFile(targetView, name, resultInfo); err != nil {
 				return receipt, err
 			}
 		} else if err = verifyEmptyIntegrationDirectory(targetView, name); err != nil {
@@ -109,14 +110,15 @@ func applyIntegrationStep(ctx context.Context, target, private *os.Root, step in
 			return receipt, &MutationError{Cause: err, Effects: "unknown"}
 		}
 		if change.Base.Kind == "file" {
-			receipt.DisplacedDigest, err = replacementFileDigest(context.WithoutCancel(ctx), privateView, "displaced", limit)
+			var displacedInfo os.FileInfo
+			receipt.DisplacedDigest, displacedInfo, err = observeReplacementFile(context.WithoutCancel(ctx), privateView, "displaced", limit)
 			if err != nil {
 				return receipt, err
 			}
 			if receipt.DisplacedDigest != change.Base.SHA256 {
 				return receipt, ErrConflict
 			}
-			if err = syncReplacementFile(privateView, "displaced"); err != nil {
+			if err = syncReplacementFile(privateView, "displaced", displacedInfo); err != nil {
 				return receipt, err
 			}
 		} else if err = verifyEmptyIntegrationDirectory(privateView, "displaced"); err != nil {

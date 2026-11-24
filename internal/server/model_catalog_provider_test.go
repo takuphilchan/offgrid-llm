@@ -17,6 +17,9 @@ func TestLanguagePackagesDoNotRequireSpeechRuntimeForInventory(t *testing.T) {
 	if hasSpeechPackage([]models.PackageState{language}) {
 		t.Fatal("language-only package triggered speech runtime discovery")
 	}
+	if hasSpeechPackage([]models.PackageState{{Manifest: &models.ModelPackageManifest{Capabilities: []models.ModelCapability{models.CapabilityEmbeddings}}}}) {
+		t.Fatal("embedding package triggered speech runtime discovery")
+	}
 	for _, capability := range []models.ModelCapability{models.CapabilityTranscription, models.CapabilitySynthesis} {
 		speech := models.PackageState{ID: "speech", Manifest: &models.ModelPackageManifest{Capabilities: []models.ModelCapability{capability}}}
 		if !hasSpeechPackage([]models.PackageState{language, speech}) {

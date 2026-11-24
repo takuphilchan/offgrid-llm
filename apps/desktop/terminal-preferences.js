@@ -16,7 +16,7 @@
  function theme(dark,system,palette){
   const background=dark?'#191919':'#ffffff',foreground=dark?'#e6e6e6':'#242424';
   if(system)return {background:system.background,foreground:system.foreground,cursor:system.foreground,cursorAccent:system.background,selectionBackground:system.foreground,selectionForeground:system.background,...Object.fromEntries(colors.map(key=>[key,system.foreground]))};
-  if(palette)return {...theme(dark,null),...palette.ansi,background:palette['surface-0'],foreground:palette.text,cursor:palette.text,cursorAccent:palette['surface-0'],selectionBackground:palette.accent,selectionForeground:palette['on-accent']};
+  if(palette)return {...theme(dark,null),...palette.ansi,background:palette['surface-1'],foreground:palette.text,cursor:palette.text,cursorAccent:palette['surface-1'],selectionBackground:palette.accent,selectionForeground:palette['on-accent']};
   return {background,foreground,cursor:foreground,cursorAccent:background,selectionBackground:dark?'#555555':'#cbd7ef',selectionForeground:foreground,...Object.fromEntries(colors.map((key,i)=>[key,palettes[dark?'dark':'light'][i]]))};
  }
  function options(value,reducedMotion){const settings=normalize(value);return {...settings,cursorBlink:settings.cursorBlink&&!reducedMotion};}

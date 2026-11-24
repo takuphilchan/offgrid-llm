@@ -1,10 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,readFile,rm,copyFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-const {createManifest,verifyNativePack,runtimeFiles}=createRequire(import.meta.url)('../pack.cjs');
+import {fileURLToPath,pathToFileURL} from 'node:url';
+const {createManifest,verifyNativePack,runtimeFiles,copyRuntimeModules}=createRequire(import.meta.url)('../pack.cjs');
+
+test('isolated packaged image masker resolves its pinned runtime dependencies',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'offgrid-browser-dependencies-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  const source=fileURLToPath(new URL('..',import.meta.url));
+  await copyRuntimeModules(source,root);
+  await copyFile(join(source,'browser-png-mask.mjs'),join(root,'browser-png-mask.mjs'));
+  const {maskBrowserPNG}=await import(pathToFileURL(join(root,'browser-png-mask.mjs')).href);
+  const {PNG}=createRequire(join(root,'package.json'))('pngjs');
+  const png=new PNG({width:4,height:4});png.data.fill(255);
+  const masked=PNG.sync.read(maskBrowserPNG(PNG.sync.write(png),{width:4,height:4},[{x:1,y:1,width:1,height:1}]));
+  assert.deepEqual([...masked.data.subarray(20,24)],[0,0,0,255]);
+  await writeFile(join(root,'node_modules','pngjs','package.json'),JSON.stringify({version:'0.0.0'}));
+  await assert.rejects(copyRuntimeModules(root,join(root,'invalid')),/pngjs must be 7\.0\.0/);
+});
 
 test('current desktop payload includes every first-party imported runtime module',async()=>{
   assert.equal(new Set(runtimeFiles).size,runtimeFiles.length);
@@ -34,12 +50,16 @@ for(const [platform,arch,driver] of [['win32','x64','windows-uia'],['darwin','x6
     await verifyNativePack(root,platform,arch);
     const manifest=JSON.parse(await readFile(join(root,'manifest.json'),'utf8'));
     assert.equal(manifest.native.driver,driver);assert.equal(manifest.native.qualified,false);
-    for(const changed of [{qualified:true},{vision:true},{scope:'whole-desktop'},{driver:'browser'},{contracts:{native_documents:2}},{contracts:{native_documents:1,shell:1}}]) {
+    for(const changed of [{qualified:true},{vision:true},{scope:'whole-desktop'},{driver:'browser'},{contracts:{native_documents:2}},{contracts:{native_documents:1,shell:1}},{browser_storage:2}]) {
       await writeFile(join(root,'manifest.json'),JSON.stringify({...manifest,native:{...manifest.native,...changed}}));
       await assert.rejects(verifyNativePack(root,platform,arch),/pack_invalid/);
     }
     await writeFile(join(root,'manifest.json'),JSON.stringify(manifest));
-    const legacy={...manifest.native};delete legacy.contracts;
+    assert.equal((await verifyNativePack(root,platform,arch)).browser_storage,1);
+    const previous={...manifest.native};delete previous.browser_storage;
+    await writeFile(join(root,'manifest.json'),JSON.stringify({...manifest,native:previous}));
+    assert.equal((await verifyNativePack(root,platform,arch)).browser_storage,undefined);
+    const legacy={...previous};delete legacy.contracts;
     await writeFile(join(root,'manifest.json'),JSON.stringify({...manifest,native:legacy}));
     assert.equal((await verifyNativePack(root,platform,arch)).contracts,undefined);
     await writeFile(join(root,'manifest.json'),JSON.stringify(manifest));

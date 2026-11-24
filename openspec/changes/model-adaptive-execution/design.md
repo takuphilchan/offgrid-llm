@@ -63,6 +63,37 @@ unchanged. Approved local fallbacks are resolved/pinned when a task is admitted;
 switching requires a durable safe boundary and never resets root counters. Guided
 operations still use broker validation, receipts and the existing durable runner.
 
+The version 1 `model_policy` records guided/adaptive intent, at most two local
+fallback references, and an optional perception reference. Nil policy serializes
+exactly as before so old revision digests and authority remain unchanged. Readiness
+resolves installation and planned context without loading a runtime. The first
+admission implementation uses existing measured native-agent workflow pins for
+GGUF fallback candidates; external endpoint routes and unqualified native text
+packages are not automatic local pool members. Perception requires full workflow
+qualification plus projector/preprocessing fingerprints. A separate manually
+selected Chat model does not acquire another primary's pool.
+
+Default admission retains the primary. Explicit requests may select an approved
+qualified fallback, pinning the selection/reason and exact evidence in the task.
+Detach accepted configuration before publishing it in the live manager as well
+as before serialization, so caller mutations cannot change admitted evidence or
+capabilities. This is task 4.1 foundation; automatic runtime switching, generalized
+provider qualification, perception dispatch and switching presentation remain
+separate unfinished integration requirements. Do not equate storing adaptive
+intent with automatic switching or hardware qualification.
+
+The current switching increment handles owned typed response rejection before
+dispatch for roots and workers. A root-owned correction ledger is committed
+atomically with child changes; follow-ups transfer unresolved entries without
+refund. The accepted conversation model remains immutable provenance while a
+validated switch chain identifies the effective model. Correction resolution is
+an explicit internal persistence result from accepted work, not an inference from
+iteration advancement, queued syntax or a cleared execution field. Hold/steering
+preemption must discard that success signal. Runtime operations with their own
+transactions resolve only their canonical root entry within the existing commit,
+preserving sibling debt and spent switches. This implementation remains subject
+to the acceptance and qualification gates in tasks 4.2–4.4.
+
 Keep one inference admission authority. Reserve parent verification/finalization
 budget before child allocation. Adapt schema/context projection to measured token
 capacity, never by erasing constraints. Queue, loading and generation timings are

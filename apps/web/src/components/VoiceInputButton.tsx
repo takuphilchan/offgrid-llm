@@ -9,40 +9,29 @@ import { selectSpeech, SpeechSetupRequired, useVoicePreferences } from '../lib/v
 import { UtilityPopover } from './UtilityPopover';
 import { voiceSettingsText } from '../i18n/voice-settings';
 import { observeSpeechPause } from '../lib/speech-pause';
+import {ContinuousVoiceInput} from './ContinuousVoiceInput';
+import type {ContinuousVoiceConfig} from '../lib/voice-capture';
+import {recordingWav} from '../lib/recording-wav';
+import {microphoneChoices, microphoneConstraints, selectedMicrophone, selectMicrophone} from '../lib/microphone';
+import {microphoneText} from '../i18n/microphone';
 
-async function toWav(blob: Blob): Promise<Blob> {
-  const AudioContextCtor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioContextCtor || blob.type.includes('wav')) return blob;
-  const context = new AudioContextCtor();
-  try {
-    const decoded = await context.decodeAudioData(await blob.arrayBuffer());
-    const channels = Math.min(decoded.numberOfChannels, 2);
-    const frames = decoded.length;
-    const bytes = new ArrayBuffer(44 + frames * channels * 2);
-    const view = new DataView(bytes);
-    const write = (offset: number, value: string) => [...value].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
-    write(0, 'RIFF'); view.setUint32(4, 36 + frames * channels * 2, true); write(8, 'WAVE');
-    write(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, channels, true);
-    view.setUint32(24, decoded.sampleRate, true); view.setUint32(28, decoded.sampleRate * channels * 2, true);
-    view.setUint16(32, channels * 2, true); view.setUint16(34, 16, true); write(36, 'data'); view.setUint32(40, frames * channels * 2, true);
-    const input = Array.from({ length: channels }, (_, channel) => decoded.getChannelData(channel));
-    let offset = 44;
-    for (let frame = 0; frame < frames; frame++) for (let channel = 0; channel < channels; channel++) {
-      const sample = Math.max(-1, Math.min(1, input[channel][frame]));
-      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true); offset += 2;
-    }
-    return new Blob([bytes], { type: 'audio/wav' });
-  } finally { await context.close(); }
+type RecordingWork = { controller: AbortController; stream?: MediaStream; recorder?: MediaRecorder; timer?: number; stopPause?: () => void; stopDevice?: () => void };
+type CapturePhase = 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing' | 'monitoring';
+
+export type VoiceInputProps = {onTranscript: (text: string) => void; onFailure?: (message: string) => void; onSilence?: () => void; onPhaseChange?: (phase: CapturePhase) => void; onLevel?: (level: number) => void; autoStart?: boolean; contextKey: string; disabled?: boolean; compact?: boolean; continuous?: ContinuousVoiceConfig; onCaptureStart?: () => boolean};
+
+export function VoiceInputButton(props: VoiceInputProps) {
+  return props.continuous ? <ContinuousVoiceInput {...props} continuous={props.continuous} fallback={ManualVoiceInputButton}/> : <ManualVoiceInputButton {...props}/>;
 }
 
-type RecordingWork = { controller: AbortController; stream?: MediaStream; recorder?: MediaRecorder; timer?: number; stopPause?: () => void };
-type CapturePhase = 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing';
-
-export function VoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseChange, onLevel, autoStart = false, contextKey, disabled = false, compact = false }: { onTranscript: (text: string) => void; onFailure?: (message: string) => void; onSilence?: () => void; onPhaseChange?: (phase: 'idle' | 'checking' | 'permission' | 'recording' | 'transcribing') => void; onLevel?: (level:number)=>void; autoStart?: boolean; contextKey: string; disabled?: boolean; compact?: boolean }) {
+function ManualVoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseChange, onLevel, autoStart = false, contextKey, disabled = false, compact = false, onCaptureStart }: VoiceInputProps) {
   const { preferences } = useVoicePreferences();
   const { locale, messages } = useI18n();
   const copy = { ...voiceText(locale), silence: voiceSilenceText[locale] };
   const feedback = operationFeedback(locale);
+  const micCopy = microphoneText[locale];
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [device, setDevice] = useState(selectedMicrophone);
   const [phase, setPhase] = useState<CapturePhase>('idle');
   const [levels, setLevels] = useState<number[]>(Array(12).fill(0));
   useEffect(()=>onLevel?.(phase==='recording'?(levels.at(-1)??0):0),[levels,phase,onLevel]);
@@ -73,6 +62,7 @@ export function VoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseCh
     work.controller.abort();
     clearTimeout(work.timer);
     work.stopPause?.();
+    work.stopDevice?.();
     if (work.recorder?.state === 'recording') work.recorder.stop();
     work.stream?.getTracks().forEach(track => track.stop());
   };
@@ -92,6 +82,7 @@ export function VoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseCh
     if (work?.recorder?.state === 'recording') {
       clearTimeout(work.timer);
       work.stopPause?.();
+      work.stopDevice?.();
       setPhase('transcribing');
       work.recorder.stop();
       work.stream?.getTracks().forEach(track => track.stop());
@@ -118,9 +109,17 @@ export function VoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseCh
       if (!active()) return;
       const selection = selectSpeech(status, preferences, 'asr', locale);
       setPhase('permission');
-      const input = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const input = await navigator.mediaDevices.getUserMedia(microphoneConstraints());
       if (!active()) { input.getTracks().forEach(track => track.stop()); return; }
       work.stream = input;
+      const tracks = input.getAudioTracks?.() ?? input.getTracks();
+      if (!tracks.length || tracks.some(track => track.readyState === 'ended')) throw new Error(micCopy.lost);
+      const disconnected = () => { if (active()) { cancel(); setPhase('idle'); fail(micCopy.lost); } };
+      tracks.forEach(track => track.addEventListener?.('ended', disconnected));
+      work.stopDevice = () => tracks.forEach(track => track.removeEventListener?.('ended', disconnected));
+      void microphoneChoices().then(choices => {if (active()) setDevices(choices);}).catch(() => {});
+      window.dispatchEvent(new Event(stopSpeechEvent));
+      if (onCaptureStart && !onCaptureStart()) { cancel(); setPhase('idle'); failKnown('failed'); return; }
       const chunks: Blob[] = [];
       let bytes = 0;
       const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'].find(value => MediaRecorder.isTypeSupported(value));
@@ -136,19 +135,23 @@ export function VoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseCh
       next.onstop = async () => {
         clearTimeout(work.timer);
         work.stopPause?.();
+        work.stopDevice?.();
         work.stream?.getTracks().forEach(track => track.stop());
         if (!active()) return;
         setPhase('transcribing');
         try {
           const blob = new Blob(chunks, { type: next.mimeType || 'audio/webm' });
           if (!blob.size) { silence(); return; }
-          const wav = await toWav(blob);
+          const wav = await recordingWav(blob);
           if (!active()) return;
           const result = await api.transcribeAudio(wav, 'offgrid-recording.wav', work.controller.signal, selection);
           if (active() && result.text.trim()) target.current.onTranscript(result.text.trim());
           else if (active()) silence();
         } catch (reason) {
-          if (active()) fail(reason instanceof Error ? reason.message : currentCopy.current.failed);
+          if (active()) {
+            if (reason instanceof RangeError && reason.message === 'audio_capture_limit') failKnown('failed');
+            else fail(reason instanceof Error ? reason.message : currentCopy.current.failed);
+          }
         } finally { if (active()) { current.current = null; setPhase('idle'); } }
       };
       next.start(1000);
@@ -172,6 +175,9 @@ export function VoiceInputButton({ onTranscript, onFailure, onSilence, onPhaseCh
   if (compact && error) return <span className="voice-input-control voice-input-compact" data-capture-phase={phase}>
     <UtilityPopover defaultOpen label={voiceSettingsText(locale).title} trigger={<Icon name="mic" size={18} />} triggerClassName="icon-button voice-needs-setup" className="composer-voice-recovery" align="end">
       <p className="voice-error" role="status">{error}</p>
+      {(devices.length > 0 || device) && <label className="field">{micCopy.device}<select aria-label={micCopy.device} value={device} onChange={event => {setDevice(event.target.value); selectMicrophone(event.target.value);}}>
+        <option value="">{micCopy.system}</option>{device && !devices.some(input => input.deviceId === device) && <option value={device} disabled>{micCopy.device} · {messages.settings.unavailable}</option>}{devices.map((input, index) => <option key={input.deviceId} value={input.deviceId}>{input.label || `${micCopy.device} ${index + 1}`}</option>)}
+      </select></label>}
       {setupRequired && <a className="composer-settings-link" href="#/settings/voice">{voiceSettingsText(locale).title}</a>}
       <button type="button" className="secondary-button" disabled={disabled} onClick={() => void start()}>{copy.record}</button>
     </UtilityPopover>

@@ -69,6 +69,12 @@ Settings and source inspection SHALL remain reachable in the full workspace.
 - **AND** opening a model or attachment menu temporarily provides enough room to use it
 - **AND** expanding restores full-window geometry and native resizing without losing the draft
 
+#### Scenario: Quick Access input at native zoom
+- **WHEN** native zoom leaves the compact input viewport too short for its controls
+- **THEN** Quick Access uses its existing larger presentation so the editor and single model selector remain reachable
+- **AND** resizing settles without repeatedly shrinking and expanding, and returning to normal zoom permits the compact input size
+- **AND** opening or closing a menu, dismissing, and expanding preserve the draft without submitting work
+
 #### Scenario: Interchangeable voice and text views
 - **WHEN** Talk is explicitly started in Quick Access or the full workspace
 - **THEN** one voice surface replaces the text view without a visible chat background, dimmed card or modal outline
@@ -105,7 +111,7 @@ Reduced motion SHALL preserve all controls, status and cancellation behaviour.
 - **WHEN** a user starts Talk and microphone permission is pending
 - **THEN** the surface distinguishes pending permission from listening and remains cancellable
 - **AND** one completed utterance enters the same saved work without a second concurrent recorder
-- **AND** capture pauses during playback and resumes only while Talk remains active
+- **AND** interactive Talk retains one explicitly owned capture stream for qualified interruption during playback, following the natural voice requirements in `voice-model-foundation`; legacy alternating playback is not full-duplex qualification
 
 #### Scenario: Escape or hidden surface
 - **WHEN** the user presses Escape in Talk or hides OffGrid during permission or transcription
@@ -123,6 +129,18 @@ category selector with independent retained filters and honest runtime readiness
 - **WHEN** the user follows configuration from a draft and changes a selection
 - **THEN** returning preserves the draft and selected sources without submitting work
 - **AND** local inventory is distinct from network discovery and no download begins without explicit review
+
+#### Scenario: One model control in Chat
+- **WHEN** Chat has no selected model or installed chat models
+- **THEN** the existing composer selector remains the single model entry control, with empty-inventory guidance and the Models destination inside its menu
+- **AND** Chat does not add a duplicate choose-model action or setup banner above the input
+- **AND** opening Models from that selector preserves the current draft and its return handoff without submitting or downloading
+- **AND** an unavailable saved selection retains a visible explanation until the user explicitly replaces it
+
+#### Scenario: Ordinary menus preserve workspace visibility
+- **WHEN** the user opens or closes a composer menu or changes draft length in the browser or full desktop workspace
+- **THEN** the workspace remains visible without a presentation fade or native resize transition
+- **AND** voice swaps and compact-window geometry changes retain their existing transition, reduced-motion and draft-continuity behavior
 
 ### Requirement: Contextual work surface without compulsory project setup
 The application SHALL prioritize entering a request and resuming recent work.
@@ -185,6 +203,21 @@ on ordinary turns. Downloads, grants and model replacement SHALL remain explicit
 - **WHEN** setup is ready and a user adds supported documents then asks a question
 - **THEN** the interface shows per-file readiness and attributable results without requiring embedding, chunking or runtime choices
 - **AND** relevant errors preserve the draft and expose one next action with technical details secondary
+
+#### Scenario: Engine preparation status is unknown or unsupported
+- **WHEN** the first-use guide is waiting for engine status, receives a failed or malformed read, or connects to a service without that endpoint
+- **THEN** it distinguishes checking, retryable status failure and unsupported setup without claiming engine readiness or offering preparation from stale data
+- **AND** retry reads status only; service availability, model selection and completed first-response verification remain separate
+
+#### Scenario: Preparation acknowledgment is lost or cancelled
+- **WHEN** an explicit engine preparation request is cancelled, fails to return a usable acknowledgment, or returns an invalid status
+- **THEN** the guide reads the current service status before enabling another explicit attempt
+- **AND** no automatic preparation is replayed and a failed reconciliation read leaves preparation unavailable
+
+#### Scenario: Slow preparation polling and configured GPU engine
+- **WHEN** a status read spans multiple polling intervals or a preparation acknowledgment arrives before an earlier read
+- **THEN** polling has at most one active read and an older response cannot replace the acknowledged result
+- **AND** the explanation distinguishes a reported runtime download from checking the configured engine and does not promise model or GPU-driver downloads
 
 ### Requirement: Progressive advanced tools
 The default workspace SHALL prioritize conversation and documents while keeping
@@ -306,6 +339,12 @@ Chat SHALL keep agent/model, tools, access status and submission controls discov
 - **WHEN** the user scrolls upward while output or activity expands
 - **THEN** their reading position is preserved until they return to the bottom or choose Latest
 - **AND** navigation and submission controls remain reachable without an additional page scrollbar
+
+#### Scenario: Resize an unsent draft
+- **WHEN** the window narrows or native zoom changes while a draft is present
+- **THEN** the prompt editor reflows to show the draft up to its bounded maximum height, after which the field scrolls internally
+- **AND** widening or clearing the draft reduces its height without editing, losing or submitting the draft
+- **AND** browsers without native content sizing retain a bounded sizing fallback
 
 ### Requirement: Prompt-led entry
 Chat SHALL present one labelled prompt editor and one primary submit action for ordinary and agent-enabled conversations. Agents SHALL configure reusable profiles and expose canonical work inspection, not duplicate task entry. A ready workspace SHALL NOT require a separate configuration or execution-mode screen before ordinary submission. Secondary controls SHALL remain discoverable without competing with the prompt.

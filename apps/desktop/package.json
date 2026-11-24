@@ -1,7 +1,7 @@
 {
   "name": "offgrid-llm-desktop",
   "desktopName": "com.offgrid.llm.desktop",
-  "version": "0.4.32",
+  "version": "0.4.33",
   "description": "OffGrid private local AI workspace",
   "homepage": "https://github.com/takuphilchan/offgrid-llm",
   "author": {
@@ -62,8 +62,21 @@
       "compatibility.cjs",
       "legacy-compatibility.json",
       "runtime.js",
+      "workspace-maintenance.js",
+      "workspace-maintenance-host.js",
+      "workspace-maintenance-process.js",
+      "workspace-maintenance-files.js",
+      {
+        "from": "../web/src/i18n",
+        "to": ".",
+        "filter": [
+          "workspace-recovery.json"
+        ]
+      },
       "attachment.js",
       "computer-runtime.js",
+      "computer-browser-control.js",
+      "computer-browser-task.js",
       "application-launcher.js",
       {
         "from": "../computer",

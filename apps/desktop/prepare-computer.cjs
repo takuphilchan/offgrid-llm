@@ -2,7 +2,7 @@
 const fs=require('node:fs/promises');
 const path=require('node:path');
 const {spawn}=require('node:child_process');
-const {createManifest,runtimeFiles}=require('../computer/pack.cjs');
+const {createManifest,runtimeFiles,copyRuntimeModules}=require('../computer/pack.cjs');
 
 module.exports=async function prepareComputer(context) {
   await require('./speech-pack.cjs').prepare(context);
@@ -55,7 +55,7 @@ module.exports=async function prepareComputer(context) {
     await run('go',['build','-trimpath','-tags','offgrid_native','-o',path.join(native,'offgrid-computer'),'./cmd/offgrid-computer'],{...process.env,GOOS:'linux',GOARCH:'amd64',CGO_ENABLED:'1'});
     await run('cc',[path.join(source,'native','linux','consent.c'),'-o',path.join(native,'offgrid-computer-ui'),...flags]);
   }
-  for (const module of ['playwright','playwright-core']) await fs.cp(path.join(source,'node_modules',module),path.join(target,'node_modules',module),{recursive:true});
+  await copyRuntimeModules(source,target);
   await new Promise((resolve,reject)=>{
     const env={...process.env,PLAYWRIGHT_BROWSERS_PATH:path.join(target,'browsers')};
     delete env.PLAYWRIGHT_HOST_PLATFORM_OVERRIDE;

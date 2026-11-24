@@ -1,9 +1,9 @@
 .work-home { width:min(100%,760px); margin:auto; padding:24px 0 12px; text-align:center; }
 .work-home-intro { margin-block-end:0; }
 .work-home-brand { display:flex; justify-content:center; color:var(--faint); opacity:.6; }
-.work-home-brand .brand-symbol { width:44px; height:44px; }
-.work-home h2 { margin:28px 0 0; font-size:clamp(24px,3vw,30px); font-weight:400; letter-spacing:-.025em; line-height:1.25; }
-.work-home-recent { display:none; }
+.work-home-brand .brand-symbol { width:32px; height:32px; }
+.work-home h2 { margin:16px 0 0; font-size:clamp(24px,2.4vw,28px); font-weight:400; letter-spacing:-.025em; line-height:1.3; text-wrap:balance; }
+.work-home-recent { display:block; width:min(100%,32rem); margin:var(--space-8) auto 0; text-align:start; }
 .chat-layout:has(.work-home) { justify-content:normal; }
 .chat-layout:has(.work-home) > .composer { margin-block-start:auto; margin-block-end:0; }
 .chat-layout:has(.work-home) .conversation { flex:1; display:flex; flex-direction:column; }
@@ -13,8 +13,16 @@
 .work-home-recent ul { list-style:none; margin:0; padding:0; }
 .work-home-recent button { display:flex; width:100%; align-items:center; gap:12px; padding:12px 8px; background:transparent; border:0; border-radius:8px; color:var(--text); text-align:start; font:inherit; font-size:var(--type-ui); cursor:pointer; }
 .work-home-recent button:hover { background:var(--surface-2); }
+.work-home-recent button:focus-visible { outline:2px solid var(--text); outline-offset:2px; }
 .work-home-recent span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .work-home-recent time,.work-home-recent svg { color:var(--muted); font-size:var(--type-caption); flex:none; }
 @media(max-width:600px) { .work-home { padding-block-start:16px; } .work-home h2 { font-size:25px; } }
 
 .document-workspace.has-document .work-home{padding:24px 0;margin:auto;max-width:100%}.document-workspace.has-document .work-home h2{font-size:24px}.document-workspace.has-document .work-home-actions,.document-workspace.has-document .work-home-recent{display:none}
+
+/* Recent work is a bounded continuation path, never a second task controller. */
+.work-home-recent li + li { border-block-start:1px solid var(--separator); }
+.work-home-recent button { min-height:44px; padding:12px; }
+.work-home-recent h3 { padding-inline:12px; margin-block-end:8px; }
+.work-home-recent .work-home-session-name { white-space:normal; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+@media(max-height:620px) { .work-home { margin:0 auto; padding-block:12px; } .work-home h2 { margin-block-start:12px; } .work-home-brand { display:none; } .work-home-recent { margin-block-start:16px; } }

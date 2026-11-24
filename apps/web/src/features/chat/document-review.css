@@ -39,6 +39,14 @@
 @media(max-width:480px){.document-review-blocks{padding:16px;gap:20px}.document-review-tabs{margin-block-end:8px}}
 @media(forced-colors:active){.document-review-tabs [aria-pressed=true]{outline:1px solid Highlight;outline-offset:-2px}}
 .document-block-location { font-size:var(--type-meta); color:var(--muted); }
+.document-cell-details { margin-block:12px; font-size:var(--type-meta); }
+.document-cell-details > summary { min-height:32px; padding-block:6px; cursor:pointer; color:var(--muted); }
+.document-cell-details dl { margin:8px 0; display:grid; gap:12px; }
+.document-cell-details dl > div { display:grid; grid-template-columns:minmax(100px,1fr) minmax(0,3fr); gap:8px 16px; }
+.document-cell-details dt { color:var(--muted); }
+.document-cell-details dd { margin:0; min-width:0; }
+.document-cell-details code { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; font-family:var(--mono); }
+@media(max-width:480px) { .document-cell-details dl > div { grid-template-columns:minmax(0,1fr); gap:4px; } }
 
 .document-revision-alternatives{margin-block:var(--space-3,12px);color:var(--muted)}
 .document-revision-alternatives>ol{list-style:none;padding:0;display:grid;gap:16px}

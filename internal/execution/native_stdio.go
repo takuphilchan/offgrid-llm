@@ -15,11 +15,12 @@ import (
 // not a renderer method, HTTP API or model tool. Only native main may supply
 // Folder/Permissions after its own consent. There is no arbitrary spawn field.
 type NativeHostRequest struct {
-	Protocol    int         `json:"protocol"`
-	Service     string      `json:"service"`
-	Pairing     Pairing     `json:"pairing"`
-	Folder      string      `json:"folder"`
-	Permissions Permissions `json:"permissions"`
+	Protocol             int         `json:"protocol"`
+	Service              string      `json:"service"`
+	Pairing              Pairing     `json:"pairing"`
+	Folder               string      `json:"folder"`
+	Permissions          Permissions `json:"permissions"`
+	ProtectedDirectories []string    `json:"protected_directories,omitempty"`
 }
 
 type NativeHostState struct {
@@ -29,6 +30,9 @@ type NativeHostState struct {
 }
 
 func (r NativeHostRequest) Validate() error {
+	if _, err := protectedHostDirectories(r.ProtectedDirectories); err != nil {
+		return err
+	}
 	u, err := url.Parse(r.Service)
 	if err != nil || u.Scheme != "http" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || (u.Hostname() != "127.0.0.1" && u.Hostname() != "localhost" && u.Hostname() != "::1") || r.Protocol != ProtocolVersion || !filepath.IsAbs(r.Folder) || !r.Permissions.Read || r.Permissions.Processes && !r.Permissions.Write || r.Pairing.Protocol != ProtocolVersion || !validCredential(r.Pairing.Code) || !validIdentity(r.Pairing.Actor) || !validIdentity(r.Pairing.Workspace) {
 		return ErrAuthority
@@ -71,7 +75,7 @@ func ServeNativeHostWithProjectIdentity(ctx context.Context, input io.ReadCloser
 	if err != nil {
 		return err
 	}
-	host, err := StartPairedHost(ctx, client, LocalHostOptions{Folder: request.Folder, Permissions: request.Permissions, PackDirectory: packDirectory, StateDirectory: stateDirectory, Version: version, ProjectIdentityDirectory: identityDirectory}, request.Pairing)
+	host, err := StartPairedHost(ctx, client, LocalHostOptions{Folder: request.Folder, Permissions: request.Permissions, PackDirectory: packDirectory, StateDirectory: stateDirectory, ProtectedDirectories: request.ProtectedDirectories, Version: version, ProjectIdentityDirectory: identityDirectory}, request.Pairing)
 	if err != nil {
 		return err
 	}

@@ -42,6 +42,7 @@ async function savedCommand(key: string, command: Schema['ConversationCommand'])
 
 export async function submitCanonicalSession(options: {
   name: string; id: string; key: string; content: string; model: string;
+  responseProfile?: 'interactive' | 'extended'; maxTokens?: number;
   profile?: {id: string; revision: number}; restrictions: Schema['AgentResourceRestrictions'];
   folder?: Schema['ExecutionWorkspace'] | null;
   folderApplied?: () => void;
@@ -63,6 +64,8 @@ export async function submitCanonicalSession(options: {
   }
   const key = `${options.key}:input`;
   const payload: Schema['ConversationInboxInput'] = {content: options.content, model: options.model, origin: options.origin};
+  if(options.responseProfile)payload.response_profile=options.responseProfile;
+  if(options.maxTokens!==undefined)payload.max_tokens=options.maxTokens;
   if (options.attachments?.length) Object.assign(payload, {source_session: options.name, attachments: options.attachments});
   if (options.images?.length) payload.images = options.images;
   if(options.knowledgeSelections?.length) payload.knowledge_selections=options.knowledgeSelections;
@@ -77,6 +80,7 @@ export async function submitCanonicalSession(options: {
   try {
     const stored = JSON.parse(readDraft(key)) as Schema['ConversationInputCommand'];
     const sameText = stored.payload?.content === options.content && stored.payload?.model === options.model && stored.payload?.origin === options.origin
+      && stored.payload?.response_profile === payload.response_profile && stored.payload?.max_tokens === payload.max_tokens
       && JSON.stringify(stored.payload?.attachments ?? []) === JSON.stringify(payload.attachments ?? [])
       && JSON.stringify(stored.payload?.images ?? []) === JSON.stringify(payload.images ?? [])
       && JSON.stringify(stored.payload?.knowledge_selections ?? []) === JSON.stringify(payload.knowledge_selections ?? [])

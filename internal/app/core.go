@@ -75,6 +75,15 @@ func newCore(cfg *config.Config) (_ *core, err error) {
 	c.cache.StartCleanupRoutine(15 * time.Minute)
 	c.owned.add("response cache", func() error { c.cache.StopCleanupRoutine(); return nil })
 	c.embedding = inference.NewEmbeddingEngine(filepath.Join(cfg.ModelsDir, "..", "bin"))
+	if cfg.ONNXEmbeddingRuntimeFile != "" {
+		runtimeConfig, decodeErr := inference.LoadONNXEmbeddingRuntimeConfig(cfg.ONNXEmbeddingRuntimeFile)
+		if decodeErr != nil {
+			return nil, fmt.Errorf("decode ONNX embedding runtime enrollment: %w", decodeErr)
+		}
+		if err := c.embedding.ConfigureONNXEmbeddingRuntime(c.registry.Packages(), runtimeConfig); err != nil {
+			return nil, err
+		}
+	}
 	if scanErr := c.registry.ScanModels(); scanErr != nil {
 		log.Printf("Warning: Failed to scan models: %v", scanErr)
 	}

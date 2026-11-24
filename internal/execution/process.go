@@ -24,13 +24,14 @@ type ProcessSpec struct {
 }
 
 type ProcessResult struct {
-	Handle          string          `json:"handle"`
-	Directory       string          `json:"directory"`
-	State           string          `json:"state"`
-	ExitCode        *int            `json:"exit_code,omitempty"`
-	Output          []byte          `json:"output"`
-	OutputTruncated bool            `json:"output_truncated"`
-	Runtime         *ProcessRuntime `json:"runtime,omitempty"`
+	Handle          string              `json:"handle"`
+	Directory       string              `json:"directory"`
+	State           string              `json:"state"`
+	ExitCode        *int                `json:"exit_code,omitempty"`
+	Output          []byte              `json:"output"`
+	OutputTruncated bool                `json:"output_truncated"`
+	Runtime         *ProcessRuntime     `json:"runtime,omitempty"`
+	Descendants     *ProcessDescendants `json:"descendants,omitempty"`
 }
 
 // Runtime is supervised elapsed time, including launch and termination handling,
@@ -66,27 +67,30 @@ func (o *processOutput) snapshot() ([]byte, bool) {
 }
 
 type ownedProcess struct {
-	mu        sync.Mutex
-	binding   Binding
-	handle    string
-	directory string
-	state     string
-	exit      *int
-	output    processOutput
-	cancel    context.CancelFunc
-	done      chan struct{}
-	started   time.Time
-	elapsed   time.Duration
+	mu              sync.Mutex
+	binding         Binding
+	handle          string
+	directory       string
+	state           string
+	exit            *int
+	output          processOutput
+	cancel          context.CancelFunc
+	done            chan struct{}
+	started         time.Time
+	elapsed         time.Duration
+	cleanupVerified bool
+	cleanupRelease  func() error
 }
 
 type ProcessManager struct {
-	mu        sync.Mutex
-	session   *Session
-	processes map[string]*ownedProcess
-	order     []string
-	closed    bool
-	isolation *LinuxIsolation
-	journal   *Journal
+	mu              sync.Mutex
+	session         *Session
+	processes       map[string]*ownedProcess
+	order           []string
+	closed          bool
+	cleanupUnproven bool
+	isolation       *LinuxIsolation
+	journal         *Journal
 }
 
 func NewProcessManager(session *Session) *ProcessManager {
@@ -97,14 +101,17 @@ func NewProcessManager(session *Session) *ProcessManager {
 // must authorize the exact invocation under trusted-host or isolated policy
 // before dispatch. Program is an already selected executable, not model prose.
 func (m *ProcessManager) Start(ctx context.Context, binding Binding, spec ProcessSpec) (ProcessResult, error) {
-	return m.start(ctx, binding, spec, nil)
+	return m.start(ctx, binding, spec, nil, nil)
 }
 
-func (m *ProcessManager) start(ctx context.Context, binding Binding, spec ProcessSpec, intent *Request) (ProcessResult, error) {
+func (m *ProcessManager) start(ctx context.Context, binding Binding, spec ProcessSpec, intent *Request, journal *Journal) (ProcessResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
 		return ProcessResult{}, ErrAuthority
+	}
+	if m.cleanupUnproven {
+		return ProcessResult{}, ErrHostUnavailable
 	}
 	if err := ValidateProcessSpec(spec); err != nil {
 		return ProcessResult{}, err
@@ -122,6 +129,11 @@ func (m *ProcessManager) start(ctx context.Context, binding Binding, spec Proces
 	for _, p := range m.processes {
 		select {
 		case <-p.done:
+			p.mu.Lock()
+			if !p.cleanupVerified {
+				active++
+			}
+			p.mu.Unlock()
 		default:
 			active++
 		}
@@ -133,6 +145,16 @@ func (m *ProcessManager) start(ctx context.Context, binding Binding, spec Proces
 		for i, h := range m.order {
 			select {
 			case <-m.processes[h].done:
+				p := m.processes[h]
+				p.mu.Lock()
+				verified := p.cleanupVerified
+				p.mu.Unlock()
+				// Keep retryable native cleanup handles. Otherwise carry the
+				// uncertainty beyond bounded public history eviction.
+				if !verified && nativeCleanupVerified(nil) {
+					continue
+				}
+				m.cleanupUnproven = m.cleanupUnproven || !verified
 				delete(m.processes, h)
 				m.order = append(m.order[:i], m.order[i+1:]...)
 				goto room
@@ -171,6 +193,8 @@ room:
 		}
 		p.started = time.Now()
 		if err := m.isolation.start(processCtx, s.revokedSignal, m.journal, *intent, spec, s.config.Directory, p); err != nil {
+			var mutation *MutationError
+			m.cleanupUnproven = errors.As(err, &mutation) && mutation.Effects == "unknown"
 			cancel()
 			return ProcessResult{}, err
 		}
@@ -178,25 +202,45 @@ room:
 		m.order = append(m.order, handle)
 		return p.snapshot(), nil
 	}
-	command := exec.Command(spec.Program, spec.Arguments...)
+	program, err := s.environment.program(spec.Program, directory)
+	if err != nil {
+		cancel()
+		return ProcessResult{}, err
+	}
+	if intent != nil {
+		if journal == nil || intent.Binding != binding {
+			cancel()
+			return ProcessResult{}, ErrAuthority
+		}
+		if err := journal.recordProcessManifest(ctx, *intent, directory, program, s.environment.descriptor()); err != nil {
+			cancel()
+			return ProcessResult{}, err
+		}
+	}
+	command := exec.Command(program, spec.Arguments...)
 	command.Dir = directory
-	command.Env = processEnvironment()
+	command.Env = s.environment.clone().values
 	command.WaitDelay = 2 * time.Second
 	p := &ownedProcess{binding: binding, handle: handle, directory: directory, state: "running", cancel: cancel, done: make(chan struct{})}
 	command.Stdout = &p.output
 	command.Stderr = &p.output
 	p.started = time.Now()
-	stop, wait, release, err := startOwned(command)
+	start := m.session.startProcess
+	if start == nil {
+		start = startOwned
+	}
+	stop, wait, release, err := start(command)
 	if err != nil {
+		m.cleanupUnproven = errors.Is(err, errProcessCleanupUncertain)
 		cancel()
 		return ProcessResult{}, err
 	}
+	p.cleanupRelease = release
 	m.processes[handle] = p
 	m.order = append(m.order, handle)
 	go func() {
 		defer close(p.done)
 		defer cancel()
-		defer release()
 		finished := make(chan error, 1)
 		go func() { finished <- wait() }()
 		var waitErr error
@@ -215,12 +259,14 @@ room:
 			_ = stop()
 			waitErr = <-finished
 		}
+		cleanupErr := release()
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		code := command.ProcessState.ExitCode()
 		p.exit = &code
 		p.state = state
 		p.elapsed = time.Since(p.started)
+		p.cleanupVerified = nativeCleanupVerified(cleanupErr)
 		if waitErr != nil && state == "exited" {
 			p.state = "failed"
 		}
@@ -238,14 +284,22 @@ func (p *ownedProcess) snapshot() ProcessResult {
 		exit = &copy
 	}
 	var timing *ProcessRuntime
+	descendants := &ProcessDescendants{Version: 1, State: "unknown"}
+	if p.state == "running" {
+		descendants.State = "pending"
+	} else if p.cleanupVerified {
+		descendants.State = "settled"
+	}
+	result := ProcessResult{Handle: p.handle, Directory: p.directory, State: p.state, ExitCode: exit, Output: output, OutputTruncated: truncated, Descendants: descendants}
 	if !p.started.IsZero() {
 		elapsed := p.elapsed
 		if p.state == "running" {
 			elapsed = time.Since(p.started)
 		}
-		timing = &ProcessRuntime{Version: 1, ElapsedNS: max(int64(elapsed), 0), Settled: exit != nil && p.state != "running" && p.state != "uncertain"}
+		timing = &ProcessRuntime{Version: 1, ElapsedNS: max(int64(elapsed), 0), Settled: ProcessDescendantsSettled(result)}
 	}
-	return ProcessResult{Handle: p.handle, Directory: p.directory, State: p.state, ExitCode: exit, Output: output, OutputTruncated: truncated, Runtime: timing}
+	result.Runtime = timing
+	return result
 }
 
 func (m *ProcessManager) get(ctx context.Context, b Binding, handle string) (*ownedProcess, error) {
@@ -319,14 +373,47 @@ func (m *ProcessManager) Close() error {
 	var err error
 	for _, p := range all {
 		<-p.done
-		if p.snapshot().State == "uncertain" {
-			err = ErrHostUnavailable
+		if nativeCleanupVerified(nil) && p.cleanupRelease != nil {
+			cleanupErr := p.cleanupRelease()
+			p.mu.Lock()
+			p.cleanupVerified = cleanupErr == nil
+			p.mu.Unlock()
+			if cleanupErr != nil {
+				err = errors.Join(err, cleanupErr)
+			}
+		}
+		if !ProcessDescendantsSettled(p.snapshot()) {
+			err = errors.Join(err, ErrHostUnavailable)
 		}
 	}
 	if m.isolation != nil {
 		m.isolation.client.CloseIdleConnections()
 	}
+	m.mu.Lock()
+	if m.cleanupUnproven {
+		err = errors.Join(err, ErrHostUnavailable)
+	}
+	m.mu.Unlock()
 	return err
+}
+
+// Cleanup requires stronger proof than the observed exit of a command leader.
+// A private copy remains leased when any native descendant ownership is unknown.
+func (m *ProcessManager) cleanupConfirmed() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.closed || m.cleanupUnproven {
+		return false
+	}
+	for _, p := range m.processes {
+		p.mu.Lock()
+		confirmed := p.cleanupVerified
+		p.mu.Unlock()
+		if !confirmed {
+			return false
+		}
+	}
+	return true
 }
 
 // CancelJob closes only this admitted job's owned processes. Returning success
@@ -347,7 +434,7 @@ func (m *ProcessManager) CancelJob(ctx context.Context, b Binding) error {
 	for _, p := range all {
 		select {
 		case <-p.done:
-			if p.snapshot().State == "uncertain" {
+			if !ProcessDescendantsSettled(p.snapshot()) {
 				return ErrHostUnavailable
 			}
 		case <-ctx.Done():
@@ -358,7 +445,7 @@ func (m *ProcessManager) CancelJob(ctx context.Context, b Binding) error {
 }
 
 func processEnvironment() []string {
-	keys := []string{"PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL", "HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "XDG_CACHE_HOME"}
+	keys := []string{"PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL", "HOME", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "XDG_CACHE_HOME", "XDG_CONFIG_HOME"}
 	env := []string{}
 	for _, key := range keys {
 		if value, ok := os.LookupEnv(key); ok {

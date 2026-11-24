@@ -1,7 +1,7 @@
 // A failed preference write must not prevent input/runtime cleanup. Attempt
 // every owned cleanup even if another fails; callers must not claim quit until
 // all owned workers confirm stopping. External services are never stopped here.
-async function shutdownDesktop({ save, computer, execution, terminal, runtime, saveTimeoutMs = 5000 }) {
+async function shutdownDesktop({ save, computer, execution, terminal, runtime, recovery, saveTimeoutMs = 5000 }) {
   let timer;
   const saved = Promise.race([
     Promise.resolve().then(save).catch(() => undefined),
@@ -13,6 +13,7 @@ async function shutdownDesktop({ save, computer, execution, terminal, runtime, s
     }),
     Promise.resolve().then(() => execution.stop()),
     Promise.resolve().then(() => terminal?.stop()),
+    Promise.resolve().then(() => recovery?.stop()),
   ]);
   const service = await Promise.allSettled([Promise.resolve().then(() => runtime.stop())]);
   await saved;

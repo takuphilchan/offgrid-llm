@@ -41,18 +41,19 @@ type WorkingCopyRequest struct {
 
 type WorkingCopyRecord struct {
 	rootInfo              os.FileInfo
-	ID                    string  `json:"id"`
-	State                 string  `json:"state"`
-	Purpose               string  `json:"purpose,omitempty"`
-	Source                Binding `json:"source"`
-	WorkerRunID           string  `json:"worker_run_id"`
-	ReservedBytes         int64   `json:"reserved_bytes"`
-	InputBytes            int64   `json:"input_bytes"`
-	ManifestDigest        string  `json:"manifest_digest,omitempty"`
-	MeasuredBytes         int64   `json:"measured_bytes"`
-	UsageMeasured         bool    `json:"usage_measured"`
-	ArtifactReservedBytes int64   `json:"artifact_reserved_bytes,omitempty"`
-	ContentBytes          int64   `json:"content_bytes,omitempty"`
+	ID                    string                 `json:"id"`
+	State                 string                 `json:"state"`
+	Purpose               string                 `json:"purpose,omitempty"`
+	Source                Binding                `json:"source"`
+	WorkerRunID           string                 `json:"worker_run_id"`
+	ReservedBytes         int64                  `json:"reserved_bytes"`
+	InputBytes            int64                  `json:"input_bytes"`
+	ManifestDigest        string                 `json:"manifest_digest,omitempty"`
+	MeasuredBytes         int64                  `json:"measured_bytes"`
+	UsageMeasured         bool                   `json:"usage_measured"`
+	ArtifactReservedBytes int64                  `json:"artifact_reserved_bytes,omitempty"`
+	ContentBytes          int64                  `json:"content_bytes,omitempty"`
+	Environment           *EnvironmentDescriptor `json:"environment,omitempty"`
 }
 
 // WorkingCopies owns host-private preparation artifacts and logical-byte
@@ -101,11 +102,15 @@ func OpenWorkingCopies(directory string, policy WorkingCopyPolicy) (*WorkingCopi
 		return fail(err)
 	}
 	var version int
-	if err = db.QueryRow(`PRAGMA user_version`).Scan(&version); err == nil && (version < 0 || version > 10) {
+	if err = db.QueryRow(`PRAGMA user_version`).Scan(&version); err == nil && (version < 0 || version > 12) {
 		err = ErrUnsupported
 	}
 	if err == nil {
-		_, err = db.Exec(`BEGIN; CREATE TABLE IF NOT EXISTS worker_copies(id TEXT PRIMARY KEY,digest TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('preparing','ready','uncertain','releasing','released')),reserved_bytes INTEGER NOT NULL CHECK(reserved_bytes>=0),record BLOB NOT NULL,manifest BLOB); ` + changeSetSchema + integrationSchema + ` CREATE TABLE IF NOT EXISTS worker_validations(copy_id TEXT PRIMARY KEY REFERENCES worker_copies(id),digest TEXT NOT NULL,evidence BLOB NOT NULL); PRAGMA user_version=10; COMMIT;`)
+		ownershipUpgrade := ""
+		if version == 11 {
+			ownershipUpgrade = workingCopyOwnershipV12
+		}
+		_, err = db.Exec(`BEGIN; CREATE TABLE IF NOT EXISTS worker_copies(id TEXT PRIMARY KEY,digest TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('preparing','ready','uncertain','releasing','released')),reserved_bytes INTEGER NOT NULL CHECK(reserved_bytes>=0),record BLOB NOT NULL,manifest BLOB); ` + changeSetSchema + integrationSchema + workingCopyOwnershipSchema + ownershipUpgrade + ` CREATE TABLE IF NOT EXISTS worker_validations(copy_id TEXT PRIMARY KEY REFERENCES worker_copies(id),digest TEXT NOT NULL,evidence BLOB NOT NULL); PRAGMA user_version=12; COMMIT;`)
 	}
 	var integrity string
 	if err == nil {
@@ -193,39 +198,6 @@ func (s *WorkingCopies) Manifest(ctx context.Context, id string, owner Binding) 
 		return nil, err
 	}
 	return &m, nil
-}
-
-// Release is called by the trusted supervisor only after closing the workspace
-// session and settling owned processes. A failed removal/receipt retains the
-// reservation, and a retry removes only this generated store-relative directory.
-func (s *WorkingCopies) Release(ctx context.Context, id string, owner Binding) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	r, err := s.inspect(ctx, id)
-	if err != nil {
-		return err
-	}
-	if r.Source != owner || !validCopyID(id) {
-		return ErrAuthority
-	}
-	if r.State == "released" {
-		return nil
-	}
-	var retained int
-	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM worker_change_sets WHERE copy_id=? AND state!='abandoned'`, id).Scan(&retained); err != nil {
-		return err
-	}
-	if retained != 0 {
-		return ErrConflict
-	}
-	if _, err = s.db.ExecContext(ctx, `UPDATE worker_copies SET state='releasing' WHERE id=?`, id); err != nil {
-		return err
-	}
-	if err = s.root.RemoveAll(id); err != nil {
-		return err
-	}
-	_, err = s.db.ExecContext(ctx, `UPDATE worker_copies SET state='released',reserved_bytes=0 WHERE id=?`, id)
-	return err
 }
 
 func validCopyID(id string) bool {

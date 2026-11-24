@@ -1,4 +1,5 @@
 import {DocumentRevisionAlternatives} from './DocumentRevisionAlternatives';
+import {DocumentCellDetails} from './DocumentCellDetails';
 import { useEffect, useRef, useState } from 'react';
 import type {components} from '../../api/schema.generated';
 import { api, type DocumentBlock, type DocumentStructurePage } from '../../api/client';
@@ -107,6 +108,7 @@ export function DocumentReview({ id, revision = '', highlight = '', attachment, 
     {block.kind==='figure'&&<p>{navigationCopy.figures}</p>}{((!!block.review_state&&block.review_state!=='corrected'&&block.review_state!=='reviewed')||!!block.warnings?.length)&&<p className="workspace-secondary">{navigationCopy.needsReview}{!!block.warnings?.length&&<> · {number(block.warnings.length)}</>}</p>}
     <pre dir="auto">{highlight && block.text.includes(highlight) ? <>{block.text.slice(0, block.text.indexOf(highlight))}<mark>{highlight}</mark>{block.text.slice(block.text.indexOf(highlight) + highlight.length)}</> : block.text}</pre>
     <DocumentRevisionAlternatives block={block}/>
+    <DocumentCellDetails cell={block.cell}/>
     {selectBlock&&block.text&&<button className="text-button" onClick={()=>selectBlock(result.revision,block)}>{workSurface(locale).askSelection}</button>}
     {(block.truncated || block.metadata_omitted) && <p className="workspace-secondary">{copy.incomplete}</p>}
     {block.editable && result.can_correct && !readOnly && <button className="text-button" disabled={!!draft} onClick={() => { setSaved(false); setDraft({ block, revision: result.revision, attachmentRevision:attachment?attachmentRevision:undefined, text: block.text, uncertain: false }); }}>{copy.edit}</button>}

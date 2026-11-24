@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, type ModelPackageState } from '../../api/client';
+import { api, type ModelCategory, type ModelPackageState } from '../../api/client';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useI18n } from '../../i18n';
 import { speechModels } from '../../i18n/speech-models';
 import { modelAcquisition } from '../../i18n/model-acquisition';
 import { useWorkspace } from '../../lib/workspace-context';
 import { formatBytes } from './model-format';
-import { preparePackageImport } from './package-import';
+import { packageMatchesCategory, preparePackageImport } from './package-import';
 import { FilePicker } from '../../components/FilePicker';
 
-export function SpeechPackages({ importOnly = false, language = false, onChanged }: { importOnly?: boolean; language?: boolean; onChanged?: () => Promise<void> }) {
+export function SpeechPackages({ importOnly = false, category = 'speech_recognition', onChanged }: { importOnly?: boolean; category?: ModelCategory; onChanged?: () => Promise<void> }) {
   const { locale, messages: text } = useI18n();
   const copy = speechModels[locale];
   const { admin } = useWorkspace();
@@ -41,7 +41,7 @@ export function SpeechPackages({ importOnly = false, language = false, onChanged
   return <details className="model-section" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
     <summary>{importOnly ? modelAcquisition[locale].advanced : copy.title}</summary>
     <div className="stack">
-      {!language && <p>{copy.hint}</p>}
+      {category.startsWith('speech_') && <p>{copy.hint}</p>}
       {error && <div role="alert" className="inline-error">{error}</div>}
       {!importOnly && <button className="secondary-button" disabled={busy} onClick={() => void perform(signal => load(signal)).catch(() => {})}>{text.common.refresh}</button>}
       {!importOnly && items.map(item => <article className="catalog-card" key={`${item.id}/${item.revision}`}>
@@ -60,7 +60,7 @@ export function SpeechPackages({ importOnly = false, language = false, onChanged
           const version = ++selection.current; setPrepared(null); setError('');
           if (!files.length) return;
           try { const result = await preparePackageImport(files); if (version === selection.current) {
-            if (language !== (result.manifest.architecture === 'mlx-text' || result.manifest.architecture === 'transformers-text')) throw new Error('wrong_package_category');
+            if (!packageMatchesCategory(result.manifest, category)) throw new Error('wrong_package_category');
             setPrepared(result);
           } }
           catch { if (version === selection.current) setError(copy.invalid); }

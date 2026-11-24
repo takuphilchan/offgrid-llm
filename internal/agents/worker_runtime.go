@@ -97,7 +97,7 @@ func (r *Runner) executeWorkerRuntime(ctx context.Context, task *Task, call api.
 		return string(data), err
 	}
 	if args.WorkerID == "" {
-		return "", ErrControlCommand
+		return "", &runtimeArgumentError{cause: ErrControlCommand}
 	}
 	worker, err := r.manager.WorkerSession(scope, args.WorkerID)
 	if err != nil {
@@ -114,7 +114,7 @@ func (r *Runner) executeWorkerRuntime(ctx context.Context, task *Task, call api.
 	hash := sha256.Sum256([]byte(task.ID + "\x00" + call.ID))
 	command := api.WorkerCommand{RequestID: "worker-tool-" + hex.EncodeToString(hash[:]), TargetID: worker.ID, ExpectedRevision: args.ExpectedRevision, Kind: kind, Payload: api.WorkerCommandPayload{Content: args.Content}}
 	if err = validateWorkerCommand(command); err != nil {
-		return "", err
+		return "", &runtimeArgumentError{cause: err}
 	}
 	var receipt *ConversationCommandReceipt
 	if kind == "continue" {

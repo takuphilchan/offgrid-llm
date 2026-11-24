@@ -12,7 +12,7 @@ import { SpeechPackages } from './SpeechPackages';
 
 // Package imports remain metadata-only until a supervised provider and this
 // exact model/runtime revision have been qualified. Never offer Select here.
-export function LanguagePackageModels() {
+export function LanguagePackageModels({ category = 'language', filter = '', onChanged }: { category?: 'language' | 'embeddings'; filter?: string; onChanged?: () => Promise<void> }) {
   const { messages: text, locale } = useI18n();
   const details = modelProviderDetails(locale);
   const { admin } = useWorkspace();
@@ -24,8 +24,8 @@ export function LanguagePackageModels() {
   const [remove, setRemove] = useState<InstalledTypedModel | null>(null);
   const load = async (signal?: AbortSignal) => {
     try {
-      const items = await api.typedModels('language', signal);
-      if (!signal?.aborted) { setPackages(items.filter(item => item.kind === 'package')); setError(''); }
+      const items = await api.typedModels(category, signal);
+      if (!signal?.aborted) { setPackages(items.filter(item => item.kind === 'package' && item.category === category)); setError(''); }
     } catch (reason) {
       if (!signal?.aborted) setError(reason instanceof Error ? reason.message : text.common.error);
     } finally {
@@ -36,20 +36,22 @@ export function LanguagePackageModels() {
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
-  }, []);
+  }, [category]);
   useWorkspaceRefresh(load);
   const perform = async (action: () => Promise<unknown>) => {
     if (locked.current) return;
     locked.current = true;
     setBusy(true); setError('');
-    try { await action(); await load(); }
+    try { await action(); await load(); await onChanged?.(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : text.common.error); throw reason; }
     finally { locked.current = false; setBusy(false); }
   };
-  if (!loading && !error && packages.length === 0) return null;
+  if (category === 'language' && !loading && !error && packages.length === 0) return null;
+  const query = filter.trim().toLocaleLowerCase(locale);
+  const visible = packages.filter(item => (category === 'embeddings' ? `embedding:${item.id}@${item.revision}` : item.id).toLocaleLowerCase(locale).includes(query));
   return <section className="model-section" aria-busy={loading}>
     {error && <div className="inline-error" role="alert">{error}<button className="secondary-button" onClick={() => void load()}>{text.common.retry}</button></div>}
-    {packages.length > 0 && <div className="catalog-grid installed-package-list">{packages.map(item => <article className="catalog-card package-card" key={`${item.id}/${item.revision}`}>
+    {visible.length > 0 && <div className="catalog-grid installed-package-list">{visible.map(item => <article className="catalog-card package-card" key={`${item.id}/${item.revision}`}>
       <ModelIdentity model={packageDisplay(item)} />
       <p className="model-runtime-meta">{[item.engine, item.format, item.backend].filter(Boolean).join(' · ')}</p>
       <p className="model-readiness">{details.qualified}: {item.readiness.qualified ? details.yes : details.no}</p>
@@ -69,7 +71,7 @@ export function LanguagePackageModels() {
         <button className="danger-button" disabled={!admin || busy || !!item.package?.in_use} onClick={() => setRemove(item)}>{text.models.delete}</button>
       </div>
     </article>)}</div>}
-    <SpeechPackages importOnly language onChanged={() => load()} />
+    <SpeechPackages importOnly category={category} onChanged={async () => { await load(); await onChanged?.(); }} />
     {remove && <ConfirmDialog title={remove.name} body={workflow[locale].deleteModel} close={() => setRemove(null)} confirm={async () => { await perform(() => api.removeModelPackage(remove.id, remove.revision!, new AbortController().signal)); setRemove(null); }} />}
   </section>;
 }

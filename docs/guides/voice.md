@@ -126,9 +126,19 @@ results. This does not cancel an already-submitted agent task.
 Choose **Talk** in an ordinary Chat conversation with an empty draft. OffGrid
 checks the selected local recognition and speech models, then starts listening.
 When you finish speaking and pause, it transcribes and sends that utterance once.
-The answer is shown in Chat and spoken after the turn commits. When playback
-finishes, listening resumes. The microphone does not capture while the speaker
-is playing, preventing the answer from becoming another request.
+The answer is shown in Chat and spoken after the turn commits. Supported browsers
+keep one capture session open to detect the next utterance, including while an
+answer is being prepared. During playback, automatic interruption requires the
+device to report applied echo cancellation (`true` or `all`). OffGrid requests
+all-output cancellation when the device advertises it; noise suppression is an
+independent setting and is not required. If echo cancellation is unavailable,
+Talk explains the limitation and offers **Speak again**. These settings do not
+establish acoustic accuracy on every microphone or speaker.
+
+Automatic Talk uses the responsive voice indicator and a single status instead
+of an elapsed recording counter. Pause to send your utterance automatically;
+the completion and discard buttons remain available while you speak. The exit
+control stays in place as listening and transcription change.
 
 Silence or an empty recognition result keeps Talk open and starts a fresh
 listening cycle after a short delay. It does not send an empty message or replay
@@ -144,6 +154,16 @@ not grant agent, computer or network authority.
 Noise, microphone gain and browser audio restrictions can prevent pause detection
 or playback. Manual Stop and ordinary text Chat remain available. Isolated
 browser checks do not qualify every physical microphone, speaker or language.
+
+Short manually completed recordings receive silent tail padding because the
+bundled Whisper engine otherwise returns no transcript below one second. Stop
+remains immediate. Browser-encoded dictation is converted to mono PCM16 at
+16 kHz before recognition. If recognition returns no text, your draft remains
+editable and unchanged. After microphone permission has been granted, recovery
+offers an input-device selector; the choice lasts only for the open app session
+and also applies to the next Talk session. Disconnected devices cancel partial
+recordings instead of submitting them. The level meter shows incoming energy,
+not proof that the recognition model understood words.
 
 ## Listen to Chat answers
 
@@ -199,7 +219,7 @@ runtime and exact safe error text instead.
 
 ## Current boundaries
 
-This preview does not provide always-on listening, wake words, full-duplex Talk,
+This preview does not provide always-on listening, wake words, acoustically qualified full-duplex Talk,
 voice-only consequential approvals, agent progress narration, or the planned
 recording-review-to-Knowledge workflow. File transcription APIs do not establish
 that those UI workflows exist. Voice preferences, capture and playback feedback

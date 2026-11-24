@@ -17,11 +17,13 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	s.syncRegistryLoadState()
-	models := s.registry.ListModels()
+	models := s.listedLocalModels()
 	for index := range models {
 		if models[index].Type == "embedding" {
 			models[index].Capabilities = []string{"embeddings"}
-			models[index].CapabilityStatus = map[string]string{"embeddings": "declared"}
+			if models[index].CapabilityStatus == nil {
+				models[index].CapabilityStatus = map[string]string{"embeddings": "declared"}
+			}
 			continue
 		}
 		if !models[index].SupportsChat() {
@@ -44,7 +46,7 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 	}
 	response := api.ModelListResponse{
 		Object: "list",
-		Data:   models,
+		Data:   append(models, s.listedEndpointModels(r.Context())...),
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -69,10 +71,10 @@ func (s *Server) handleRefreshModels(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Return updated model list
-	models := s.registry.ListModels()
+	models := s.listedLocalModels()
 	response := api.ModelListResponse{
 		Object: "list",
-		Data:   models,
+		Data:   append(models, s.listedEndpointModels(r.Context())...),
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -101,6 +103,14 @@ func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
 
 	if req.ModelID == "" {
 		writeError(w, "model_id is required", http.StatusBadRequest)
+		return
+	}
+	if isEndpointModel(req.ModelID) {
+		writeErrorWithCode(w, "Edit HTTP endpoint enrollment to remove it; this operation cannot delete local model files", http.StatusConflict, "endpoint_model_managed")
+		return
+	}
+	if strings.HasPrefix(req.ModelID, models.ONNXEmbeddingPrefix) {
+		writeErrorWithCode(w, "Remove an embedding package through package management", http.StatusConflict, "embedding_package_managed")
 		return
 	}
 

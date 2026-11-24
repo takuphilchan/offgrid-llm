@@ -33,9 +33,11 @@ type AgentConfig struct {
 	DisableDelegation   bool   `json:"disable_delegation,omitempty"`
 	ExecutionWorkerMode string `json:"execution_worker_mode,omitempty"`
 
-	ConversationConfiguration *ConversationConfiguration `json:"conversation_configuration,omitempty"`
+	ConversationConfiguration *ConversationConfiguration  `json:"conversation_configuration,omitempty"`
+	ConversationDiscovery     *ConversationDiscoveryScope `json:"conversation_discovery,omitempty"`
 
 	ToolAdapter             *inference.AgentToolPin            `json:"tool_adapter,omitempty"`
+	ModelSelection          *ModelPolicySelection              `json:"model_selection,omitempty"`
 	ExecutionRequestVersion int                                `json:"execution_request_version,omitempty"`
 	InputWriteVersion       int                                `json:"input_write_version,omitempty"`
 	Automation              *ScheduleOrigin                    `json:"automation,omitempty"`

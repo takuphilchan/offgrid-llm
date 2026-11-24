@@ -109,3 +109,26 @@ without sending or replaying a turn. Stop/navigation cancel re-arming; genuine
 transport failures still pause. The 43-case synthetic browser regression results
 and remaining qualification limits are recorded in
 [silence recovery evidence](../../../docs/quality/evidence/talk-silence-and-integration-status-2026-11-07.md).
+
+## 14. Natural interactive voice (authorized 2026-11-22)
+
+2026-11-24 corrective evidence: [Voice interruption and automatic UI](../../../docs/quality/evidence/voice-barge-in-and-auto-ui-2026-11-24.md)
+records quiet/gapped onset, applied AEC-mode fixes, hands-free browser ordering,
+recorded-speech capture and the timer-free UI. Acoustic qualification remains open.
+
+2026-11-23 corrective evidence: [Stop, interruption and Talk controls](../../../docs/quality/evidence/voice-stop-interruption-ui-2026-11-23.md)
+records the short-recording engine rejection, session identity fix, silent
+preparation interruption and responsive controls. This does not close the
+broader acoustic, context and natural-conversation tasks below.
+
+The user requires natural spoken interaction, including interruptions and spoken
+steering. Earlier half-duplex Talk checks remain historical evidence; they do not
+qualify this expanded interaction. Reuse existing capture, speech and canonical
+conversation owners. No microphone use or model download is authorized here.
+
+- [ ] 14.1 Audit current voice/session/turn ownership against primary real-time voice sources; reproduce and fix stale asynchronous callbacks affecting restarted Talk, navigation or another conversation. Verify exact revision fencing with focused renderer tests and record remaining gaps.
+- [ ] 14.2 Implement user speech detection during playback with immediate local playback cancellation, bounded echo/noise rejection, owned synthesis/generation cancellation and explicit interruption state. Verify delayed audio, false interruption, device loss, Stop and navigation without replay; qualify actual acoustic behavior separately.
+- [ ] 14.3 Route finalized spoken corrections and side questions through canonical active-turn steering, retaining request identity, background work, parent conversation ownership and explicit job Stop semantics. Verify speech while thinking/working, duplicate transcripts, partial utterances, lost replies and reconnect without duplicate work.
+- [ ] 14.4 Track generated, queued and actually played speech separately; preserve interrupted answer context and exact canonical message/turn references. Verify cancellation before playback, interruption mid-answer and late completions without claiming unheard content was delivered.
+- [ ] 14.5 Replace rigid pause-only turn completion with bounded adaptive endpointing and explicit user completion controls, supporting hesitation, longer pauses, backchannels, silence/noise and supported languages. Measure end-of-utterance and interruption latency; unavailable semantic/VAD models must remain explicit rather than silently falling back to cloud services.
+- [ ] 14.6 Run integrated local ASR/conversation/TTS interruption and active-agent journeys, applicable Go/web/desktop checks, accessibility/localization and physical microphone/speaker/headset/noise/device-reconnect qualification. Record actual supported model/hardware results, human naturalness evaluation and current-system comparisons; synthetic audio fixtures do not close acoustic or human gates.

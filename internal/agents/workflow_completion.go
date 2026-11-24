@@ -46,6 +46,7 @@ func (r *Runner) assessWorkflow(t *Task) {
 		}
 	}
 	if progress {
+		resolveAuxiliaryModelRepair(t, "workflow_completion")
 		t.Checkpoint.CompletionRepairs = 0
 		encoded, _ := json.Marshal(seen)
 		t.Checkpoint.CompletionProgress = string(encoded)
@@ -144,6 +145,7 @@ func (r *Runner) repairWorkflowCompletion(t *Task) (bool, error) {
 		plan, _ := json.Marshal(remainingPlan)
 		feedback += " Your saved plan still contains unfinished work: " + string(plan) + ". Perform the requested work and update the plan with actual evidence before finishing. A verified app launch does not finish a document or research task."
 	}
+	chargeAuxiliaryModelRepair(t, "workflow_completion")
 	t.Checkpoint.Messages = append(t.Checkpoint.Messages, api.ChatMessage{Role: "system", Content: feedback})
 	t.Steps = append(t.Steps, Step{ID: len(t.Steps) + 1, Type: "completion_rejected", Content: feedback, Timestamp: time.Now().UTC()})
 	if t.Checkpoint.CompletionRepairs >= 3 {
@@ -183,6 +185,9 @@ func ComputerAccessNeedsObservation(t *Task, tools interface {
 	for index, step := range t.Steps {
 		if index < t.Config.ComputerStepOffset || step.Type != "action" {
 			continue
+		}
+		if (t.Config.ComputerDriver == "browser" || t.Config.ComputerDriver == "") && structuredBrowserObservation(step, tools) {
+			return false
 		}
 		switch step.ToolName {
 		case "computer_observe", "computer_verify_application", "browser_observe":

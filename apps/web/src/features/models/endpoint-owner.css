@@ -1,0 +1,19 @@
+.endpoint-owner-panel { margin-block: 12px; }
+.endpoint-owner-panel > .stack { margin-block-start: 12px; }
+.endpoint-owner-dialog.history-delete-dialog { width: min(760px, calc(100vw - 32px)); }
+.endpoint-owner-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; border: 0; padding: 0; margin-block: 16px; min-width: 0; }
+.endpoint-owner-fields label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.endpoint-owner-fields input, .endpoint-owner-fields textarea, .endpoint-owner-fields select { width: 100%; box-sizing: border-box; min-width: 0; padding: 8px; background: var(--surface-1); color: var(--text); border: 1px solid var(--line-strong); border-radius: 6px; font: inherit; }
+.endpoint-owner-fields textarea { resize: vertical; min-height: 76px; }
+.endpoint-owner-fields .endpoint-owner-check { grid-column: 1 / -1; flex-direction: row; align-items: start; }
+.endpoint-owner-check input { width: auto; flex: 0 0 auto; margin-block-start: 4px; }
+.endpoint-owner-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; min-width: 0; }
+.endpoint-owner-details dt { color: var(--text-muted); font-size: 13px; }
+.endpoint-owner-details dd { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.endpoint-owner-entry, .endpoint-owner-record { border: 1px solid var(--line-strong); border-radius: 8px; padding: 12px; min-width: 0; overflow-wrap: anywhere; }
+.endpoint-owner-entry h3, .endpoint-owner-record h4 { margin-block: 0 8px; }
+.endpoint-owner-dialog .model-actions { flex-wrap: wrap; }
+.endpoint-owner-maintenance { flex-wrap: wrap; }
+.endpoint-maintenance-review { overflow-wrap: anywhere; padding-inline-start: 24px; }
+.endpoint-owner-history { overflow-wrap: anywhere; min-width: 0; }
+.endpoint-owner-history .model-actions { flex-wrap: wrap; }

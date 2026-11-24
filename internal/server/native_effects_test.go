@@ -20,8 +20,8 @@ func TestNativeDescriptorsUseSharedReviewedEffects(t *testing.T) {
 	}
 	for _, tool := range browserTools() {
 		d, _ := browserDescriptor(tool.Function.Name)
-		if d.Revision != "" || capabilities.TrustedNativeRead(d) {
-			t.Fatal("legacy browser semantics changed")
+		if !capabilities.TrustedBrowserOperation(d) || capabilities.TrustedNativeRead(d) {
+			t.Fatal("browser descriptor lacks its separate reviewed contract")
 		}
 	}
 }

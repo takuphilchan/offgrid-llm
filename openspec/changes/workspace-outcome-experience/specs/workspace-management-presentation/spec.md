@@ -117,6 +117,17 @@ Activity SHALL foreground current and recent permitted work with meaningful stat
 ### Requirement: Coherent Settings groups
 Settings SHALL group personal preferences, workspace/capability setup and diagnostics. Endpoint/version information SHALL have one authoritative detail section rather than repeated cards with conflicting values. Existing compatibility guidance, service ownership and emergency stopping SHALL remain available.
 
+#### Scenario: Recovery capability or status is unavailable
+- **WHEN** the desktop recovery bridge is missing, the actor is ineligible, the service is external, or the initial status read is pending or fails
+- **THEN** recovery names the observed blocker or checking state and does not report Ready or present an actionable operation without confirmed eligibility
+- **AND** a retry reads status only, retains uncertainty and never repeats an operation; supported active work retains Stop and explicit Resume
+- **AND** the existing local-directory card remains unchanged while recovery uses balanced padding, readable status and a useful existing navigation or retry action
+
+#### Scenario: Return from the desktop terminal over Settings
+- **WHEN** the terminal is opened from Settings and the user returns to the workspace
+- **THEN** the action is labelled for that return, preserves the previous route/draft and does not close the process or send terminal input
+- **AND** the terminal canvas and surrounding workspace form one continuous themed surface without an inset bordered panel, including supported palette and forced-color modes
+
 #### Scenario: Inspect an external service
 - **WHEN** desktop uses a container or explicitly configured service
 - **THEN** Settings distinguishes that service from desktop-local storage and identifies relevant build information
@@ -138,6 +149,11 @@ History, document and model maintenance SHALL use consistent labelled controls, 
 - **WHEN** some selected items cannot be removed or deletion is stopped
 - **THEN** processed and remaining items are distinguished and the selection is updated accurately
 - **AND** already-deleted items are not resubmitted and unrelated documents/artifacts are preserved
+
+#### Scenario: Return to a filtered document library
+- **WHEN** a user leaves a later page of the library and returns in the same account/workspace session
+- **THEN** its filter, valid page and still-accessible selection remain available alongside the retained Chat draft
+- **AND** changing the filter starts at the first page, a shorter refreshed list clamps to a valid page, and navigation performs no mutation
 
 ### Requirement: Discoverable integrations without composer clutter
 Tools and connections SHALL remain reachable through clearly labelled administration surfaces with persisted routes and role-aware access. Their configuration SHALL NOT be a permanent prerequisite panel on an ordinary task composer.
@@ -185,6 +201,13 @@ Settings SHALL offer searchable General, Models & responses, Voice, Terminal, Ac
 - **WHEN** a user changes response or voice preferences and returns to Chat or reloads
 - **THEN** the same scoped preference is used and unrelated work, grants and pinned agent profiles remain unchanged
 
+#### Scenario: Preference persistence fails
+- **WHEN** browser or native preference persistence fails after a selection is applied
+- **THEN** the current session retains that selection and discloses that saving failed, including after leaving and reopening Settings
+- **AND** appearance does not report Saved while its native write is pending or failed
+- **AND** only the latest presentation save owns its feedback; an older reply cannot erase or introduce a newer failure
+- **AND** recovery follows an explicit preference change without replaying a request, enabling audio or changing grants
+
 #### Scenario: Browse without side effects
 - **WHEN** a user searches Settings or opens a section
 - **THEN** no model load, microphone capture, playback, grant or resource change occurs
@@ -193,6 +216,12 @@ Settings SHALL offer searchable General, Models & responses, Voice, Terminal, Ac
 #### Scenario: Localized navigation
 - **WHEN** Settings is used by keyboard in any supported locale, a narrow window or RTL
 - **THEN** matching settings remain reachable without clipped controls or losing search focus
+
+#### Scenario: Find an individual preference
+- **WHEN** a user searches for a displayed response, voice, appearance or shortcut setting and follows its result or saved deep link
+- **THEN** the existing owning section opens and focus reaches that control, or its stable explanatory region while the control is unavailable
+- **AND** search indexes localized control labels, preserves previous section routes and does not offer desktop-only shortcut settings in the browser
+- **AND** focusing a setting never opens its picker, changes its value, starts audio, submits work, changes access or steals focus after a delayed metadata read
 
 ### Requirement: Purposeful action and preference hierarchy
 Settings SHALL distinguish destination cards from inline preferences and expose full model identities in selection menus while using readable names in compact triggers.

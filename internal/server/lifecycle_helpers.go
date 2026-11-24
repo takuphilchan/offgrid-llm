@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"syscall"
 	"time"
+
+	"github.com/takuphilchan/offgrid-llm/internal/models"
 )
 
 // startRAGAutoRestore starts the existing background restore at its original
@@ -28,6 +30,11 @@ func (s *Server) startRAGAutoRestore() {
 		if !s.ragEngine.IsEnabled() {
 			var modelNames []string
 			for _, m := range s.registry.ListModels() {
+				// New package providers require explicit initial selection. A
+				// previously saved selection is handled by AutoRestore above.
+				if m.Engine == models.EngineONNX {
+					continue
+				}
 				modelNames = append(modelNames, m.ID)
 			}
 			if err := s.ragEngine.AutoEnableWithModel(ctx, modelNames); err != nil {

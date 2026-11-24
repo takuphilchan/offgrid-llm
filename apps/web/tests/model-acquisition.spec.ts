@@ -81,6 +81,9 @@ test.describe('complete package acquisition through a real isolated service', ()
     await request.post(`/api/v2/models/operations/${operation.id}/cancel`);
     await expect.poll(async () => (await (await request.get(`/api/v2/models/operations/${operation.id}`)).json()).state).toBe('cancelled');
     await page.locator('.model-category-filter').selectOption({label:'Speech recognition'});
+    const downloads = page.locator('.model-transfers');
+    await expect(downloads).toBeVisible();
+    if (!await downloads.evaluate(el => (el as HTMLDetailsElement).open)) await downloads.locator(':scope > summary').click();
     const transfer = page.locator('article').filter({ has: page.getByRole('button', { name: 'Resume', exact: true }) });
     await expect(transfer).toHaveCount(1);
     await transfer.getByRole('button', { name: 'Resume', exact: true }).click();
@@ -90,6 +93,8 @@ test.describe('complete package acquisition through a real isolated service', ()
     const retry = await (await request.post('/api/v2/models/operations', { data: { request_id: crypto.randomUUID(), action: 'install', resolution_id: resolution.id } })).json();
     await request.post(`/api/v2/models/operations/${retry.id}/cancel`);
     await expect.poll(async () => (await (await request.get(`/api/v2/models/operations/${retry.id}`)).json()).state).toBe('cancelled');
+    await expect(downloads).toBeVisible();
+    if (!await downloads.evaluate(el => (el as HTMLDetailsElement).open)) await downloads.locator(':scope > summary').click();
     await expect(transfer).toHaveCount(1);
     await transfer.getByRole('button', { name: 'Discard partial data', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Discard partial data', exact: true }).click();

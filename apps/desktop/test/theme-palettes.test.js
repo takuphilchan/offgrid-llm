@@ -22,6 +22,7 @@ for(const [id,modes] of Object.entries(catalog.terminal))for(const [mode,ansi] o
  const tokens=catalog.themes[id][mode];
  const prefs=require('../terminal-preferences');
  const actual=prefs.theme(mode==='dark',null,{...tokens,ansi});
+ assert.equal(actual.background,tokens['surface-1'],'terminal shares the workspace canvas');
  assert.equal(Object.keys(ansi).length,16);
  for(const name of prefs.colors){assert.equal(actual[name],ansi[name]);assert.ok(contrast(actual[name],actual.background)>=4.5,name);}
  assert.ok(contrast(actual.selectionBackground,actual.selectionForeground)>=4.5);

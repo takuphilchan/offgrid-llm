@@ -10,7 +10,6 @@ import (
 	"io/fs"
 	"os"
 	"path"
-	"strings"
 )
 
 type WorkingCopyEntry struct {
@@ -43,32 +42,18 @@ type WorkingCopyManifest struct {
 // .git file must never point a worker back at the user's index or object store.
 func inventoryWorkingCopy(ctx context.Context, source *os.Root, req WorkingCopyRequest, policy WorkingCopyPolicy) (*WorkingCopyManifest, error) {
 	m := &WorkingCopyManifest{Version: 1, Source: req.Parent, InstructionVersion: req.InstructionVersion, ControlEpoch: req.ControlEpoch, Entries: []WorkingCopyEntry{}, Exclusions: []WorkingCopyExclusion{}}
-	err := fs.WalkDir(source.FS(), ".", func(name string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if name == "." {
-			return nil
-		}
-		if len(name) > 4096 || strings.Count(name, "/") > 128 {
-			return fmt.Errorf("working copy path exceeds preparation limits: %s", name)
-		}
+	// Included entries and excluded Git roots retain their separate admission
+	// budgets; the walker bounds their combined directory allocation up front.
+	err := walkWorkingCopy(ctx, source, 2*policy.MaxEntries, func(name string, info os.FileInfo) error {
 		if path.Base(name) == ".git" {
 			m.Exclusions = append(m.Exclusions, WorkingCopyExclusion{name, "Git administration is excluded; all ordinary working-tree files are inventoried regardless of tracking or ignore status"})
 			if len(m.Exclusions) > policy.MaxEntries {
 				return ErrLimit
 			}
-			if entry.IsDir() {
+			if info.IsDir() {
 				return fs.SkipDir
 			}
 			return nil
-		}
-		info, err := source.Lstat(name)
-		if err != nil {
-			return err
 		}
 		if info.Mode().Type() != 0 && info.Mode().Type() != os.ModeDir {
 			return fmt.Errorf("working copy preparation does not support links or special files: %s", name)
@@ -82,6 +67,7 @@ func inventoryWorkingCopy(ctx context.Context, source *os.Root, req WorkingCopyR
 				return ErrLimit
 			}
 			item.Kind, item.Bytes = "file", info.Size()
+			var err error
 			item.SHA256, err = hashWorkingCopyFile(ctx, source, name, info)
 			if err != nil {
 				return err
@@ -129,16 +115,10 @@ func (r copyContextReader) Read(p []byte) (int, error) {
 }
 
 func openWorkingCopyFile(source *os.Root, name string, expected os.FileInfo) (*os.File, error) {
-	f, err := source.Open(name)
-	if err != nil {
-		return nil, err
+	if expected == nil || !expected.Mode().IsRegular() {
+		return nil, ErrUnsupported
 	}
-	actual, err := f.Stat()
-	if err != nil || !actual.Mode().IsRegular() || !os.SameFile(expected, actual) || expected.Size() != actual.Size() {
-		f.Close()
-		return nil, ErrRevision
-	}
-	return f, nil
+	return openWorkingCopyObject(source, name, expected, false)
 }
 
 func hashWorkingCopyFile(ctx context.Context, source *os.Root, name string, expected os.FileInfo) (string, error) {

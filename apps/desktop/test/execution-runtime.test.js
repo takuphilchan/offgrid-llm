@@ -17,6 +17,16 @@ test('native folder consent and pairing precede spawn; private seed is scoped an
   assert.equal(f.seed().folder,folder);assert.equal(f.seed().pairing.code,pair.code);assert.deepEqual(f.seed().permissions,resource.permissions);assert.equal(f.seed().service,'http://127.0.0.1:11611');f.ready();assert.deepEqual((await start).resource,resource);
   const stopping=f.runtime.stop();assert.equal(f.runtime.state,'stopping');f.exit();assert.equal((await stopping).state,'stopped');assert.equal(f.runtime.child,null);
 });
+test('protected browser roots come only from native host options and remain in private seed',async()=>{
+  const protectedDirectories=[path.resolve('owned-profile','computer')];
+  const f=fixture({protectedDirectories});
+  await assert.rejects(f.runtime.start({access:'edit',protected_directories:[]}),/execution_request_invalid/);
+  const pending=f.runtime.start({access:'edit'});await tick();
+  assert.deepEqual(f.seed().protected_directories,protectedDirectories);
+  f.ready();const status=await pending;
+  assert.equal(Object.hasOwn(status,'protected_directories'),false);
+  const stopping=f.runtime.stop();f.exit();await stopping;
+});
 test('renderer cannot submit folder, authority, command or service; denial never pairs',async()=>{
   for(const request of [{access:'edit',folder},{access:'trusted',approved:true},{access:'read',service:'http://other'},{access:'shell'},{access:'read',command:'anything'}]){const f=fixture();await assert.rejects(f.runtime.start(request),/execution_request_invalid/);assert.equal(f.counts().forks,0);}
   const f=fixture({confirm:async()=>false});assert.equal((await f.runtime.start({access:'trusted'})).state,'idle');assert.equal(f.counts().pairs,0);assert.equal(f.counts().forks,0);

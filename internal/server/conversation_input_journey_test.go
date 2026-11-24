@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agents"
+	"github.com/takuphilchan/offgrid-llm/internal/config"
 	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
@@ -17,7 +18,8 @@ func TestConversationInputPublicServiceJourneyWithoutProfile(t *testing.T) {
 	for _, ongoing := range []bool{false, true} {
 		t.Run(map[bool]string{false: "ordinary-answer", true: "ongoing-work"}[ongoing], func(t *testing.T) {
 			s, scope, c := contextInboxFixture(t)
-			s.config.DefaultModel, s.config.EnableConversationPreview = "model", true
+			t.Setenv("OFFGRID_ENABLE_CONVERSATION_PREVIEW", "")
+			s.config.DefaultModel, s.config.EnableConversationPreview = "model", config.LoadConfig().EnableConversationPreview
 			var calls atomic.Int32
 			s.agentRunner = agents.NewRunner(s.agentManager, s.toolRegistry, func(ctx context.Context, task *agents.Task, messages []api.ChatMessage, tools []api.Tool) (*api.ChatCompletionResponse, error) {
 				calls.Add(1)

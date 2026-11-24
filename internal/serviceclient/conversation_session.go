@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/takuphilchan/offgrid-llm/internal/sessions"
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
@@ -55,18 +57,55 @@ func (c *Client) SubmitSessionInput(ctx context.Context, id, requestID string, i
 		}
 		after = page.NextCursor
 	}
+	// Receipt recovery above remains available after capability withdrawal. A
+	// fresh submission must never let an older service ignore source/options
+	// fields, including when this call is an explicit retry after a lost reply.
+	if len(input.Attachments)+len(input.Images)+len(input.KnowledgeDocuments)+len(input.KnowledgeSelections) > 0 || input.UseKnowledge {
+		if err := c.RequireCapability(ctx, "conversation-source-inputs-v1"); err != nil {
+			return nil, &conversationInputRejected{err}
+		}
+	}
+	if len(input.KnowledgeSelections) > 0 {
+		if err := c.RequireCapability(ctx, "conversation-source-scopes-v1"); err != nil {
+			return nil, &conversationInputRejected{err}
+		}
+	}
+	if input.ResponseProfile != "" || input.MaxTokens != 0 || strings.TrimSpace(input.Content) == "" {
+		if err := c.RequireCapability(ctx, "conversation-input-options-v1"); err != nil {
+			return nil, &conversationInputRejected{err}
+		}
+	}
 	conversation, err := c.CanonicalConversation(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	receipt, err := c.SubmitConversationInput(ctx, api.ConversationInputCommand{RequestID: requestID, TargetID: id, ExpectedRevision: conversation.Revision, Kind: "submit_input", Payload: input})
 	if err != nil {
+		var remote *Error
+		// These input/source validation responses precede AcceptConversationInput
+		// or its transaction commit. Other statuses (including identity conflicts)
+		// and failures while inspecting an earlier receipt remain conservative.
+		if errors.As(err, &remote) && (remote.Status == 400 || remote.Status == 413 || remote.Status == 422) {
+			return nil, &conversationInputRejected{err}
+		}
 		return nil, err
 	}
 	if receipt.Input == nil {
 		return nil, &Error{Code: "invalid_response", Message: "The service returned no accepted input."}
 	}
 	return receipt.Input, nil
+}
+
+type conversationInputRejected struct{ error }
+
+func (e *conversationInputRejected) Unwrap() error { return e.error }
+
+// ConversationInputRejected identifies this invocation's preflight failure
+// before POST or explicit validation rejection. It cannot resolve uncertainty
+// retained from an earlier invocation.
+func ConversationInputRejected(err error) bool {
+	var rejected *conversationInputRejected
+	return errors.As(err, &rejected)
 }
 
 func (c *Client) WorkItem(ctx context.Context, id string) (*api.WorkItem, error) {

@@ -9,7 +9,7 @@ export function AgentNavigation({view = 'workspace'}: {view?: 'workspace'|'profi
   const {messages: text, locale} = useI18n();
   const {admin} = useWorkspace();
   const copy = agentManagement[locale];
-  return <nav className="task-management agent-navigation" aria-label={text.nav.agents}>
+  return <nav className="task-management agent-navigation workspace-view-nav" aria-label={text.nav.agents}>
     <a id="agent-profiles-tab" href="#/agents/profiles" aria-current={view === 'profiles' ? 'page' : undefined}><Icon name="agents" size={17}/>{agentProfilesText[locale].profiles}</a>
     {admin && <>
     <a id="agent-tools-tab" href="#/agents/tools" aria-current={view === 'tools' || view === 'connections' ? 'page' : undefined}><Icon name="plug" size={17}/>{copy.tools}</a>

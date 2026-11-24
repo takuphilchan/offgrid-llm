@@ -24,10 +24,20 @@ func testPackageManifest(architecture string) ModelPackageManifest {
 	if architecture == "piper" || architecture == "kokoro" || architecture == "qwen3-tts" {
 		m.Voices = []PackageVoice{{"default", "en"}}
 	}
+	if architecture == "onnx-embedding" {
+		m.Engine, m.Format, m.Backend = EngineONNX, FormatONNX, "cpu"
+		m.ModelFamily, m.ContextLength = "bert-symmetric", 128
+		m.RunnerRevision, m.AdapterRevision, m.Runtime.Revision = "fixture-1", ONNXEmbeddingAdapterRevision, ONNXEmbeddingAdapterRevision
+		m.Modalities, m.ToolCalling, m.SampleRates = []string{"text"}, "unsupported", nil
+	}
 	for role, extensions := range l.required {
 		data := []byte(role)
 		digest := sha256.Sum256(data)
-		m.Artifacts = append(m.Artifacts, PackageArtifact{Path: role + extensions[0], Role: role, Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:]), License: "CC0-1.0"})
+		path := role + extensions[0]
+		if architecture == "onnx-embedding" {
+			path = map[string]string{"weights": "model.onnx", "tokenizer": "tokenizer.json", "config": "embedding.json"}[role]
+		}
+		m.Artifacts = append(m.Artifacts, PackageArtifact{Path: path, Role: role, Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:]), License: "CC0-1.0"})
 	}
 	return m
 }

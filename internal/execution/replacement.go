@@ -28,27 +28,33 @@ type replacementDirectory struct {
 }
 
 func replacementFileDigest(ctx context.Context, root *os.Root, name string, limit int64) (string, error) {
+	digest, _, err := observeReplacementFile(ctx, root, name, limit)
+	return digest, err
+}
+
+func observeReplacementFile(ctx context.Context, root *os.Root, name string, limit int64) (string, os.FileInfo, error) {
 	info, err := root.Lstat(name)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	if !info.Mode().IsRegular() || info.Size() > limit {
-		return "", ErrUnsupported
+	if !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > limit {
+		return "", nil, ErrUnsupported
 	}
 	f, err := openWorkingCopyFile(root, name, info)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	defer f.Close()
 	h := sha256.New()
 	n, err := io.Copy(h, io.LimitReader(copyContextReader{ctx, f}, limit+1))
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	if n != info.Size() || n > limit {
-		return "", ErrRevision
+	after, err := f.Stat()
+	if err != nil || n != info.Size() || n > limit || after.Size() != info.Size() || !after.ModTime().Equal(info.ModTime()) {
+		return "", nil, ErrRevision
 	}
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return hex.EncodeToString(h.Sum(nil)), after, nil
 }
 
 func replacePreserving(ctx context.Context, target *os.Root, name string, private *os.Root, staged, backup, expected, result string, limit int64) (receipt preservedReplacement, resultErr error) {
@@ -122,11 +128,12 @@ func replacePreservingUsing(ctx context.Context, target *os.Root, name string, p
 	// Cancellation after dispatch cannot erase actual effects. Preserve both
 	// versions and surface conflict; never overwrite a newer edit to roll back.
 	observe := context.WithoutCancel(ctx)
-	receipt.DisplacedDigest, err = replacementFileDigest(observe, privateView, receipt.Displaced, limit)
+	var displacedInfo, resultInfo os.FileInfo
+	receipt.DisplacedDigest, displacedInfo, err = observeReplacementFile(observe, privateView, receipt.Displaced, limit)
 	if err != nil {
 		return receipt, &MutationError{Cause: err, Effects: "unknown"}
 	}
-	receipt.ResultDigest, err = replacementFileDigest(observe, targetView, name, limit)
+	receipt.ResultDigest, resultInfo, err = observeReplacementFile(observe, targetView, name, limit)
 	if err != nil {
 		return receipt, &MutationError{Cause: err, Effects: "unknown"}
 	}
@@ -140,7 +147,7 @@ func replacePreservingUsing(ctx context.Context, target *os.Root, name string, p
 		return receipt, &MutationError{Cause: errors.Join(ErrConflict, err), Effects: "partial"}
 	}
 	currentView.Close()
-	if err = errors.Join(syncReplacementFile(targetView, name), syncReplacementFile(privateView, receipt.Displaced)); err != nil {
+	if err = errors.Join(syncReplacementFile(targetView, name, resultInfo), syncReplacementFile(privateView, receipt.Displaced, displacedInfo)); err != nil {
 		return receipt, &MutationError{Cause: err, Effects: "unknown"}
 	}
 	if err = syncReplacement(targetDir, privateDir); err != nil {
@@ -149,12 +156,19 @@ func replacePreservingUsing(ctx context.Context, target *os.Root, name string, p
 	return receipt, nil
 }
 
-func syncReplacementFile(root *os.Root, name string) error {
-	f, err := root.OpenFile(name, os.O_RDWR, 0)
+func syncReplacementFile(root *os.Root, name string, expected os.FileInfo) error {
+	// Sync exactly the regular object whose post-dispatch bytes were observed.
+	// A changed pathname is uncertainty, never a reason to follow or delete it.
+	f, err := openWorkingCopyObject(root, name, expected, true)
 	if err != nil {
 		return err
 	}
-	return errors.Join(f.Sync(), f.Close())
+	syncErr := f.Sync()
+	after, statErr := f.Stat()
+	if statErr == nil && (after.Size() != expected.Size() || !after.ModTime().Equal(expected.ModTime())) {
+		statErr = ErrRevision
+	}
+	return errors.Join(syncErr, statErr, f.Close())
 }
 
 func closeReplacementFiles(files []*os.File) error {

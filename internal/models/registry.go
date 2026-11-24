@@ -138,6 +138,9 @@ func (r *Registry) ListModels() []api.Model {
 
 	models := make([]api.Model, 0, len(r.models))
 	for _, meta := range r.models {
+		if strings.HasPrefix(meta.ID, ONNXEmbeddingPrefix) {
+			continue
+		}
 		// Format size in GB
 		sizeGB := fmt.Sprintf("%.2f GB", float64(meta.Size)/(1024*1024*1024))
 		if meta.Size < 1024*1024*1024 {
@@ -161,7 +164,7 @@ func (r *Registry) ListModels() []api.Model {
 		})
 	}
 
-	return models
+	return append(models, r.listONNXEmbeddingModels()...)
 }
 
 // CountLoadedModels returns how many models are currently marked as loaded.
@@ -179,6 +182,9 @@ func (r *Registry) CountLoadedModels() int {
 
 // DeleteModel removes a model from the registry and deletes the file
 func (r *Registry) DeleteModel(modelID string) error {
+	if strings.HasPrefix(modelID, ONNXEmbeddingPrefix) {
+		return fmt.Errorf("embedding packages must be removed through package management")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -217,6 +223,9 @@ func (r *Registry) getModelIDs() []string {
 
 // GetModel retrieves a model by ID
 func (r *Registry) GetModel(id string) (*api.ModelMetadata, error) {
+	if strings.HasPrefix(id, ONNXEmbeddingPrefix) {
+		return r.getONNXEmbeddingMetadata(id)
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

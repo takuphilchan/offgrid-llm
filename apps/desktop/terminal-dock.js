@@ -6,13 +6,13 @@ const {validateWorkspaceBounds,terminalBounds}=require('./terminal-layout');
 const {createContextDelivery}=require('./terminal-context-delivery');
 const terminalTranslations=require('./terminal-translations');
 
-function createTerminalDock({electron,window,host,cli,service,presentation,showMessage}){
+function createTerminalDock({electron,window,host,cli,service,presentation,showMessage,admit=()=>true}){
   const {WebContentsView,ipcMain,dialog,clipboard}=electron;
   const text=key=>terminalTranslations.text(presentation().locale,key);
   const url=pathToFileURL(path.join(__dirname,'terminal.html')).href;
   let view,visible=false,overlay=false,workspaceBounds,loaded=false,loading=null,stopping=false,cleanup=null,visibilityRevision=0;
   const emit=value=>{if(view&&!view.webContents.isDestroyed())view.webContents.send('terminal-event',value);};
-  const sessions=new TerminalSessions({host,runner:process.execPath,worker:path.join(__dirname,'terminal-worker.js'),cli,service,
+  const sessions=new TerminalSessions({host,runner:process.execPath,worker:path.join(__dirname,'terminal-worker.js'),cli,service,admit,
     choose:async()=>{const result=await dialog.showOpenDialog(window,{title:text('Choose a local terminal folder'),properties:['openDirectory']});return result.canceled?null:result.filePaths[0];},
     confirm:async r=>(await (showMessage || dialog.showMessageBox.bind(dialog))(window,{type:'question',title:text('Close terminal?'),message:text('Stop this terminal and its running commands?'),detail:r.cwd,buttons:[text('Cancel'),text('Stop and close')],defaultId:0,cancelId:0})).response===1,
     send:emit});
@@ -29,7 +29,7 @@ function createTerminalDock({electron,window,host,cli,service,presentation,showM
     window.webContents.send('terminal-context',value);
   }});
   window.webContents.on('did-start-loading',()=>contextDelivery.cancel());
-  const protocol=createTerminalProtocol({trustedURL:url,contents:()=>view?.webContents,available:()=>sessions.available()&&!cleanup,operations:{
+  const protocol=createTerminalProtocol({trustedURL:url,contents:()=>view?.webContents,available:()=>sessions.available()&&!cleanup&&admit(),operations:{
     share:async context=>{const result=await contextDelivery.deliver(context);hide();return result;},
     create:request=>sessions.create(request),attach:id=>sessions.attach(id),input:(id,text)=>sessions.input(id,text),resize:(id,cols,rows)=>sessions.resize(id,cols,rows),ack:(id,sequence)=>sessions.ack(id,sequence),close:id=>sessions.close(id),layout,hide,copy:text=>clipboard.writeText(text),paste:()=>clipboard.readText(),presentation:()=>({...presentation(),visible:visible&&!overlay})
   }});
@@ -45,7 +45,7 @@ function createTerminalDock({electron,window,host,cli,service,presentation,showM
   return {
     acknowledgeContext:(id,accepted)=>contextDelivery.acknowledge(id,accepted),
     async open(){
-      if(stopping)throw Error('terminal_stopping');
+      if(stopping||!admit())throw Error('terminal_stopping');
       const intent=visibilityRevision;
       if(!view){
         view=new WebContentsView({webPreferences:{preload:path.join(__dirname,'terminal-preload.js'),sandbox:true,contextIsolation:true,nodeIntegration:false,partition:'offgrid-terminal',spellcheck:false}});
@@ -63,14 +63,14 @@ function createTerminalDock({electron,window,host,cli,service,presentation,showM
       if(!loaded){
         if(!loading)loading=(async()=>{
           await cleanup;
-          if(stopping||view!==target)throw Error('terminal_stopping');
+          if(stopping||view!==target||!admit())throw Error('terminal_stopping');
           await target.webContents.loadURL(url);
-          if(stopping||view!==target||target.webContents.isDestroyed())throw Error('terminal_stopping');
+          if(stopping||view!==target||target.webContents.isDestroyed()||!admit())throw Error('terminal_stopping');
           loaded=true;
         })().finally(()=>{loading=null;});
         await loading;
       }
-      if(stopping||view!==target||target.webContents.isDestroyed())throw Error('terminal_stopping');
+      if(stopping||view!==target||target.webContents.isDestroyed()||!admit())throw Error('terminal_stopping');
       if(intent!==visibilityRevision)return {visible:false};
       visible=true;layout();if(!overlay)view.webContents.focus();emit({type:'visibility',visible:!overlay});return {visible:true};
     },

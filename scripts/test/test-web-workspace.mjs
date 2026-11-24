@@ -8,19 +8,34 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
+import { privateFixtureDirectory } from './private-fixture-directory.mjs';
 const root = resolve(import.meta.dirname, '../..');
 const require = createRequire(join(root, 'apps/web/package.json'));
 const { availablePort } = createRequire(join(root, 'apps/desktop/package.json'))('./runtime.js');
 if (!process.argv[2]) throw new Error('Pass the native OffGrid executable');
-const evidence = await mkdtemp(join(tmpdir(), 'offgrid-web-qualification-'));
-const port = await availablePort();
 const modelFixtures = process.argv.includes('--model-fixtures');
+const endpointFixtures = process.argv.includes('--endpoint-fixtures');
+const endpointOwnerFixtures = process.argv.includes('--endpoint-owner-fixtures');
+if (endpointFixtures && endpointOwnerFixtures) throw Error('Choose one endpoint fixture mode');
+const evidence = endpointOwnerFixtures ? await privateFixtureDirectory() : await mkdtemp(join(tmpdir(), 'offgrid-web-qualification-'));
+const port = await availablePort();
 for (const dir of ['models', 'data', 'bin']) await mkdir(join(evidence, dir));
 await writeFile(join(evidence, 'config.yaml'), '{}');
 const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('OFFGRID_')));
 Object.assign(env, { OFFGRID_HOST: '127.0.0.1', OFFGRID_PORT: String(port), OFFGRID_MODELS_DIR: join(evidence, 'models'),
   OFFGRID_DATA_DIR: join(evidence, 'data'), OFFGRID_BIN_DIR: join(evidence, 'bin'), OFFGRID_CONFIG: join(evidence, 'config.yaml'),
   OFFGRID_UI_DIR: join(root, 'apps/web/dist'), OFFGRID_REQUIRE_AUTH: 'false', OFFGRID_ENABLE_P2P: 'false' });
+if (endpointFixtures) {
+  const entry = { id: 'isolated-endpoint', revision: 'r1', provider: 'ollama', url: 'https://fixture.example.test', allowed_ips: ['192.0.2.9'],
+    actors: ['local-admin'], credential_env: 'OFFGRID_ISOLATED_UNAVAILABLE_CREDENTIAL', model: 'fixture-model', model_digest: `sha256:${'a'.repeat(64)}`,
+    format: 'gguf', runtime_version: 'fixture-1', context_length: 8192, deployment_attested: true };
+  env.OFFGRID_INFERENCE_ENDPOINTS_FILE = join(evidence, 'endpoints.json');
+  await writeFile(env.OFFGRID_INFERENCE_ENDPOINTS_FILE, JSON.stringify({ version: 1, endpoints: [entry] }));
+}
+if (endpointOwnerFixtures) {
+  env.OFFGRID_INFERENCE_ENDPOINT_OWNER_POLICY_FILE = join(evidence, 'owner-policy.json');
+  await writeFile(env.OFFGRID_INFERENCE_ENDPOINT_OWNER_POLICY_FILE, JSON.stringify({ version: 1, credentials: [{ id: 'fixture-credential', environment: 'OFFGRID_ISOLATED_UNAVAILABLE_CREDENTIAL', origins: ['https://fixture.example.test'] }], managed_templates: [] }));
+}
 const log = createWriteStream(join(evidence, 'service.log'));
 let service, stopped, spawnError, closing = false, restarting = false;
 function start() {
@@ -33,7 +48,7 @@ function start() {
 start();
 // Test-only restart control lives in this disposable directory. It can only
 // terminate the wrapper's owned child, never an installed service or container.
-const restartTimer = modelFixtures ? setInterval(async () => {
+const restartTimer = modelFixtures || endpointFixtures || endpointOwnerFixtures ? setInterval(async () => {
   if (closing || restarting) return;
   restarting = true;
   try {
@@ -64,8 +79,8 @@ try {
     await delay(100);
   }
   if (!ready) throw new Error('Fixture service did not become ready');
-  const tests = spawn(process.execPath, [require.resolve('@playwright/test/cli'), 'test', ...process.argv.slice(3).filter(arg => arg !== '--model-fixtures')], {
-    cwd: join(root, 'apps/web'), env: { ...process.env, OFFGRID_E2E_URL: url, ...(modelFixtures ? { OFFGRID_E2E_MODEL_FIXTURES: '1', OFFGRID_E2E_RESTART_DIR: evidence } : {}) }, windowsHide: true, stdio: 'inherit'
+  const tests = spawn(process.execPath, [require.resolve('@playwright/test/cli'), 'test', ...process.argv.slice(3).filter(arg => !['--model-fixtures', '--endpoint-fixtures', '--endpoint-owner-fixtures'].includes(arg))], {
+    cwd: join(root, 'apps/web'), env: { ...process.env, OFFGRID_E2E_URL: url, ...(modelFixtures ? { OFFGRID_E2E_MODEL_FIXTURES: '1', OFFGRID_E2E_RESTART_DIR: evidence } : {}), ...(endpointFixtures ? { OFFGRID_E2E_ENDPOINT_FIXTURES: evidence, OFFGRID_E2E_RESTART_DIR: evidence } : {}), ...(endpointOwnerFixtures ? { OFFGRID_E2E_ENDPOINT_OWNER_FIXTURES: evidence, OFFGRID_E2E_RESTART_DIR: evidence } : {}) }, windowsHide: true, stdio: 'inherit'
   });
   const [code] = await once(tests, 'exit');
   process.exitCode = code ?? 1;

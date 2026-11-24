@@ -33,7 +33,7 @@ func (r *Runner) requestWorkerBudget(task *Task, call api.ToolCall) (string, err
 		return "", err
 	}
 	if args.ModelCalls < 1 || args.ModelCalls > 50 || !validProfileText(args.Reason, 2048, true) || call.ID == "" || len(call.ID) > 256 {
-		return "", ErrControlCommand
+		return "", &runtimeArgumentError{cause: ErrControlCommand}
 	}
 	digest := sha256.Sum256([]byte(call.Function.Arguments))
 	key := hex.EncodeToString(digest[:])

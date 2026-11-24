@@ -29,7 +29,7 @@ func (p *localDocumentSynthesis) admit(ctx context.Context, model string, window
 	if p.server.registry == nil || p.server.engine == nil || p.server.llamaProcess == nil {
 		return nil, rag.ErrAnalysisUnavailable
 	}
-	metadata, err := p.server.registry.GetChatModel(model)
+	metadata, err := p.server.localChatMetadata(model)
 	if err != nil || metadata.Format != "gguf" {
 		return nil, rag.ErrAnalysisUnavailable
 	}

@@ -14,14 +14,16 @@ import (
 	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/execution"
+	"github.com/takuphilchan/offgrid-llm/internal/testhost"
 )
 
 func TestPinnedStdioEndpointRunsRealExecutor(t *testing.T) {
+	testhost.Account(t)
 	ext := ""
 	if runtime.GOOS == "windows" {
 		ext = ".exe"
 	}
-	binary := filepath.Join(t.TempDir(), "offgrid-executor"+ext)
+	binary := filepath.Join(testhost.PrivateDirectory(t), "offgrid-executor"+ext)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	build := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"+ext), "build", "-o", binary, ".")
@@ -35,8 +37,8 @@ func TestPinnedStdioEndpointRunsRealExecutor(t *testing.T) {
 	sum := sha256.Sum256(data)
 	digest := hex.EncodeToString(sum[:])
 	root := t.TempDir()
-	grant := filepath.Join(t.TempDir(), "grant.json")
-	state := filepath.Join(t.TempDir(), "journal")
+	grant := filepath.Join(testhost.PrivateDirectory(t), "grant.json")
+	state := filepath.Join(testhost.PrivateDirectory(t), "journal")
 	b := execution.Binding{Actor: "fixture", Workspace: "workspace", Host: "host", Session: "session", Grant: "grant", Revision: 1, Job: "supervisor"}
 	config := execution.Context{Version: 1, Binding: b, Backend: "local", Root: root, Directory: ".", Permissions: execution.Permissions{Read: true}}
 	encoded, _ := json.Marshal(config)

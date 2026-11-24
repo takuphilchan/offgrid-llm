@@ -78,10 +78,8 @@ func TestProcessProviderFailedRetirementKeepsPackageLease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
-		_ = provider.cmd.Process.Kill()
-		_ = provider.cmd.Wait()
-	}()
+	terminate := provider.terminate
+	defer func() { _ = terminate(provider.cmd) }()
 	var released atomic.Int32
 	provider.release = func() { released.Add(1) }
 	stopErr := errors.New("owned worker termination not confirmed")

@@ -1,6 +1,23 @@
 # Surface materials
 
-## Current refinement — 2026-10-31
+## Current flat workspace — 2026-11-22 reconciliation
+
+The approved desktop-agent refinement supersedes the decorative treatment below.
+Sidebar, composer, document reader, utility popovers and the command palette use
+flat semantic surfaces. Floating menus have an opaque background and no backdrop
+blur in either `data-gradients` diagnostic mode. Primary controls retain solid
+fills. The retained functional progress treatment still reports actual transfer
+progress and respects forced colors/increased contrast and the diagnostic switch.
+
+`workspace.css`, the current composition design and `surface-materials.spec.ts`
+already enforce this behavior. The opt-in surface paint test is aligned with
+that same contract; it still measures streaming, menu opening, Stop and frame p95
+at 4x/6x CPU with unchanged timing budgets. Generated tokens may retain historical
+ramps; their presence does not mean the workspace consumes them. Do not restore
+blur merely to satisfy a historical screenshot or test. Current execution results
+are in [the completion evidence](../quality/evidence/interface-completion-2026-11-21.md).
+
+## Historical refinement — 2026-10-31
 
 The approved material prototype strengthens neutral depth without changing the
 base palette. The three decorative families are now sidebar, composer and

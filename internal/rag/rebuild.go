@@ -25,6 +25,42 @@ func RebuildKnowledgeOffline(ctx context.Context, dataDir, modelID, modelPath, r
 		return err
 	}
 	defer owner.Close()
+	return rebuildKnowledgeOfflineOwned(ctx, dataDir, modelID, modelPath, runtimePath, progress)
+}
+
+// RebuildKnowledgeOfflineWithBackup keeps one workspace owner from the recovery
+// snapshot through rebuilding. No service can enter between those operations.
+func RebuildKnowledgeOfflineWithBackup(ctx context.Context, dataDir, modelID, modelPath, runtimePath, backupPath, version string, options storage.BackupWriteOptions, progress func(int, int)) (*storage.BackupManifest, error) {
+	if strings.TrimSpace(modelID) == "" || runtimePath == "" {
+		return nil, fmt.Errorf("model ID and an explicit installed runtime are required")
+	}
+	return rebuildWithRecoveryBackup(ctx, dataDir, backupPath, version, options, func(ctx context.Context, ownedDir string) error {
+		return rebuildKnowledgeOfflineOwned(ctx, ownedDir, modelID, modelPath, runtimePath, progress)
+	})
+}
+
+func rebuildWithRecoveryBackup(ctx context.Context, dataDir, backupPath, version string, options storage.BackupWriteOptions, rebuild func(context.Context, string) error) (*storage.BackupManifest, error) {
+	abs, err := filepath.Abs(dataDir)
+	if err != nil {
+		return nil, err
+	}
+	ownedDir, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return nil, err
+	}
+	return storage.BackupWorkspaceThen(ctx, ownedDir, backupPath, version, options, func(*storage.BackupManifest) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return rebuild(ctx, ownedDir)
+	})
+}
+
+// Only the two ownership-acquiring entry points above may invoke this core.
+func rebuildKnowledgeOfflineOwned(ctx context.Context, dataDir, modelID, modelPath, runtimePath string, progress func(int, int)) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	worker := inference.NewEmbeddingEngine()
 	defer worker.Unload()
 	opts := inference.DefaultEmbeddingOptions()

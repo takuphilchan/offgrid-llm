@@ -372,7 +372,10 @@ class TestAgentConversations:
         response = MagicMock()
         response.read.return_value = b'{"profiles":[],"revision":3}'
         send.return_value = response
-        settings = {'name': 'Research', 'model': 'installed', 'max_iterations': 8}
+        settings = {'name': 'Research', 'model': 'installed', 'max_iterations': 8,
+                    'model_policy': {'version': 1, 'mode': 'guided',
+                                     'fallback_models': ['qualified-local'],
+                                     'perception_model': 'qualified-vision'}}
         operations = [
             (lambda: client.agent.profiles.list(), 'GET', '/api/v2/agent-profiles', None),
             (lambda: client.agent.profiles.get('profile-one', revision=2), 'GET', '/api/v2/agent-profiles/profile-one?revision=2', None),

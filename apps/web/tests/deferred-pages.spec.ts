@@ -46,12 +46,15 @@ test('delayed route loading is visible, cancellable by navigation, and respects 
 
 test('failed page load recovers by explicit reload and retains the saved draft',async({page})=>{
  await craftFixture(page,'en','light');
- let failed=false;
- await page.route(modelsModule,route=>{if(!failed){failed=true;return route.abort('failed');}return route.continue();});
+ let failing=true,failures=0;
+ // Module preloads may retry before navigation. Keep the outage in effect
+ // until the explicit recovery action so this exercises a real failed load.
+ await page.route(modelsModule,route=>{if(failing){failures++;return route.abort('failed');}return route.continue();});
  await page.goto('/ui/#/chat/new');
  await page.locator('.composer textarea').fill('Keep this during recovery');
  await page.locator('.sidebar a[href="#/settings"]').click(); await page.getByRole('button',{name:'Models & responses',exact:true}).click(); await page.locator('.settings-group a[href="#/models"]').click();
  await expect(page.locator('.page-failure')).toBeVisible();
+ expect(failures).toBeGreaterThan(0);failing=false;
  await page.getByRole('button',{name:'Reload app',exact:true}).click();
  await expect(page.locator('.installed-model').first()).toBeVisible();
  await page.locator('.sidebar a[href="#/chat"]').click();

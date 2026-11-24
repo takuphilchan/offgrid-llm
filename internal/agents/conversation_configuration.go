@@ -14,3 +14,13 @@ type ConversationConfiguration struct {
 	Model        string               `json:"model"`
 	Restrictions ResourceRestrictions `json:"restrictions"`
 }
+
+// The accepted Chat choice is immutable provenance. A later effective model may
+// differ only through the recorded adaptive chain, not a rewritten preference.
+func validAcceptedConversationModel(task *Task, accepted string) bool {
+	cp, selection := task.Checkpoint, task.Config.ModelSelection
+	if cp == nil || len(cp.ModelSwitches) == 0 {
+		return task.Model == accepted
+	}
+	return selection != nil && selection.Mode == "adaptive" && cp.ModelSwitches[0].From == accepted && validSwitchSelection(task)
+}

@@ -54,6 +54,26 @@ func (p *AgentToolPolicy) Select(ctx context.Context, model string, window int) 
 	return p.pin(ctx, model, window, target)
 }
 
+// SelectPerception requires full workflow qualification and measured projector
+// and preprocessing identities. A text-only or scoped tool pass cannot qualify
+// the separate visual input path merely because a model is labelled VLM.
+func (p *AgentToolPolicy) SelectPerception(ctx context.Context, model string, window int) (*AgentToolPin, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, nil
+	}
+	target, err := p.target(ctx, model, window)
+	if err != nil || target == nil {
+		return nil, err
+	}
+	if target.Scope != "" || target.Fingerprint.ProjectorSHA256 == "" || target.Fingerprint.PreprocessSHA256 == "" {
+		return nil, nil
+	}
+	return p.pin(ctx, model, window, target)
+}
+
 func (p *AgentToolPolicy) pin(ctx context.Context, model string, window int, target *models.CapabilityEvidenceTarget) (*AgentToolPin, error) {
 	if target.Fingerprint.Adapter != NativeAgentToolAdapter || target.Fingerprint.ContextWindow != window {
 		return nil, errors.New("native agent target does not match the adapter and context")

@@ -13,6 +13,12 @@ client. Runtime activation still requires an explicitly pinned worker path and
 reviewed digest; the source move does not create a fallback executable or
 qualify MLX/Transformers hardware.
 
+The ONNX embedding increment has a separate [installation and qualification
+guide](onnx-embeddings.md). It uses the same embedding owner and package store.
+The current Windows factory requires administrator-provisioned read-only runtime
+ownership; ordinary installed runtime packaging and real-model/platform
+qualification remain open. A valid imported package does not establish readiness.
+
 ## Runtime states
 
 These states are intentionally separate:

@@ -1,0 +1,9 @@
+{
+  "manual": "You control the browser.",
+  "hint": "Finish your changes in its open tabs. Automation resumes only after you reconnect and approve access.",
+  "resume": "Resume this browser",
+  "pending": "Browser handoff is being confirmed.",
+  "unconfirmed": "Browser control could not be confirmed. Keep it paused or use Stop.",
+  "check": "Check resume",
+  "scope": "The same sites and access policy will apply."
+}

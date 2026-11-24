@@ -24,7 +24,7 @@ test('model setup returns to the latest chat draft, refreshes inventory and neve
   const state = await fixture(page);
   await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('Private draft — not a URL');
-  await page.getByRole('button', { name: 'Choose a chat model', exact: true }).click();
+  await page.locator('.composer .model-select-trigger').click(); await page.locator('.model-select-panel').getByRole('link', {name:'Models',exact:true}).click();
   await expect(page).toHaveURL(/#\/models$/);
   await expect(page.getByRole('button', { name: 'Return to your draft' })).toBeVisible();
   expect(page.url()).not.toContain('Private');
@@ -59,7 +59,7 @@ test('Knowledge setup return does not silently turn retrieval on', async ({ page
 test('reload drops the transient return link but not the existing draft', async ({ page }) => {
   await fixture(page); await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('Retain my task');
-  await page.getByRole('button', { name: 'Choose a chat model', exact: true }).click();
+  await page.locator('.composer .model-select-trigger').click(); await page.locator('.model-select-panel').getByRole('link', {name:'Models',exact:true}).click();
   await expect(page.getByRole('button', { name: 'Return to your draft' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Return to your draft' })).toHaveCount(0);
@@ -70,7 +70,7 @@ test('reload drops the transient return link but not the existing draft', async 
 for (const change of ['workspace', 'actor', 'permission'] as const) test(`${change} change discards a private setup return`, async ({ page }) => {
   const state = await fixture(page); await page.goto('/ui/#/chat');
   await page.locator('.composer textarea').fill('Do not move this to another account');
-  await page.getByRole('button', { name: 'Choose a chat model', exact: true }).click();
+  await page.locator('.composer .model-select-trigger').click(); await page.locator('.model-select-panel').getByRole('link', {name:'Models',exact:true}).click();
   await expect(page.getByRole('button', { name: 'Return to your draft' })).toBeVisible();
   if (change === 'workspace') state.workspace = 'workspace-b';
   else if (change === 'actor') state.actor = 'bob';
@@ -196,7 +196,7 @@ test('a removed conversation on setup return retains its draft and does not sele
   await page.goto('/ui/#/chat');
   await expect(page.locator('.history-row.active')).toContainText('Original chat');
   await page.locator('.composer textarea').fill('Keep bound to original');
-  await page.getByRole('button', { name: 'Choose a chat model', exact: true }).click();
+  await page.locator('.composer .model-select-trigger').click(); await page.locator('.model-select-panel').getByRole('link', {name:'Models',exact:true}).click();
   sessions = ['Unrelated chat']; state.models = true;
   await page.getByRole('button', { name: 'Return to your draft' }).click();
   await expect(page.locator('.composer textarea')).toHaveValue('Keep bound to original');

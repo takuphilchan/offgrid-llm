@@ -370,3 +370,7 @@ catalogs, accurate whole-app translation coverage, theme-aware in-app branding,
 and an app-wide horizontal-divider audit. Repair the reported stacked Models
 rules and theme-incompatible decorative lines while preserving meaningful control
 boundaries. Translation completion and native-language review remain separate gates.
+
+## Isolated interface refinement (2026-11-21)
+
+The owner requested implementation of the reviewed UI direction in the same day, without affecting a concurrent system-development thread. Continue this change in D:/offgrid-ui-20261121 only, from recorded source baseline f3aaf3e7 plus 627 copied working-tree paths. This increment improves the existing shared surfaces: bounded recent-work continuation, discoverable command search, navigation focus/selection, consistent management navigation and spacing, and compact completed-work metadata. Existing access, uncertainty, Stop, source and capability states remain authoritative. No new project hub, workflow engine, palette, runtime or executor is included. Integration into the active checkout and installed application is separate.

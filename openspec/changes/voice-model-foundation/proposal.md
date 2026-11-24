@@ -32,6 +32,17 @@ the intended model-management experience and does not complete this change.
 
 ## User-visible acceptance
 
+### Natural interactive voice extension (2026-11-22)
+
+The user explicitly requires natural conversation with speech interruption, as
+well as spoken corrections during an active response or agent job. This extends
+the alternating listen/respond stage below; it does not waive local operation,
+consent, canonical work ownership or qualification. One owned capture session
+must support barge-in with echo rejection, immediate playback interruption,
+natural pause handling and truthful played-versus-generated context. Spoken
+steering uses the same durable input/Stop paths as text. Tasks 14.1–14.6 own this
+remaining work; current half-duplex Talk is not acceptance evidence for it.
+
 ### Approved Talk-mode extension (2026-11-03)
 
 - Dictation detects a spoken utterance followed by a pause, stops capture and

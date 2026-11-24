@@ -25,7 +25,7 @@ export function useVoicePreferences() {
     } catch { /* no saved selection */ }
     return defaultVoicePreferences;
   }, [draft.value]);
-  return { preferences, setPreferences: (value: VoicePreferences) => draft.setValue(JSON.stringify(value)) };
+  return { preferences, setPreferences: (value: VoicePreferences) => draft.setValue(JSON.stringify(value)), unsaved: draft.unsaved };
 }
 
 // Resolve once per utterance/answer, not once per chunk. Explicit selections

@@ -75,7 +75,7 @@ func recordProcessReceipt(task *Task, request execution.Request, receipt executi
 			return ErrRunConflict
 		}
 	}
-	return settleProcessReservation(b, key, reservation, timing.ElapsedNS, timing.Settled)
+	return settleProcessReservation(b, key, reservation, timing.ElapsedNS, timing.Settled && execution.ProcessDescendantsSettled(process))
 }
 
 func settleProcessReservation(b *ProcessBudget, key string, r ProcessReservation, elapsed int64, settled bool) error {

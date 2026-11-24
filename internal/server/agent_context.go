@@ -10,8 +10,8 @@ import (
 )
 
 func (s *Server) countAgentContext(ctx context.Context, task *agents.Task, messages []api.ChatMessage, tools []api.Tool) (int, error) {
-	if task.Config.TextOnlyInference {
-		// A llama tokenizer cannot count a pinned MLX/Transformers prompt.
+	if task.Config.TextOnlyInference || isEndpointModel(task.Model) {
+		// A llama tokenizer cannot count a pinned native or HTTP provider prompt.
 		// The runner retains its conservative UTF-8 estimate and headroom.
 		return 0, agents.ErrContextCountUnavailable
 	}

@@ -76,6 +76,10 @@ type Server struct {
 	nativeRuntimeMu          sync.RWMutex
 	nativeInstallSealed      bool
 	nativeChatSelector       nativeChatSelector // nil until trusted runtime and platform qualification are installed
+	endpointChatSelector     nativeChatSelector // explicit HTTP endpoint enrollment; no automatic provider fallback
+	endpointPolicy           *endpointPolicy    // startup-owned subtractive authority; never enrolls provider URLs
+	endpointOwner            *endpointOwner     // reviewed writes to the same startup configuration, not another registry
+	installedEndpoints       []inferenceEndpointEnrollment
 	rateLimiter              *RateLimiter
 	inferenceRateLimiter     *InferenceRateLimiter
 	sessionHandlers          *SessionHandlers

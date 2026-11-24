@@ -32,11 +32,62 @@ API and internal migration do not complete the client/worker/resource phases.
 Current worker/control acceptance evidence and unverified boundaries:
 [2026-11-14 checks](../../../docs/quality/evidence/conversation-worker-policy-2026-11-14.md).
 
+The [2026-11-21 writer-reservation correction](../../../docs/quality/evidence/task-writer-reservation-2026-11-21.md)
+removes a duplicate task snapshot write without changing transaction projections,
+durability or recovery. Actual SQLite connections verify exclusive writer
+reservation and release. This does not complete any remaining client or
+qualification task; aggregate server race verification remains separately tracked.
+
 ## 10. Conversation-first clients
 
 - [ ] 10.1 Add default assistant admission and scoped progressive discovery without profile setup; preserve explicit legacy request semantics and share attachment/model capability checks.
 - [ ] 10.2 Add responsive conversation input, work focus, background observation and shared configuration to CLI/UI; align Go/TypeScript/Python contracts and legacy adapters.
 - [ ] 10.3 Verify reload, cross-client controls, corrections, accessibility/locales, voice and configuration inspection in isolated service/browser tests.
+
+The current default-admission increment under 10.1 preserves canonical response
+context/output options, source-only ordinary input, explicit disable and accepted
+retry/control behavior. Verify default configuration, session/CLI/UI routing,
+source/model checks and legacy ownership with focused Go service/client tests,
+the canonical conversation and image/file renderer suites, generated API/type
+checks and Python contracts. Run affected full/race checks after integration.
+Record failures and evidence in `docs/quality/evidence/`; do not check 10.1 from
+this increment alone because discovery and complete client qualification are
+tracked separately below.
+
+Default-admission/request-parity results are recorded in
+`docs/quality/evidence/default-conversation-admission-2026-11-20.md`: full affected
+Go packages pass; canonical renderer 30 passed with one opt-in visual check
+skipped; Python conversation contract 13 passed. These controlled-inference
+checks do not complete real-model, race, client-cutover or discovery qualification.
+
+The separate 10.1 increment provides versioned metadata-only foreground discovery
+through the existing task_find_tools control. Verify actor/profile/conversation
+scope and provider identity before ranking; eight-entry pages and UTF-8 bounds;
+restart and revocation; unchanged native/text-only qualification; no executable
+schema promotion, host access, provider call, work creation or budget refresh.
+
+Implementation and current checks are recorded in
+`docs/quality/evidence/foreground-tool-metadata-2026-11-20.md`. Focused metadata and
+broader conversation/profile regressions pass. Full normal agents/server and
+focused Linux metadata/skill-reference race suites pass; independent sampled
+review found no blocking defect. Do not equate metadata visibility
+with actual skill use, provider execution or real-model task qualification.
+
+The client increment under 10.1–10.2 restores interactive file/image draft
+commands in default canonical CLI chat using existing owning-session transport
+and input admission. Verify mid-conversation upload, inspection/removal without
+submission, source-only captions, unsupported service and model rejection,
+pending-question behavior, detached retry snapshots after draft edits, and
+accepted-receipt recovery with no repeated upload or input. Run focused CLI and
+actual service journeys, full affected CLI/serviceclient/server checks and Linux
+race cases; record evidence without checking the complete client/qualification
+tasks from this slice alone. Unknown source input cannot be replaced by new text
+without exact retry recovery or explicit local discard; discard never cancels
+accepted work. Distinguish initial submit validation rejection from failures
+while reading receipts or from a later rejection after prior uncertainty.
+Implementation and exact results are recorded in
+`docs/quality/evidence/canonical-cli-sources-2026-11-20.md`; these bounded client
+changes do not complete 10.1–10.3 or installed-model/usability qualification.
 
 ## 11. Resumable research workers
 
@@ -50,12 +101,20 @@ Current worker/control acceptance evidence and unverified boundaries:
 - [ ] 12.2 Add foreground/background fairness, cancellation-safe queue admission and measured installed-model selection without weakening residency/memory safety.
 - [ ] 12.3 Verify no budget reopening/starvation, unmeasured memory handling and matching-hardware single-agent performance.
 
+The 2026-11-20 [local model policy evidence](../../../docs/quality/evidence/local-model-policy-2026-11-20.md)
+records the existing 3:1 queue and budget implementation plus new immutable
+qualified pool admission. Tasks 12.2–12.3 remain open for complete automatic
+selection/integration and matching-hardware qualification; this foundation does
+not certify their whole contracts.
+
 ## 13. Execution workers and integration
 
 - [ ] 13.1 Add independently admitted worker sessions, bounded private working copies, input/environment manifests and process ownership without transferring grants.
 - [x] 13.2 Implement sealed change sets, combined validation, dependency candidates, conflict handling and per-file integration/quarantine receipts.
 - [ ] 13.3 Add qualified displaced-content-preserving replacements with race/crash tests and unsupported-backend review fallback; never blind rollback.
 - [ ] 13.4 Implement authorized background supervision while retaining client-owned grant lifetime; verify disconnect, expiry and Stop.
+- [x] 13.5 Bound worker-copy inventory/measurement before directory allocation and reject raced link/FIFO file opens, including replacement sync. Verify deterministic manifests, exact limits, cancellation, conservative failed measurement and preserved displaced-content outcomes with focused Windows/Linux execution tests and Linux race checks; record findings and remaining 13.1/13.3/13.4 requirements separately. Evidence: `docs/quality/evidence/worker-copy-filesystem-bounds-2026-11-20.md`; final Windows execution suite 21.782 s and Linux execution race suite 71.247 s passed, with skips and remaining platform/environment gates explicitly retained.
+- [ ] 13.6 Persist native ownership identity before copied bytes and worker-use leases before session admission. Require settled supervisor/descendant ownership before identity-verified private quarantine, bounded postorder cleanup and a durable empty-directory checkpoint; use exact-handle Windows disposal and preserve all uncertain ownership/resources. Preserve replaced/recreated paths and reservations across lost receipts, cancellation, native member-history loss and restart; retain legacy unproven artifacts without adopting them. Verify actual Windows/Linux failure-before/fix-after, every rename/delete/publication boundary, partial cleanup, retained change sets and no automatic restart cleanup. Complete remaining escaped/unobserved-descendant and platform persistence qualification before checking this task; environment-template/background-supervision requirements remain open.
 
 ## 14. Qualification and rollout
 

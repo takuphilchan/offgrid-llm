@@ -19,6 +19,7 @@ export async function craftFixture(page: Page, locale: string, theme: string) {
     };
   }, {locale,theme});
   const session = {name:'Demo briefing',model_id:model,updated_at:'2026-10-30T00:00:00Z',messages:[{role:'user',content:'Prepare a concise briefing with an example.'},{role:'assistant',content:answer}]};
+  const sessions = new Map([[session.name, session]]);
   const profiles = [{id:'researcher',actor:'local',workspace:'craft',revision:3,digest:'fixture',settings:{name:'Researcher',model,instructions:'Read approved sources and explain uncertainty.',max_iterations:20}}];
   const job = {id:'run-'+'a'.repeat(32),run_id:'run-'+'a'.repeat(32),prompt:'Prepare a demo briefing',model,status:'completed',created_at:'2026-10-30T00:00:00Z',updated_at:'2026-10-30T00:00:00Z',steps:[],result:'A concise briefing is ready.'};
   await page.route('**/health',r=>r.fulfill({json:{status:'healthy'}}));
@@ -38,7 +39,7 @@ export async function craftFixture(page: Page, locale: string, theme: string) {
       '/v1/models':{data:[{id:model,type:'chat',size:4.4*1024**3}]},
       '/v1/catalog':{models:[{id:'demo-model',name:'Local Research',description:'A local model for everyday writing and research.',repo:'fixture/local',file:'model.gguf',quant:'Q4_K_M',parameters:'7B',size_bytes:4.4*1024**3,min_ram_gb:8}]},
       '/v1/models/download/progress':state.download ? {'demo-model.gguf':{model_id:'demo-model',file_name:'demo-model.gguf',status:'downloading',percent:state.percent=(state.percent+10)%90,bytes_done:1024,bytes_total:4096,speed:1024,started_at:1}} : {},'/api/v2/models':{models:[]},'/api/v2/models/catalog':{models:[]},'/api/v2/models/operations':{operations:[]},
-      '/v1/sessions':{sessions:[session]},'/v1/sessions/Demo briefing':session,
+      '/v1/sessions':{sessions:[...sessions.values()]},
       '/v1/rag/status':{enabled:true,embedding_model:'local-embedding',stats:{}},
       '/v1/documents':{documents:state.mode==='empty'?[]:[{id:'notes',name:'Demo notes — café 日本語 مرحباً.txt',size:4096,index_status:'ready',source_retained:true,chunk_count:4}]},
       '/api/v2/jobs':[job], [`/api/v2/jobs/${job.id}`]:job,
@@ -47,7 +48,12 @@ export async function craftFixture(page: Page, locale: string, theme: string) {
       '/v1/agents/tasks':[],'/v1/runs':{runs:[]},'/v1/stats':{server:{}},'/v1/agents/mcp':{servers:[]},'/v1/agents/tools':{tools:[]},
       '/v1/audio/status':{profiles:[]},'/v1/integrations':{integrations:[]},
     };
-    if(path==='/v1/sessions' && r.request().method()==='POST') return r.fulfill({json:{...r.request().postDataJSON(),messages:[]}});
+    if(path==='/v1/sessions' && r.request().method()==='POST') {
+      const created = {...r.request().postDataJSON(),updated_at:session.updated_at,messages:[]};
+      sessions.set(created.name,created);return r.fulfill({json:created});
+    }
+    const saved = path.startsWith('/v1/sessions/') && sessions.get(path.slice('/v1/sessions/'.length));
+    if(saved && r.request().method()==='GET') return r.fulfill({json:saved});
     return r.fulfill({json:path.endsWith('/turn')?{turn:null}:bodies[path]??{}});
   });
   return state;

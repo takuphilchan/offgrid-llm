@@ -4,6 +4,193 @@
  */
 
 export interface paths {
+    "/api/v2/inference-endpoints/configuration/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Administrator-only read of up to 32 archived receipts in lexical filename-hash order. Scans names in bounded batches, up to 200002 workspace directory entries, without loading the complete directory. Active receipt copies are excluded. Continuation requires the original journal revision; changed history must be refreshed. Reading never grants access or writes workspace state. */
+        get: operations["listInferenceEndpointOwnerHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inference-endpoints/configuration/policy-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Administrator-only read of one immutable historical policy snapshot. Omit revision for the current policy's immediate predecessor; null means no predecessor. Follow snapshot.previous_snapshot explicitly for earlier evidence. Historical enabled fields never grant access. One bounded file is read; no recursive traversal or mutation occurs. */
+        get: operations["readInferenceEndpointPolicyHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inference-endpoints/configuration/retire-decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Explicit administrator retirement of reviewed access decisions absent from current configuration, installed endpoints and active requests. Archives and verifies the complete prior policy before atomically removing selected decisions. Missing decisions deny access; historical grants are never activated. The request is bounded to 20 KiB and is never automatically retried. */
+        post: operations["retireInferenceEndpointDecisions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inference-endpoints/configuration/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Explicit administrator maintenance of settled configuration receipts. Copies and verifies immutable historical receipts before releasing active journal capacity. Preserves duplicate-request protection; never publishes endpoint configuration, prunes access decisions, grants access or contacts a provider. A lost response requires a fresh read, not an automatic retry. */
+        post: operations["archiveInferenceEndpointOwnerReceipts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inference-endpoints/configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Administrator-only owner configuration, installation-approved references and durable publication receipts. Read-only; never contacts an endpoint, starts a runtime or exposes credential values and executable paths. */
+        get: operations["getInferenceEndpointOwner"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inference-endpoints/configuration/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Validate an explicit administrator proposal against current file revision and installation ceilings. Creates an expiring actor-bound review without publishing, connecting or granting access. Managed runtime fields come from an installation template; credentials use approved origin-scoped references. */
+        post: operations["prepareInferenceEndpointOwner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inference-endpoints/configuration/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Commit only the reviewed proposal using an explicit request identity. Rechecks actor, epoch, file revision and installation ceilings; revokes access before durable intent and owner-file publication. Never enables access. Inspect receipts after a lost response; do not automatically retry an uncertain publication. */
+        post: operations["commitInferenceEndpointOwner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inference-endpoints/configuration/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Explicit administrator comparison of a recorded intent with the current owner-file digest. Records committed, not_applied or conflict without repeating publication or granting access. A conflict remains blocked. */
+        post: operations["reconcileInferenceEndpointOwner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inference-endpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Administrator review of trusted installation entries. No network contact or model load; credentials and local runtime paths are omitted. */
+        get: operations["listInferenceEndpoints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inference-endpoints/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Explicit revision-bound enable or disable of an existing trusted installation entry. Cannot enroll URLs or broaden actor grants. Disable blocks later HTTP admission and cancels admitted transports; already dispatched remote effects are not undone. Restores require new review. */
+        post: operations["reviewInferenceEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/inference-endpoints/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Explicit metadata health request through the existing scheduler. A managed local entry may start its owned runtime. No prompt generation, downloads or qualification claim. */
+        post: operations["probeInferenceEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/user-preferences": {
         parameters: {
             query?: never;
@@ -2699,6 +2886,183 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        InferenceEndpointOwnerFields: {
+            id: string;
+            revision: string;
+            /** @enum {string} */
+            provider?: "ollama" | "vllm";
+            url?: string;
+            allowed_ips?: string[];
+            actors: string[];
+            /** @description Installation-approved reference; never an environment name or credential value. */
+            credential_reference?: string;
+            /** @description Installation-approved immutable managed runtime template. */
+            managed_template?: string;
+            model?: string;
+            model_digest?: string;
+            /** @enum {string} */
+            format?: "gguf" | "mlx_safetensors" | "safetensors";
+            runtime_version?: string;
+            context_length?: number;
+            deployment_attested: boolean;
+        };
+        /** @description Remote proposals supply complete endpoint/model/runtime fields. Managed proposals supply managed_template, identity, actors and attestation; provider/destination/runtime/credential fields must be absent. Updates preserve ID and select a new revision. The server validates all ceilings again. */
+        InferenceEndpointOwnerInput: components["schemas"]["InferenceEndpointOwnerFields"] & {
+            expected_revision: string;
+            /** @description Exact existing endpoint ID and revision joined by @; omit to create. */
+            replace?: string;
+        };
+        InferenceEndpointOwnerEntry: components["schemas"]["InferenceEndpointOwnerFields"] & {
+            /** @description Empty in this entry projection; the snapshot or draft carries the authoritative whole-file revision. */
+            expected_revision: string;
+            managed: boolean;
+            credential_configured: boolean;
+        };
+        InferenceEndpointOwnerSnapshot: {
+            /** @description Read-only receipt and policy history routes are supported; absence means an older service. */
+            history_available?: boolean;
+            policy_maintenance?: components["schemas"]["InferenceEndpointPolicyMaintenanceView"];
+            /** @description Optional live journal CAS token. Absence disables archival on older services or unavailable history. */
+            journal_revision?: string;
+            file_revision: string;
+            /** @enum {string} */
+            source: "workspace" | "external";
+            write_available: boolean;
+            write_reason?: string;
+            actor: string;
+            entries: components["schemas"]["InferenceEndpointOwnerEntry"][];
+            credential_references: {
+                id: string;
+                origins: string[];
+            }[];
+            managed_templates: {
+                id: string;
+                entry: components["schemas"]["InferenceEndpointOwnerEntry"];
+            }[];
+            records: components["schemas"]["InferenceEndpointOwnerRecord"][];
+        };
+        InferenceEndpointOwnerDraft: {
+            review_id: string;
+            expected_revision: string;
+            /** Format: date-time */
+            expires_at: string;
+            entry: components["schemas"]["InferenceEndpointOwnerEntry"];
+            /** @constant */
+            restart_required: true;
+            /** @constant */
+            access_review_required: true;
+        };
+        InferenceEndpointPolicyMaintenanceView: {
+            policy_revision: string;
+            decision_count: number;
+            retirable: string[];
+        };
+        InferenceEndpointPolicyMaintenanceResult: {
+            retired: string[];
+            policy_revision: string;
+            history_revision: string;
+        };
+        InferenceEndpointOwnerArchiveResult: {
+            archived: number;
+            journal_revision: string;
+        };
+        InferenceEndpointOwnerArchivedReceipt: {
+            /** @constant */
+            version: 1;
+            archive_id: string;
+            archived_by: string;
+            /** Format: date-time */
+            archived_at: string;
+            record: components["schemas"]["InferenceEndpointOwnerRecord"];
+        };
+        InferenceEndpointOwnerHistoryPage: {
+            journal_revision: string;
+            archive_id?: string;
+            receipts: components["schemas"]["InferenceEndpointOwnerArchivedReceipt"][];
+            next?: string;
+        };
+        InferenceEndpointHistoricalDecision: {
+            pin: string;
+            /** @description Historical decision only; never current authority. */
+            enabled: boolean;
+            actor: string;
+            /** Format: date-time */
+            at: string;
+            review_required?: boolean;
+        };
+        InferenceEndpointHistoricalPolicy: {
+            /** @enum {integer} */
+            version: 1 | 2;
+            restore_epoch: string;
+            revision: string;
+            previous_snapshot?: string;
+            decisions: {
+                [key: string]: components["schemas"]["InferenceEndpointHistoricalDecision"];
+            };
+        };
+        InferenceEndpointPolicyHistoryPage: {
+            revision: string;
+            history: {
+                /** @constant */
+                version: 1;
+                actor: string;
+                /** Format: date-time */
+                at: string;
+                configuration_revision: string;
+                snapshot: components["schemas"]["InferenceEndpointHistoricalPolicy"];
+            };
+        };
+        InferenceEndpointOwnerRecord: {
+            request_id: string;
+            review_id: string;
+            actor: string;
+            epoch: string;
+            before: string;
+            after: string;
+            endpoint: string;
+            /** @enum {string} */
+            state: "pending" | "published" | "committed" | "not_applied" | "conflict";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            resolved_at?: string;
+            resolved_by?: string;
+            resolved_epoch?: string;
+        };
+        InferenceEndpointReview: {
+            id: string;
+            revision: string;
+            config_pin: string;
+            policy_revision: string;
+            enabled?: boolean;
+        };
+        InferenceEndpointManagement: {
+            configured: boolean;
+            /** @enum {string} */
+            policy_state: "not_configured" | "review_required" | "restore_review_required" | "ready";
+            policy_revision: string;
+            items: components["schemas"]["InferenceEndpointStatus"][];
+        };
+        InferenceEndpointStatus: {
+            id: string;
+            revision: string;
+            model_id: string;
+            /** @enum {string} */
+            provider: "ollama" | "vllm";
+            url: string;
+            model: string;
+            actors: string[];
+            config_pin: string;
+            installed: boolean;
+            current: boolean;
+            enabled: boolean;
+            review_required: boolean;
+            credential_ready: boolean;
+            managed: boolean;
+            probe_allowed: boolean;
+            reviewed_by?: string;
+            reviewed_at?: string;
+        };
         /** @description Native engine preparation only. Ready verifies runtime startup flags, not model inference or workflow quality. Progress is service-local and is not durable across restart. */
         InferenceRuntimeReadiness: {
             /** @enum {string} */
@@ -2895,7 +3259,7 @@ export interface components {
             revision: string;
             name: string;
             /** @enum {string} */
-            architecture: "whisper" | "piper" | "zipformer-streaming" | "kokoro" | "qwen3-asr" | "qwen3-tts" | "mlx-text" | "transformers-text";
+            architecture: "whisper" | "piper" | "zipformer-streaming" | "kokoro" | "qwen3-asr" | "qwen3-tts" | "mlx-text" | "transformers-text" | "onnx-embedding";
             /** @description Pinned family identity required for text packages. */
             model_family?: string;
             runtime: {
@@ -2920,9 +3284,9 @@ export interface components {
                 evidence: string;
             }[];
             /** @enum {string} */
-            engine?: "llama_cpp" | "mlx" | "transformers";
+            engine?: "llama_cpp" | "mlx" | "transformers" | "onnx";
             /** @enum {string} */
-            format?: "gguf" | "mlx_safetensors" | "safetensors";
+            format?: "gguf" | "mlx_safetensors" | "safetensors" | "onnx";
             backend?: string;
             runner_revision?: string;
             adapter_revision?: string;
@@ -3028,9 +3392,9 @@ export interface components {
             category?: components["schemas"]["ModelCategory"];
             capabilities: string[];
             /** @enum {string} */
-            engine?: "llama_cpp" | "mlx" | "transformers";
+            engine?: "llama_cpp" | "mlx" | "transformers" | "onnx";
             /** @enum {string} */
-            format?: "gguf" | "mlx_safetensors" | "safetensors";
+            format?: "gguf" | "mlx_safetensors" | "safetensors" | "onnx";
             backend?: string;
             readiness: components["schemas"]["ModelReadiness"];
             provenance: components["schemas"]["ModelProvenance"];
@@ -3136,9 +3500,9 @@ export interface components {
                 [key: string]: "declared" | "tested" | "unsupported" | "unknown";
             };
             /** @enum {string} */
-            engine?: "llama_cpp" | "mlx" | "transformers";
+            engine?: "llama_cpp" | "mlx" | "transformers" | "ollama" | "vllm" | "onnx";
             /** @enum {string} */
-            format?: "gguf" | "mlx_safetensors" | "safetensors";
+            format?: "gguf" | "mlx_safetensors" | "safetensors" | "onnx";
             backend?: string;
             runner_revision?: string;
             adapter_revision?: string;
@@ -3718,6 +4082,13 @@ export interface components {
             block_ids?: string[];
         };
         ConversationInboxInput: {
+            /**
+             * @description Requires conversation-input-options-v1. Pin this context profile before model qualification; omitted preserves legacy canonical allocation.
+             * @enum {string}
+             */
+            response_profile?: "interactive" | "extended";
+            /** @description Requires conversation-input-options-v1. Requested output token ceiling */
+            max_tokens?: number;
             knowledge_selections?: components["schemas"]["ConversationKnowledgeSelection"][];
             /** @description Owning session whose canonical manifest matches this conversation. */
             source_session?: string;
@@ -3728,6 +4099,7 @@ export interface components {
             use_knowledge?: boolean;
             /** @description Required for answer intent. Exact saved primary clarification identity; never authorizes host access. Omit for other intents. */
             question_id?: string;
+            /** @description May be empty only for ordinary message input with authorized images or attachments on conversation-input-options-v1 services. Corrections */
             content: string;
             model?: string;
             /** @enum {string} */
@@ -5103,12 +5475,47 @@ export interface components {
             dependencies: number;
             token: string;
         };
+        AgentModelPolicy: {
+            /** @enum {integer} */
+            version: 1;
+            /** @enum {string} */
+            mode: "guided" | "adaptive";
+            /** @description Explicit installed local candidates; admission requires matching workflow qualification. No endpoint acquisition or download. */
+            fallback_models?: string[];
+            /** @description Optional installed local vision model with measured projector and preprocessing qualification. */
+            perception_model?: string;
+        };
+        AgentModelCandidate: {
+            model: string;
+            context_window: number;
+            tool_adapter?: {
+                adapter: string;
+                evidence_id: string;
+                fingerprint_id: string;
+                scope?: string;
+                capability_sha256?: string;
+            };
+        };
+        AgentModelSelection: {
+            /** @enum {integer} */
+            version: 1;
+            /** @enum {string} */
+            mode: "guided" | "adaptive";
+            primary: string;
+            selected: string;
+            /** @enum {string} */
+            reason: "primary_model" | "explicit_qualified_fallback" | "invalid_model_decision" | "inherited_qualified_model";
+            candidates: components["schemas"]["AgentModelCandidate"][];
+            perception?: components["schemas"]["AgentModelCandidate"];
+        };
         AgentProfileSettings: {
             name: string;
             description?: string;
             /** @description Behavior only; cannot override broker or host authority. String limits are enforced in UTF-8 bytes. */
             instructions?: string;
             model: string;
+            /** @description Optional immutable local policy. Omitted preserves the primary-only profile contract. Policy storage does not grant runtime switching or tool authority. */
+            model_policy?: components["schemas"]["AgentModelPolicy"];
             /** @description Authorized existing Knowledge document IDs. */
             knowledge?: string[];
             tools?: components["schemas"]["AgentToolReference"][];
@@ -5145,6 +5552,7 @@ export interface components {
         };
         EffectiveAgentProfile: {
             profile: components["schemas"]["AgentProfile"];
+            model_selection?: components["schemas"]["AgentModelSelection"];
             ready: boolean;
             issues: {
                 kind: string;
@@ -5677,6 +6085,495 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listInferenceEndpointOwnerHistory: {
+        parameters: {
+            query?: {
+                after?: string;
+                journal_revision?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded historical evidence page, never activation authority. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceEndpointOwnerHistoryPage"];
+                };
+            };
+            /** @description Current administrator permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid cursor */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readInferenceEndpointPolicyHistory: {
+        parameters: {
+            query?: {
+                revision?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Historical policy evidence, or null when there is no predecessor. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceEndpointPolicyHistoryPage"] | null;
+                };
+            };
+            /** @description Current administrator permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid revision or unavailable/corrupt evidence. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    retireInferenceEndpointDecisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expected_revision: string;
+                    expected_policy_revision: string;
+                    endpoints: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Obsolete decisions retired with durable prior-policy evidence. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceEndpointPolicyMaintenanceResult"];
+                };
+            };
+            /** @description Current administrator permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale review */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Uncertain policy publication; restart and inspect actual state without replay. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    archiveInferenceEndpointOwnerReceipts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    expected_revision: string;
+                    expected_journal_revision: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Settled receipts remain in the workspace archive; active journal capacity is released. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceEndpointOwnerArchiveResult"];
+                };
+            };
+            /** @description Current administrator permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale review */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsettled configuration publication cannot be archived. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getInferenceEndpointOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact current owner-file revision and available editing authority. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceEndpointOwnerSnapshot"];
+                };
+            };
+            /** @description Current administrator permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Owner configuration or installation policy unavailable. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    prepareInferenceEndpointOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InferenceEndpointOwnerInput"];
+            };
+        };
+        responses: {
+            /** @description Exact proposal available for explicit review and commit. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceEndpointOwnerDraft"];
+                };
+            };
+            /** @description Current administrator permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid proposal */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Publication history is uncertain; reconcile actual stored state first. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    commitInferenceEndpointOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    review_id: string;
+                    request_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Durable publication receipt. Published still requires explicit reconciliation, service restart and fresh access review. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceEndpointOwnerRecord"];
+                };
+            };
+            /** @description Current administrator permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale/expired review */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Publication is uncertain; read current configuration and reconcile without replay. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reconcileInferenceEndpointOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    request_id: string;
+                    expected_revision: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Observed durable outcome; does not activate the endpoint. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceEndpointOwnerRecord"];
+                };
+            };
+            /** @description Current administrator permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current owner digest changed or recorded intent unavailable. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reconciliation publication is uncertain; retain the prior evidence. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listInferenceEndpoints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current installation and subtractive workspace policy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceEndpointManagement"];
+                };
+            };
+            /** @description Current administrator permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unreadable or corrupt authority; requests remain blocked. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reviewInferenceEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InferenceEndpointReview"] & unknown;
+            };
+        };
+        responses: {
+            /** @description Durable review saved and current status returned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InferenceEndpointManagement"];
+                };
+            };
+            /** @description Invalid bounded identity/action. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current administrator permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale policy/configuration */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Publication or durability is uncertain; service authority blocked until restart and review of actual state. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    probeInferenceEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InferenceEndpointReview"];
+            };
+        };
+        responses: {
+            /** @description Pinned runtime/model metadata answered; qualification remains false. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        model_id: string;
+                        /** @constant */
+                        connection_verified: true;
+                        /** @constant */
+                        qualified: false;
+                    };
+                };
+            };
+            /** @description Invalid request or enabled field supplied for probe. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current administrator and enrolled chat actor authority required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Policy or installation changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Connection or pinned identity check failed. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getUserPreferences: {
         parameters: {
             query?: never;
@@ -11573,9 +12470,12 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {integer} */
-                    protocol_version?: 3;
+                    protocol_version?: 1 | 3;
                     run_id?: string;
                     input_id?: string;
+                    previous_session?: string;
+                    /** @enum {string} */
+                    approval_mode?: "ask_every_time" | "scoped_changes" | "full_task";
                 };
             };
         };

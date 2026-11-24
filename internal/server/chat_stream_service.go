@@ -29,7 +29,7 @@ func (s *Server) streamSessionChat(ctx context.Context, request *api.ChatComplet
 	}
 	var nativeDescriptor inference.ProviderDescriptor
 	native := false
-	if _, err := s.registry.GetChatModel(request.Model); err != nil {
+	if _, err := s.localChatMetadata(request.Model); err != nil {
 		var selectErr error
 		nativeDescriptor, native, selectErr = s.selectNativeChat(ctx, request.Model)
 		if selectErr != nil {

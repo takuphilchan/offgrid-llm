@@ -163,3 +163,14 @@ def test_library_block_scope_is_sent_atomically_without_retry():
     transport._request.assert_called_once_with("POST", "/api/v2/conversations/conversation/inputs", {
         "request_id": "scope-once", "target_id": "conversation", "expected_revision": 12,
         "kind": "submit_input", "payload": payload}, retry=False)
+
+
+def test_source_only_response_options_preserve_exact_input_without_retry():
+    transport = Mock()
+    payload = {"content": "", "response_profile": "extended", "max_tokens": 256,
+               "source_session": "Policy", "attachments": [
+                   {"id": "file-" + "a" * 32, "revision": "b" * 64}]}
+    Conversations(transport).submit_input("source-only-once", "conversation", 12, payload)
+    transport._request.assert_called_once_with("POST", "/api/v2/conversations/conversation/inputs", {
+        "request_id": "source-only-once", "target_id": "conversation", "expected_revision": 12,
+        "kind": "submit_input", "payload": payload}, retry=False)

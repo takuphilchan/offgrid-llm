@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -10,7 +11,25 @@ import (
 // prepareConversationRun creates no state and dispatches no work. Both legacy
 // admission and canonical commands use this same validation and checkpoint.
 func prepareConversationRun(prompt, model, actor string, config AgentConfig, origin *ConversationOrigin) (*Task, error) {
-	if prompt == "" || model == "" || actor == "" || config.MaxIterations < 1 || config.MaxIterations > 50 || config.TimeoutPerStep <= 0 {
+	return prepareConversationRunInput(prompt, model, actor, config, origin, false)
+}
+
+func prepareConversationRunInput(prompt, model, actor string, config AgentConfig, origin *ConversationOrigin, sourceOnly bool) (*Task, error) {
+	// Detach accepted preferences, capability maps and evidence pins before
+	// either persistence or publication in the live manager. Saving JSON alone
+	// does not prevent the caller from mutating the in-memory execution policy.
+	encoded, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("invalid agent configuration snapshot: %w", err)
+	}
+	var detached AgentConfig
+	if err = json.Unmarshal(encoded, &detached); err != nil {
+		return nil, fmt.Errorf("invalid agent configuration snapshot: %w", err)
+	}
+	retainEmptyConfigSelections(&detached, config)
+	config = detached
+	validSources := sourceOnly && origin != nil && config.ScopedCapabilities && config.DisableDelegation && (len(config.InputImages) > 0 || len(config.InputAttachments) > 0 && config.InputEvidence != "")
+	if (prompt == "" && !validSources) || model == "" || actor == "" || config.MaxIterations < 1 || config.MaxIterations > 50 || config.TimeoutPerStep <= 0 {
 		return nil, fmt.Errorf("invalid agent run configuration")
 	}
 	if err := config.validateTextOnly(); err != nil {
@@ -19,13 +38,15 @@ func prepareConversationRun(prompt, model, actor string, config AgentConfig, ori
 	if err := config.validateExecution(); err != nil {
 		return nil, err
 	}
-	var err error
 	config.SystemPrompt, err = config.initialSystemPrompt()
 	if err != nil {
 		return nil, err
 	}
 	task := &Task{ID: "run-" + runID(), Prompt: prompt, Model: model, Actor: actor, Status: TaskPending, Config: config, CreatedAt: time.Now().UTC(),
-		Checkpoint: &Checkpoint{Messages: []api.ChatMessage{{Role: "system", Content: config.SystemPrompt}, {Role: "user", Content: prompt}}}}
+		Checkpoint: &Checkpoint{AuxiliaryModelRepairs: newAuxiliaryModelRepairs(), Messages: []api.ChatMessage{{Role: "system", Content: config.SystemPrompt}, {Role: "user", Content: prompt}}}}
+	if modelGraphEnabled(task) {
+		task.Checkpoint.ModelBudget = newModelGraphBudget()
+	}
 	if origin != nil {
 		value := *origin
 		task.Origin, task.AdmissionHeld = &value, true

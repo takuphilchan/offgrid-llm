@@ -31,6 +31,9 @@ func (s *Server) validateScheduleResources(ctx context.Context, actor string, co
 		return err
 	}
 	profile := config.Profile
+	if isEndpointModel(profile.Settings.Model) {
+		ctx = withEndpointActor(ctx, actor)
+	}
 	var err error
 	if config.ComputerSession != "" || config.RequestedComputerScope != "" || config.ComputerScope != "" || config.ComputerAccessOnDemand || !config.RestrictComputer {
 		return scheduleBlocked("scheduled_computer_access_unavailable")
@@ -42,7 +45,7 @@ func (s *Server) validateScheduleResources(ctx context.Context, actor string, co
 	} else if config.TextOnlyInference || s.registry == nil {
 		return scheduleBlocked("model_runtime_changed")
 	} else {
-		model, lookupErr := s.registry.GetChatModel(profile.Settings.Model)
+		model, lookupErr := s.localChatMetadata(profile.Settings.Model)
 		if lookupErr != nil {
 			return scheduleBlocked("model_unavailable")
 		}

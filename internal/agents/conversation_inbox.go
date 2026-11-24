@@ -12,6 +12,9 @@ import (
 )
 
 func validateConversationInput(c api.ConversationInputCommand) error {
+	if c.Payload.ResponseProfile != "" && c.Payload.ResponseProfile != "interactive" && c.Payload.ResponseProfile != "extended" || c.Payload.MaxTokens < 0 || c.Payload.MaxTokens > 4096 {
+		return ErrControlCommand
+	}
 	if len(c.Payload.KnowledgeSelections) > 16 {
 		return ErrControlCommand
 	}
@@ -53,7 +56,7 @@ func validateConversationInput(c api.ConversationInputCommand) error {
 	if (c.Payload.Intent == "answer" || c.Payload.Intent == "correction") && (len(c.Payload.Attachments)+len(c.Payload.Images)+len(c.Payload.KnowledgeDocuments)+len(c.Payload.KnowledgeSelections) > 0 || c.Payload.UseKnowledge) {
 		return ErrControlCommand
 	}
-	if !validProfileText(c.RequestID, 128, true) || strings.ContainsAny(c.RequestID, "\r\n") || c.Kind != "submit_input" || !validTaskID(c.TargetID) || c.ExpectedRevision < 1 || !validProfileText(c.Payload.Content, 32000, true) || strings.TrimSpace(c.Payload.Content) == "" || !validProfileText(c.Payload.Model, 256, false) {
+	if !validProfileText(c.RequestID, 128, true) || strings.ContainsAny(c.RequestID, "\r\n") || c.Kind != "submit_input" || !validTaskID(c.TargetID) || c.ExpectedRevision < 1 || !validProfileText(c.Payload.Content, 32000, false) || (strings.TrimSpace(c.Payload.Content) == "" && !sourceOnlyConversationInput(c.Payload)) || !validProfileText(c.Payload.Model, 256, false) {
 		return ErrControlCommand
 	}
 	switch c.Payload.Intent {
@@ -77,6 +80,13 @@ func validateConversationInput(c api.ConversationInputCommand) error {
 		return ErrControlCommand
 	}
 	return nil
+}
+
+// A source-only caption is ordinary conversation, never an inferred objective,
+// correction or answer to a pending question. Source authority is resolved by
+// the service before acceptance and again at preparation.
+func sourceOnlyConversationInput(input api.ConversationInboxInput) bool {
+	return strings.TrimSpace(input.Content) == "" && (input.Intent == "" || input.Intent == "message") && len(input.Attachments)+len(input.Images) > 0
 }
 
 func conversationInputDigest(c api.ConversationInputCommand) string {

@@ -19,6 +19,28 @@ async function setup(page: Page, selected = '', first = false, locale: LocaleCod
   return { fixture, models: (value: typeof models) => { models = value; }, fail: () => { failed = true; }, recover: () => { failed = false; } };
 }
 
+for (const locale of ['en','fr','ar'] as LocaleCode[]) test(`one model control handles empty setup in short and narrow windows: ${locale}`, async ({page}) => {
+ const state=await setup(page,'',false,locale);state.models([]);
+ await page.goto('/ui/#/chat/new');
+ const editor=page.locator('.composer textarea'),picker=page.locator('.composer .model-select-trigger'),panel=page.locator('.model-select-panel');
+ const draft='Prepare a concise plan for the next workshop, with time for questions and a short summary of the decisions we need to make.';
+ await editor.fill(draft);
+ for(const viewport of [{width:1280,height:800},{width:640,height:450},{width:320,height:480}]) {
+  await page.setViewportSize(viewport);
+  await expect(page.locator('.chat-readiness,.chat-layout > .setup-inline')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Choose a chat model',exact:true})).toHaveCount(0);
+  await expect(page.locator('.composer .model-select-trigger')).toHaveCount(1);
+  await expect.poll(()=>page.locator('.composer').evaluate(el=>{const r=el.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight+1;})).toBe(true);
+  await picker.focus();await page.keyboard.press('Enter');
+  await expect(panel).toBeVisible();await expect(panel).toContainText(chatReadiness[locale].setup);
+  await expect(panel.getByRole('searchbox')).toHaveCount(0);
+  await expect(panel.getByRole('link')).toBeFocused();await expect(panel.getByRole('link')).toBeInViewport();
+  await page.keyboard.press('Escape');await expect(panel).not.toBeVisible();await expect(picker).toBeFocused();
+  await expect(editor).toHaveValue(draft);await expect(page.getByRole('button',{name:locale==='en'?'Send':locale==='fr'?'Envoyer':'إرسال',exact:true})).toBeDisabled();
+ }
+ expect(state.fixture.writes).toEqual([]);
+});
+
 for (const method of ['close', 'escape'] as const) {
   test(`declining first-use setup survives reload without claiming completion: ${method}`, async ({ page }) => {
     const state = await setup(page, '', true);
@@ -138,7 +160,7 @@ test('refresh preserves a removed selection and draft until an explicit replacem
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   state.models([{ id: 'replacement-model', type: 'chat', runtime_ready: true }]);
   await refresh(page);
-  await expect(page.locator('.setup-inline')).toContainText(chatReadiness.en.unavailable);
+  await expect(page.locator('.chat-readiness')).toContainText(chatReadiness.en.unavailable);
   await expect(input).toHaveValue('Keep my question');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
   await input.press('Enter');
@@ -147,7 +169,7 @@ test('refresh preserves a removed selection and draft until an explicit replacem
   await page.locator('.composer-context-menu > button').click();
   await page.locator('.composer .model-select-trigger').click();
   await page.getByRole('option', { name: /replacement model/ }).click();
-  await expect(page.locator('.setup-inline')).toHaveCount(0);
+  await expect(page.locator('.chat-readiness')).toHaveCount(0);
   await expect(input).toHaveValue('Keep my question');
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
   expect(state.fixture.writes).toEqual([]);
@@ -169,7 +191,7 @@ for (const locale of ['en', 'fr', 'de', 'es', 'ar', 'sw', 'sn', 'nd', 'zu'] as L
     const state = await setup(page, 'saved-model', false, locale);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/ui/#/chat/new');
-    await expect(page.locator('.setup-inline')).toContainText(chatReadiness[locale].unavailable);
+    await expect(page.locator('.chat-readiness')).toContainText(chatReadiness[locale].unavailable);
     await page.locator('.composer textarea').fill('draft café 日本語');
     await page.locator('.composer textarea').press('Enter');
     await expect(page.locator('.composer textarea')).toHaveValue('draft café 日本語');

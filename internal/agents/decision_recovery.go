@@ -7,6 +7,23 @@ import (
 	"github.com/takuphilchan/offgrid-llm/pkg/api"
 )
 
+func (r *Runner) modelDecisionBoundary(task *Task) (bool, error) {
+	if stopped, err := r.adaptiveModelBoundary(task); stopped || err != nil {
+		return stopped, err
+	}
+	message := ""
+	if task.Checkpoint.Iteration+task.Checkpoint.ReservedChildIterations >= task.Config.MaxIterations {
+		message = "Maximum agent iterations reached; task did not complete."
+	} else if r.caller == nil && r.StreamCaller == nil {
+		message = "Model runtime is unavailable."
+	}
+	if message == "" {
+		return false, nil
+	}
+	_, err := r.fail(task, message)
+	return true, err
+}
+
 // Rejected model output is never copied into executable history. Corrective
 // generation consumes iterations and is persisted before another model call.
 // Earlier tool effects, pending checks and authorization remain unchanged.
@@ -25,5 +42,5 @@ func (r *Runner) rejectModelDecision(task *Task, failure *inference.DecisionVali
 		task.Error = "Paused after repeated invalid model decisions. Rejected responses executed no tools; earlier work remains saved. Review the model/runtime before explicitly continuing."
 		setRunPhase(task, "interrupted", "")
 	}
-	return r.persist(task)
+	return r.persistModelDecision(task, true)
 }

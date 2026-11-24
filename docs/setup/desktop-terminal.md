@@ -14,7 +14,7 @@ start a shell automatically. The browser application does not expose a terminal.
 - **+** offers OffGrid CLI, Agent and plain PowerShell, up to four tabs total. All tabs use the
   same configured service address without exposing credentials in command lines.
 - Terminal replaces the main Chat area while keeping the sidebar available.
-  Switch back with **Chat**; your shell and unfinished command stay in their tab.
+  Switch back with **Back to workspace**; your shell and unfinished command stay in their tab.
   Resize the app window to change the terminal dimensions.
 - **Search** searches the current tab. `Ctrl+C` copies selected terminal text;
   with no selection, it interrupts the running command. `Ctrl+Shift+C` always
@@ -26,7 +26,9 @@ start a shell automatically. The browser application does not expose a terminal.
   conversations. Reduced motion disables cursor blinking; system forced colors
   override the terminal palette. Settings and their keystrokes never become shell
   commands. If preferences cannot be saved, they still apply to the current window.
-- **Chat** returns to the workspace without stopping tabs.
+- **Back to workspace** returns to the previous workspace without stopping tabs.
+  While the terminal is visible, the covered page does not scroll. Terminal
+  history remains independently scrollable; returning restores the covered page.
 - Interface language changes update terminal controls, open command previews,
   search status and accessibility labels. Search selections, edited questions,
   redacted output and running sessions are preserved. Terminal interface copy
@@ -67,6 +69,17 @@ app available. This preview's native terminal is enabled on Windows x64; macOS,
 Linux and Windows ARM64 remain unavailable pending native qualification.
 
 ### Asking about command output
+
+The command-context window sizes its editable output to the content; longer
+output scrolls within a bounded preview. A compact toolbar exposes command and
+folder details, and the question uses the same composer pattern as Chat.
+Command selection receives initial focus, and output starts at the beginning.
+Questions use the application text style; commands and output use monospace and
+retain their original direction in right-to-left interfaces. Copying context
+and continuing in Chat preserve the existing explicit handoff.
+
+The desktop stop confirmation fits its contents, with Cancel selected initially.
+Long details scroll inside the confirmation, keeping its actions reachable.
 
 **Commands** appears after the shell reports a command. Selecting terminal text
 changes it to **Ask about selection**, so unsupported command capture still has

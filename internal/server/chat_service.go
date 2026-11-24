@@ -122,7 +122,7 @@ func (s *Server) completeChat(ctx context.Context, request *api.ChatCompletionRe
 	if s.degradationMgr != nil {
 		defer s.degradationMgr.RequestEnd()
 	}
-	metadata, err := s.registry.GetChatModel(request.Model)
+	metadata, err := s.localChatMetadata(request.Model)
 	var nativeDescriptor inference.ProviderDescriptor
 	native := false
 	if err != nil {

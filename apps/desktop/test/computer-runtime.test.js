@@ -1,7 +1,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {EventEmitter}=require('node:events');
-const {ComputerRuntime,isComputerLink,parseComputerLink,validateTarget}=require('../computer-runtime');
+const {ComputerRuntime,isComputerLink,parseComputerLink,validateTarget,validateAdditionalOrigins}=require('../computer-runtime');
 const copy=require('../../web/src/i18n/computer-experience.json');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -87,6 +87,8 @@ test('computer deep links carry no service, credentials, target or command',()=>
  for(const value of ['offgrid://computer?code=secret','offgrid://computer/run','offgrid://computer#command','https://computer']) assert.equal(isComputerLink(value),false);
  for(const value of ['http://example.com','https://user:password@example.com','https://127.0.0.1','https://[::1]','https://router.local']) assert.throws(()=>validateTarget(value));
  assert.equal(validateTarget('https://example.com'),'https://example.com');
+ assert.equal(validateTarget('offgrid-demo://research'),'demo');
+ for(const value of ['offgrid-demo://other','offgrid-demo://research/extra','offgrid-demo://research?site=example.com'])assert.throws(()=>validateTarget(value));
  assert.equal(validateTarget('https://example.com/path?q=1#section'),'https://example.com/path?q=1#section');
  assert.match(fs.readFileSync(path.join(__dirname,'../main.js'),'utf8'),/!installerTest && !customHome\) app\.setAsDefaultProtocolClient/);
  const main=fs.readFileSync(path.join(__dirname,'../main.js'),'utf8');
@@ -198,7 +200,7 @@ test('trusted routing is explicit, locally confirmed, and cannot be selected by 
  const f=fixture({confirm:async(...args)=>{received=args;return false;}});
  const requested={origin:'https://example.com/article?q=1',workspace:'owned-workspace',networkMode:'trusted-vpn'};
  assert.equal((await f.runtime.start(requested)).code,'consent_declined');
- assert.deepEqual(received,[requested.origin,'http://127.0.0.1:11611','trusted-vpn','scoped_changes']);
+ assert.deepEqual(received,[requested.origin,'http://127.0.0.1:11611','trusted-vpn','scoped_changes',{origins:['https://example.com'],maxTabs:1}]);
  assert.equal(f.forks.length,0);
  for(const invalid of ['automatic','proxy','',true]) await assert.rejects(f.runtime.start({...requested,networkMode:invalid}),/network_mode_invalid/);
  await assert.rejects(f.runtime.start({...requested,proxy:'http://127.0.0.1:9999'}),/invalid_session/);
@@ -261,4 +263,61 @@ test('enrollment happens after local consent and pack verification; rejected aut
  assert.deepEqual(sequence,['consent','verified','enrollment']);assert.equal(f.forks.length,0);
  const denied=fixture({confirm:async()=>false,pairing:async()=>{throw Error('must not enroll');}});
  assert.equal((await denied.runtime.start(request)).code,'consent_declined');
+});
+
+test('browser scope rejects injected destinations and bounds canonical public origins',()=>{
+ const target='https://example.com/article?q=1';
+ assert.deepEqual(validateAdditionalOrigins(['https://cdn.example.com','https://research.example.org:8443'],target),['https://cdn.example.com','https://research.example.org:8443']);
+ assert.deepEqual(validateAdditionalOrigins(['https://xn--bcher-kva.example.com'],target),['https://xn--bcher-kva.example.com']);
+ assert.throws(()=>validateAdditionalOrigins(['https://bücher.example.com'],target),/computer_browser_scope_invalid/);
+ assert.throws(()=>validateAdditionalOrigins([`https://${'a'.repeat(505)}.com`],target),/computer_browser_scope_invalid/);
+ for(const bad of [null,'https://cdn.example.com',{},['https://example.com'],['https://cdn.example.com','https://cdn.example.com'],['https://cdn.example.com/'],['https://cdn.example.com/path'],['https://cdn.example.com?x=1'],['https://cdn.example.com#login'],['https://user:secret@cdn.example.com'],['http://cdn.example.com'],['https://127.0.0.1'],['https://[::1]'],['https://2130706433'],['https://router.local'],['https://x.internal'],['https://*.example.com'],['https://example.com.'],['https://safe.example.com\nhttps://hidden.example.com'],Array.from({length:16},(_,i)=>`https://site${i}.example.com`)])assert.throws(()=>validateAdditionalOrigins(bad,target),/computer_browser_scope_invalid/);
+ assert.throws(()=>validateAdditionalOrigins(['https://example.com'],'demo'),/computer_browser_scope_invalid/);
+});
+
+test('browser workspace consent shows the exact origin set and only launches its immutable selection',async()=>{
+ let received,release;const consent=new Promise(resolve=>release=resolve);
+ const payload={origin:'https://example.com/article',additionalOrigins:['https://cdn.example.com'],workspace:'owned-workspace',approvalMode:'full_task'};
+ const f=fixture({identity:async()=>({product:'offgrid',api_version:2,workspace_id:'owned-workspace',capabilities:['browser-workspace-v1']}),confirm:async(...args)=>{received=args;return consent;}});
+ const started=f.runtime.start(payload);await tick();
+ assert.deepEqual(received[4],{origins:['https://example.com','https://cdn.example.com'],maxTabs:8});
+ assert.equal(f.forks.length,0);assert.equal(Object.isFrozen(received[4].origins),true);
+ payload.additionalOrigins[0]='https://evil.example.com';payload.workspace='other';payload.approvalMode='ask_every_time';release(true);await tick();
+ assert.deepEqual(f.messages[0].additionalOrigins,['https://cdn.example.com']);assert.equal(f.messages[0].workspace,'owned-workspace');assert.equal(f.messages[0].approvalMode,'full_task');assert.equal(f.messages[0].expectedBrowserWorkspace,true);
+ f.child.emit('message',{state:'ready',target:{id:'session',origin:'https://example.com'}});await started;await f.runtime.stop();
+ const main=fs.readFileSync(path.join(__dirname,'../main.js'),'utf8');
+ assert.match(main,/scope\.origins\.join\('\\n'\)/);assert.match(main,/scope\.maxTabs===8\?text\.workspaceConsent:text\.consentBody/);
+});
+
+test('browser additional scope is rejected by old services before consent, enrollment or launch',async()=>{
+ let pairs=0;const f=fixture({pairing:async()=>{pairs++;return {code};}});
+ await assert.rejects(f.runtime.start({origin:'https://example.com',additionalOrigins:['https://cdn.example.com'],workspace:'owned-workspace'}),/computer_browser_workspace_unsupported/);
+ await assert.rejects(f.runtime.start({origin:'https://example.com',workspace:'owned-workspace',expectedBrowserWorkspace:true}),/invalid_session/);
+ assert.equal(f.confirmations(),0);assert.equal(pairs,0);assert.equal(f.forks.length,0);
+ const pending=f.runtime.start({origin:'https://example.com',workspace:'owned-workspace'});await tick();
+ assert.equal(f.messages[0].additionalOrigins,undefined);assert.equal(f.messages[0].expectedBrowserWorkspace,false);f.child.emit('message',{state:'ready',target:{id:'legacy',origin:'https://example.com'}});await pending;await f.runtime.stop();
+});
+
+test('browser consent expires when service, workspace, actor or tab capability changes',async()=>{
+ for(const changed of ['service','workspace','actor','capability']){
+  let checks=0,pairs=0,actorChecks=0,serviceChecks=0;
+  const f=fixture({
+   service:()=>{serviceChecks++;return changed==='service'&&serviceChecks>1?'http://127.0.0.1:11612':'http://127.0.0.1:11611';},
+   identity:async()=>{checks++;return {product:'offgrid',api_version:2,workspace_id:changed==='workspace'&&checks>1?'other':'owned-workspace',capabilities:changed==='capability'&&checks>1?[]:['browser-workspace-v1']};},
+   principal:async()=>{actorChecks++;return changed==='actor'&&actorChecks>1?'other-user':'user';},
+   pairing:async()=>{pairs++;return {code};}
+  });
+  await assert.rejects(f.runtime.start({origin:'https://example.com',additionalOrigins:['https://cdn.example.com'],workspace:'owned-workspace'}),/computer_browser_scope_changed/);
+  assert.equal(pairs,0,changed);assert.equal(f.forks.length,0,changed);
+ }
+});
+
+test('all supported locales contain browser scope consent, errors and tab labels',()=>{
+ const registry=require('../language-registry.json');const {localizedCopy}=require('../locale-messages');
+ for(const locale of Object.keys(registry)){
+  const value=localizedCopy(copy,locale,'i18n/computer-experience:copy');
+  for(const key of ['additionalSites','additionalSitesHint','invalidScope','workspaceConsent','scopeChanged','scopeUnsupported'])assert.ok(typeof value[key]==='string'&&value[key].trim(),`${locale}/${key}`);
+  assert.equal(value.tabActions.length,4,locale);assert.ok(value.tabActions.every(label=>label.trim()),locale);
+  if(locale!=='en')assert.notEqual(value.workspaceConsent,copy.en.workspaceConsent,locale);
+ }
 });

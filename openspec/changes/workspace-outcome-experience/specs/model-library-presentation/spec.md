@@ -57,6 +57,14 @@ Download, verification, preparation, cancellation, resume and repair presentatio
 - **THEN** retained progress and supported Resume, Check status or Discard controls are shown beside that model
 - **AND** the client neither invents durability nor automatically restarts the transfer
 
+#### Scenario: Transfer continuity across model categories
+- **WHEN** an administrator changes between Language, Embeddings, Speech recognition and Speech generation, or returns to Models from another route
+- **THEN** ongoing and recoverable GGUF and package transfers remain inspectable independently of the selected category and discovery filter
+- **AND** package operations use one library-wide read subscription and one set of controls for each operation identity
+- **AND** Cancel, Resume and confirmed Discard preserve the original source/operation identity; navigation and a status refresh never replay a transfer
+- **AND** a failed status read retains the last observed transfer with an error and a read-only Check status action
+- **AND** ordinary members do not gain access to administrative transfer history
+
 ### Requirement: No parallel acquisition authority
 This presentation SHALL consume existing legacy and package APIs without adding a downloader, bypassing provenance/permission checks or treating UI completion as speech qualification. Missing durable acquisition behavior SHALL remain an explicit dependency of the existing voice-model change.
 
@@ -64,6 +72,12 @@ This presentation SHALL consume existing legacy and package APIs without adding 
 - **WHEN** the running service lacks a required package operation
 - **THEN** the UI states the actual capability limitation and does not simulate success
 - **AND** typed Chat and unrelated installed models remain usable
+
+#### Scenario: Older service without endpoint management
+- **WHEN** the endpoint-management collection returns HTTP 404
+- **THEN** the library explains that this service does not support that management feature without claiming an empty provisioned inventory or offering ineffective review/probe controls
+- **AND** local model selection and any endpoint models actually advertised by the service remain available under their existing readiness rules
+- **AND** other failures such as HTTP 503 remain visible with read-only refresh, rather than being classified as unsupported
 
 ### Requirement: Usable inventory before inactive transfers
 The library SHALL label the selected model and collapse cancelled transfer

@@ -87,6 +87,9 @@ func (s *Server) InstallQualifiedNativeTextTargets(ctx context.Context, adapters
 }
 
 func (s *Server) selectNativeChat(ctx context.Context, model string) (inference.ProviderDescriptor, bool, error) {
+	if strings.HasPrefix(model, "endpoint:") {
+		return s.selectEndpointChat(ctx, strings.TrimPrefix(model, "endpoint:"))
+	}
 	s.nativeRuntimeMu.RLock()
 	selector := s.nativeChatSelector
 	s.nativeRuntimeMu.RUnlock()

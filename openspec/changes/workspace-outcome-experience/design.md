@@ -1,5 +1,31 @@
 # Design
 
+## Owner correction: coherent everyday layout (2026-11-21)
+
+The owner rejected the installed Chat screenshot's oversized setup card, heavy
+composer boundary and disconnected spacing. Functional tests and enlarged
+captures did not establish visual acceptance. Keep the approved bottom input,
+monochrome identity and contextual navigation. The owner's follow-up rejects
+the duplicate model action as well: use the existing composer model selector
+for installed choices and its Models link for setup. Empty-inventory guidance
+belongs inside that picker; do not add a second model CTA or setup banner to
+Chat. A lost/unavailable selection keeps a quiet status beside the input.
+Keep explicit setup handoff, a visible keyboard focus indicator and retained drafts.
+Use a restrained welcome mark/title and consistent spacing across the connected
+Chat, model setup, document/library and Settings flows. Inspect actual normal-size
+and native 200% renders before delivery; do not treat one polished fixture as
+approval of the whole interface. The original directory card remains unchanged.
+
+## Approved terminal and recovery correction (2026-11-21)
+
+The active completion goal preserves the Models directory/Data directory card exactly. Only the recovery section on Local storage changes: balanced card padding, a short purpose, explicit capability/status and secondary scope details. No missing, pending or failed read becomes idle/Ready. Unsupported hosts show a specific explanation and existing service-details navigation instead of an inert form. Compatible hosts retain native-owned file/secret dialogs, Stop, explicit Resume, retained receipts and uncertainty. Read retry never replays a mutation; scope changes discard stale private status.
+
+The terminal is one continuous workspace surface with its xterm and cursor background matched to the surrounding canvas. This supersedes the historical rounded inner terminal-pane decision. Preserve ANSI/selection readability, tab/search/display controls, resizing and native authority. The return action reveals the previous route and uses accurate workspace wording rather than promising Chat. Navigation must never close a process or send terminal input.
+
+Moving xterm to the workspace surface requires limited terminal-only ANSI brightness corrections where the previous values fail the unchanged 4.5:1 contrast check. Record those exact changes; preserve shared UI theme surfaces, semantic text tokens and the existing palette choices. This necessary terminal contrast correction is distinct from the historical flat-refinement color freeze and does not authorize a visual rebrand.
+
+Renderer and native presentation are separately packaged. Delivery must inspect optional capabilities and test supported/unsupported paths in a matching isolated package before installation; generic bridge compatibility alone is insufficient. Do not include another thread's unfinished recovery/service implementation just to enable a control.
+
 ### Attachment and preview refinement (2026-11-15 owner reference)
 
 Continue the existing shared reader and uploader. Use bounded file tiles with a
@@ -1193,7 +1219,7 @@ these surfaces through isolated renderer fixtures, without operating the desktop
 ### Startup and transcript follow-through (2026-11-16)
 The owner reported a first-message outline during scrolling and a premature transition from service startup into disabled Chat. Use a shared local startup visual across native service connection and HTTP renderer bootstrap. Renderer readiness is explicit: base access/model discovery plus Chat history, capabilities and selected-conversation configuration settle before the first reveal. Errors reveal actionable recovery, not fabricated readiness; a bundle watchdog offers reload without exposing disabled Chat. Background refreshes and active generation do not re-enter the gate. Preserve reduced motion with textual stage and elapsed feedback. Focus decoration belongs to keyboard navigation of the scroll region, never the first message.
 
-The follow-up replaces the small spinner with a larger OffGrid stack that gently expands and settles. Three welcoming lines rotate independently of real loading stages; they never imply progress. Native and renderer startup share the same local CSS, controller and 29-language catalog. Hidden windows and recovery pause the copy rotation, teardown removes its timers, and reduced motion changes copy without fades or spatial motion. New copy enters the existing translator review/export/import inventory and remains pending human review.
+The earlier follow-up used an expanding stack and three rotating welcome lines. The owner's 22 November screenshot review supersedes that presentation: use a 38px intact mark beside the wordmark, one status line, no glow, no rotating greeting and no visible timer. Shared local CSS keeps native and renderer loading geometry consistent. A whole-mark opacity animation is disabled by either reduced-motion preference and in recovery. Renderer access failures remain on this surface with their actual reason and an existing read-only Retry; the gate still reveals only admitted, initialized UI. Native recovery keeps existing trusted controls and diagnostics, presented without a second card aesthetic. Reuse the existing desktop presentation translations rather than introducing marketing copy. Legacy welcome catalog files remain available to existing translation tooling but are no longer loaded by the entrance.
 
 The Windows caption area is reserved consistently during renderer bootstrap.
 Boot/login content uses the remaining viewport height, and the hidden mounting
@@ -1203,3 +1229,9 @@ strip. Removing the gate restores ordinary application scrolling. Animation is
 automatic by default, with no startup chooser; app and system accessibility
 preferences remain authoritative. The owner explicitly enabled app animations
 for this installation after a saved reduced-motion setting was identified.
+
+## Isolated interface refinement (2026-11-21)
+
+Use existing semantic tokens and translations. Show at most three recent conversations on the ordinary empty work surface; opening one uses the current activation handler. Keep reader and compact-window layouts bounded. Expose the existing command palette label/shortcut on wide screens. Correct rail-tooltip positioning in the mobile drawer and add a positional selected marker. Models, agent administration and Activity use one shared navigation treatment while retaining their existing semantics. Shared empty/error states and management spacing use existing component owners. Move profile revision metadata into execution details; compact only saved completed results, keeping verification labels and all recovery/approval controls. Native authority and request ownership are unchanged.
+
+Validation uses isolated fixture ports 5317?5319, static production fixtures on 5320?5321 and disposable profile state, a retained baseline production bundle, before/after screenshots, existing continuity/locale/desktop renderer tests and CI web checks. Production data is never substituted with fixtures. Record pre-existing failures and missing installed/native qualification separately.

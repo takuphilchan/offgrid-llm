@@ -35,6 +35,9 @@ export function observeSpeechPause(stream: MediaStream, onPause: () => void, onL
     const analyser = context.createAnalyser();
     analyser.fftSize = 1024;
     source.connect(analyser);
+    // Permission/status awaits can outlive the click activation. Resume the
+    // graph explicitly so the level meter and pause detector receive samples.
+    void context.resume?.().catch(() => {});
     const samples = new Float32Array(analyser.fftSize);
     const gate = new SpeechPauseGate();
     timer = window.setInterval(() => {

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"golang.org/x/text/unicode/norm"
 	"io"
@@ -13,22 +14,28 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 const (
-	BackupFormat           = 1
-	maxBackupFiles         = 100000
-	maxBackupBytes   int64 = 100 << 30
-	maxManifestBytes int64 = 32 << 20
+	BackupFormat                  = 1
+	maxBackupFiles                = 100000
+	maxBackupBytes          int64 = 100 << 30
+	maxManifestBytes        int64 = 32 << 20
+	maxBackupPathBytes            = 4096
+	maxBackupPathDepth            = 128
+	maxBackupPathEntries          = 2*maxBackupFiles + 2
+	maxBackupPathIndexBytes int64 = 64 << 20
 )
 
 // Backups contain private data and credentials. A digest detects damage, not
 // malicious replacement: accept archives only from a trusted local source.
 type BackupManifest struct {
+	// Transport metadata is returned to callers, never written into format-1 ZIP.
+	Encryption         string       `json:"-"`
 	Format             int          `json:"format"`
 	ApplicationVersion string       `json:"application_version"`
 	CreatedAt          time.Time    `json:"created_at"`
@@ -61,8 +68,26 @@ func (r contextReader) Read(p []byte) (int, error) {
 // Models and configuration outside directory are not included. The caller must
 // retain those separately and explain this boundary to the operator.
 func BackupWorkspace(ctx context.Context, directory, destination, version string) (*BackupManifest, error) {
-	if strings.TrimSpace(version) == "" {
-		return nil, fmt.Errorf("application version is required")
+	return BackupWorkspaceWithOptions(ctx, directory, destination, version, BackupWriteOptions{})
+}
+
+func BackupWorkspaceWithOptions(ctx context.Context, directory, destination, version string, options BackupWriteOptions) (*BackupManifest, error) {
+	return BackupWorkspaceThen(ctx, directory, destination, version, options, nil)
+}
+
+// BackupWorkspaceThen retains exclusive workspace ownership through a follow-up
+// operation. The callback runs only after verified, durable archive publication;
+// failure returns the retained manifest and never restores/replays automatically.
+// The callback must use an already-owned implementation, not acquire a new lock.
+func BackupWorkspaceThen(ctx context.Context, directory, destination, version string, options BackupWriteOptions, after func(*BackupManifest) error) (_ *BackupManifest, resultErr error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := options.validate(); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(version) == "" || len(version) > 256 {
+		return nil, fmt.Errorf("application version is required and must be at most 256 bytes")
 	}
 	root, err := existingDirectory(directory)
 	if err != nil {
@@ -86,15 +111,46 @@ func BackupWorkspace(ctx context.Context, directory, destination, version string
 		return nil, err
 	}
 	defer owner.Close()
-	file, err := os.CreateTemp(parent, ".offgrid-backup-*")
+	inputRoot, err := os.OpenRoot(root)
 	if err != nil {
 		return nil, err
 	}
-	defer os.Remove(file.Name())
-	defer file.Close()
-	archive := zip.NewWriter(file)
+	defer inputRoot.Close()
+	rootIdentity, err := inputRoot.Stat(".")
+	if err != nil {
+		return nil, err
+	}
+	file, err := createPrivateBackupFile(parent)
+	if err != nil {
+		return nil, err
+	}
+	fileIdentity, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, &BackupRetainedError{Path: file.Name(), Cause: err}
+	}
+	cleanupFile := true
+	defer func() {
+		_ = file.Close()
+		if cleanupFile {
+			cleanupBackupPath(file.Name(), false, fileIdentity, &resultErr)
+		}
+	}()
+	cipher, err := newBackupCipher(ctx, file, options)
+	if err != nil {
+		return nil, err
+	}
+	defer cipher.clearKey()
+	if err := backupBoundary(ctx, "backup_opened", file.Name()); err != nil {
+		return nil, err
+	}
+	archive := zip.NewWriter(cipher.writer)
 	manifest := &BackupManifest{Format: BackupFormat, ApplicationVersion: version, CreatedAt: time.Now().UTC(), Scope: "workspace-data-directory", Files: []BackupFile{}}
-	paths := make(backupPaths)
+	paths := backupPaths{}
+	if err := paths.add("manifest.json"); err != nil {
+		return nil, err
+	}
+	directoryBytes := int64(46 + len("manifest.json") + 28)
 	err = filepath.WalkDir(root, func(filename string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -122,7 +178,7 @@ func BackupWorkspace(ctx context.Context, directory, destination, version string
 		if entry.IsDir() {
 			return nil
 		}
-		if err := paths.add(relative); err != nil {
+		if err := paths.add("state/" + relative); err != nil {
 			return err
 		}
 		info, err := entry.Info()
@@ -135,11 +191,29 @@ func BackupWorkspace(ctx context.Context, directory, destination, version string
 		if len(manifest.Files) >= maxBackupFiles || info.Size() > maxBackupBytes-manifest.Bytes {
 			return fmt.Errorf("workspace exceeds backup limits")
 		}
-		input, err := os.Open(filename)
+		directoryBytes += int64(46 + len("state/") + len(relative) + 28)
+		if directoryBytes > maxBackupDirectoryBytes {
+			return fmt.Errorf("workspace exceeds backup metadata limits")
+		}
+		if err := backupBoundary(ctx, "backup_source_observed", filename); err != nil {
+			return err
+		}
+		input, err := openBackupSourceFile(inputRoot, filepath.FromSlash(relative))
 		if err != nil {
 			return err
 		}
 		defer input.Close()
+		opened, err := input.Stat()
+		if err != nil {
+			return err
+		}
+		observed, err := inputRoot.Lstat(filepath.FromSlash(relative))
+		if err != nil {
+			return err
+		}
+		if !opened.Mode().IsRegular() || !observed.Mode().IsRegular() || !os.SameFile(info, opened) || !os.SameFile(opened, observed) {
+			return fmt.Errorf("workspace source identity changed during backup: %s", relative)
+		}
 		header := &zip.FileHeader{Name: "state/" + relative, Method: zip.Deflate}
 		header.SetMode(0600)
 		writer, err := archive.CreateHeader(header)
@@ -158,20 +232,29 @@ func BackupWorkspace(ctx context.Context, directory, destination, version string
 		if size != info.Size() || after.Size() != info.Size() || !after.ModTime().Equal(info.ModTime()) {
 			return fmt.Errorf("workspace changed during backup: %s", relative)
 		}
+		observed, err = inputRoot.Lstat(filepath.FromSlash(relative))
+		if err != nil || !observed.Mode().IsRegular() || !os.SameFile(opened, after) || !os.SameFile(after, observed) {
+			return fmt.Errorf("workspace source identity changed during backup: %s", relative)
+		}
 		manifest.Files = append(manifest.Files, BackupFile{Path: relative, Size: size, SHA256: hex.EncodeToString(digest.Sum(nil)), Executable: info.Mode().Perm()&0111 != 0})
 		manifest.Bytes += size
 		return nil
 	})
 	if err != nil {
-		archive.Close()
-		return nil, err
+		return nil, errors.Join(err, archive.Close(), cipher.close())
 	}
 	writer, err := archive.Create("manifest.json")
 	if err == nil {
-		err = json.NewEncoder(writer).Encode(manifest)
+		err = json.NewEncoder(&contextBackupWriter{ctx, writer, maxManifestBytes}).Encode(manifest)
 	}
 	if closeErr := archive.Close(); err == nil {
 		err = closeErr
+	}
+	if closeErr := cipher.close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = backupBoundary(ctx, "backup_before_sync", file.Name())
 	}
 	if err == nil {
 		err = file.Sync()
@@ -182,13 +265,56 @@ func BackupWorkspace(ctx context.Context, directory, destination, version string
 	if err != nil {
 		return nil, err
 	}
-	// Verify the completed archive before publishing it. Hard-link publication
-	// is atomic and fails if another process has claimed the destination.
-	if _, err := VerifyBackup(ctx, file.Name()); err != nil {
+	if err := backupBoundary(ctx, "backup_closed", file.Name()); err != nil {
 		return nil, err
 	}
-	if err := os.Link(file.Name(), destination); err != nil {
+	if err := backupPathIdentity(file.Name(), fileIdentity); err != nil {
+		return nil, err
+	}
+	sealedFile, err := os.Lstat(file.Name())
+	if err != nil {
+		return nil, err
+	}
+	// Verify the completed archive before platform-specific no-replace publication.
+	if _, err := VerifyBackupWithOptions(ctx, file.Name(), cipher.verificationOptions()); err != nil {
+		return nil, err
+	}
+	if err := backupBoundary(ctx, "backup_verified", file.Name()); err != nil {
+		return nil, err
+	}
+	if err := backupPathIdentity(file.Name(), fileIdentity); err != nil {
+		return nil, err
+	}
+	currentFile, err := os.Lstat(file.Name())
+	if err != nil {
+		return nil, err
+	}
+	if currentFile.Size() != sealedFile.Size() || !currentFile.ModTime().Equal(sealedFile.ModTime()) {
+		return nil, errors.New("verified backup archive changed before publication")
+	}
+	if err := publishBackupFile(file.Name(), destination); err != nil {
 		return nil, fmt.Errorf("publish backup without overwriting: %w", err)
+	}
+	if backupPublicationMovesSource {
+		cleanupFile = false
+	}
+	manifest.Encryption = cipher.encryption
+	if err := backupBoundary(ctx, "backup_published", destination); err != nil {
+		return manifest, fmt.Errorf("backup published at %s; completion confirmation interrupted: %w", destination, err)
+	}
+	if err := syncBackupParent(parent); err != nil {
+		return manifest, fmt.Errorf("backup published at %s but durability confirmation failed: %w", destination, err)
+	}
+	if after != nil {
+		if err := ctx.Err(); err != nil {
+			return manifest, fmt.Errorf("backup published at %s; follow-up cancelled: %w", destination, err)
+		}
+		if err := backupPathIdentity(root, rootIdentity); err != nil {
+			return manifest, fmt.Errorf("backup published at %s; workspace identity changed before follow-up: %w", destination, err)
+		}
+		if err := after(manifest); err != nil {
+			return manifest, fmt.Errorf("backup published at %s; follow-up operation failed: %w", destination, err)
+		}
 	}
 	return manifest, nil
 }
@@ -220,6 +346,9 @@ func within(root, target string) bool {
 // portablePath avoids traversal, NTFS alternate streams, reserved Windows names,
 // and ambiguities when restoring a Linux archive on Windows or macOS.
 func portablePath(name string) error {
+	if len(name) > maxBackupPathBytes || strings.Count(name, "/") >= maxBackupPathDepth || !utf8.ValidString(name) {
+		return fmt.Errorf("backup path exceeds byte/depth limits or is not UTF-8")
+	}
 	if name == "" || path.Clean(name) != name || strings.HasPrefix(name, "/") || strings.ContainsAny(name, `\:*?"<>|`) || strings.IndexFunc(name, unicode.IsControl) >= 0 {
 		return fmt.Errorf("unsafe backup path %q", name)
 	}
@@ -238,38 +367,62 @@ func portablePath(name string) error {
 
 // Reject file/directory aliases and case/normalization collisions before any
 // extraction, including collisions in parent directories on Windows and macOS.
-type backupPaths map[string]struct {
-	name string
-	file bool
+type backupPathNode struct {
+	name     string
+	file     bool
+	children map[string]*backupPathNode
 }
 
-func (p backupPaths) add(name string) error {
+type backupPaths struct {
+	root    backupPathNode
+	entries int
+	bytes   int64
+}
+
+func (p *backupPaths) add(name string) error {
+	if err := portablePath(name); err != nil {
+		return err
+	}
 	parts := strings.Split(name, "/")
-	for i := range parts {
-		prefix := strings.Join(parts[:i+1], "/")
-		key := strings.ToLower(norm.NFC.String(prefix))
+	node := &p.root
+	for i, part := range parts {
+		// Normalize bounded components, never repeatedly allocate full path
+		// prefixes. Entries and retained strings have separate global budgets.
+		if int64(len(part))*8 > maxBackupPathIndexBytes-p.bytes {
+			return fmt.Errorf("backup path index exceeds byte limit")
+		}
+		key := strings.ToLower(norm.NFC.String(part))
 		last := i == len(parts)-1
-		if previous, ok := p[key]; ok {
-			if previous.name != prefix || previous.file || last {
+		if previous, ok := node.children[key]; ok {
+			if previous.name != part || previous.file || last {
 				return fmt.Errorf("colliding backup path: %s", name)
 			}
+			node = previous
 			continue
 		}
-		p[key] = struct {
-			name string
-			file bool
-		}{prefix, last}
+		if p.entries >= maxBackupPathEntries {
+			return fmt.Errorf("backup path index exceeds entry limit")
+		}
+		if node.children == nil {
+			node.children = make(map[string]*backupPathNode)
+		}
+		// Clone components so a short leaf does not retain an entire long path
+		// through a substring, bypassing the retained-string accounting.
+		child := &backupPathNode{name: strings.Clone(part), file: last}
+		node.children[strings.Clone(key)], node = child, child
+		p.entries++
+		p.bytes += int64(len(part) + len(key))
 	}
 	return nil
 }
 
-func readBackupManifest(archive *zip.ReadCloser) (*BackupManifest, map[string]*zip.File, error) {
+func readBackupManifest(archive *zip.Reader) (*BackupManifest, map[string]*zip.File, error) {
 	if len(archive.File) > maxBackupFiles+1 {
 		return nil, nil, fmt.Errorf("backup contains too many files")
 	}
 	files := make(map[string]*zip.File)
 	seen := make(map[string]bool)
-	paths := make(backupPaths)
+	paths := backupPaths{}
 	var manifestFile *zip.File
 	var total uint64
 	for _, file := range archive.File {
@@ -305,15 +458,9 @@ func readBackupManifest(archive *zip.ReadCloser) (*BackupManifest, map[string]*z
 		return nil, nil, err
 	}
 	defer reader.Close()
-	decoder := json.NewDecoder(io.LimitReader(reader, maxManifestBytes+1))
-	decoder.DisallowUnknownFields()
-	var manifest BackupManifest
-	if err := decoder.Decode(&manifest); err != nil {
-		return nil, nil, fmt.Errorf("invalid backup manifest: %w", err)
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		return nil, nil, fmt.Errorf("trailing backup manifest data")
+	manifest, err := decodeBackupManifest(reader, len(files))
+	if err != nil {
+		return nil, nil, err
 	}
 	if manifest.Format != BackupFormat || manifest.ApplicationVersion == "" || manifest.CreatedAt.IsZero() || manifest.Scope != "workspace-data-directory" || len(manifest.Files) != len(files) || manifest.Bytes < 0 || manifest.Bytes > maxBackupBytes {
 		return nil, nil, fmt.Errorf("unsupported or incomplete backup manifest")
@@ -335,7 +482,7 @@ func readBackupManifest(archive *zip.ReadCloser) (*BackupManifest, map[string]*z
 	if count != manifest.Bytes {
 		return nil, nil, fmt.Errorf("backup byte count mismatch")
 	}
-	return &manifest, files, nil
+	return manifest, files, nil
 }
 
 func copyBackupFile(ctx context.Context, file *zip.File, item BackupFile, target io.Writer) error {
@@ -356,15 +503,19 @@ func copyBackupFile(ctx context.Context, file *zip.File, item BackupFile, target
 }
 
 func VerifyBackup(ctx context.Context, filename string) (*BackupManifest, error) {
+	return VerifyBackupWithOptions(ctx, filename, BackupReadOptions{})
+}
+
+func VerifyBackupWithOptions(ctx context.Context, filename string, options BackupReadOptions) (*BackupManifest, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	archive, err := zip.OpenReader(filename)
+	archive, err := openBackupArchive(ctx, filename, options)
 	if err != nil {
 		return nil, err
 	}
 	defer archive.Close()
-	manifest, files, err := readBackupManifest(archive)
+	manifest, files, err := readBackupManifest(archive.Reader)
 	if err != nil {
 		return nil, err
 	}
@@ -373,99 +524,6 @@ func VerifyBackup(ctx context.Context, filename string) (*BackupManifest, error)
 			return nil, err
 		}
 	}
-	return manifest, nil
-}
-
-// RestoreWorkspace never overwrites a workspace. It validates a complete staged
-// copy and atomically installs it at a new path. Keeping the original untouched
-// makes recovery reversible without deleting newer work or mixing schema versions.
-func RestoreWorkspace(ctx context.Context, filename, target, version string) (*BackupManifest, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	parent, err := existingDirectory(filepath.Dir(target))
-	if err != nil {
-		return nil, err
-	}
-	target = filepath.Join(parent, filepath.Base(target))
-	if _, err := os.Lstat(target); err == nil {
-		return nil, fmt.Errorf("restore requires a new, nonexistent data directory; the current workspace is never overwritten")
-	} else if !os.IsNotExist(err) {
-		return nil, err
-	}
-	archive, err := zip.OpenReader(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer archive.Close()
-	manifest, files, err := readBackupManifest(archive)
-	if err != nil {
-		return nil, err
-	}
-	if version == "dev" || version == "" || version != manifest.ApplicationVersion {
-		return nil, fmt.Errorf("restore requires the matching application version %s; current version is %s", manifest.ApplicationVersion, version)
-	}
-	stage, err := os.MkdirTemp(parent, ".offgrid-restore-*")
-	if err != nil {
-		return nil, err
-	}
-	// Only this freshly created, private directory is recursively removed.
-	defer os.RemoveAll(stage)
-	for _, item := range manifest.Files {
-		destination := filepath.Join(stage, filepath.FromSlash(item.Path))
-		if !within(stage, destination) {
-			return nil, fmt.Errorf("restore path escapes staging")
-		}
-		if err := os.MkdirAll(filepath.Dir(destination), 0700); err != nil {
-			return nil, err
-		}
-		file, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-		if err != nil {
-			return nil, err
-		}
-		err = copyBackupFile(ctx, files[item.Path], item, file)
-		if err == nil && item.Executable {
-			err = file.Chmod(0700)
-		}
-		if err == nil {
-			err = file.Sync()
-		}
-		if closeErr := file.Close(); err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-	// A valid ZIP hash is not proof of a usable SQLite database. WAL recovery
-	// and integrity checks happen on staging, never on the original workspace.
-	var databases []string
-	for _, item := range manifest.Files {
-		if strings.HasSuffix(item.Path, ".db") || strings.HasSuffix(item.Path, ".sqlite") {
-			databases = append(databases, item.Path)
-		}
-	}
-	sort.Strings(databases)
-	for _, name := range databases {
-		db, err := OpenSQLite(filepath.Join(stage, filepath.FromSlash(name)))
-		if err != nil {
-			return nil, fmt.Errorf("verify restored database %s: %w", name, err)
-		}
-		err = CheckSQLite(ctx, db)
-		if closeErr := db.Close(); err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			return nil, fmt.Errorf("verify restored database %s: %w", name, err)
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	// Reserve the destination while activation occurs. Never rename over a
-	// path another process created while the archive was being checked.
-	if err := publishDirectory(stage, target); err != nil {
-		return nil, err
-	}
+	manifest.Encryption = archive.encryption
 	return manifest, nil
 }

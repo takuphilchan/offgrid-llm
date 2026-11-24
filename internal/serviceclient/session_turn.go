@@ -16,14 +16,16 @@ import (
 )
 
 type ConversationRequest struct {
-	Content     string                         `json:"content"`
-	Model       string                         `json:"model_id,omitempty"`
-	RequestID   string                         `json:"request_id"`
-	Attachments []sessions.AttachmentReference `json:"attachments,omitempty"`
-	Images      []api.SessionImage             `json:"images,omitempty"`
-	Knowledge   bool                           `json:"use_knowledge_base,omitempty"`
-	Stream      bool                           `json:"stream"`
-	Durable     bool                           `json:"durable"`
+	ResponseProfile string                         `json:"profile,omitempty"`
+	MaxTokens       int                            `json:"max_tokens,omitempty"`
+	Content         string                         `json:"content"`
+	Model           string                         `json:"model_id,omitempty"`
+	RequestID       string                         `json:"request_id"`
+	Attachments     []sessions.AttachmentReference `json:"attachments,omitempty"`
+	Images          []api.SessionImage             `json:"images,omitempty"`
+	Knowledge       bool                           `json:"use_knowledge_base,omitempty"`
+	Stream          bool                           `json:"stream"`
+	Durable         bool                           `json:"durable"`
 }
 type ConversationResponse struct {
 	Session *sessions.Session `json:"session"`

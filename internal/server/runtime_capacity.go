@@ -19,7 +19,7 @@ func (s *Server) checkModelLoadCapacity(ctx context.Context, modelID string, req
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	metadata, err := s.registry.GetChatModel(modelID)
+	metadata, err := s.localChatMetadata(modelID)
 	if err != nil {
 		return err
 	}

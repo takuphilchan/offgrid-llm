@@ -129,6 +129,20 @@ func TestBrowserToolsUseDurableApprovalsAndCannotEscapeRegistry(t *testing.T) {
 	registry := agents.NewToolRegistry()
 	registry.SetCapabilityBroker(capabilities.NewBroker(nil))
 	server := &Server{browserHub: hub, agentManager: manager}
+	var mutationReceipts int
+	hub.RecordReply = func(actor, session, run string, action computer.BrowserAction, reply computer.BrowserReply) error {
+		if err := server.recordComputerReply(actor, session, run, action, reply); err != nil {
+			return err
+		}
+		if action.Kind == "browser_navigate" {
+			saved, ok := manager.GetTask(run)
+			if !ok || saved.Checkpoint.ComputerReceipt == nil || saved.Checkpoint.ComputerReceipt.Result != reply.Result {
+				return errors.New("browser receipt not durable before acknowledgement")
+			}
+			mutationReceipts++
+		}
+		return nil
+	}
 	tools := &browserRunTools{RunTools: registry, server: server}
 	caller := func(_ context.Context, _ *agents.Task, messages []api.ChatMessage, available []api.Tool) (*api.ChatCompletionResponse, error) {
 		if len(available) != 9 {
@@ -189,7 +203,7 @@ func TestBrowserToolsUseDurableApprovalsAndCannotEscapeRegistry(t *testing.T) {
 				return
 			}
 			if a != nil {
-				done <- hub.Reply(token, computer.BrowserReply{ID: a.ID, Result: `{"navigated":true}`})
+				done <- hub.Reply(token, computer.BrowserReply{ID: a.ID, Result: `{"effect_status":"completed","dispatched":true,"verified":false,"observation_status":"unavailable"}`})
 				return
 			}
 			time.Sleep(time.Millisecond)
@@ -202,6 +216,9 @@ func TestBrowserToolsUseDurableApprovalsAndCannotEscapeRegistry(t *testing.T) {
 	}
 	if err = <-done; err != nil {
 		t.Fatal(err)
+	}
+	if mutationReceipts != 1 {
+		t.Fatal("missing durable browser receipt")
 	}
 	if task.Status != agents.TaskFailed || !strings.Contains(task.Error, "verification") {
 		t.Fatalf("unverified work declared complete: %+v", task)

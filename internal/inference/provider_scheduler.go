@@ -592,6 +592,12 @@ func (s *ProviderScheduler) runtimeWithTiming(ctx context.Context, descriptor Pr
 		}
 		s.mu.Unlock()
 		if err != nil {
+			// Startup can fail after process creation without returning a usable
+			// runtime. Its retained ownership lease still consumes capacity until
+			// exit is proven; a nil runtime must not erase that uncertainty.
+			if errors.Is(err, errProviderStopUncertain) {
+				s.recordUnloadFailure(err)
+			}
 			if runtime != nil {
 				if closeErr := runtime.Close(); closeErr != nil {
 					s.recordUnloadFailure(closeErr)

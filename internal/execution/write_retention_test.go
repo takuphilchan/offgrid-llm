@@ -73,7 +73,7 @@ func TestWriteJournalUpgradePreservesReceiptsAndRejectsFutureSchema(t *testing.T
 	if err != nil || fresh || receipt.State != "complete" || string(receipt.Result) != `{"saved":true}` {
 		t.Fatal(receipt, fresh, err)
 	}
-	if _, err = j.db.Exec(`PRAGMA user_version=4`); err != nil {
+	if _, err = j.db.Exec(`PRAGMA user_version=5`); err != nil {
 		t.Fatal(err)
 	}
 	if err = j.Close(); err != nil {

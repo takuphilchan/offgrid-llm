@@ -44,6 +44,9 @@ func RunCanonicalConversationChat(ctx context.Context, client *serviceclient.Cli
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 4096), 64<<10)
 	var pending *api.ConversationInboxInput
+	draft := &canonicalSourceDraft{}
+	var pendingDraftVersion uint64
+	pendingUncertain := false
 	requestID := ""
 	workerControls := &conversationWorkerControls{}
 	folderControl := &conversationFolderControl{}
@@ -57,7 +60,7 @@ func RunCanonicalConversationChat(ctx context.Context, client *serviceclient.Cli
 			return ctx.Err()
 		}
 		text := strings.TrimSpace(scanner.Text())
-		if text == "" {
+		if text == "" && !draft.hasCaptionSource() {
 			continue
 		}
 		command, arg, _ := strings.Cut(text, " ")
@@ -66,6 +69,9 @@ func RunCanonicalConversationChat(ctx context.Context, client *serviceclient.Cli
 			return nil
 		}
 		if command == "/help" {
+			fmt.Fprintln(w, "/attach PATH · /attachments · /preview-attachment N [unit] · /retry-attachment N · /attachment-text-only N · /use-attachment ID · /remove-attachment N|all")
+			fmt.Fprintln(w, "/image PATH · /images · /remove-image N|all · /rag; an empty line submits selected files/images without a caption")
+			fmt.Fprintln(w, "/discard-retry forgets only the local retry; it does not cancel accepted service work")
 			fmt.Fprintln(w, "/result RESULT_REFERENCE retrieves complete saved output")
 			fmt.Fprintln(w, "/folder SESSION|none selects an already approved folder and remembers its project")
 			fmt.Fprintln(w, "/retry-folder retries a folder choice whose response was lost")
@@ -74,6 +80,25 @@ func RunCanonicalConversationChat(ctx context.Context, client *serviceclient.Cli
 			fmt.Fprintln(w, "/workers | /worker ID | /message-worker ID MESSAGE | /continue-worker ID MESSAGE | /stop-worker ID | /close-worker ID | /retry-worker")
 			fmt.Fprintln(w, "/answer-worker ID QUESTION_ID ANSWER answers an inspected worker question")
 			fmt.Fprintln(w, "/message MESSAGE discusses focused work without answering its pending question")
+			continue
+		}
+		if command == "/discard-retry" {
+			if arg != "" {
+				fmt.Fprintln(w, "/discard-retry takes no arguments")
+			} else if pending == nil {
+				fmt.Fprintln(w, "No pending input to discard.")
+			} else {
+				fmt.Fprintf(w, "Forgot local retry %s. Draft sources remain selected. This does not cancel service work; inspect /status and use /stop-input ID for accepted input.\n", requestID)
+				pending, pendingUncertain = nil, false
+			}
+			continue
+		}
+		if handled, message, err := draft.command(ctx, client, saved.Name, text); handled {
+			if err != nil {
+				fmt.Fprintln(w, TerminalSafe(err.Error()))
+			} else {
+				fmt.Fprintln(w, message)
+			}
 			continue
 		}
 		if command == "/changes" {
@@ -130,13 +155,17 @@ func RunCanonicalConversationChat(ctx context.Context, client *serviceclient.Cli
 				continue
 			}
 		} else {
+			if pending != nil && pendingUncertain && conversationInputHasSources(*pending) {
+				fmt.Fprintln(w, "The previous source input has an unknown outcome. Use /retry to recover it, or /discard-retry explicitly; draft edits do not change that input.")
+				continue
+			}
 			if pending != nil && pending.Intent == "answer" {
 				fmt.Fprintln(w, "The previous answer has an unknown outcome. Use /retry to recover it before sending another answer.")
 				continue
 			}
 			input := questionConversationInput(text, question)
 			if command == "/new" || command == "/message" {
-				if arg == "" {
+				if arg == "" && (command != "/message" || !draft.hasCaptionSource()) {
 					fmt.Fprintln(w, command+" MESSAGE")
 					continue
 				}
@@ -149,16 +178,30 @@ func RunCanonicalConversationChat(ctx context.Context, client *serviceclient.Cli
 					}
 				}
 			}
+			if err := draft.snapshot(saved.Name, &input); err != nil {
+				fmt.Fprintln(w, TerminalSafe(err.Error()))
+				continue
+			}
 			pending = &input
+			pendingUncertain = false
+			pendingDraftVersion = draft.version
 			requestID = rand.Text()
 		}
 		entry, err := client.SubmitSessionInput(ctx, saved.CanonicalID, requestID, *pending)
 		if err != nil {
+			if !pendingUncertain && serviceclient.ConversationInputRejected(err) {
+				fmt.Fprintf(w, "%s\nInput rejected before admission. Draft retained; correct it and send a new message.\n", TerminalSafe(err.Error()))
+				pending = nil
+				continue
+			}
+			pendingUncertain = true
 			fmt.Fprintf(w, "%s\nInput retained. /retry uses request %s.\n", TerminalSafe(err.Error()), requestID)
 			continue
 		}
 		fmt.Fprintf(w, "Accepted input %s\n", TerminalSafe(entry.ID))
+		draft.accepted(pendingDraftVersion)
 		pending = nil
+		pendingUncertain = false
 	}
 }
 

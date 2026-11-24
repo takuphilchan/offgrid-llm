@@ -33,6 +33,13 @@ test('a folder picker completed after shutdown cannot start a late process',asyn
  await manager.stop();choose('C:\\isolated');
  await assert.rejects(pending,/terminal_stopping/);assert.equal(spawns,0);
 });
+test('maintenance admission hold blocks new and already selecting terminal creation after Stop',async()=>{
+ let choose,held=false,spawns=0,pickers=0;
+ const manager=new TerminalSessions({admit:()=>!held,choose:()=>{pickers++;return new Promise(resolve=>{choose=resolve;});},spawnProcess:()=>{spawns++;throw Error('must not spawn');}});
+ const pending=manager.create({kind:'shell',cols:80,rows:24});held=true;await manager.stop();choose('C:\\isolated');
+ await assert.rejects(pending,/terminal_stopping/);await assert.rejects(manager.create({kind:'shell',cols:80,rows:24}),/terminal_stopping/);
+ assert.equal(spawns,0);assert.equal(pickers,1);assert.equal(manager.sessions.size,0);
+});
 test('unconfirmed stop keeps the owned session and surfaces failure',async()=>{
  const manager=new TerminalSessions({});
  manager.sessions.set('owned',{state:'uncertain',stopped:Promise.resolve(false)});

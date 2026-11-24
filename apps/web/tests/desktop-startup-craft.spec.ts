@@ -21,7 +21,8 @@ for(const theme of ['light','dark']) for(const locale of ['en','ar']) for(const 
   },{theme,locale,copy:copy[locale]});
   await page.route('**/*',r=>{
     const name=new URL(r.request().url()).pathname.slice(1);
-    if(!['loading.html','startup.css','startup.js'].includes(name))return r.abort();
+    if(!['loading.html','startup.css','startup-surface.css','startup.js'].includes(name))return r.abort();
+    if(name==='startup-surface.css'&&before)return r.fulfill({body:'',contentType:'text/css'});
     return r.fulfill({body:name==='startup.css'&&before?oldCSS:readFileSync(resolve(desktop,name),'utf8'),contentType:name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':'text/javascript'});
   });
   const dir=resolve(root,'build/ui-craft/startup',`${theme}-${locale}-${width}`);mkdirSync(dir,{recursive:true});

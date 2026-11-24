@@ -9,6 +9,235 @@ security:
   - sessionCookie: []
   - bearerAuth: []
 paths:
+  /api/v2/inference-endpoints/configuration/history:
+    get:
+      operationId: listInferenceEndpointOwnerHistory
+      description: Administrator-only read of up to 32 archived receipts in lexical filename-hash order. Scans names in bounded batches, up to 200002 workspace directory entries, without loading the complete directory. Active receipt copies are excluded. Continuation requires the original journal revision; changed history must be refreshed. Reading never grants access or writes workspace state.
+      parameters:
+        - in: query
+          name: after
+          schema: { type: string, pattern: '^[a-f0-9]{64}$' }
+        - in: query
+          name: journal_revision
+          schema: { type: string, pattern: '^[a-f0-9]{64}$' }
+      responses:
+        '200':
+          description: Bounded historical evidence page, never activation authority.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InferenceEndpointOwnerHistoryPage' }
+        '403': { description: Current administrator permission required. }
+        '409': { description: Invalid cursor, changed journal, corrupt history or scan limit reached; no partial page is returned. }
+  /api/v2/inference-endpoints/configuration/policy-history:
+    get:
+      operationId: readInferenceEndpointPolicyHistory
+      description: Administrator-only read of one immutable historical policy snapshot. Omit revision for the current policy's immediate predecessor; null means no predecessor. Follow snapshot.previous_snapshot explicitly for earlier evidence. Historical enabled fields never grant access. One bounded file is read; no recursive traversal or mutation occurs.
+      parameters:
+        - in: query
+          name: revision
+          schema: { type: string, pattern: '^[a-f0-9]{64}$' }
+      responses:
+        '200':
+          description: Historical policy evidence, or null when there is no predecessor.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: '#/components/schemas/InferenceEndpointPolicyHistoryPage' }
+                  - { type: 'null' }
+        '403': { description: Current administrator permission required. }
+        '409': { description: Invalid revision or unavailable/corrupt evidence. }
+  /api/v2/inference-endpoints/configuration/retire-decisions:
+    post:
+      operationId: retireInferenceEndpointDecisions
+      description: Explicit administrator retirement of reviewed access decisions absent from current configuration, installed endpoints and active requests. Archives and verifies the complete prior policy before atomically removing selected decisions. Missing decisions deny access; historical grants are never activated. The request is bounded to 20 KiB and is never automatically retried.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_revision, expected_policy_revision, endpoints]
+              properties:
+                expected_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+                expected_policy_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+                endpoints:
+                  type: array
+                  minItems: 1
+                  maxItems: 64
+                  uniqueItems: true
+                  items: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}@[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$' }
+      responses:
+        '200':
+          description: Obsolete decisions retired with durable prior-policy evidence.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InferenceEndpointPolicyMaintenanceResult' }
+        '403': { description: Current administrator permission required. }
+        '409': { description: Stale review, protected endpoint, invalid history or unavailable writer. }
+        '503': { description: Uncertain policy publication; restart and inspect actual state without replay. }
+  /api/v2/inference-endpoints/configuration/archive:
+    post:
+      operationId: archiveInferenceEndpointOwnerReceipts
+      description: Explicit administrator maintenance of settled configuration receipts. Copies and verifies immutable historical receipts before releasing active journal capacity. Preserves duplicate-request protection; never publishes endpoint configuration, prunes access decisions, grants access or contacts a provider. A lost response requires a fresh read, not an automatic retry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_revision, expected_journal_revision]
+              properties:
+                expected_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+                expected_journal_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+      responses:
+        '200':
+          description: Settled receipts remain in the workspace archive; active journal capacity is released.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InferenceEndpointOwnerArchiveResult' }
+        '403': { description: Current administrator permission required. }
+        '409': { description: Stale review, invalid archival history or unconfirmed maintenance write; inspect current journal before another explicit request. }
+        '503': { description: Unsettled configuration publication cannot be archived. }
+  /api/v2/inference-endpoints/configuration:
+    get:
+      operationId: getInferenceEndpointOwner
+      description: Administrator-only owner configuration, installation-approved references and durable publication receipts. Read-only; never contacts an endpoint, starts a runtime or exposes credential values and executable paths.
+      responses:
+        '200':
+          description: Exact current owner-file revision and available editing authority.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InferenceEndpointOwnerSnapshot' }
+        '403': { description: Current administrator permission required. }
+        '409': { description: Owner configuration or installation policy unavailable. }
+  /api/v2/inference-endpoints/configuration/prepare:
+    post:
+      operationId: prepareInferenceEndpointOwner
+      description: Validate an explicit administrator proposal against current file revision and installation ceilings. Creates an expiring actor-bound review without publishing, connecting or granting access. Managed runtime fields come from an installation template; credentials use approved origin-scoped references.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InferenceEndpointOwnerInput' }
+      responses:
+        '200':
+          description: Exact proposal available for explicit review and commit.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InferenceEndpointOwnerDraft' }
+        '403': { description: Current administrator permission required. }
+        '409': { description: Invalid proposal, stale revision, unavailable writer or changed installation authority. }
+        '503': { description: Publication history is uncertain; reconcile actual stored state first. }
+  /api/v2/inference-endpoints/configuration/commit:
+    post:
+      operationId: commitInferenceEndpointOwner
+      description: Commit only the reviewed proposal using an explicit request identity. Rechecks actor, epoch, file revision and installation ceilings; revokes access before durable intent and owner-file publication. Never enables access. Inspect receipts after a lost response; do not automatically retry an uncertain publication.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [review_id, request_id]
+              properties:
+                review_id: { type: string, pattern: '^[a-f0-9]{64}$' }
+                request_id: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$' }
+      responses:
+        '200':
+          description: Durable publication receipt. Published still requires explicit reconciliation, service restart and fresh access review.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InferenceEndpointOwnerRecord' }
+        '403': { description: Current administrator permission required. }
+        '409': { description: Stale/expired review, changed authority or conflicting request identity. }
+        '503': { description: Publication is uncertain; read current configuration and reconcile without replay. }
+  /api/v2/inference-endpoints/configuration/reconcile:
+    post:
+      operationId: reconcileInferenceEndpointOwner
+      description: Explicit administrator comparison of a recorded intent with the current owner-file digest. Records committed, not_applied or conflict without repeating publication or granting access. A conflict remains blocked.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [request_id, expected_revision]
+              properties:
+                request_id: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$' }
+                expected_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+      responses:
+        '200':
+          description: Observed durable outcome; does not activate the endpoint.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InferenceEndpointOwnerRecord' }
+        '403': { description: Current administrator permission required. }
+        '409': { description: Current owner digest changed or recorded intent unavailable. }
+        '503': { description: Reconciliation publication is uncertain; retain the prior evidence. }
+  /api/v2/inference-endpoints:
+    get:
+      operationId: listInferenceEndpoints
+      description: Administrator review of trusted installation entries. No network contact or model load; credentials and local runtime paths are omitted.
+      responses:
+        '200':
+          description: Current installation and subtractive workspace policy.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InferenceEndpointManagement' }
+        '403': { description: Current administrator permission required. }
+        '503': { description: Unreadable or corrupt authority; requests remain blocked. }
+  /api/v2/inference-endpoints/review:
+    post:
+      operationId: reviewInferenceEndpoint
+      description: Explicit revision-bound enable or disable of an existing trusted installation entry. Cannot enroll URLs or broaden actor grants. Disable blocks later HTTP admission and cancels admitted transports; already dispatched remote effects are not undone. Restores require new review.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/InferenceEndpointReview' }
+                - { required: [enabled] }
+      responses:
+        '200':
+          description: Durable review saved and current status returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InferenceEndpointManagement' }
+        '400': { description: Invalid bounded identity/action. }
+        '403': { description: Current administrator permission required. }
+        '409': { description: Stale policy/configuration, corrupt authority, or restart required. }
+        '503': { description: Publication or durability is uncertain; service authority blocked until restart and review of actual state. }
+  /api/v2/inference-endpoints/probe:
+    post:
+      operationId: probeInferenceEndpoint
+      description: Explicit metadata health request through the existing scheduler. A managed local entry may start its owned runtime. No prompt generation, downloads or qualification claim.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InferenceEndpointReview' }
+      responses:
+        '200':
+          description: Pinned runtime/model metadata answered; qualification remains false.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [model_id, connection_verified, qualified]
+                properties:
+                  model_id: { type: string }
+                  connection_verified: { type: boolean, const: true }
+                  qualified: { type: boolean, const: false }
+        '400': { description: Invalid request or enabled field supplied for probe. }
+        '403': { description: Current administrator and enrolled chat actor authority required. }
+        '409': { description: Policy or installation changed. }
+        '503': { description: Connection or pinned identity check failed. }
   /api/v2/user-preferences:
     get:
       operationId: getUserPreferences
@@ -3476,11 +3705,13 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              description: Empty for legacy enrollment. Protocol 3 requires both IDs from the actor-owned pending task, whose saved policy and scope are validated before enrollment. Enrollment alone does not grant access.
+              description: Empty for legacy enrollment. Protocol 3 requires both IDs from the actor-owned pending task. Protocol 1 additionally requires the exact previous stopped browser session and unchanged approval policy for that pending task; its origin set and features are pinned atomically by the service. Enrollment alone does not grant access.
               properties:
-                protocol_version: { type: integer, enum: [3] }
+                protocol_version: { type: integer, enum: [1, 3] }
                 run_id: { type: string }
                 input_id: { type: string }
+                previous_session: { type: string }
+                approval_mode: { type: string, enum: [ask_every_time, scoped_changes, full_task] }
       responses:
         '200':
           description: Administrator-only single-use enrollment code, valid for two minutes. Never cache or log.
@@ -3627,6 +3858,245 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
   schemas:
+    InferenceEndpointOwnerFields:
+      type: object
+      required: [id, revision, actors, deployment_attested]
+      properties:
+        id: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$' }
+        revision: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$' }
+        provider: { type: string, enum: [ollama, vllm] }
+        url: { type: string }
+        allowed_ips: { type: array, items: { type: string } }
+        actors: { type: array, minItems: 1, maxItems: 128, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 256 } }
+        credential_reference: { type: string, description: Installation-approved reference; never an environment name or credential value. }
+        managed_template: { type: string, description: Installation-approved immutable managed runtime template. }
+        model: { type: string, maxLength: 512 }
+        model_digest: { type: string }
+        format: { type: string, enum: [gguf, mlx_safetensors, safetensors] }
+        runtime_version: { type: string, maxLength: 256 }
+        context_length: { type: integer, minimum: 512, maximum: 1048576 }
+        deployment_attested: { type: boolean }
+    InferenceEndpointOwnerInput:
+      description: Remote proposals supply complete endpoint/model/runtime fields. Managed proposals supply managed_template, identity, actors and attestation; provider/destination/runtime/credential fields must be absent. Updates preserve ID and select a new revision. The server validates all ceilings again.
+      allOf:
+        - { $ref: '#/components/schemas/InferenceEndpointOwnerFields' }
+        - type: object
+          required: [expected_revision]
+          properties:
+            expected_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+            replace: { type: string, description: Exact existing endpoint ID and revision joined by @; omit to create. }
+      unevaluatedProperties: false
+    InferenceEndpointOwnerEntry:
+      allOf:
+        - { $ref: '#/components/schemas/InferenceEndpointOwnerFields' }
+        - type: object
+          required: [expected_revision, managed, credential_configured]
+          properties:
+            expected_revision: { type: string, description: Empty in this entry projection; the snapshot or draft carries the authoritative whole-file revision. }
+            managed: { type: boolean }
+            credential_configured: { type: boolean }
+    InferenceEndpointOwnerSnapshot:
+      type: object
+      required: [file_revision, source, write_available, actor, entries, credential_references, managed_templates, records]
+      properties:
+        history_available: { type: boolean, description: Read-only receipt and policy history routes are supported; absence means an older service. }
+        policy_maintenance: { $ref: '#/components/schemas/InferenceEndpointPolicyMaintenanceView' }
+        journal_revision:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: Optional live journal CAS token. Absence disables archival on older services or unavailable history.
+        file_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+        source: { type: string, enum: [workspace, external] }
+        write_available: { type: boolean }
+        write_reason: { type: string }
+        actor: { type: string }
+        entries:
+          type: array
+          maxItems: 64
+          items: { $ref: '#/components/schemas/InferenceEndpointOwnerEntry' }
+        credential_references:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            required: [id, origins]
+            properties:
+              id: { type: string }
+              origins: { type: array, minItems: 1, maxItems: 16, items: { type: string } }
+        managed_templates:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            required: [id, entry]
+            properties:
+              id: { type: string }
+              entry: { $ref: '#/components/schemas/InferenceEndpointOwnerEntry' }
+        records:
+          type: array
+          maxItems: 64
+          items: { $ref: '#/components/schemas/InferenceEndpointOwnerRecord' }
+    InferenceEndpointOwnerDraft:
+      type: object
+      required: [review_id, expected_revision, expires_at, entry, restart_required, access_review_required]
+      properties:
+        review_id: { type: string, pattern: '^[a-f0-9]{64}$' }
+        expected_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+        expires_at: { type: string, format: date-time }
+        entry: { $ref: '#/components/schemas/InferenceEndpointOwnerEntry' }
+        restart_required: { type: boolean, const: true }
+        access_review_required: { type: boolean, const: true }
+    InferenceEndpointPolicyMaintenanceView:
+      type: object
+      additionalProperties: false
+      required: [policy_revision, decision_count, retirable]
+      properties:
+        policy_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+        decision_count: { type: integer, minimum: 0, maximum: 64 }
+        retirable:
+          type: array
+          maxItems: 64
+          uniqueItems: true
+          items: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}@[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$' }
+    InferenceEndpointPolicyMaintenanceResult:
+      type: object
+      additionalProperties: false
+      required: [retired, policy_revision, history_revision]
+      properties:
+        retired:
+          type: array
+          minItems: 1
+          maxItems: 64
+          uniqueItems: true
+          items: { type: string, pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}@[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$' }
+        policy_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+        history_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+    InferenceEndpointOwnerArchiveResult:
+      type: object
+      additionalProperties: false
+      required: [archived, journal_revision]
+      properties:
+        archived: { type: integer, minimum: 0, maximum: 64 }
+        journal_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+    InferenceEndpointOwnerArchivedReceipt:
+      type: object
+      additionalProperties: false
+      required: [version, archive_id, archived_by, archived_at, record]
+      properties:
+        version: { type: integer, const: 1 }
+        archive_id: { type: string, pattern: '^[a-f0-9]{64}$' }
+        archived_by: { type: string, minLength: 1, maxLength: 256 }
+        archived_at: { type: string, format: date-time }
+        record: { $ref: '#/components/schemas/InferenceEndpointOwnerRecord' }
+    InferenceEndpointOwnerHistoryPage:
+      type: object
+      additionalProperties: false
+      required: [journal_revision, receipts]
+      properties:
+        journal_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+        archive_id: { type: string, pattern: '^[a-f0-9]{64}$' }
+        receipts:
+          type: array
+          maxItems: 32
+          items: { $ref: '#/components/schemas/InferenceEndpointOwnerArchivedReceipt' }
+        next: { type: string, pattern: '^[a-f0-9]{64}$' }
+    InferenceEndpointHistoricalDecision:
+      type: object
+      additionalProperties: false
+      required: [pin, enabled, actor, at]
+      properties:
+        pin: { type: string, pattern: '^[a-f0-9]{64}$' }
+        enabled: { type: boolean, description: Historical decision only; never current authority. }
+        actor: { type: string, minLength: 1, maxLength: 256 }
+        at: { type: string, format: date-time }
+        review_required: { type: boolean }
+    InferenceEndpointHistoricalPolicy:
+      type: object
+      additionalProperties: false
+      required: [version, restore_epoch, revision, decisions]
+      properties:
+        version: { type: integer, enum: [1, 2] }
+        restore_epoch: { type: string, pattern: '^[a-f0-9]{64}$' }
+        revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+        previous_snapshot: { type: string, pattern: '^[a-f0-9]{64}$' }
+        decisions:
+          type: object
+          maxProperties: 64
+          additionalProperties: { $ref: '#/components/schemas/InferenceEndpointHistoricalDecision' }
+    InferenceEndpointPolicyHistoryPage:
+      type: object
+      additionalProperties: false
+      required: [revision, history]
+      properties:
+        revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+        history:
+          type: object
+          additionalProperties: false
+          required: [version, actor, at, configuration_revision, snapshot]
+          properties:
+            version: { type: integer, const: 1 }
+            actor: { type: string, minLength: 1, maxLength: 256 }
+            at: { type: string, format: date-time }
+            configuration_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+            snapshot: { $ref: '#/components/schemas/InferenceEndpointHistoricalPolicy' }
+    InferenceEndpointOwnerRecord:
+      type: object
+      required: [request_id, review_id, actor, epoch, before, after, endpoint, state, created_at]
+      properties:
+        request_id: { type: string }
+        review_id: { type: string, pattern: '^[a-f0-9]{64}$' }
+        actor: { type: string }
+        epoch: { type: string, pattern: '^[a-f0-9]{64}$' }
+        before: { type: string, pattern: '^[a-f0-9]{64}$' }
+        after: { type: string, pattern: '^[a-f0-9]{64}$' }
+        endpoint: { type: string }
+        state: { type: string, enum: [pending, published, committed, not_applied, conflict] }
+        created_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time }
+        resolved_by: { type: string }
+        resolved_epoch: { type: string, pattern: '^[a-f0-9]{64}$' }
+    InferenceEndpointReview:
+      type: object
+      additionalProperties: false
+      required: [id, revision, config_pin, policy_revision]
+      properties:
+        id: { type: string, maxLength: 128 }
+        revision: { type: string, maxLength: 128 }
+        config_pin: { type: string, pattern: '^[a-f0-9]{64}$' }
+        policy_revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+        enabled: { type: boolean }
+    InferenceEndpointManagement:
+      type: object
+      required: [configured, policy_state, policy_revision, items]
+      properties:
+        configured: { type: boolean }
+        policy_state: { type: string, enum: [not_configured, review_required, restore_review_required, ready] }
+        policy_revision: { type: string }
+        items:
+          type: array
+          maxItems: 128
+          items: { $ref: '#/components/schemas/InferenceEndpointStatus' }
+    InferenceEndpointStatus:
+      type: object
+      required: [id, revision, model_id, provider, url, model, actors, config_pin, installed, current, enabled, review_required, credential_ready, managed, probe_allowed]
+      properties:
+        id: { type: string }
+        revision: { type: string }
+        model_id: { type: string }
+        provider: { type: string, enum: [ollama, vllm] }
+        url: { type: string }
+        model: { type: string }
+        actors: { type: array, items: { type: string }, maxItems: 128 }
+        config_pin: { type: string }
+        installed: { type: boolean }
+        current: { type: boolean }
+        enabled: { type: boolean }
+        review_required: { type: boolean }
+        credential_ready: { type: boolean }
+        managed: { type: boolean }
+        probe_allowed: { type: boolean }
+        reviewed_by: { type: string }
+        reviewed_at: { type: string }
     InferenceRuntimeReadiness:
       type: object
       description: Native engine preparation only. Ready verifies runtime startup flags, not model inference or workflow quality. Progress is service-local and is not durable across restart.
@@ -3854,7 +4324,7 @@ components:
         id: { type: string, pattern: '^[a-z0-9][a-z0-9._-]{0,95}$' }
         revision: { type: string, description: Immutable revision, not main/master/latest. }
         name: { type: string, maxLength: 200 }
-        architecture: { type: string, enum: [whisper, piper, zipformer-streaming, kokoro, qwen3-asr, qwen3-tts, mlx-text, transformers-text] }
+        architecture: { type: string, enum: [whisper, piper, zipformer-streaming, kokoro, qwen3-asr, qwen3-tts, mlx-text, transformers-text, onnx-embedding] }
         model_family: { type: string, description: Pinned family identity required for text packages. }
         runtime:
           type: object
@@ -3890,8 +4360,8 @@ components:
               id: { type: string }
               memory_bytes: { type: integer, format: int64 }
               evidence: { type: string, description: Reference only, never self-certified qualification. }
-        engine: { type: string, enum: [llama_cpp, mlx, transformers] }
-        format: { type: string, enum: [gguf, mlx_safetensors, safetensors] }
+        engine: { type: string, enum: [llama_cpp, mlx, transformers, onnx] }
+        format: { type: string, enum: [gguf, mlx_safetensors, safetensors, onnx] }
         backend: { type: string }
         runner_revision: { type: string }
         adapter_revision: { type: string }
@@ -4015,8 +4485,8 @@ components:
         kind: { type: string, enum: [legacy_file, package] }
         category: { $ref: '#/components/schemas/ModelCategory' }
         capabilities: { type: array, items: { type: string } }
-        engine: { type: string, enum: [llama_cpp, mlx, transformers] }
-        format: { type: string, enum: [gguf, mlx_safetensors, safetensors] }
+        engine: { type: string, enum: [llama_cpp, mlx, transformers, onnx] }
+        format: { type: string, enum: [gguf, mlx_safetensors, safetensors, onnx] }
         backend: { type: string }
         readiness: { $ref: '#/components/schemas/ModelReadiness' }
         provenance: { $ref: '#/components/schemas/ModelProvenance' }
@@ -4130,8 +4600,8 @@ components:
         capability_status:
           type: object
           additionalProperties: { type: string, enum: [declared, tested, unsupported, unknown] }
-        engine: { type: string, enum: [llama_cpp, mlx, transformers] }
-        format: { type: string, enum: [gguf, mlx_safetensors, safetensors] }
+        engine: { type: string, enum: [llama_cpp, mlx, transformers, ollama, vllm, onnx] }
+        format: { type: string, enum: [gguf, mlx_safetensors, safetensors, onnx] }
         backend: { type: string }
         runner_revision: { type: string }
         adapter_revision: { type: string }
@@ -4777,6 +5247,8 @@ components:
       additionalProperties: false
       required: [content]
       properties:
+        response_profile: { type: string, enum: [interactive, extended], description: Requires conversation-input-options-v1. Pin this context profile before model qualification; omitted preserves legacy canonical allocation. }
+        max_tokens: { type: integer, minimum: 0, maximum: 4096, description: Requires conversation-input-options-v1. Requested output token ceiling, bounded by model context. Zero or omitted preserves the existing canonical default. }
         knowledge_selections: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/ConversationKnowledgeSelection' } }
         source_session: { type: string, maxLength: 256, description: Owning session whose canonical manifest matches this conversation. }
         attachments: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/ConversationAttachment' } }
@@ -4784,7 +5256,7 @@ components:
         knowledge_documents: { type: array, maxItems: 16, items: { type: string } }
         use_knowledge: { type: boolean, description: Retrieve from currently permitted Knowledge within effective resource restrictions. }
         question_id: { type: string, description: Required for answer intent. Exact saved primary clarification identity; never authorizes host access. Omit for other intents. }
-        content: { type: string, minLength: 1, maxLength: 32000 }
+        content: { type: string, maxLength: 32000, description: May be empty only for ordinary message input with authorized images or attachments on conversation-input-options-v1 services. Corrections, new work and clarification answers require text. }
         model: { type: string, maxLength: 256 }
         intent: { type: string, enum: [message, correction, new_work, answer] }
         focused_work_id: { type: string, description: Omitted uses current focus. Empty string selects unbound conversation input. }
@@ -6280,6 +6752,41 @@ components:
         blocked_jobs: { type: integer, minimum: 0 }
         dependencies: { type: integer, minimum: 0 }
         token: { type: string, pattern: '^[a-f0-9]{64}$' }
+    AgentModelPolicy:
+      type: object
+      additionalProperties: false
+      required: [version, mode]
+      properties:
+        version: { type: integer, enum: [1] }
+        mode: { type: string, enum: [guided, adaptive] }
+        fallback_models: { type: array, maxItems: 2, uniqueItems: true, items: { type: string }, description: Explicit installed local candidates; admission requires matching workflow qualification. No endpoint acquisition or download. }
+        perception_model: { type: string, description: Optional installed local vision model with measured projector and preprocessing qualification. }
+    AgentModelCandidate:
+      type: object
+      required: [model, context_window]
+      properties:
+        model: { type: string }
+        context_window: { type: integer, minimum: 1 }
+        tool_adapter:
+          type: object
+          required: [adapter, evidence_id, fingerprint_id]
+          properties:
+            adapter: { type: string }
+            evidence_id: { type: string }
+            fingerprint_id: { type: string }
+            scope: { type: string }
+            capability_sha256: { type: string }
+    AgentModelSelection:
+      type: object
+      required: [version, mode, primary, selected, reason, candidates]
+      properties:
+        version: { type: integer, enum: [1] }
+        mode: { type: string, enum: [guided, adaptive] }
+        primary: { type: string }
+        selected: { type: string }
+        reason: { type: string, enum: [primary_model, explicit_qualified_fallback, invalid_model_decision, inherited_qualified_model] }
+        candidates: { type: array, items: { $ref: '#/components/schemas/AgentModelCandidate' } }
+        perception: { $ref: '#/components/schemas/AgentModelCandidate' }
     AgentProfileSettings:
       type: object
       additionalProperties: false
@@ -6289,6 +6796,7 @@ components:
         description: { type: string, maxLength: 512 }
         instructions: { type: string, maxLength: 8192, description: Behavior only; cannot override broker or host authority. String limits are enforced in UTF-8 bytes. }
         model: { type: string }
+        model_policy: { $ref: '#/components/schemas/AgentModelPolicy', description: Optional immutable local policy. Omitted preserves the primary-only profile contract. Policy storage does not grant runtime switching or tool authority. }
         knowledge: { type: array, maxItems: 32, uniqueItems: true, items: { type: string }, description: Authorized existing Knowledge document IDs. }
         tools:
           type: array
@@ -6329,6 +6837,7 @@ components:
       required: [profile, ready, issues, capabilities]
       properties:
         profile: { $ref: '#/components/schemas/AgentProfile' }
+        model_selection: { $ref: '#/components/schemas/AgentModelSelection' }
         ready: { type: boolean }
         issues:
           type: array

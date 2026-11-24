@@ -31,6 +31,17 @@ func nativeTextPrompt(request *api.ChatCompletionRequest, descriptor ProviderDes
 	if request == nil || request.Model == "" || len(request.Messages) == 0 {
 		return nil, errors.New("native text request requires a model and messages")
 	}
+	if descriptor.Provider == ProviderOllama || descriptor.Provider == ProviderVLLM {
+		if len(request.Tools) != 0 || request.ToolChoice != nil || request.ParallelToolCalls != nil {
+			return nil, errors.New("HTTP endpoint text route does not grant tool authority")
+		}
+		prompt, err := json.Marshal(request)
+		if err != nil {
+			return nil, err
+		}
+		_, err = httpProviderChat(ProviderRequest{Prompt: prompt, ContextLength: descriptor.ContextLength}, descriptor)
+		return prompt, err
+	}
 	if err := request.ResponseFormat.Validate(); err != nil {
 		return nil, err
 	}

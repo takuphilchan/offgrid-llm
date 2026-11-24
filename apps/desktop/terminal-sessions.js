@@ -33,12 +33,12 @@ function launchEnvironment(base,cli,service) {
 }
 
 class TerminalSessions {
-  constructor({host,runner,worker,choose,confirm,send,cli,service,spawnProcess=spawn}) { Object.assign(this,{host,runner,worker,choose,confirm,send,cli,service,spawnProcess}); this.sessions=new Map(); this.closing=false; this.generation=0; }
+  constructor({host,runner,worker,choose,confirm,send,cli,service,admit=()=>true,spawnProcess=spawn}) { Object.assign(this,{host,runner,worker,choose,confirm,send,cli,service,admit,spawnProcess}); this.sessions=new Map(); this.closing=false; this.generation=0; }
   available() {return process.platform==='win32' && fs.existsSync(this.host) && fs.existsSync(this.worker);}
   async create({kind,cols,rows}) {
-    if(this.closing)throw Error('terminal_stopping');
+    if(this.closing||!this.admit())throw Error('terminal_stopping');
     const generation=this.generation;const cwd=await this.choose();if(!cwd)return null;
-    if(this.closing||generation!==this.generation)throw Error('terminal_stopping');
+    if(this.closing||generation!==this.generation||!this.admit())throw Error('terminal_stopping');
     const {file,args}=launchCommand(kind,this.cli);
     if(!fs.existsSync(file))throw Error('The matching local executable is unavailable.');
     const id=randomUUID(), record={id,cwd,kind,cols,rows,title:kind==='agent'||kind==='offgrid'?'Agent':kind==='cli'?'OffGrid CLI':'PowerShell',state:'starting',confirmed:false,attached:false,frames:[]};

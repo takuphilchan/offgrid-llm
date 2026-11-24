@@ -71,7 +71,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get model metadata
-	metadata, err := s.registry.GetChatModel(req.Model)
+	metadata, err := s.localChatMetadata(req.Model)
 	var nativeDescriptor inference.ProviderDescriptor
 	native := false
 	if err != nil {
@@ -335,7 +335,7 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Prompt is required", http.StatusBadRequest)
 		return
 	}
-	if _, err := s.registry.GetChatModel(req.Model); err != nil {
+	if _, err := s.localChatMetadata(req.Model); err != nil {
 		writeError(w, fmt.Sprintf("Model not found: %s", req.Model), http.StatusNotFound)
 		return
 	}
@@ -399,6 +399,10 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if it's an embedding model
+	if isEndpointModel(req.Model) {
+		writeErrorWithCode(w, "HTTP endpoint embeddings are not qualified", http.StatusBadRequest, "unsupported_parameter")
+		return
+	}
 	modelMeta, err := s.registry.GetModel(req.Model)
 	if err != nil {
 		writeError(w, fmt.Sprintf("Model not found: %s", req.Model), http.StatusNotFound)

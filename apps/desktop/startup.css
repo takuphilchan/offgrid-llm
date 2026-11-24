@@ -4,40 +4,30 @@
 :root[data-theme='dark'] { color-scheme: dark; --bg: #101011; --panel: #19191a; --text: #efefed; --muted: #a3a3a0; --line: #363637; --button: #efefed; --on-button: #171717; }
 #technical-reason { overflow-wrap: anywhere; }
 * { box-sizing: border-box; }
-body { margin: 0; min-height: 100vh; display: grid; align-items: center; background: var(--bg); color: var(--text); font: 14px/1.55 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
-main { width: min(520px, 100%); padding: 40px 28px; margin: auto; }
-header { display: flex; flex-direction:column; align-items: center; gap: 18px; font-size: 26px; letter-spacing:-.025em; font-weight: 550; margin-bottom: 24px; }
-header svg { width: 46px; height: 46px; color:var(--muted); }
+body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding:0 24px; background: var(--bg); color: var(--text); font: 14px/1.6 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; }
+main.startup-content { padding-block:32px; }
 h1 { font-size: 14px; line-height: 1.5; font-weight: 400; margin: 0; }
 p { margin: 0; }
 .muted { color: var(--muted); }
 .status-row { display: flex; align-items: center; justify-content:center; gap: 10px; color:var(--muted); }
 #status-text { color: var(--muted); overflow-wrap: anywhere; }
-:root[data-startup-state=recovery] header { flex-direction:row; font-size:18px; gap:12px; margin-bottom:20px; }
-:root[data-startup-state=recovery] header svg { width:26px; height:26px; animation:none; }
-:root[data-startup-state=recovery] .connection { border:1px solid var(--line); border-radius:22px; background:var(--panel); padding:26px; }
-:root[data-startup-state=recovery] .status-row { justify-content:flex-start; color:var(--text); }
-:root[data-startup-state=recovery] h1 { font-size:20px; font-weight:550; letter-spacing:-.02em; margin-bottom:10px; }
 dl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin: 12px 0; }
 dl div { min-width: 0; }
 dt { color: var(--muted); font-size: 12px; }
 dd { margin: 4px 0 0; font-size: 13px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .address { grid-column: 1 / -1; }
 #timing { font-size: 12px; }
-.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
-button { border: 1px solid var(--button); border-radius: 999px; background: var(--button); color: var(--on-button); padding: 8px 16px; min-height: 40px; font: inherit; font-size: 14px; cursor: pointer; }
-button.secondary { background: transparent; color: var(--text); border-color: var(--line); }
-button:hover { filter: brightness(.9); }
-button:disabled { opacity: .5; cursor: wait; }
-button:focus-visible, summary:focus-visible { outline: 2px solid var(--text); outline-offset: 4px; }
-details { margin-top: 12px; }
-summary { cursor: pointer; font-size: 13px; min-height: 40px; display: list-item; align-content: center; }
+.startup-content button.secondary { background: transparent; color: var(--text); border-color: var(--line); }
+details { margin-top: 20px; text-align:start; }
+summary { cursor: pointer; font-size: 13px; min-height: 40px; display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--muted); list-style:none; }
+summary::-webkit-details-marker { display:none; }
+summary::after { content:''; width:6px; height:6px; border-inline-end:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); flex:none; margin-inline-end:4px; }
+details[open]>summary::after { transform:rotate(225deg); }
 details p { font-size: 13px; color: var(--muted); margin: 12px 0; }
-.text-button { color: var(--muted); background: transparent; border-color: transparent; padding-inline: 0; margin-top: 8px; text-align: start; }
+.startup-content .text-button { color: var(--muted); background: transparent; border-color: transparent; padding-inline: 0; margin-top: 8px; text-align: start; }
 #action-error { padding-top: 16px; }
 [hidden] { display: none !important; }
 @media (max-height: 420px) { body { align-items: start; } }
-@media (max-width: 360px) { main { padding: 24px 18px; } .actions button { width: 100%; } }
-@media (max-width: 420px) { :root[data-startup-state=recovery] .connection { padding:18px; } }
+@media (max-width: 360px) { body { padding:24px 18px; } }
 @media (pointer: coarse) { button, summary { min-height: 44px; } }
 @media (forced-colors: active) { button { border-color: ButtonText; } }

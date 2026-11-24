@@ -121,7 +121,7 @@ func recoverExecutionReceipt(t *Task) bool {
 	}
 	if intent.Request.Operation == "process_start" && receipt.State == "complete" {
 		var process execution.ProcessResult
-		if json.Unmarshal(receipt.Result, &process) != nil || process.Handle == "" || process.ExitCode == nil || process.State == "running" {
+		if json.Unmarshal(receipt.Result, &process) != nil || process.Handle == "" || !execution.ProcessDescendantsSettled(process) {
 			return false
 		}
 		switch process.State {

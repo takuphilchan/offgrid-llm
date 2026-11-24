@@ -21,6 +21,9 @@ const (
 	ProviderLlamaCPP         ProviderID = "llama_cpp"
 	ProviderMLX              ProviderID = "mlx"
 	ProviderTransformers     ProviderID = "transformers"
+	ProviderOllama           ProviderID = "ollama"
+	ProviderVLLM             ProviderID = "vllm"
+	ProviderONNX             ProviderID = "onnx"
 )
 
 // ModelFormat identifies the on-disk model representation.
@@ -30,6 +33,7 @@ const (
 	FormatGGUF           ModelFormat = "gguf"
 	FormatMLXSafetensors ModelFormat = "mlx_safetensors"
 	FormatSafetensors    ModelFormat = "safetensors"
+	FormatONNX           ModelFormat = "onnx"
 )
 
 // ProviderCapability is intentionally small; model-family adapters provide the
@@ -37,11 +41,12 @@ const (
 type ProviderCapability string
 
 const (
-	CapabilityText      ProviderCapability = "text"
-	CapabilityToolCalls ProviderCapability = "tool_calls"
-	CapabilityVision    ProviderCapability = "vision"
-	CapabilityAudio     ProviderCapability = "audio"
-	CapabilityStreaming ProviderCapability = "streaming"
+	CapabilityText       ProviderCapability = "text"
+	CapabilityToolCalls  ProviderCapability = "tool_calls"
+	CapabilityVision     ProviderCapability = "vision"
+	CapabilityAudio      ProviderCapability = "audio"
+	CapabilityStreaming  ProviderCapability = "streaming"
+	CapabilityEmbeddings ProviderCapability = "embeddings"
 )
 
 // ProviderDescriptor is returned during the handshake and stored with
@@ -74,12 +79,12 @@ func (d ProviderDescriptor) Validate() error {
 		return errors.New("provider descriptor requires protocol, runner, and model identity")
 	}
 	switch d.Provider {
-	case ProviderLlamaCPP, ProviderMLX, ProviderTransformers:
+	case ProviderLlamaCPP, ProviderMLX, ProviderTransformers, ProviderOllama, ProviderVLLM, ProviderONNX:
 	default:
 		return fmt.Errorf("unsupported provider %q", d.Provider)
 	}
 	switch d.Format {
-	case FormatGGUF, FormatMLXSafetensors, FormatSafetensors:
+	case FormatGGUF, FormatMLXSafetensors, FormatSafetensors, FormatONNX:
 	default:
 		return fmt.Errorf("unsupported model format %q", d.Format)
 	}
@@ -89,13 +94,16 @@ func (d ProviderDescriptor) Validate() error {
 	if d.Provider != ProviderLlamaCPP && (d.AdapterRevision == "" || d.Backend == "") {
 		return errors.New("native provider requires pinned adapter and backend")
 	}
+	if (d.Provider == ProviderOllama || d.Provider == ProviderVLLM) && !completeSHA256Digest(d.ModelDigest) {
+		return errors.New("HTTP provider requires a complete pinned model digest")
+	}
 	if d.ContextLength < 0 {
 		return errors.New("provider context length cannot be negative")
 	}
 	seen := map[ProviderCapability]bool{}
 	for _, c := range d.Capabilities {
 		switch c {
-		case CapabilityText, CapabilityToolCalls, CapabilityVision, CapabilityAudio, CapabilityStreaming:
+		case CapabilityText, CapabilityToolCalls, CapabilityVision, CapabilityAudio, CapabilityStreaming, CapabilityEmbeddings:
 		default:
 			return fmt.Errorf("unknown provider capability %q", c)
 		}
@@ -112,6 +120,13 @@ func (d ProviderDescriptor) Validate() error {
 	}
 	if seen[CapabilityAudio] && d.PreprocessDigest == "" {
 		return errors.New("audio capability requires a preprocessing identity")
+	}
+	if d.Provider == ProviderONNX {
+		if d.Format != FormatONNX || d.Backend != "cpu" || len(seen) != 1 || !seen[CapabilityEmbeddings] || !completeSHA256Digest(d.ModelDigest) || !completeSHA256Digest(d.PreprocessDigest) || d.ContextLength < 1 || d.ContextLength > 8192 || d.TemplateDigest != "" || d.ProjectorDigest != "" {
+			return errors.New("ONNX embeddings require a pinned CPU-only embedding descriptor and preprocessing identity")
+		}
+	} else if d.Format == FormatONNX || seen[CapabilityEmbeddings] {
+		return errors.New("ONNX format and embedding events require the ONNX provider")
 	}
 	return nil
 }
@@ -154,12 +169,13 @@ func (r ProviderRequest) Validate() error {
 type ProviderEventType string
 
 const (
-	ProviderEventReady ProviderEventType = "ready"
-	ProviderEventDelta ProviderEventType = "delta"
-	ProviderEventTool  ProviderEventType = "tool_decision"
-	ProviderEventUsage ProviderEventType = "usage"
-	ProviderEventDone  ProviderEventType = "done"
-	ProviderEventError ProviderEventType = "error"
+	ProviderEventReady      ProviderEventType = "ready"
+	ProviderEventDelta      ProviderEventType = "delta"
+	ProviderEventTool       ProviderEventType = "tool_decision"
+	ProviderEventUsage      ProviderEventType = "usage"
+	ProviderEventDone       ProviderEventType = "done"
+	ProviderEventError      ProviderEventType = "error"
+	ProviderEventEmbeddings ProviderEventType = "embeddings"
 )
 
 type ProviderEvent struct {
@@ -170,6 +186,7 @@ type ProviderEvent struct {
 	Descriptor       *ProviderDescriptor `json:"descriptor,omitempty"`
 	Resources        *ProviderResources  `json:"resources,omitempty"`
 	Text             string              `json:"text,omitempty"`
+	Embeddings       [][]float32         `json:"embeddings,omitempty"`
 	FinishReason     string              `json:"finish_reason,omitempty"`
 	Tool             json.RawMessage     `json:"tool,omitempty"`
 	Usage            *UsageMetrics       `json:"usage,omitempty"`

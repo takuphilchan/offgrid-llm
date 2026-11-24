@@ -13,6 +13,39 @@ CLI and UI SHALL start ordinary assistant conversation without mandatory profile
 - **WHEN** a CLI user resumes work created in the UI after a reload
 - **THEN** context, restrictions and controls refer to the same canonical work without selecting an agent again
 
+### Requirement: Canonical interactive source drafts
+Canonical CLI conversation SHALL support the existing explicit file and image draft
+commands through the owning session and canonical input service. Draft selection,
+inspection, preparation and removal SHALL NOT submit input or delete saved sources.
+The client SHALL require source capabilities before uploading or submitting and
+retain source-only ordinary input, exact source revisions and shared model checks.
+Unknown input receipts SHALL retain an immutable retry payload independently of
+later draft edits; receipt recovery SHALL NOT repeat upload or inference.
+New text SHALL NOT replace an unresolved source-bearing retry. An explicit local
+discard SHALL explain that it does not cancel service work. A confirmed initial
+validation rejection before admission MAY release the retry while retaining the
+editable draft; a later rejection SHALL NOT erase earlier uncertainty.
+
+#### Scenario: Attach sources during ordinary canonical conversation
+- **WHEN** a user selects a file or image and submits ordinary text or an empty source-only caption
+- **THEN** one canonical input references the owned file revision or selected image bytes
+- **AND** no legacy generation path is used and accepted sources clear from the unchanged draft
+
+#### Scenario: Edit a draft after an unknown input receipt
+- **WHEN** an input response is lost, the user changes selected sources and explicitly retries the pending input
+- **THEN** retry uses the original identity and complete source snapshot, observing an accepted receipt before any resubmission
+- **AND** later draft edits are retained and no upload is repeated
+
+#### Scenario: Unsupported sources or pending clarification
+- **WHEN** a service lacks the necessary source capability or an input answering a pending clarification contains selected sources
+- **THEN** the client reports the unsupported selection without silently dropping it or submitting another kind of request
+- **AND** saved conversation controls and draft removal remain available
+
+#### Scenario: Distinguish rejection from lost acceptance
+- **WHEN** the initial submit receives a supported validation rejection before admission
+- **THEN** a corrected draft can be submitted with a new input identity
+- **AND** transport failures, server failures and receipt-inspection failures retain the original identity until explicit recovery or local discard
+
 ### Requirement: Eligible background work survives observation
 Closing a client SHALL leave service-owned work running only while its authorized supervision remains available. Client-owned grants MUST NOT silently gain background lifetime. Reconnect SHALL observe existing work without recreating it.
 

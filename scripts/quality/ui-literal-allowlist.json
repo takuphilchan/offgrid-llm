@@ -1,43 +1,257 @@
 [
- {"file":"features/chat/FileDraftList.tsx","text":"MiB","reason":"IEC binary size unit, paired with localized numbers and attachment status; one MiB is exactly 1048576 bytes."},
- {"file":"features/knowledge/OCRLanguageSetup.tsx","text":".traineddata","reason":"Exact pinned OCR model filename extension; the surrounding setup controls are localized."},
- {"file":"features/knowledge/ComparisonExport.tsx","text":"Markdown","reason":"Standard export format name; localized action and retention explanation surround it."},
- {"file":"api/document-structure.ts","text":"Invalid document structure receipt","reason":"Internal response validation error; DocumentReview renders localized unavailable guidance without the diagnostic."},
- {"file":"api/document-structure.ts","text":"Invalid document block receipt","reason":"Internal response validation error; DocumentReview renders localized unavailable guidance without the diagnostic."},
- {"file":"api/document-structure.ts","text":"Unconfirmed document correction","reason":"Internal publication receipt error; DocumentReview preserves the draft and renders localized uncertain-outcome guidance."},
- {"file":"features/chat/image-admission.ts","text":"Invalid PNG header","reason":"Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."},
- {"file":"features/chat/image-admission.ts","text":"Invalid JPEG header","reason":"Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."},
- {"file":"features/chat/image-admission.ts","text":"Invalid JPEG marker","reason":"Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."},
- {"file":"features/chat/image-admission.ts","text":"Truncated JPEG segment","reason":"Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."},
- {"file":"features/chat/image-admission.ts","text":"Invalid JPEG frame","reason":"Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."},
- {"file":"features/chat/image-admission.ts","text":"Missing JPEG frame","reason":"Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."},
- {"file":"features/chat/image-admission.ts","text":"Image pixel limit","reason":"Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."},
- {"file":"App.tsx","text":"Page render failed","reason":"Console diagnostic; the error boundary renders localized recovery copy."},
- {"file":"components/CommandPalette.tsx","text":"Esc","reason":"Keyboard key identifier; the button has a localized accessible name."},
- {"file":"components/CommandPalette.tsx","text":"(Esc)","reason":"Keyboard key suffix following the localized action label."},
- {"file":"components/shell/WorkspaceHeader.tsx","text":"(Ctrl+`)","reason":"Literal keyboard shortcut following the localized terminal label."},
- {"file":"components/VoiceInputButton.tsx","text":"Playback stopped","reason":"Internal AbortError reason, handled as cancellation."},
- {"file":"features/agents/AgentManagement.tsx","text":"https://mcp.example.com/mcp","reason":"Example endpoint syntax, not a translatable instruction."},
- {"file":"features/agents/AgentContextResources.tsx","text":"· v","reason":"Version identifier prefix between user-authored resource data."},
- {"file":"features/agents/SkillLibrary.tsx","text":"· v","reason":"Version identifier prefix after a user-authored skill description."},
- {"file":"features/agents/TaskResult.tsx","text":"B ·","reason":"Byte unit and separator in artifact metadata."},
- {"file":"features/agents/TaskDesktopAccess.tsx","text":"Computer access cancelled","reason":"Internal AbortError for a cancelled access request; the cancelled flow does not display it."},
- {"file":"features/chat/ComposerFiles.tsx","text":"Conversation selection changed","reason":"Internal AbortError for a stale conversation selection."},
- {"file":"features/chat/ChatResponseDetails.tsx","text":"s","reason":"Second unit after the elapsed response duration."},
- {"file":"features/chat/DocumentReader.tsx","text":"· Page Up","reason":"Keyboard key name appended to the localized previous-page action."},
- {"file":"features/chat/DocumentReader.tsx","text":"· Page Down","reason":"Keyboard key name appended to the localized next-page action."},
- {"file":"features/chat/FileDraftList.tsx","text":"KiB","reason":"Binary quantity unit abbreviation."},
- {"file":"features/chat/KnowledgePassages.tsx","text":"· SHA-256:","reason":"Checksum algorithm identifier."},
- {"file":"features/models/ModelSearch.tsx","text":"Hugging Face","reason":"Service brand."},
- {"file":"features/models/ModelsPage.tsx","text":"GB RAM","reason":"Memory unit and technical abbreviation."},
- {"file":"features/models/OfflineModelImport.tsx","text":"Mismatched import receipt","reason":"Internal receipt validation error; callers render localized uncertain-outcome guidance."},
- {"file":"features/models/PackageModels.tsx","text":"Hugging Face","reason":"Service brand."},
- {"file":"features/models/RuntimePreparation.tsx","text":"Unavailable runtime status","reason":"Internal readiness validation error; the component renders localized unavailable copy."},
- {"file":"features/settings/SettingsPage.tsx","text":"OffGrid","reason":"Product brand."},
- {"file":"features/settings/SettingsPage.tsx","text":"API","reason":"Protocol abbreviation in technical information."},
- {"file":"features/settings/SettingsPage.tsx","text":"UI SHA-256","reason":"Renderer artifact checksum identifier."},
- {"file":"lib/active-work.tsx","text":"Work coordinator required","reason":"Developer-only provider invariant, handled by the localized error boundary."},
- {"file":"lib/draft-scope.tsx","text":"Workspace draft provider required","reason":"Developer-only provider invariant, handled by the localized error boundary."},
- {"file":"lib/drafts.ts","text":"Workspace identity unavailable","reason":"Internal draft-restoration guard; callers render localized restoration failure copy."},
- {"file":"main.tsx","text":"Presentation timeout","reason":"Caught startup timeout; retains preferences without displaying the diagnostic."}
+  {
+    "file": "features/chat/FileDraftList.tsx",
+    "text": "MiB",
+    "reason": "IEC binary size unit, paired with localized numbers and attachment status; one MiB is exactly 1048576 bytes."
+  },
+  {
+    "file": "features/knowledge/OCRLanguageSetup.tsx",
+    "text": ".traineddata",
+    "reason": "Exact pinned OCR model filename extension; the surrounding setup controls are localized."
+  },
+  {
+    "file": "features/knowledge/ComparisonExport.tsx",
+    "text": "Markdown",
+    "reason": "Standard export format name; localized action and retention explanation surround it."
+  },
+  {
+    "file": "api/document-structure.ts",
+    "text": "Invalid document structure receipt",
+    "reason": "Internal response validation error; DocumentReview renders localized unavailable guidance without the diagnostic."
+  },
+  {
+    "file": "api/document-structure.ts",
+    "text": "Invalid document block receipt",
+    "reason": "Internal response validation error; DocumentReview renders localized unavailable guidance without the diagnostic."
+  },
+  {
+    "file": "api/document-structure.ts",
+    "text": "Unconfirmed document correction",
+    "reason": "Internal publication receipt error; DocumentReview preserves the draft and renders localized uncertain-outcome guidance."
+  },
+  {
+    "file": "features/chat/image-admission.ts",
+    "text": "Invalid PNG header",
+    "reason": "Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."
+  },
+  {
+    "file": "features/chat/image-admission.ts",
+    "text": "Invalid JPEG header",
+    "reason": "Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."
+  },
+  {
+    "file": "features/chat/image-admission.ts",
+    "text": "Invalid JPEG marker",
+    "reason": "Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."
+  },
+  {
+    "file": "features/chat/image-admission.ts",
+    "text": "Truncated JPEG segment",
+    "reason": "Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."
+  },
+  {
+    "file": "features/chat/image-admission.ts",
+    "text": "Invalid JPEG frame",
+    "reason": "Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."
+  },
+  {
+    "file": "features/chat/image-admission.ts",
+    "text": "Missing JPEG frame",
+    "reason": "Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."
+  },
+  {
+    "file": "features/chat/image-admission.ts",
+    "text": "Image pixel limit",
+    "reason": "Internal image preflight diagnostic; ComposerImages catches it and displays the shared localized image-limits message."
+  },
+  {
+    "file": "App.tsx",
+    "text": "Page render failed",
+    "reason": "Console diagnostic; the error boundary renders localized recovery copy."
+  },
+  {
+    "file": "components/CommandPalette.tsx",
+    "text": "Esc",
+    "reason": "Keyboard key identifier; the button has a localized accessible name."
+  },
+  {
+    "file": "components/CommandPalette.tsx",
+    "text": "(Esc)",
+    "reason": "Keyboard key suffix following the localized action label."
+  },
+  {
+    "file": "components/shell/WorkspaceHeader.tsx",
+    "text": "(Ctrl+`)",
+    "reason": "Literal keyboard shortcut following the localized terminal label."
+  },
+  {
+    "file": "components/VoiceInputButton.tsx",
+    "text": "Playback stopped",
+    "reason": "Internal AbortError reason, handled as cancellation."
+  },
+  {
+    "file": "features/agents/AgentManagement.tsx",
+    "text": "https://mcp.example.com/mcp",
+    "reason": "Example endpoint syntax, not a translatable instruction."
+  },
+  {
+    "file": "features/agents/AgentContextResources.tsx",
+    "text": "· v",
+    "reason": "Version identifier prefix between user-authored resource data."
+  },
+  {
+    "file": "features/agents/SkillLibrary.tsx",
+    "text": "· v",
+    "reason": "Version identifier prefix after a user-authored skill description."
+  },
+  {
+    "file": "features/agents/TaskResult.tsx",
+    "text": "B ·",
+    "reason": "Byte unit and separator in artifact metadata."
+  },
+  {
+    "file": "features/agents/TaskDesktopAccess.tsx",
+    "text": "Computer access cancelled",
+    "reason": "Internal AbortError for a cancelled access request; the cancelled flow does not display it."
+  },
+  {
+    "file": "features/chat/ComposerFiles.tsx",
+    "text": "Conversation selection changed",
+    "reason": "Internal AbortError for a stale conversation selection."
+  },
+  {
+    "file": "features/chat/ChatResponseDetails.tsx",
+    "text": "s",
+    "reason": "Second unit after the elapsed response duration."
+  },
+  {
+    "file": "features/chat/DocumentReader.tsx",
+    "text": "· Page Up",
+    "reason": "Keyboard key name appended to the localized previous-page action."
+  },
+  {
+    "file": "features/chat/DocumentReader.tsx",
+    "text": "· Page Down",
+    "reason": "Keyboard key name appended to the localized next-page action."
+  },
+  {
+    "file": "features/chat/FileDraftList.tsx",
+    "text": "KiB",
+    "reason": "Binary quantity unit abbreviation."
+  },
+  {
+    "file": "features/chat/KnowledgePassages.tsx",
+    "text": "· SHA-256:",
+    "reason": "Checksum algorithm identifier."
+  },
+  {
+    "file": "features/models/ModelSearch.tsx",
+    "text": "Hugging Face",
+    "reason": "Service brand."
+  },
+  {
+    "file": "features/models/ModelsPage.tsx",
+    "text": "GB RAM",
+    "reason": "Memory unit and technical abbreviation."
+  },
+  {
+    "file": "features/models/OfflineModelImport.tsx",
+    "text": "Mismatched import receipt",
+    "reason": "Internal receipt validation error; callers render localized uncertain-outcome guidance."
+  },
+  {
+    "file": "features/models/PackageModels.tsx",
+    "text": "Hugging Face",
+    "reason": "Service brand."
+  },
+  {
+    "file": "features/models/RuntimePreparation.tsx",
+    "text": "Unavailable runtime status",
+    "reason": "Internal readiness validation error; the component renders localized unavailable copy."
+  },
+  {
+    "file": "features/settings/SettingsPage.tsx",
+    "text": "OffGrid",
+    "reason": "Product brand."
+  },
+  {
+    "file": "features/settings/SettingsPage.tsx",
+    "text": "API",
+    "reason": "Protocol abbreviation in technical information."
+  },
+  {
+    "file": "features/settings/SettingsPage.tsx",
+    "text": "UI SHA-256",
+    "reason": "Renderer artifact checksum identifier."
+  },
+  {
+    "file": "lib/active-work.tsx",
+    "text": "Work coordinator required",
+    "reason": "Developer-only provider invariant, handled by the localized error boundary."
+  },
+  {
+    "file": "lib/draft-scope.tsx",
+    "text": "Workspace draft provider required",
+    "reason": "Developer-only provider invariant, handled by the localized error boundary."
+  },
+  {
+    "file": "lib/drafts.ts",
+    "text": "Workspace identity unavailable",
+    "reason": "Internal draft-restoration guard; callers render localized restoration failure copy."
+  },
+  {
+    "file": "main.tsx",
+    "text": "Presentation timeout",
+    "reason": "Caught startup timeout; retains preferences without displaying the diagnostic."
+  },
+  {
+    "file": "lib/voice-capture.ts",
+    "text": "Microphone unavailable",
+    "reason": "Internal capture diagnostic. ContinuousVoiceInput maps capture failures to localized voice permission/failed messages; the diagnostic text is not rendered."
+  },
+  {
+    "file": "lib/voice-capture.ts",
+    "text": "Microphone disconnected or muted",
+    "reason": "Internal capture diagnostic. ContinuousVoiceInput maps capture failures to localized voice permission/failed messages; the diagnostic text is not rendered."
+  },
+  {
+    "file": "lib/voice-capture.ts",
+    "text": "Audio processing unavailable",
+    "reason": "Internal capture diagnostic. ContinuousVoiceInput maps capture failures to localized voice permission/failed messages; the diagnostic text is not rendered."
+  },
+  {
+    "file": "lib/voice-capture.ts",
+    "text": "Invalid capture frame",
+    "reason": "Internal capture diagnostic. ContinuousVoiceInput maps capture failures to localized voice permission/failed messages; the diagnostic text is not rendered."
+  },
+  {
+    "file": "lib/voice-capture.ts",
+    "text": "Audio capture interrupted before completion",
+    "reason": "Internal capture diagnostic. ContinuousVoiceInput maps capture failures to localized voice permission/failed messages; the diagnostic text is not rendered."
+  },
+  {
+    "file": "lib/voice-capture.ts",
+    "text": "Voice input queue full",
+    "reason": "Internal capture diagnostic. ContinuousVoiceInput maps capture failures to localized voice permission/failed messages; the diagnostic text is not rendered."
+  },
+  {
+    "file": "lib/voice-capture.ts",
+    "text": "Voice input needs review before continuing",
+    "reason": "Internal capture diagnostic. ContinuousVoiceInput maps capture failures to localized voice permission/failed messages; the diagnostic text is not rendered."
+  },
+  {
+    "file": "lib/voice-pcm.ts",
+    "text": "Unsupported capture sample rate",
+    "reason": "Internal capture diagnostic. ContinuousVoiceInput maps capture failures to localized voice permission/failed messages; the diagnostic text is not rendered."
+  },
+  {
+    "file": "lib/voice-pcm.ts",
+    "text": "Invalid capture frame",
+    "reason": "Internal capture diagnostic. ContinuousVoiceInput maps capture failures to localized voice permission/failed messages; the diagnostic text is not rendered."
+  },
+  {
+    "file": "lib/voice-pcm.ts",
+    "text": "Invalid capture sample",
+    "reason": "Internal capture diagnostic. ContinuousVoiceInput maps capture failures to localized voice permission/failed messages; the diagnostic text is not rendered."
+  }
 ]

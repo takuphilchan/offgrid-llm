@@ -195,7 +195,7 @@ func (r *Runner) answerReviewedWorkerQuestion(ctx context.Context, task *Task, c
 	if *args.NeedsUser {
 		task.PendingInput = &InputRequest{ID: review.QuestionID, CallID: call.ID, Kind: "worker_clarification", Mode: "clarification", Target: args.Content}
 		task.Status, task.SchedulerReady = TaskInput, false
-		return r.persist(task)
+		return r.persistModelProgress(task)
 	}
 	hash := sha256.Sum256([]byte(task.ID + "\x00" + call.ID))
 	command := api.WorkerCommand{RequestID: "worker-review-" + hex.EncodeToString(hash[:]), TargetID: worker.ID, ExpectedRevision: worker.Revision, Kind: "answer", Payload: api.WorkerCommandPayload{QuestionID: review.QuestionID, Content: args.Content}}
@@ -216,7 +216,7 @@ func (r *Runner) answerReviewedWorkerQuestion(ctx context.Context, task *Task, c
 	data, _ := json.Marshal(receipt)
 	task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "worker_answer", ToolName: call.Function.Name, ToolArgs: call.Function.Arguments, ToolResult: string(data), Timestamp: time.Now().UTC()})
 	finishWorkerQuestionReview(task, call.ID)
-	return r.persist(task)
+	return r.persistModelProgress(task)
 }
 
 func finishWorkerQuestionReview(task *Task, callID string) {

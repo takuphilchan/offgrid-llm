@@ -13,7 +13,11 @@ import (
 func TestExecutionCompletionPendingIdentifiesCurrentProcess(t *testing.T) {
 	ref := execution.Reference{Host: "host", Session: "session", Grant: "grant", Revision: 1}
 	step := func(name, session, handle, state, receiptState string, exit *int) agents.Step {
-		result, _ := json.Marshal(execution.ProcessResult{Handle: handle, State: state, ExitCode: exit})
+		process := execution.ProcessResult{Handle: handle, State: state, ExitCode: exit}
+		if state != "running" {
+			process.Descendants = &execution.ProcessDescendants{Version: 1, State: "settled"}
+		}
+		result, _ := json.Marshal(process)
 		data, _ := json.Marshal(map[string]any{"host": ref.Host, "session": session, "receipt": execution.Receipt{State: receiptState, Result: result}})
 		return agents.Step{Type: "action", ToolName: name, ToolResult: string(data)}
 	}

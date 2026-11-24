@@ -36,7 +36,13 @@ func processBudgetResponse(request execution.Request, handle, state, receipt str
 		code := 0
 		exit = &code
 	}
-	data, _ := json.Marshal(execution.ProcessResult{Handle: handle, State: state, ExitCode: exit, Runtime: &execution.ProcessRuntime{Version: 1, ElapsedNS: int64(elapsed), Settled: settled}})
+	descendants := &execution.ProcessDescendants{Version: 1, State: "unknown"}
+	if state == "running" {
+		descendants.State = "pending"
+	} else if settled {
+		descendants.State = "settled"
+	}
+	data, _ := json.Marshal(execution.ProcessResult{Handle: handle, State: state, ExitCode: exit, Runtime: &execution.ProcessRuntime{Version: 1, ElapsedNS: int64(elapsed), Settled: settled}, Descendants: descendants})
 	return execution.Response{Version: 1, ID: request.ID, Receipt: &execution.Receipt{State: receipt, Result: data}}
 }
 

@@ -78,9 +78,11 @@ func delegatedAnswerFeedback(task *Task, answer string) string {
 func (r *Runner) repairDelegatedAnswer(task *Task, answer string) (bool, error) {
 	feedback := delegatedAnswerFeedback(task, answer)
 	if feedback == "" {
+		resolveAuxiliaryModelRepair(task, "delegation_answer")
 		return false, nil
 	}
 	cp := task.Checkpoint
+	chargeAuxiliaryModelRepair(task, "delegation_answer")
 	cp.DelegationAnswerRepairs++
 	if cp.DelegationAnswerRepairs > 2 {
 		task.ErrorCode = "delegation_answer_incomplete"

@@ -20,6 +20,9 @@ window.addEventListener('DOMContentLoaded', () => {
   const style = new CSSStyleSheet();
   style.replaceSync(`:root { --workspace-viewport: calc(100dvh - var(--native-chrome-height, 0px)); }
     body { padding-top: var(--native-chrome-height) !important; box-sizing: border-box; }
+    /* The native terminal owns output scrolling; the covered route retains its
+       scroll position until Back to workspace restores it. */
+    :root[data-native-terminal-visible] { overflow: hidden !important; }
     #offgrid-native-chrome { position: fixed; inset: 0 0 auto; height: var(--native-chrome-height); z-index: 2147483647; background: var(--surface-0, var(--bg, Canvas)); -webkit-app-region: drag; user-select: none; }
     :root[data-compact-chrome] #offgrid-native-chrome { display:none; }
     @media (forced-colors: active) { #offgrid-native-chrome { background: Canvas; } }`);
@@ -98,7 +101,7 @@ window.addEventListener('hashchange',()=>{if(terminalVisible)void ipcRenderer.in
 // Hiding the native view leaves terminal processes and their tabs intact.
 document.addEventListener('click',event=>{
   if(!terminalVisible||event.defaultPrevented||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
-  const target=event.target instanceof Element?event.target.closest('#workspace-sidebar a[href^="#/"], #workspace-sidebar .new-chat-button'):null;
+  const target=event.target instanceof Element?event.target.closest('#workspace-sidebar a[href^="#/"], #workspace-sidebar .new-chat-button, #workspace-sidebar .settings-navigation button'):null;
   if(target&&!target.matches(':disabled,[aria-disabled="true"]'))void ipcRenderer.invoke('terminal-hide').catch(()=>{});
 },true);
 let presentation;
@@ -106,6 +109,16 @@ try { const value = process.argv.find(item => item.startsWith('--offgrid-present
 
 // Expose safe APIs to renderer process
 contextBridge.exposeInMainWorld('electron', {
+  workspaceRecoveryProtocol: 1,
+  getWorkspaceRecovery: () => ipcRenderer.invoke('workspace-recovery-status'),
+  startWorkspaceRecovery: request => ipcRenderer.invoke('workspace-recovery-start', {operation:request?.operation,encryption:request?.encryption}),
+  cancelWorkspaceRecovery: request => ipcRenderer.invoke('workspace-recovery-cancel', {id:request?.id}),
+  resumeWorkspaceAfterRecovery: request => ipcRenderer.invoke('workspace-recovery-resume', {id:request?.id}),
+  onWorkspaceRecovery: callback => {
+    const listener=(_event,state)=>callback(state);
+    ipcRenderer.on('workspace-recovery-state',listener);
+    return ()=>ipcRenderer.removeListener('workspace-recovery-state',listener);
+  },
   commandWindowProtocol: 1,
   getCommandWindow: () => ipcRenderer.invoke('command-window-status'),
   openCommandWindow: () => ipcRenderer.invoke('command-window-open'),
@@ -154,6 +167,10 @@ contextBridge.exposeInMainWorld('electron', {
   getExecutionWorkspace: () => ipcRenderer.invoke('execution-status'),
   stopExecutionWorkspace: () => ipcRenderer.invoke('execution-stop'),
   getComputerStatus: () => ipcRenderer.invoke('computer-status'),
+  browserManualProtocol: 1,
+  browserTaskBindingProtocol: 1,
+  takeoverComputerAccess: request => ipcRenderer.invoke('computer-takeover-access', request),
+  resumeComputerBrowser: request => ipcRenderer.invoke('computer-browser-resume', request),
   startComputerBrowser: request => ipcRenderer.invoke('computer-start', request),
   selectComputerUpload: () => ipcRenderer.invoke('computer-select-upload'),
   discoverComputerApps: request => ipcRenderer.invoke('computer-targets', request),

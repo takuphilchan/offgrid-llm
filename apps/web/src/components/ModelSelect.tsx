@@ -7,9 +7,10 @@ import { SearchField } from './SearchField';
 import { Icon } from './Icon';
 import { compactModelName, readableModelName } from '../features/models/model-display';
 import { modelLibrary, modelProviderDetails } from '../i18n/model-library';
+import { chatReadiness } from '../i18n/chat-readiness';
 import './model-select.css';
 
-export function ModelSelect({ models, value, onChange, compact = false }: { models: Model[]; value: string; onChange: (value: string) => void; compact?: boolean }) {
+export function ModelSelect({ models, value, onChange, onOpenModels, compact = false }: { models: Model[]; value: string; onChange: (value: string) => void; onOpenModels?: () => void; compact?: boolean }) {
   const { messages: text, locale , language} = useI18n(), copy = modelLibrary(locale), runtime = modelProviderDetails(locale);
   const [query, setQuery] = useState('');
   const root = useRef<HTMLDivElement>(null);
@@ -33,8 +34,8 @@ export function ModelSelect({ models, value, onChange, compact = false }: { mode
   return <div ref={root} className="model-select" onKeyDown={navigate}>
     <UtilityPopover label={text.chat.model} triggerClassName="secondary-button model-select-trigger" panelClassName="model-select-panel" panelTabIndex={-1} preferredHeight={360}
       trigger={<><span title={value} className={compact ? 'model-trigger-name' : undefined}>{compact && value ? <><span className="model-label-regular">{compactModelName(value) || text.chat.model}</span><span className="model-label-narrow">{compactModelName(value,14) || text.chat.model}</span></> : value ? readableModelName(value) : text.chat.selectModel}</span><Icon name="chevron-down" size={14} /></>}
-      onOpenChange={open => { if (open) { setQuery(''); root.current?.querySelector<HTMLInputElement>('input[type="search"]')?.focus(); } }}>
-      <SearchField label={copy.filterInstalled} value={query} onChange={setQuery} />
+      onOpenChange={open => { if (open) { setQuery(''); root.current?.querySelector<HTMLElement>('input[type="search"], a[href]')?.focus(); } }}>
+      {!!eligible.length && <SearchField label={copy.filterInstalled} value={query} onChange={setQuery} />}
       <div role="listbox" aria-label={text.chat.model} className="model-select-options">
         {matches.map((model, index) => <button type="button" role="option" aria-selected={model.id === value} tabIndex={model.id === value || !matches.some(m => m.id === value) && index === 0 ? 0 : -1} key={model.id} onClick={() => choose(model.id)}>
           <span className="model-select-name"><strong>{readableModelName(model.id)}</strong>{model.id === value && <Icon name="check" size={16} />}</span>
@@ -42,9 +43,9 @@ export function ModelSelect({ models, value, onChange, compact = false }: { mode
           <small>{model.loaded ? copy.loaded : model.runtime_ready === true ? runtime.ready : model.runtime_ready === false ? `${runtime.ready}: ${runtime.no}` : copy.unchecked}{model.context_window ? ` · ${runtime.context}: ${model.context_window.toLocaleString(language)}` : ''}</small>
         </button>)}
       </div>
-      {!matches.length && <p role="status">{text.history.noMatches}</p>}
+      {!matches.length && <p className="model-select-empty" role="status">{eligible.length ? copy.noMatches : chatReadiness[locale].setup}</p>}
       {value && !eligible.some(model => model.id === value) && <p role="status" dir="auto">{value} · {copy.unknown}</p>}
-      <a className="text-button" href="#/models">{text.nav.models}</a>
+      <a className="text-button model-select-library" href="#/models" onClick={event => { if (onOpenModels) { event.preventDefault(); onOpenModels(); } }}>{text.nav.models}<Icon name="chevron-right" size={15} /></a>
     </UtilityPopover>
   </div>;
 }

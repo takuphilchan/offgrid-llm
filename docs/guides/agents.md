@@ -26,6 +26,59 @@ this computer and workflow qualification. Open setup instructions to copy the
 command and inspect verification steps. Opening or copying these instructions
 does not execute them; clipboard failures appear inside the setup dialog.
 
+### Explicit local model policies
+
+The development API and JSON profile commands accept an optional `model_policy`:
+
+```json
+{"version":1,"mode":"guided","fallback_models":["qualified-local-model"],"perception_model":"qualified-local-vision"}
+```
+
+Omit the entire field to retain the primary-only behavior of existing profiles.
+The policy permits at most two distinct installed local fallbacks. Saving it
+creates an immutable revision; it never downloads a model, authorizes an endpoint,
+or grants tools. The effective-profile response includes the planned context and
+evidence identities. Missing, changed or unqualified resources return a readiness
+issue before admission. Current fallback selection uses locally installed GGUF
+models with matching native-agent workflow qualification. Perception additionally
+requires a projector and full workflow evidence binding preprocessing and projector
+bytes; a scoped text/tool pass does not qualify vision.
+
+Admission selects the primary unless the job explicitly requests a configured,
+qualified fallback. A separate explicit Chat model override keeps its existing
+behavior without inheriting another primary's pool.
+
+In `adaptive` mode, a root task or delegated worker can switch to the next unused configured local
+fallback when the owned response validator rejects a model decision before
+dispatch. The switch, reason, context allocation and exact qualification pin are
+saved before another count or generation. The parent and workers share at most
+two switches and three unresolved corrections. Switching, Resume and explicit
+worker follow-ups preserve those charges; success in another worker cannot clear
+an unresolved correction. Activity history records the switch. Runtime failures,
+missing models and uncertain tool effects do not trigger fallback or replay.
+The next model must retain the same measured tool scope and pass live
+qualification again. Guided mode keeps its explicitly selected model.
+The original accepted Chat model stays in the conversation configuration;
+the effective task model and recorded switch history identify subsequent changes.
+
+Delegated conversation workers keep the current qualified model unless their
+selected child profile explicitly enables a local model pool. The admitted
+child context, adapter and evidence remain pinned through execution and explicit
+follow-ups. Legacy direct profile jobs keep the selected child profile's model.
+Changed qualification stops inference before counting or generation. These
+choices do not grant additional tools or computer access. See the
+[delegated admission evidence](../quality/evidence/delegated-model-pins-2026-11-22.md).
+
+A larger fallback or child context consumes more of the original aggregate input-token
+allowance; it does not enlarge the task or worker budget. Complete acceptance
+verification, additional repair triggers, perception dispatch, dedicated localized
+switch controls and real-model qualification remain unfinished in
+`model-adaptive-execution` tasks 4.2–4.4. See the
+[admission evidence](../quality/evidence/local-model-policy-2026-11-20.md) and
+[switching evidence](../quality/evidence/model-switching-2026-11-22.md). Shared
+accounting, recovery and canonical Chat checks, including unresolved broad-run
+failures, are recorded in the [graph-budget evidence](../quality/evidence/model-graph-budget-2026-11-22.md).
+
 ### Archive or permanently delete a profile
 
 Archiving keeps the profile and its history. In the development build, services

@@ -356,71 +356,6 @@ func (r *Runner) Shutdown(ctx context.Context) error {
 	}
 }
 
-func (r *Runner) persist(task *Task) error {
-	snapshot, err := copyTask(task)
-	if err != nil {
-		return err
-	}
-	steering, inbox := false, false
-	updated, err := r.manager.updateTask(task.ID, func(current *Task) error {
-		if current.Status != TaskRunning {
-			return context.Canceled
-		}
-		if hasConversationHold(current) && current.Checkpoint.ExecutingCall == "" {
-			retainHeldModelSettlement(current.Checkpoint, snapshot.Checkpoint)
-			parkConversationTask(current)
-			inbox = true
-			return nil
-		}
-		// A correction admitted before a new dispatch/final answer wins that
-		// boundary. Do not erase it with a worker's older snapshot. In-flight
-		// results are still recorded first; they must never be replayed.
-		if len(current.PendingInstructions) > 0 && current.Checkpoint.ExecutingCall == "" && (snapshot.Status != TaskRunning || snapshot.Checkpoint.ExecutingCall != "" || len(snapshot.Checkpoint.Calls) > 0) {
-			// Reject the superseded proposal, not the inference cost already
-			// incurred. Persist the charge in the same transaction as the inbox
-			// check so restart/steering cannot recover a spent parent budget.
-			retainHeldModelSettlement(current.Checkpoint, snapshot.Checkpoint)
-			steering = true
-			return nil
-		}
-		snapshot.PendingInstructions = append([]Instruction(nil), current.PendingInstructions...)
-		snapshot.WorkerMessageRequests = current.WorkerMessageRequests
-		snapshot.ConversationHold = current.ConversationHold
-		snapshot.ControlEpoch = max(snapshot.ControlEpoch, current.ControlEpoch)
-		// Host adapters own process charges independently of a model snapshot.
-		if current.Checkpoint != nil && current.Checkpoint.ProcessBudget != nil && snapshot.Checkpoint != nil {
-			snapshot.Checkpoint.ProcessBudget = current.Checkpoint.ProcessBudget
-		}
-		if current.Checkpoint != nil && current.Checkpoint.StorageBudget != nil && snapshot.Checkpoint != nil {
-			snapshot.Checkpoint.StorageBudget = current.Checkpoint.StorageBudget
-		}
-		if snapshot.Checkpoint != nil && current.Checkpoint != nil && snapshot.Checkpoint.ExecutingCall != "" && snapshot.Checkpoint.ExecutingCall == current.Checkpoint.ExecutingCall {
-			snapshot.Checkpoint.ComputerReceipt = current.Checkpoint.ComputerReceipt
-			snapshot.Checkpoint.ExecutionIntent, snapshot.Checkpoint.ExecutionReceipt = current.Checkpoint.ExecutionIntent, current.Checkpoint.ExecutionReceipt
-		}
-		if snapshot.Checkpoint != nil && snapshot.Checkpoint.ExecutingCall == "" {
-			snapshot.Checkpoint.ComputerReceipt, snapshot.Checkpoint.ExecutingCapability = nil, nil
-			snapshot.Checkpoint.ExecutionIntent, snapshot.Checkpoint.ExecutionReceipt = nil, nil
-		}
-		*current = *snapshot
-		return nil
-	})
-	if err == nil {
-		if task.Checkpoint != nil && updated.Checkpoint != nil {
-			task.Checkpoint.ProcessBudget = updated.Checkpoint.ProcessBudget
-			task.Checkpoint.StorageBudget = updated.Checkpoint.StorageBudget
-		}
-		r.observe(updated)
-		if inbox {
-			return errConversationInputPending
-		}
-		if steering {
-			return errSteeringPending
-		}
-	}
-	return err
-}
-
 func (r *Runner) observe(task *Task) {
 	if r.Observer != nil {
 		r.Observer(task)
@@ -588,7 +523,7 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 				if !errors.Is(err, capabilities.ErrApprovalRequired) {
 					var safe *ToolAuthorizationError
 					if errors.As(err, &safe) {
-						if recovery := proposalRecovery(task, call.Function.Name, safe); recovery != "" {
+						if recovery := proposalRecovery(task, call.Function.Name, safe, descriptor); recovery != "" {
 							if err := r.rejectProposal(task, safe, recovery); err != nil {
 								return nil, err
 							}
@@ -648,7 +583,7 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 			if err != nil {
 				var failure *ToolFailure
 				if readOnlyBuiltin(descriptor) {
-					if !capabilities.TrustedNativeRead(descriptor) || !errors.As(err, &failure) {
+					if !(capabilities.TrustedNativeRead(descriptor) || capabilities.TrustedBrowserRead(descriptor)) || !errors.As(err, &failure) {
 						failure = readFailure(err)
 					}
 				} else {
@@ -661,7 +596,7 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 						}
 						continue
 					}
-					if failure.BeforeEffects && failure.Recovery != "" && descriptor.Source == "builtin" && descriptor.Namespace == "tools" {
+					if failure.BeforeEffects && failure.Recovery != "" && ((descriptor.Source == "builtin" && descriptor.Namespace == "tools") || trustedBrowserRepair(descriptor, failure)) {
 						cp.ExecutingCall, cp.ReadOnlyCall, cp.ReadOnlyCapability = "", "", nil
 						cp.PreEffectRepair = true
 						cp.PreEffectRepairTool = call.Function.Name
@@ -745,6 +680,7 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 			}
 			task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, CallID: call.ID, Type: "action", ToolName: call.Function.Name, ToolArgs: string(args), ToolResult: result, Timestamp: time.Now().UTC(), Authorization: authorization})
 			r.assessWorkflow(task)
+			r.resolveAuxiliaryExecutionProgress(task, descriptor)
 			if cp.NativeReadRepair == nil && !cp.WorkflowEditPending && cp.ProposalTool == "computer_open_application" && len(PendingApplicationLaunches(task)) == 0 && (call.Function.Name == "computer_verify_application" || advancedVerifiedApplicationRepair(task, call.Function.Name)) {
 				cp.ProposalRepairs, cp.ProposalUnresolved, cp.ProposalTool = 0, false, ""
 			}
@@ -755,7 +691,7 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 				cp.ProposalRepairs, cp.ProposalUnresolved, cp.ProposalTool = 0, false, ""
 			}
 			paused := recordNativeReadProgress(task, descriptor, call.Function.Name, result)
-			if err := r.persist(task); err != nil {
+			if err := r.persistModelProgress(task); err != nil {
 				return nil, err
 			}
 			if paused {
@@ -763,11 +699,8 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 			}
 			continue
 		}
-		if cp.Iteration+cp.ReservedChildIterations >= task.Config.MaxIterations {
-			return r.fail(task, "Maximum agent iterations reached; task did not complete.")
-		}
-		if r.caller == nil && r.StreamCaller == nil {
-			return r.fail(task, "Model runtime is unavailable.")
+		if stopped, err := r.modelDecisionBoundary(task); stopped || err != nil {
+			return task, err
 		}
 		stepCtx, cancel := context.WithTimeout(ctx, task.Config.TimeoutPerStep)
 		stepCtx = taskSchedulingContext(stepCtx, task)
@@ -867,7 +800,7 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 			}
 			observed := false
 			for _, step := range task.Steps[task.Config.ComputerStepOffset:] {
-				if step.ToolName == observe && step.Type == "action" {
+				if step.ToolName == observe && step.Type == "action" || observe == "browser_observe" && structuredBrowserObservation(step, r.tools) {
 					observed = true
 				}
 				if task.Config.NativeWorkflowVersion == DocumentWorkflowEvidenceVersion && observe == "computer_observe" && step.ToolName == "computer_documents" && step.Type == "action" {
@@ -903,7 +836,7 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 			// exemption is identity-bound and does not skip normal authorization.
 			artifactTool := known && workspaceArtifactCapability(name, descriptor)
 			needsObservation := !task.Config.TaskFirst || !(registryTool || artifactTool)
-			if task.Config.NativeWorkflowVersion == DocumentWorkflowEvidenceVersion && observe == "computer_observe" && name == "computer_documents" {
+			if task.Config.NativeWorkflowVersion == DocumentWorkflowEvidenceVersion && observe == "computer_observe" && name == "computer_documents" || observe == "browser_observe" && known && structuredBrowserRead(name, descriptor) {
 				needsObservation = false
 			}
 			if task.Config.ComputerScope == "desktop" {
@@ -922,7 +855,6 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 				continue
 			}
 		}
-		cp.DecisionRepairs = 0
 		// Give every invocation its own durable identity, including repeated
 		// calls with identical arguments or reused upstream model call IDs.
 		for i := range message.ToolCalls {
@@ -971,7 +903,7 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 				}
 			}
 			if validator, ok := r.tools.(interface{ ValidateExecutionCompletion(*Task) error }); ok {
-				if err := validator.ValidateExecutionCompletion(task); err != nil {
+				if err := validateAuxiliaryExecutionCompletion(task, validator); err != nil {
 					if handled, repairErr := r.repairExecutionCompletion(task, err); handled {
 						if repairErr != nil || task.Status != TaskRunning {
 							return task, repairErr
@@ -1002,8 +934,14 @@ func (r *Runner) executeUntilBoundary(ctx context.Context, task *Task, grant *Ap
 				return settled, err
 			}
 		}
-		if err := r.persist(task); err != nil {
-			return nil, err
+		var persistErr error
+		if task.Status == TaskCompleted {
+			persistErr = r.persistModelProgress(task)
+		} else {
+			persistErr = r.persist(task)
+		}
+		if persistErr != nil {
+			return nil, persistErr
 		}
 		if task.Status == TaskCompleted {
 			return task, nil

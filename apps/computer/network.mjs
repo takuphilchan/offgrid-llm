@@ -31,12 +31,16 @@ export async function pinnedDestination(value, mode = 'direct', resolve = lookup
   return {origin:url.origin, hostname:url.hostname, port:Number(url.port || 443), address:addresses[0].address};
 }
 
-// A loopback-only HTTPS CONNECT relay pins one locally consented destination.
+// A loopback-only HTTPS CONNECT relay pins locally consented destinations.
 // This also blocks redirect escapes: route callbacks alone do not intercept
 // every redirected request. TLS remains end-to-end with Chromium verification.
 // Trusted VPN mode permits only the disclosed 198.18/15 fake-DNS mapping; it
 // does not grant arbitrary private IPs, origins, plaintext HTTP or proxy auth.
 export async function startEgress(destination) {
+  const entries = Array.isArray(destination) ? destination : [destination];
+  if (!entries.length || entries.length > 16) throw Error('browser_scope_invalid');
+  const destinations = new Map(entries.map(item => [`${item.hostname}:${item.port}`, {...item}]));
+  if (destinations.size !== entries.length) throw Error('browser_scope_invalid');
   const sockets = new Set();
   let closed = false;
   const track = socket => {
@@ -50,7 +54,8 @@ export async function startEgress(destination) {
   server.headersTimeout = 10000;
   server.on('connection', socket => {track(socket); if (closed || sockets.size > 128) socket.destroy();});
   server.on('connect', (request, client, head) => {
-    if (closed || sockets.size > 128 || request.url !== `${destination.hostname}:${destination.port}` || head.length) {
+    const destination = destinations.get(request.url);
+    if (closed || sockets.size > 128 || !destination || head.length) {
       client.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return;
     }
     const upstream = track(connect({host:destination.address, port:destination.port}));

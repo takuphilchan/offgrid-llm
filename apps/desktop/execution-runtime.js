@@ -38,7 +38,7 @@ class ExecutionRuntime extends EventEmitter{
       if(pair.protocol!==1||pair.workspace!==identity.workspace_id||pair.actor!==principal||!safeID(pair.actor)||!/^[a-f0-9]{64}$/.test(pair.code))throw Error('execution_pairing_failed');
       this.publish('starting');
       const file=path.join(this.root,process.platform==='win32'?'offgrid-executor.exe':'offgrid-executor');
-      const env={};for(const key of ['PATH','SystemRoot','WINDIR','COMSPEC','PATHEXT','TEMP','TMP','TMPDIR','HOME','USERPROFILE','LOCALAPPDATA','APPDATA','LANG','LC_ALL'])if(process.env[key])env[key]=process.env[key];
+      const env={};for(const key of ['PATH','SystemRoot','WINDIR','COMSPEC','PATHEXT','TEMP','TMP','TMPDIR','HOME','USERPROFILE','LOCALAPPDATA','APPDATA','XDG_CONFIG_HOME','LANG','LC_ALL'])if(process.env[key])env[key]=process.env[key];
       const child=this.spawn(file,['--connect','--state-dir',this.directory],{stdio:['pipe','pipe','pipe'],shell:false,windowsHide:true,env});this.child=child;
       let buffer=Buffer.alloc(0),ready=false,stopped=false,settled=false;
       const result=await new Promise((resolve,reject)=>{
@@ -64,7 +64,7 @@ class ExecutionRuntime extends EventEmitter{
         child.once('error',()=>{if(this.child===child)this.child=null;this.publish('uncertain');finish(Error('execution_host_failed'));});
         child.once('exit',code=>{child.__executionExited=true;if(this.child===child)this.child=null;this.resource=null;this.owner=null;this.publish(code===0&&stopped?'stopped':'uncertain');finish(Error('execution_host_failed'));});
         child.stdin.on('error',()=>finish(Error('execution_host_failed')));
-        child.stdin.write(frame({protocol:1,service,pairing:pair,folder,permissions}));
+        child.stdin.write(frame({protocol:1,service,pairing:pair,folder,permissions,...(this.protectedDirectories?{protected_directories:[...this.protectedDirectories]}:{})}));
       });
       return result;
     }catch(error){if(this.child){try{await this.stop();}catch{/* Keep uncertain stopping visible. */}}else if(generation===this.generation&&this.state!=='uncertain')this.publish('error');throw error;}

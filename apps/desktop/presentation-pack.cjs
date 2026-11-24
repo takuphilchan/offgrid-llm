@@ -2,7 +2,7 @@
 const fs=require('node:fs');
 const path=require('node:path');
 const required=['startup-surface.css','startup-welcome.js','theme-palettes.json','language-registry.json','theme-NOTICE.txt','select-controls.css','terminal-translations.js','terminal-accessibility.js','locale-messages.js'];
-const mapped={'locale-overrides/feature-packs.json':'../web/src/i18n/feature-packs.json'};
+const mapped={'locale-overrides/feature-packs.json':'../web/src/i18n/feature-packs.json','workspace-recovery.json':'../web/src/i18n/workspace-recovery.json'};
 function verify(resources, archive=require('@electron/asar')) {
  const file=path.join(resources,'app.asar');
  for(const name of [...required,...Object.keys(mapped)]){

@@ -278,11 +278,24 @@ offgrid session export "Conversation name" conversation.md
 offgrid export-session "Conversation name" --format json --output conversation.json
 ```
 
-With `OFFGRID_ENABLE_CONVERSATION_PREVIEW` enabled on the service, `offgrid
-session chat` starts a default text conversation without creating or selecting
+Canonical admission is enabled by default on the service. `offgrid session chat`
+starts a default text conversation without creating or selecting
 an agent. `session chat NAME` continues it. Eligible existing text conversations
-are imported transactionally; original session files remain retained. Document
-and image conversations keep their existing admission path during this preview.
+are imported transactionally; original session files remain retained. Canonical
+chat supports new file/image drafts on matching services. Existing historical
+document/image conversations retain their migration gates and admission path.
+An explicit `OFFGRID_ENABLE_CONVERSATION_PREVIEW=false` disables new admission;
+inspection and saved-work controls remain available. The CLI does not silently
+fall back to legacy generation when a matching service has disabled admission.
+
+For a scripted input, `session send NAME --response-profile interactive|extended
+--max-tokens 256 --request-id ID MESSAGE` pins the response context and output
+ceiling. The maximum accepted output setting is 4096 and actual allocation is
+bounded by the chosen context. Canonical services must advertise
+`conversation-input-options-v1` for these explicit options; an older service
+returns an update-required error before submission. Reuse the exact options and
+request identity for an explicit retry. A canonical image/file message can omit
+the caption on a matching service; explicit work and corrections require text.
 
 The canonical chat composer remains usable while inference or work is pending.
 `/new MESSAGE` requests separate work, `/pause`, `/stop`, and `/continue` control
@@ -335,8 +348,31 @@ never starts another attempt.
 input without waiting for inference. A retry with the same ID and payload observes
 the prior input; changed reuse is rejected. Interactive `/retry` retains that
 identity after a transport failure. Use `session show NAME` to inspect results.
-This preview does not yet admit new documents/images into canonical conversations;
-unsupported selections are reported explicitly and are not silently discarded.
+
+In canonical interactive chat, `/attach PATH`, `/attachments`,
+`/preview-attachment N [unit]`, `/retry-attachment N`,
+`/attachment-text-only N`, `/use-attachment ID` and
+`/remove-attachment N|all` use the owning session's retained files. Image drafts
+use `/image PATH`, `/images` and `/remove-image N|all`; `/rag` toggles Knowledge
+retrieval for subsequent messages. Selecting, inspecting, preparing or removing
+a draft source never submits a message or deletes a stored source. An empty
+line with selected files/images submits an ordinary source-only message.
+The service still checks source ownership, exact revisions and model readiness.
+Unsupported capabilities are reported before upload or fresh input submission.
+
+After an unknown source-input result, source edits remain possible, but new text
+cannot replace its saved retry. `/retry` retains the original input identity,
+file revisions and image bytes; receipt recovery repeats neither upload nor
+accepted input. A recovered receipt clears only an unchanged submitted draft,
+preserving later edits. `/discard-retry` explicitly forgets this local retry and
+retains the draft; it does **not** cancel service work. Inspect `/status` and use
+`/stop-input ID` for accepted input. An initial validation rejection before
+admission permits a corrected message with a new identity. A later rejection
+cannot clear earlier uncertainty. Existing source-free text replacement behavior
+is retained. Answers to a pending clarification cannot add sources; remove the
+draft selection or explicitly use `/message MESSAGE` or `/new MESSAGE`.
+`/message` without text sends selected files/images as an ordinary source-only
+discussion, including while a clarification is pending; `/new` requires a task.
 
 Use `session folder NAME SESSION` or interactive `/folder SESSION` to select an
 already approved host folder and reuse its project. No profile is required. The
@@ -452,6 +488,17 @@ Use the exact version of your service/CLI instead of `development` for a version
 build. Set `OFFGRID_EXECUTOR_PACK_DIR` to this absolute asset directory, or package
 it beside the CLI as `execution-runtime`. Do not put private worker assets, grants
 or journals inside the folder granted to the agent. No runtime download occurs.
+
+The matching native `offgrid-executor` binary provides a local diagnostic:
+`offgrid-executor --host-protection-status`. It inspects the fixed account registry
+without creating, repairing or releasing state. JSON pages contain at most 32
+records by default; use `--host-protection-limit 1..64` and pass the returned
+`next` ID as `--host-protection-after ID`. Paths and binding summaries are local
+diagnostics, not service/model inputs; capability secrets are excluded.
+`admission_scope: all` identifies an unresolved location affecting new admissions.
+Busy ownership, damaged storage or a retained recovery journal produce an
+unavailable reason and nonzero exit instead of a stale snapshot. Inspection never
+replays a command, cleans a browser profile or clears an uncertain reservation.
 
 ```sh
 offgrid agent chat --profile PROFILE_ID --workspace-folder /absolute/test-project --workspace-access trusted

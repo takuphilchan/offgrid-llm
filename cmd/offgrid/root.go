@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/takuphilchan/offgrid-llm/internal/cli"
 	"github.com/takuphilchan/offgrid-llm/internal/output"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -94,6 +95,13 @@ func runRoot(ctx context.Context, rawArgs []string, env cli.Environment) int {
 			handleTemplate(args[2:])
 			return 0
 		case "workspace":
+			if len(args) == 3 && args[2] == "--desktop-stdio" {
+				input, ok := env.Stdin.(io.ReadCloser)
+				if !ok {
+					return 2
+				}
+				return runDesktopMaintenance(ctx, input, env.Stdout, getVersion())
+			}
 			return executeCommand(ctx, func(ctx context.Context) error { return runWorkspaceCommand(ctx, args[2:]) })
 		case "completions":
 			handleCompletions(args[2:])
@@ -106,6 +114,13 @@ func runRoot(ctx context.Context, rawArgs []string, env cli.Environment) int {
 		case "openclaw":
 			return reportCommandError(handleOpenClaw(args[2:]), options.JSON, env.Stdout, env.Stderr)
 		case "serve":
+			if len(args) == 3 && args[2] == "--desktop-owned-stdio" {
+				input, ok := env.Stdin.(io.ReadCloser)
+				if !ok {
+					return 2
+				}
+				return serveDesktopOwned(ctx, input, startDefaultServer)
+			}
 			// Fall through to start server
 		default:
 			fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)

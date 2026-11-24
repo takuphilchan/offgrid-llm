@@ -1,6 +1,32 @@
 import { expect, test } from '@playwright/test';
 import { craftFixture } from './helpers/craft-fixture';
 
+for (const host of ['browser', 'full-desktop'] as const) test(`opening the model picker and editing never blank the ${host} workspace`, async ({page}) => {
+  const fixture = await craftFixture(page, 'en', 'light');
+  if (host === 'full-desktop') await page.addInitScript(() => {
+    const state = {mode:'full',shortcut:'',registered:false};
+    Object.assign(window,{electron:{isDesktop:true,getSystemTheme:async()=>'light',onThemeChange:()=>()=>{},getCommandWindow:async()=>state,onCommandWindow:()=>()=>{},setCommandLayout:async()=>state}});
+  });
+  await page.goto('/ui/#/chat/new');
+  const editor=page.locator('.composer textarea'),trigger=page.locator('.model-select-trigger');
+  await expect(editor).toBeVisible();
+  await page.evaluate(() => {
+    const phases:string[]=[];
+    Object.assign(window,{observedPresentationPhases:phases});
+    new MutationObserver(records=>{for (const record of records) phases.push(record.oldValue ?? document.documentElement.dataset.windowTransition ?? '');})
+      .observe(document.documentElement,{attributes:true,attributeFilter:['data-window-transition'],attributeOldValue:true});
+  });
+  await trigger.click();await expect(page.locator('.model-select-panel')).toBeVisible();
+  await expect(page.locator('.app-shell')).toHaveCSS('opacity','1');
+  await page.keyboard.press('Escape');await expect(trigger).toBeFocused();
+  const draft='Keep this question and the workspace visible while I edit it. '.repeat(4);
+  await editor.fill(draft);await expect(editor).toHaveValue(draft);
+  await editor.fill('Short draft');await expect(editor).toHaveValue('Short draft');
+  await expect(page.locator('.app-shell')).toHaveCSS('opacity','1');
+  expect(await page.evaluate(()=>(window as unknown as {observedPresentationPhases:string[]}).observedPresentationPhases)).toEqual([]);
+  expect(fixture.writes).toEqual([]);
+});
+
 for (const locale of ['en', 'ar']) for (const width of [320, 390, 768, 1440]) test(`long model trigger stays inside composer without overlapping controls: ${locale} ${width}`, async ({ page }) => {
   const state = await craftFixture(page, locale, 'light');
   await page.setViewportSize({ width, height: 900 });

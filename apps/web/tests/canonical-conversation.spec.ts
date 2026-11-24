@@ -160,6 +160,65 @@ async function fixture(page: Page, loseAcknowledgment = false) {
   return {inputs, commands, submissions, conversation, session};
 }
 
+const defaultInputCapabilities = ['conversation-inputs-v1', 'conversation-input-admission-v1', 'conversation-input-options-v1', 'conversation-source-inputs-v1', 'session-files-v1'];
+
+test('default canonical admission preserves response options across a lost receipt and reload', async ({page}) => {
+  const f = await fixture(page, true);
+  await page.route('**/api/v2/system', route => route.fulfill({json: {product: 'offgrid', workspace_id: 'craft', capabilities: defaultInputCapabilities}}));
+  await page.addInitScript(() => localStorage.setItem('offgrid.chat.preferences:local', JSON.stringify({profile: 'extended', maxTokens: 256})));
+  let legacyWrites = 0;
+  page.on('request', request => {if (/\/(generate|agent-turn)$/.test(new URL(request.url()).pathname)) legacyWrites++;});
+  await page.goto('/ui/#/chat');
+  await page.locator('.composer textarea').fill('Keep my response settings');
+  await page.locator('.composer-submit').click();
+  await expect.poll(() => f.submissions.length).toBe(1);
+  expect(f.submissions[0].payload).toMatchObject({content: 'Keep my response settings', response_profile: 'extended', max_tokens: 256});
+  expect(f.conversation.preferences.profile_id ?? '').toBe('');
+  await expect(page.locator('.composer-submit')).toHaveAttribute('data-generating', 'false');
+  await page.reload();
+  await expect(page.locator('.composer textarea')).toHaveValue('Keep my response settings');
+  await page.locator('.composer-submit').click();
+  await expect.poll(() => f.submissions.length).toBe(2);
+  expect(f.submissions[1]).toEqual(f.submissions[0]);
+  expect(f.inputs).toHaveLength(1);
+  expect(legacyWrites).toBe(0);
+});
+
+for (const optionsSupported of [true, false]) test(`canonical document-only input requires request-format support: ${optionsSupported}`, async ({page}) => {
+  const f = await fixture(page); f.session.canonical_id = f.conversation.id;
+  await page.route('**/api/v2/system', route => route.fulfill({json: {product: 'offgrid', workspace_id: 'craft', capabilities: defaultInputCapabilities.filter(capability => optionsSupported || capability !== 'conversation-input-options-v1')}}));
+  const attachment = {id: 'file-' + 'a'.repeat(32), name: 'policy.txt', media_type: 'text/plain', bytes: 24, sha256: 'b'.repeat(64), revision: 'c'.repeat(64), status: 'ready'};
+  await page.route('**/v1/sessions/*/attachments', route => route.fulfill({json: route.request().method() === 'GET' ? {attachments: []} : {attachment}}));
+  await page.goto('/ui/#/chat');
+  await expect(page.locator('.composer textarea')).toBeEnabled();
+  await page.locator('input[data-attachment=files]').setInputFiles({name: 'policy.txt', mimeType: 'text/plain', buffer: Buffer.from('Shipment 12345 is exempt.')});
+  await expect(page.locator('.composer .file-attachments')).toContainText('policy.txt');
+  if (!optionsSupported) {
+    await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeDisabled();
+    expect(f.submissions).toHaveLength(0);
+    return;
+  }
+  await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await expect.poll(() => f.submissions.length).toBe(1);
+  expect(f.submissions[0].payload).toMatchObject({content: '', source_session: f.session.name, attachments: [{id: attachment.id, revision: attachment.revision}], response_profile: 'interactive'});
+  expect(f.submissions[0].payload.intent).not.toBe('new_work');
+});
+
+test('disabled default admission retains the draft without invoking legacy generation', async ({page}) => {
+  const f = await fixture(page);
+  await page.route('**/api/v2/system', route => route.fulfill({json: {product: 'offgrid', workspace_id: 'craft', capabilities: defaultInputCapabilities.filter(capability => capability !== 'conversation-input-admission-v1')}}));
+  let rejected = 0, legacyWrites = 0;
+  await page.route('**/api/v2/conversations', route => {rejected++; return route.fulfill({status: 503, json: {error: {message: 'New conversation admission is disabled'}}});});
+  page.on('request', request => {if (/\/(generate|agent-turn)$/.test(new URL(request.url()).pathname)) legacyWrites++;});
+  await page.goto('/ui/#/chat');
+  await page.locator('.composer textarea').fill('Retain my message');
+  await page.locator('.composer-submit').click();
+  await expect.poll(() => rejected).toBe(1);
+  await expect(page.locator('.composer textarea')).toHaveValue('Retain my message');
+  await expect(page.locator('.composer-submit')).toHaveAttribute('data-generating', 'false');
+  expect(legacyWrites).toBe(0); expect(f.submissions).toHaveLength(0);
+});
+
 for(const mode of ['live','buffered','restricted','revoked','reconnected','denied'] as const) test(`canonical response display observes saved work: ${mode}`,async({page})=>{
  const f=await fixture(page);f.session.canonical_id=f.conversation.id;
  f.inputs.push({id:'live-input',sequence:1,conversation_id:f.conversation.id,conversation_revision:1,request_id:'live-request',input:{content:'Explain this idea'},state:'accepted',run_id:'live-run',run_status:'running',accepted_at:new Date().toISOString()});

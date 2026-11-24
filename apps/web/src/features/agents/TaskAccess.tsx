@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   APIError,
   api,
@@ -17,10 +17,13 @@ import {
 } from "../../i18n/native-app";
 import { computerExperience } from "../../i18n/computer-experience";
 import { stopOwnedComputer } from './TaskControls';
-import { draftKey, readDraft, writeDraft } from "../../lib/drafts";
+import { draftKey, readDraft, writeDraft, useDraft } from "../../lib/drafts";
 import { taskAccessText } from '../../i18n/task-access';
 import { TaskDesktopAccess } from './TaskDesktopAccess';
 import { TaskWorkspaceAccess } from './TaskWorkspaceAccess';
+import { additionalBrowserOrigins } from './browser-scope';
+import {useBrowserHandoff} from './browser-handoff';
+import {browserManualText} from '../../i18n/browser-manual';
 
 type Target = { id: string; title: string; driver: string };
 type Policy = ComputerSession["approval_mode"];
@@ -50,6 +53,15 @@ function WindowTaskAccess({
     native = nativeAppText(locale),
     experience = computerExperience(locale);
   const input = run.pending_input!;
+  const handoff=useBrowserHandoff(input.mode==='browser'?input.previous_session:undefined),manualCopy=browserManualText(locale);
+  // This is an intent to check the exact host operation, never an access grant.
+  // Keep it through navigation/lost replies until attachment or explicit Stop
+  // is confirmed; the host revalidates the saved task, actor and previous ID.
+  const resumeIntent=useDraft(workspace,'browser-resume',`${run.run_id}:${input.id}:${input.previous_session??''}`);
+  const resumeRequested=input.mode==='browser'&&!!input.previous_session&&resumeIntent.value===input.previous_session;
+  const setResumeRequested=(value:boolean)=>resumeIntent.setValue(value?input.previous_session??'':'');
+  const resumeRetained=resumeRequested||handoff.state==='manual'||handoff.state==='resuming';
+  const handoffPending=['checking','taking_over','unavailable'].includes(handoff.state);
   const connectionKey = draftKey(
     workspace,
     "task-access",
@@ -66,6 +78,8 @@ function WindowTaskAccess({
   const [launch, setLaunch] = useState(false);
   const [session, setSession] = useState<ComputerSession | null>(null);
   const [url, setURL] = useState(input.url ?? "");
+  const [additionalSites, setAdditionalSites] = useState('');
+  const sitesHelpID = useId();
   const [network, setNetwork] = useState<"direct" | "trusted-vpn">("direct");
   const [upload, setUpload] = useState<{ id: string; name: string } | null>(
     null,
@@ -111,12 +125,21 @@ function WindowTaskAccess({
     try {
       await work(current);
     } catch (reason) {
-      const code = reason instanceof Error ? reason.message : '';
+      // Electron preserves the main-process error code inside its IPC wrapper.
+      // Strip only this host method's wrapper for local presentation.
+      const code = reason instanceof Error ? reason.message.replace(/^Error invoking remote method 'computer-(?:start|browser-resume)': Error: /,'') : '';
+      if(current()&&mounted.current&&code==='consent_declined')setResumeRequested(false);
       const browserFailure = input.mode === 'browser' ? ({
         network_blocked: experience.networkBlocked,
         network_unavailable: experience.networkUnavailable,
         consent_declined: experience.declined,
         stop_unconfirmed: experience.stopUnconfirmed,
+        computer_browser_scope_invalid: experience.invalidScope,
+        computer_browser_scope_changed: experience.scopeChanged,
+        computer_browser_workspace_unsupported: experience.scopeUnsupported,
+        computer_handoff_unconfirmed: manualCopy.unconfirmed,
+        computer_resume_unconfirmed: manualCopy.unconfirmed,
+        computer_browser_manual_unsupported: experience.scopeUnsupported,
       } as Record<string, string>)[code] : undefined;
       if (current() && mounted.current)
         setError(
@@ -139,6 +162,7 @@ function WindowTaskAccess({
   };
   const attach = async (id: string) => {
     await api.resolveJobInput(run.run_id, input.id, id);
+    if(input.mode==='browser')setResumeRequested(false);
     onResolved();
   };
   const allow = () =>
@@ -148,8 +172,10 @@ function WindowTaskAccess({
         await attach(session.id);
         return;
       }
+      const additionalOrigins = input.mode === 'browser'&&!resumeRetained ? additionalBrowserOrigins(additionalSites,url.trim()) : [];
       // A handoff releases only the old session belonging to this saved task.
-      await stopOwnedComputer(input.previous_session);
+      // A retained browser is consumed by renewed host consent instead.
+      if(!resumeRetained)await stopOwnedComputer(input.previous_session);
       if (!current()) return;
       if (input.mode === "app" && !launch && !targets.length) {
         const state = await window.electron!.discoverComputerApps!({
@@ -185,7 +211,13 @@ function WindowTaskAccess({
         return;
       }
       const state =
-        input.mode === "app"
+        resumeRetained
+          ? await (async()=>{
+              if(!input.previous_session||!window.electron?.resumeComputerBrowser)throw Error('computer_browser_manual_unsupported');
+              setResumeRequested(true);
+              return window.electron.resumeComputerBrowser({workspace,runId:run.run_id,requestId:input.id,session:input.previous_session});
+            })()
+          : input.mode === "app"
           ? await window.electron!.startComputerApp!({
               workspace,
               requestId: input.id,
@@ -195,7 +227,9 @@ function WindowTaskAccess({
           : await window.electron!.startComputerBrowser!({
               workspace,
               requestId: input.id,
+              ...(window.electron!.browserTaskBindingProtocol===1?{runId:run.run_id}:{}),
               origin: url.trim(),
+              ...(additionalOrigins.length ? {additionalOrigins} : {}),
               approvalMode: mode,
               networkMode: network,
               ...(upload ? { uploadGrant: upload.id } : {}),
@@ -209,7 +243,8 @@ function WindowTaskAccess({
         ]);
         return;
       }
-      if (!state.target)
+      if(resumeRetained&&state.state==='not_owned'&&mounted.current)setResumeRequested(false);
+      if (state.state!=='ready'||!state.target||(resumeRetained&&state.target.id===input.previous_session))
         throw Error(state.code ?? "computer_session_unavailable");
       writeDraft(connectionKey, state.target.id);
       if (mounted.current)
@@ -229,7 +264,7 @@ function WindowTaskAccess({
     locked.current = true;
     setStopping(true); setBusy(true); setError('');
     const results = await Promise.allSettled([
-      stopOwnedComputer(session?.id, input.id),
+      stopOwnedComputer(session?.id??input.previous_session, input.id),
       session ? api.stopComputerSession(session.id) : Promise.resolve(),
       // Cancel this saved job too, in case its input POST was already accepted.
       api.jobAction(run.run_id, 'cancel'),
@@ -242,6 +277,7 @@ function WindowTaskAccess({
       return;
     }
     writeDraft(connectionKey, '');
+    if(input.mode==='browser')setResumeRequested(false);
     setSession(null); setTargets([]); setTarget('');
     onResolved();
   };
@@ -264,10 +300,12 @@ function WindowTaskAccess({
         </>
       ) : (
         <>
-          {!session && (
+          {!session&&resumeRetained&&<div role="status"><p>{handoff.state==='manual'?manualCopy.manual:manualCopy.pending} {manualCopy.scope}</p><p>{manualCopy.hint}</p><p dir="ltr">{handoff.origin}</p></div>}
+          {!session&&handoffPending&&<p role="status">{handoff.state==='unavailable'?manualCopy.unconfirmed:manualCopy.pending}</p>}
+          {!session && !resumeRetained && (
             <>
               {input.mode === "browser" && (
-                <label className="field">
+                <><label className="field">
                   <span>{experience.website}</span>
                   <input
                     type="url"
@@ -276,6 +314,11 @@ function WindowTaskAccess({
                     disabled={busy}
                   />
                 </label>
+                <label className="field">
+                  <span id={`${sitesHelpID}-label`}>{experience.additionalSites}</span>
+                  <textarea value={additionalSites} onChange={e=>setAdditionalSites(e.target.value)} disabled={busy} rows={3} maxLength={32768} spellCheck={false} dir="ltr" aria-labelledby={`${sitesHelpID}-label`} aria-describedby={sitesHelpID} />
+                  <small id={sitesHelpID}>{experience.additionalSitesHint}</small>
+                </label></>
               )}
               {run.requested_computer_approval_mode ? <div className="field">
                 <span>{taskAccessText(locale).selected}</span>
@@ -373,15 +416,17 @@ function WindowTaskAccess({
             <button
               className="primary-button"
               disabled={
-                busy ||
+                busy || (!session&&handoffPending) ||
                 (!session &&
                   (((launch || targets.length > 0) && !target) ||
-                    (input.mode === "browser" && !url.trim())))
+                    (input.mode === "browser" && !resumeRetained && !url.trim())))
               }
               onClick={() => void allow()}
             >
               {busy
                 ? messages.common.loading
+                : !session&&resumeRetained
+                  ? resumeRequested||handoff.state==='resuming'?manualCopy.check:manualCopy.resume
                 : !session && launch
                   ? native.launch
                   : !session && input.mode === "app" && !targets.length
@@ -409,7 +454,7 @@ function WindowTaskAccess({
                   {native.open}
                 </button>
               )}
-            {(session || targets.length > 0 || busy || error) && (
+            {(session || input.previous_session || targets.length > 0 || busy || error) && (
               <button
                 className="secondary-button"
                 disabled={stopping}

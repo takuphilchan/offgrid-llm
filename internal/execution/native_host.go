@@ -16,6 +16,7 @@ type LocalHostOptions struct {
 	Folder                   string
 	PackDirectory            string
 	StateDirectory           string
+	ProtectedDirectories     []string
 	Version                  string
 	Permissions              Permissions
 	Isolation                IsolationPolicy
@@ -78,7 +79,12 @@ func startLocalHost(ctx context.Context, client *serviceclient.Client, options L
 	if err != nil || !info.IsDir() {
 		return nil, ErrPath
 	}
-	if err = PrivateStateOutsideRoot(root, options.PackDirectory, options.StateDirectory); err != nil {
+	protected, err := protectedHostDirectories(options.ProtectedDirectories)
+	if err != nil {
+		return nil, err
+	}
+	protected = append(protected, options.PackDirectory, options.StateDirectory)
+	if err = PrivateStateDisjointFromRoot(root, protected...); err != nil {
 		return nil, err
 	}
 	pack, _, err := LoadPack(options.PackDirectory, options.Version)

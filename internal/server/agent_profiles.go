@@ -23,11 +23,12 @@ type profileResourceIssue struct {
 }
 
 type effectiveAgentProfile struct {
-	Profile      *agents.AgentProfile               `json:"profile"`
-	Ready        bool                               `json:"ready"`
-	Issues       []profileResourceIssue             `json:"issues"`
-	Capabilities map[string]capabilities.Descriptor `json:"capabilities"`
-	Children     map[string]*effectiveAgentProfile  `json:"children,omitempty"`
+	Profile        *agents.AgentProfile               `json:"profile"`
+	Ready          bool                               `json:"ready"`
+	Issues         []profileResourceIssue             `json:"issues"`
+	Capabilities   map[string]capabilities.Descriptor `json:"capabilities"`
+	Children       map[string]*effectiveAgentProfile  `json:"children,omitempty"`
+	ModelSelection *agents.ModelPolicySelection       `json:"model_selection,omitempty"`
 }
 
 func (s *Server) profileAdmin(r *http.Request) bool {
@@ -59,6 +60,10 @@ func (s *Server) profileToolCatalog(r *http.Request) map[string]capabilities.Des
 }
 
 func (s *Server) effectiveProfile(r *http.Request, profile *agents.AgentProfile, ancestors map[string]bool, depth int, count *int, restrictions *agentResourceRestrictions) *effectiveAgentProfile {
+	return s.effectiveProfileAtWindow(r, profile, ancestors, depth, count, restrictions, s.modelContextWindow)
+}
+
+func (s *Server) effectiveProfileAtWindow(r *http.Request, profile *agents.AgentProfile, ancestors map[string]bool, depth int, count *int, restrictions *agentResourceRestrictions, window func(string) int) *effectiveAgentProfile {
 	effective := &effectiveAgentProfile{Profile: profile, Ready: true, Issues: []profileResourceIssue{}, Capabilities: map[string]capabilities.Descriptor{}}
 	original := profile
 	issue := func(kind, ref, code, message string) {
@@ -84,10 +89,18 @@ func (s *Server) effectiveProfile(r *http.Request, profile *agents.AgentProfile,
 		} else if profile.Settings.Computer || len(profile.Settings.Tools) != 0 || len(profile.Settings.Delegates) != 0 || len(profile.Settings.Skills) != 0 {
 			issue("model", profile.Settings.Model, "native_tools_unqualified", "This native model is qualified for text only. Remove computer access, tools, and collaborators or select a qualified tool-calling model.")
 		}
-	} else if _, err := s.registry.GetChatModel(profile.Settings.Model); err != nil {
+	} else if _, err := s.localChatMetadata(profile.Settings.Model); err != nil {
 		issue("model", profile.Settings.Model, "model_unavailable", "Select an installed chat model. No model was downloaded.")
 	}
 	s.checkProfileSkills(profile, issue)
+	if profile.Settings.ModelPolicy != nil {
+		selection, problem := s.resolveProfileModelPolicy(r.Context(), original.Settings, original.Settings.Model, window)
+		if problem != nil {
+			issue(problem.Kind, problem.Reference, problem.Code, problem.Message)
+		} else {
+			effective.ModelSelection = selection
+		}
+	}
 	if profile.Settings.Computer && !s.profileAdmin(r) {
 		issue("computer", "desktop", "computer_admin_required", "Computer control currently requires workspace administrator permission.")
 	}
@@ -134,7 +147,7 @@ func (s *Server) effectiveProfile(r *http.Request, profile *agents.AgentProfile,
 				}
 			}
 			childRestrictions := intersectChildRestrictions(profile, child)
-			resolved := s.effectiveProfile(r, child, ancestors, depth+1, count, childRestrictions)
+			resolved := s.effectiveProfileAtWindow(r, child, ancestors, depth+1, count, childRestrictions, window)
 			effective.Children[id] = resolved
 			if !resolved.Ready {
 				issue("delegate", id, "delegate_unavailable", "A delegated profile has unavailable resources.")
@@ -186,14 +199,21 @@ func (s *Server) applyJobProfile(w http.ResponseWriter, r *http.Request, req *jo
 	if req.ConversationModelOverride && req.Model != "" {
 		view := *profile
 		view.Settings.Model = req.Model
+		// This view checks the separately selected model's readiness. The
+		// original immutable pool is checked and pinned after context planning.
+		view.Settings.ModelPolicy = nil
 		readinessProfile = &view
 	}
-	effective := s.effectiveProfile(r, readinessProfile, map[string]bool{}, 0, &count, req.Restrictions)
+	window := s.modelContextWindow
+	if req.ResponseProfile != "" {
+		window = func(id string) int { return s.chatContextWindowForModel(req.ResponseProfile, id) }
+	}
+	effective := s.effectiveProfileAtWindow(r, readinessProfile, map[string]bool{}, 0, &count, req.Restrictions, window)
 	if !effective.Ready {
 		writeJSON(w, 422, effective)
 		return false
 	}
-	if !req.ConversationModelOverride && req.Model != "" && req.Model != profile.Settings.Model {
+	if !req.ConversationModelOverride && req.Model != "" && !profile.Settings.ModelPolicy.Allows(profile.Settings.Model, req.Model) {
 		writeJobError(w, 409, "profile_model_mismatch", "Use this profile's installed model or save a new profile revision.", false)
 		return false
 	}
@@ -232,6 +252,9 @@ func (s *Server) applyJobProfile(w http.ResponseWriter, r *http.Request, req *jo
 	for id, child := range effective.Children {
 		childConfig := agents.DefaultAgentConfig()
 		childConfig.Profile, childConfig.Instructions = child.Profile, child.Profile.Settings.Instructions
+		if !s.pinDelegateModelPolicy(w, r, child, window, &childConfig) {
+			return false
+		}
 		childConfig.AllowedCapabilities, childConfig.MaxIterations = child.Capabilities, child.Profile.Settings.MaxIterations
 		for name, descriptor := range childConfig.AllowedCapabilities {
 			if config.AllowedCapabilities[name] != descriptor {

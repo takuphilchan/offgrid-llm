@@ -19,7 +19,7 @@ const uiBuild=createHash('sha256').update((await readFile(join(ui,'index.html'),
 const directory=await mkdtemp(join(tmpdir(),'offgrid-packaged-browser-'));
 const pairingCode='b'.repeat(64);let paired=false;let stopped=false;let next=null;const replies=[];
 const runId='run-'+'a'.repeat(32);let inputId='input-1';let attached=false;const attachments=[];
-const snapshot=()=>({run_id:runId,task_id:runId,prompt:'Complete the owned browser practice form',model:'fixture-model',status:attached?'paused':'waiting_for_input',steps:[],output:'',pending_input:attached?null:{id:inputId,call_id:'call-1',kind:'computer',mode:'browser',target:'Owned practice page',url:'demo'}});
+const snapshot=()=>({run_id:runId,task_id:runId,prompt:'Complete the owned browser practice form',model:'fixture-model',status:attached?'paused':'waiting_for_input',steps:[],output:'',pending_input:attached?null:{id:inputId,call_id:'call-1',kind:'computer',mode:'browser',target:'Owned practice page',url:'offgrid-demo://research'}});
 const session={id:'packaged-session',origin:'offgrid-demo://research',state:'ready',remaining_actions:100,expires_at:new Date(Date.now()+600000).toISOString()};
 let finished,failed;const completion=new Promise((res,rej)=>{finished=res;failed=rej;});
 completion.catch(()=>{}); // A UI failure may precede the awaited protocol result.

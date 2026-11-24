@@ -238,6 +238,9 @@ func New(cfg *config.Config) (_ *Runtime, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := transport.InstallConfiguredHTTPEndpoints(); err != nil {
+		return nil, err
+	}
 	if err := transport.InstallMeasuredAgentTools(); err != nil {
 		// Keep conversation and the compatibility adapter available. Saved jobs
 		// with a native pin fail closed when no policy was installed.

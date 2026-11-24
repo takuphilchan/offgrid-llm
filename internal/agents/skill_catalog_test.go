@@ -1,10 +1,33 @@
 package agents
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/takuphilchan/offgrid-llm/internal/agentcontext"
 )
+
+func TestSkillMetadataReferencePreservesOwnedOlderRevision(t *testing.T) {
+	m := NewManagerWithPersistence(nil, nil, nil, t.TempDir())
+	files := []agentcontext.SkillFile{{Path: "SKILL.md", Content: []byte("---\nname: checked\ndescription: Check the result\n---\nRetain this older guidance.\n")}}
+	first, err := m.ImportSkill("workspace", "alice", "", 0, files, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files[0].Content = append(files[0].Content, []byte("Newer guidance.\n")...)
+	second, err := m.ImportSkill("workspace", "alice", first.ID, first.Revision, files, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.SkillReferenceAvailable("workspace", "alice", first.SkillReference) || !m.SkillReferenceAvailable("workspace", "alice", second.SkillReference) || m.SkillReferenceAvailable("workspace", "bob", first.SkillReference) || m.SkillReferenceAvailable("other", "alice", first.SkillReference) {
+		t.Fatal("metadata ownership or immutable revision lost")
+	}
+	changed := first.SkillReference
+	changed.Digest = strings.Repeat("0", 64)
+	if m.SkillReferenceAvailable("workspace", "alice", changed) {
+		t.Fatal("changed digest accepted")
+	}
+}
 
 func TestSkillCatalogMetadataIsScopedAndContentLoadsByPinnedDigest(t *testing.T) {
 	m := NewManagerWithPersistence(nil, nil, nil, t.TempDir())

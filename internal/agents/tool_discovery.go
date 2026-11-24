@@ -122,7 +122,10 @@ func (r *Runner) discoverTools(ctx context.Context, task *Task, arguments string
 		Offset int     `json:"offset"`
 	}
 	if err := decodeRuntimeArguments(arguments, &query); err != nil || query.Query == nil || len(*query.Query) > 256 || !utf8.ValidString(*query.Query) || strings.ContainsAny(*query.Query, "\x00\r\n") || query.Offset < 0 {
-		return "", fmt.Errorf("use query (at most 256 UTF-8 bytes) and a nonnegative offset")
+		return "", &runtimeArgumentError{cause: fmt.Errorf("use query (at most 256 UTF-8 bytes) and a nonnegative offset")}
+	}
+	if conversationMetadataDiscovery(task) {
+		return r.discoverConversationTools(ctx, task, *query.Query, query.Offset)
 	}
 	tools := r.authorizedTools(ctx, task)
 	if err := ctx.Err(); err != nil {
@@ -248,7 +251,7 @@ func (r *Runner) relevantTools(task *Task, tools []api.Tool) []api.Tool {
 			break
 		}
 	}
-	if count == len(optional) {
+	if count == len(optional) && !conversationMetadataDiscovery(task) {
 		// Every authorized optional schema is already visible. A second tool
 		// search cannot reveal anything and invites small models to search for
 		// applications in the wrong catalog instead of acting or answering.

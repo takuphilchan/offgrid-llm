@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"errors"
 	"os/exec"
 	"sync"
 	"syscall"
@@ -11,20 +12,66 @@ import (
 
 // Start suspended, assign to an owned kill-on-close job, then resume. This
 // avoids letting a running child spawn outside the job before assignment.
-func startOwned(command *exec.Cmd) (func() error, func() error, func(), error) {
+func startOwned(command *exec.Cmd) (func() error, func() error, func() error, error) {
+	return startOwnedJob(command, true)
+}
+
+// The unobserved path exists only for a deterministic missed-notification test;
+// production callers always enable discovery before assigning the first member.
+func startOwnedJob(command *exec.Cmd, observe bool) (func() error, func() error, func() error, error) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	var lifecycle sync.Mutex
 	closed := false
-	release := func() {
+	jobClosed := false
+	members := map[uint32]windows.Handle{}
+	var watch *executionJobWatch
+	memberMu := &sync.Mutex{}
+	closeHandles := func() {
+		for pid, handle := range members {
+			windows.CloseHandle(handle)
+			delete(members, pid)
+		}
+	}
+	release := func() error {
 		lifecycle.Lock()
 		defer lifecycle.Unlock()
-		if !closed {
-			closed = true
-			windows.CloseHandle(job)
+		if closed {
+			return nil
 		}
+		if !jobClosed {
+			memberMu.Lock()
+			stopErr := stopExecutionJob(job, members)
+			memberMu.Unlock()
+			if watch != nil {
+				if err := watch.drain(); err != nil {
+					return errors.Join(stopErr, err)
+				}
+			}
+			memberMu.Lock()
+			settleErr := settleExecutionJob(job, members)
+			if watch != nil {
+				settleErr = errors.Join(settleErr, watch.fault)
+			}
+			memberMu.Unlock()
+			if err := errors.Join(stopErr, settleErr); err != nil {
+				return err
+			}
+			if err := windows.CloseHandle(job); err != nil {
+				return err
+			}
+			jobClosed = true
+		}
+		if watch != nil {
+			if err := watch.close(); err != nil {
+				return err
+			}
+		}
+		closed = true
+		closeHandles()
+		return nil
 	}
 	info := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{}
 	info.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
@@ -32,24 +79,47 @@ func startOwned(command *exec.Cmd) (func() error, func() error, func(), error) {
 		release()
 		return nil, nil, nil, err
 	}
+	if observe {
+		watch, err = newExecutionJobWatch(job, members)
+		if err != nil {
+			windows.CloseHandle(job)
+			return nil, nil, nil, err
+		}
+		memberMu = &watch.mu
+	}
 	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_SUSPENDED | windows.CREATE_NEW_PROCESS_GROUP, HideWindow: true}
 	if err = command.Start(); err != nil {
 		release()
 		return nil, nil, nil, err
 	}
-	fail := func(e error) (func() error, func() error, func(), error) {
+	fail := func(e error) (func() error, func() error, func() error, error) {
 		command.Process.Kill()
 		command.Wait()
-		release()
+		if cleanupErr := release(); cleanupErr != nil {
+			// The caller retains launch uncertainty; these capabilities must
+			// not leak after a failed construction with no returned owner.
+			if !jobClosed {
+				windows.CloseHandle(job)
+			}
+			if watch == nil || watch.close() == nil {
+				closeHandles()
+			}
+			e = errors.Join(e, errProcessCleanupUncertain, cleanupErr)
+		}
 		return nil, nil, nil, e
 	}
-	process, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(command.Process.Pid))
+	process, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE|windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.SYNCHRONIZE, false, uint32(command.Process.Pid))
 	if err != nil {
 		return fail(err)
 	}
+	memberMu.Lock()
 	err = windows.AssignProcessToJobObject(job, process)
-	windows.CloseHandle(process)
+	if err == nil {
+		members[uint32(command.Process.Pid)] = process
+	}
+	memberMu.Unlock()
 	if err != nil {
+		windows.CloseHandle(process)
 		return fail(err)
 	}
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPTHREAD, 0)
@@ -85,6 +155,13 @@ func startOwned(command *exec.Cmd) (func() error, func() error, func(), error) {
 		if closed {
 			return nil
 		}
-		return windows.TerminateJobObject(job, 1)
+		if jobClosed {
+			return ErrHostUnavailable
+		}
+		memberMu.Lock()
+		defer memberMu.Unlock()
+		return stopExecutionJob(job, members)
 	}, command.Wait, release, nil
 }
+
+func nativeCleanupVerified(err error) bool { return err == nil }

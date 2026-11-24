@@ -7,6 +7,24 @@ import (
 	"github.com/takuphilchan/offgrid-llm/internal/agentcontext"
 )
 
+// SkillReferenceAvailable checks only owner/revision metadata. Unlike GetSkill
+// and SkillRevision it never loads package contents, even for an older pin.
+func (m *Manager) SkillReferenceAvailable(workspace, actor string, ref agentcontext.SkillReference) bool {
+	if !validProfileOwner(workspace, actor) || !ref.Valid() {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	db, err := m.contextDatabase()
+	if err != nil {
+		return false
+	}
+	defer db.Close()
+	var exists int
+	err = db.QueryRow(`SELECT 1 FROM agent_context_skills s JOIN agent_context_skill_revisions r ON r.skill_id=s.id WHERE s.workspace=? AND s.actor=? AND s.id=? AND r.revision=? AND r.digest=? AND s.draft=0`, workspace, actor, ref.ID, ref.Revision, ref.Digest).Scan(&exists)
+	return err == nil && exists == 1
+}
+
 // Catalog discovery transfers metadata, never package contents. Content and
 // digest validation still happen through GetSkill when a selected file loads.
 // The bounded snapshot is pinned into the run before the model sees it.

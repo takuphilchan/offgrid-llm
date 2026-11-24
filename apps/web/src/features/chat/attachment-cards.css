@@ -6,6 +6,10 @@
 .file-summary .file-type-mark{display:flex;align-items:center;justify-content:center;gap:8px;height:70px;color:var(--muted);background:color-mix(in srgb,var(--surface-2) 65%,var(--surface-1))}
 .file-type-mark>span{font-size:10px;letter-spacing:.04em;font-weight:600}
 .file-summary-copy{display:block;min-width:0;padding:9px 12px 10px}
+.file-attachments>li:not([data-state=ready]) .file-summary{display:flex;align-items:center;gap:10px;padding:12px 36px 12px 12px}
+.file-attachments>li:not([data-state=ready]) .file-type-mark{flex:none;width:32px;height:40px;flex-direction:column;gap:2px;background:transparent}
+.file-attachments>li:not([data-state=ready]) .file-type-mark svg{width:22px;height:22px}
+.file-attachments>li:not([data-state=ready]) .file-summary-copy{flex:1;padding:0}
 .file-summary strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--type-meta);font-weight:500}
 .file-summary small{display:block;margin-top:3px;color:var(--muted);font-size:var(--type-caption);line-height:1.4}
 .file-open:hover{background:var(--surface-2)}

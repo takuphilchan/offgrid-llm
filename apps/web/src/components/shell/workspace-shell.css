@@ -131,3 +131,11 @@
   }
   @media (pointer: coarse) { .sidebar-create .new-chat-button { width: 44px; height: 44px; min-height: 44px; } }
 }
+
+@layer workspace {
+ /* Expose the existing command palette and shortcut on roomy workspaces. */
+ @media(min-width:1200px) {
+  .topbar-actions > .command-trigger { width:auto; gap:12px; padding-inline:12px; border:1px solid var(--line); }
+  .topbar-actions > .command-trigger > span, .topbar-actions > .command-trigger > kbd { display:inline; }
+ }
+}

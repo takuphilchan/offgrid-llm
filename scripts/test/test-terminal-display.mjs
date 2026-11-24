@@ -104,6 +104,7 @@ try{
  await expect(page.locator('#context-output')).toHaveValue('sample café 日本語');
  await expect(page.locator('#context-state')).toContainText('exit 7');
  await page.locator('#context-output').fill('redacted output');
+ assert.ok((await page.locator('#context-output').boundingBox()).height<100,'A short output must not become a large empty editor');
  await page.locator('#context-question').fill('Explain this');
  await page.screenshot({path:join(evidence,'command-context-review.png')});
  await page.locator('#context-share').click();
@@ -112,6 +113,11 @@ try{
  assert.equal(await page.evaluate(()=>fixtureCalls.filter(c=>c.action==='input').length),0);
  await page.locator('#commands').click();await page.setViewportSize({width:400,height:450});
  assert.equal(await page.evaluate(()=>{const d=document.querySelector('#terminal-commands'),r=d.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth;}),true);
+ await page.locator('#context-output').scrollIntoViewIfNeeded();
+ assert.ok((await page.locator('#context-output').boundingBox()).height>=50,'Short windows retain a readable content-sized output editor');
+ await page.screenshot({path:join(evidence,'command-context-narrow-output.png')});
+ await page.locator('#context-question').fill('Explain this');
+ await page.locator('#context-share').scrollIntoViewIfNeeded();
  await expect(page.locator('#context-share')).toBeInViewport();
  await page.screenshot({path:join(evidence,'command-context-narrow.png')});
  await page.keyboard.press('Escape');
@@ -175,13 +181,14 @@ try{
   const palette={...catalog.themes[id][mode],ansi};
   await page.evaluate(({mode,palette})=>fixtureEvent({type:'appearance',theme:mode,palette,reduceMotion:true}),{mode,palette});
   const actual=await page.evaluate(()=>({theme:tabs.get(current).term.options.theme,blink:tabs.get(current).term.options.cursorBlink}));
-  assert.equal(actual.theme.background,palette['surface-0']);assert.equal(actual.theme.cursorAccent,palette['surface-0']);
+  assert.equal(actual.theme.background,palette['surface-1']);assert.equal(actual.theme.cursorAccent,palette['surface-1']);
   await expect(page.locator('html')).toHaveCSS('background-color',cssColor(palette['surface-0']));
   await expect(page.locator('body')).toHaveCSS('background-color',cssColor(palette['surface-1']));
   await expect(page.locator('body')).toHaveCSS('border-top-left-radius','20px');
   await expect(page.locator('body')).toHaveCSS('border-top-right-radius','20px');
-  await expect(page.locator('.pane')).toHaveCSS('background-color',cssColor(palette['surface-0']));
-  await expect(page.locator('.pane')).toHaveCSS('border-radius','20px');
+  await expect(page.locator('.pane')).toHaveCSS('background-color',cssColor(palette['surface-1']));
+  await expect(page.locator('.pane')).toHaveCSS('border-radius','0px');
+  await expect(page.locator('.pane')).toHaveCSS('border-width','0px');
   await expect(page.locator('.terminal-surface')).toHaveCSS('border-radius','0px');
   for(const [key,color] of Object.entries(ansi))assert.equal(actual.theme[key],color);
   assert.equal(actual.blink,false);
@@ -190,12 +197,12 @@ try{
  await page.screenshot({path:join(evidence,'established-palette-terminal.png')});
  await page.locator('#commands').click();
  const commandDialog=page.locator('#terminal-commands');
- const commandTokens=await page.evaluate(()=>Object.fromEntries(['bg','accent-strong'].map(key=>[key,getComputedStyle(document.documentElement).getPropertyValue(`--${key}`).trim()])));
- await expect(commandDialog).toHaveCSS('background-color',cssColor(commandTokens.bg));
- await expect(commandDialog).toHaveCSS('border-radius','18px');
- await expect(page.locator('#context-jump')).toHaveCSS('min-height','40px');
- await expect(page.locator('#context-jump')).toHaveCSS('border-radius','10px');
- await expect(page.locator('#context-share')).toHaveCSS('background-color',cssColor(commandTokens['accent-strong']));
+ const commandTokens=await page.evaluate(()=>Object.fromEntries(['canvas','fg'].map(key=>[key,getComputedStyle(document.documentElement).getPropertyValue(`--${key}`).trim()])));
+ await expect(commandDialog).toHaveCSS('background-color',cssColor(commandTokens.canvas));
+ await expect(commandDialog).toHaveCSS('border-radius','16px');
+ await expect(page.locator('#context-jump')).toHaveCSS('min-height','32px');
+ await expect(page.locator('#context-jump')).toHaveCSS('border-radius','8px');
+ await expect(page.locator('#context-share')).toHaveCSS('background-color',cssColor(commandTokens.fg));
  await page.screenshot({path:join(evidence,'command-context-palette.png')});
  await page.keyboard.press('Escape');
  await page.emulateMedia({forcedColors:'active'});
@@ -289,7 +296,13 @@ try{
   await expect(page.locator('#terminal-error-details summary')).toHaveText(terminalCopy.text(locale,'Technical details'));
   await expect(page.locator('#terminal-error-text')).toHaveText('fixture_backend_error: original diagnostic <untrusted>');
   await expect(page.locator('#terminal-error-text untrusted')).toHaveCount(0);
+  await expect(page.locator('#chat')).toHaveAccessibleName(terminalCopy.text(locale,'Back to workspace'));
+  await expect(page.locator('#hide')).toHaveAccessibleName(terminalCopy.text(locale,'Back to workspace'));
  }
+ const beforeReturn=await page.evaluate(()=>({calls:fixtureCalls.length,ids:[...tabs.keys()],selected:current}));
+ await page.locator('#chat').click();
+ const afterReturn=await page.evaluate(start=>({actions:fixtureCalls.slice(start).map(call=>call.action),ids:[...tabs.keys()],selected:current}),beforeReturn.calls);
+ assert.deepEqual(afterReturn,{actions:['hide'],ids:beforeReturn.ids,selected:beforeReturn.selected});
  assert.deepEqual(errors,[]);
  console.log(JSON.stringify({passed:true,evidence,checks:['existing/new tabs','no settings keystrokes to PTY','focus restoration','persistence/reload','reset','reduced motion','forced colors','narrow dialog','command output snapshot','edited context sharing','search counts and empty-query decoration cleanup','running command completion','private edits retained on shell events','failed handoff retention','duplicate handoff guard','late acknowledgement isolation','empty command output'],nativePTY:false}));
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

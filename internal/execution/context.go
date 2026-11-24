@@ -55,6 +55,8 @@ type Context struct {
 
 type Session struct {
 	mu            sync.Mutex
+	environment   processEnvironmentSnapshot
+	startProcess  ownedProcessStarter
 	root          *os.Root
 	config        Context
 	jobs          map[string]bool
@@ -69,6 +71,10 @@ func validIdentity(value string) bool {
 // OpenSession is a host-side authority constructor. Call it only after local
 // approval; a service/renderer must not turn arbitrary submitted JSON into it.
 func OpenSession(config Context) (*Session, error) {
+	return openSessionEnvironment(config, captureProcessEnvironment())
+}
+
+func openSessionEnvironment(config Context, environment processEnvironmentSnapshot) (*Session, error) {
 	if config.ProjectHostID != "" && (config.Backend != "local" || !validCredential(config.ProjectHostID)) {
 		return nil, ErrAuthority
 	}
@@ -88,7 +94,7 @@ func OpenSession(config Context) (*Session, error) {
 	if config.Directory == "" {
 		config.Directory = "."
 	}
-	s := &Session{root: root, config: config, jobs: map[string]bool{b.Job: true}, revokedSignal: make(chan struct{})}
+	s := &Session{root: root, config: config, environment: environment.clone(), jobs: map[string]bool{b.Job: true}, revokedSignal: make(chan struct{})}
 	path, err := s.resolve(config.Directory, ".")
 	if err == nil {
 		var info os.FileInfo

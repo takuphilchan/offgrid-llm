@@ -13,7 +13,11 @@ export class DispatchJournal {
   constructor(path) {
     this.db = new DatabaseSync(path);
     try {
-      this.db.exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON');
+      // DELETE-mode commits also need the journal-directory sync: FULL alone
+      // can lose the last tombstone on a subsequent power failure. Hardware/VFS
+      // qualification remains separate from these enforced connection settings.
+      this.db.exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=EXTRA; PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON');
+      if(this.db.prepare('PRAGMA journal_mode').get().journal_mode!=='delete'||this.db.prepare('PRAGMA synchronous').get().synchronous!==3)throw Error('journal_durability_unavailable');
       const version = this.db.prepare('PRAGMA user_version').get().user_version;
       if (version !== 0 && version !== 2) throw Error('journal_incompatible');
       const integrity = this.db.prepare('PRAGMA quick_check').get().quick_check;
@@ -50,7 +54,9 @@ export class DispatchJournal {
         this.db.exec('COMMIT');
         return {execute:false, reply:JSON.parse(previous.reply)};
       }
-      this.db.prepare('INSERT INTO dispatch(id,hash,status,binding) VALUES(?,?,?,?)').run(action.id,hash,'dispatched',scope);
+      const written=this.db.prepare('INSERT INTO dispatch(id,hash,status,binding) VALUES(?,?,?,?)').run(action.id,hash,'dispatched',scope);
+      const stored=this.db.prepare('SELECT hash,status,binding,reply FROM dispatch WHERE id=?').get(action.id);
+      if(written.changes!==1||!stored||stored.hash!==hash||stored.status!=='dispatched'||stored.binding!==scope||stored.reply!==null)throw Error('action_uncertain');
       this.db.exec('COMMIT');
       return {execute:true};
     } catch (error) { try { this.db.exec('ROLLBACK'); } catch {} throw error; }
@@ -59,8 +65,16 @@ export class DispatchJournal {
   complete(id, reply) {
     if (reply.id !== id || typeof reply.result !== 'string' || Buffer.byteLength(reply.result) > 48 * 1024 ||
         (reply.error !== undefined && (typeof reply.error !== 'string' || Buffer.byteLength(reply.error) > 1024))) throw Error('invalid_result');
-    const changed = this.db.prepare("UPDATE dispatch SET status='completed',reply=? WHERE id=? AND status='dispatched'").run(JSON.stringify(reply),id);
-    if (changed.changes !== 1) throw Error('action_conflict');
+    const encoded=JSON.stringify(reply);
+    this.db.exec('BEGIN IMMEDIATE');
+    try{
+      const before=this.db.prepare('SELECT hash,status,binding FROM dispatch WHERE id=?').get(id);
+      const changed = this.db.prepare("UPDATE dispatch SET status='completed',reply=? WHERE id=? AND status='dispatched'").run(encoded,id);
+      if (changed.changes !== 1) throw Error('action_conflict');
+      const stored=this.db.prepare('SELECT hash,status,binding,reply FROM dispatch WHERE id=?').get(id);
+      if(!before||!stored||stored.hash!==before.hash||stored.binding!==before.binding||stored.status!=='completed'||stored.reply!==encoded)throw Error('action_uncertain');
+      this.db.exec('COMMIT');
+    }catch(error){try{this.db.exec('ROLLBACK');}catch{}throw error;}
   }
 
   // Results may contain page text. Retain them only for the live session; keep

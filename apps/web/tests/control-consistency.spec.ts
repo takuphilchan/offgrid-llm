@@ -113,7 +113,7 @@ test('search, chat agent and document controls share sizing and keyboard focus',
   await page.goto('/ui/#/chat');
   await page.getByRole('button',{name:'Response settings',exact:true}).click();
   await expect(page.getByRole('button',{name:'Agent',exact:true})).toHaveCSS('min-height', '32px');
-  await expect(page.locator('.composer')).toHaveCSS('border-radius', '24px');
+  await expect(page.locator('.composer')).toHaveCSS('border-radius', '20px');
   await page.goto('/ui/#/knowledge');
   const controls = ['Add document', 'Ask using Knowledge', 'Manage Knowledge'].map(name => page.getByRole('button', { name, exact: true }));
   for (const control of controls) {

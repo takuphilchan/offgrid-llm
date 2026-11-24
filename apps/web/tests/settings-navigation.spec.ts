@@ -189,7 +189,8 @@ for (const locale of Object.keys(settingsNavigation) as (keyof typeof settingsNa
     const copy = settingsNavigation[locale];
     const search = page.getByRole('searchbox', { name: copy.search });
     await search.fill(copy.sections[3]);
-    await expect(page.locator('.settings-content').getByRole('heading', { name: copy.sections[3], exact: true })).toBeVisible();
+    await expect(page.locator('.settings-results a[href="#/settings/terminal"]')).toBeVisible();
+    await expect(page.locator('.settings-content').getByRole('heading', { name: copy.sections[3], exact: true })).toBeHidden();
     await search.fill('no-matching-setting-xyz');
     await expect(page.getByText(copy.empty, { exact: true })).toBeVisible();
     await search.fill('');
@@ -233,7 +234,8 @@ test('appearance save failure remains visible and does not claim persistence',as
  await openTheme(page,'dark');
  await page.getByRole('group',{name:'Dark theme',exact:true}).getByRole('button',{name:'Forest',exact:true}).click();
  await page.getByRole('button',{name:'Apply',exact:true}).click();
- await expect(page.getByText('Applied for this session; could not save.',{exact:true})).toBeVisible();
+ await expect(page.locator('.appearance-footer [role="status"]')).toHaveText('Applied for this session; could not save.');
+ await expect(page.locator('.appearance-footer [role="status"]')).toBeVisible();
 });
 
 test('settings deep links focus the requested control',async({page})=>{

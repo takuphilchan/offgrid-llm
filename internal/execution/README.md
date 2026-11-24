@@ -57,6 +57,24 @@ durable runner's exact approval, carried in a private supervisor field rather
 than model arguments. Project code can exercise the approving account's full
 authority. This policy is not arbitrary-command confinement or model qualification.
 
+Local sessions capture the existing allowed environment once as the
+`minimal-host-v1` template. Prepared workers inherit an independent copy of that
+snapshot. Command lookup uses its PATH/PATHEXT; a later host environment change
+cannot choose another command. Empty/relative PATH entries are not searched;
+an explicitly approved relative executable is resolved against the session cwd.
+The template does not pin executable bytes or isolate home/cache directories.
+
+Before a journaled local command starts, journal schema 4 persists the exact
+operation/binding/request digest, selected executable/cwd and an environment
+descriptor (template revision, names and values digest). Raw environment values
+are omitted. Failed or altered publication prevents dispatch. A saved session
+cannot silently adopt a different environment; old receipts remain observable
+without manufacturing historical manifests or replaying commands. Working-copy
+records also identify the inherited environment. Custom templates, toolchain
+package identities, private dependency/cache policy and background supervision
+remain separate unfinished requirements; isolated-container environments retain
+their existing backend-specific policy.
+
 ## Private worker protocol v1
 
 `offgrid-executor --stdio --grant-file ABS --state-dir ABS` reads a local,
@@ -182,3 +200,56 @@ modifying the target during the commit window can still conflict. Do not claim
 exclusive access, universal undo or exactly-once external effects. Post-dispatch
 errors preserve partial/unknown effects. Literal search skips links/special/binary
 files, bounds scanned entries/bytes/files/matches and reports incompleteness.
+
+Private worker copies use the existing independently admitted sessions and
+journals. Inventory and later growth measurement read directories in batches of
+at most 256 entries, enforce a shared enumeration allowance before collecting
+the full listing, and preserve deterministic manifest order. Included inputs and
+excluded Git administration roots retain their separate configured entry caps;
+excluded subtrees are never enumerated. Incomplete measurement retains an
+uncertain record and occupies the full host admission allowance.
+
+On Windows and Linux/macOS, copy and retained-blob reads open each path component
+relative to retained directory handles and reject substituted links/reparse
+points. Unix opens are nonblocking so a substituted FIFO cannot wait for a
+writer. Windows enumeration requires handle-returned file IDs and rejects
+filesystems without that capability. Opened identity/type/size/time must match
+the observed file. Replacement
+sync retains the identity from post-dispatch observation; an identity change
+leaves the existing partial/uncertain receipt and displaced content intact.
+Other platforms report this opener as unsupported. These are filesystem
+prerequisites, not a sandbox, an atomic multi-file snapshot, a disk quota, or
+qualification against arbitrary concurrent writes by the same OS user.
+See [the bounded-copy evidence](../../docs/quality/evidence/worker-copy-filesystem-bounds-2026-11-20.md)
+for platform checks and remaining worker/environment/replacement requirements.
+
+Worker-copy schema 12 retains native directory identity, a worker-use lease and
+explicit cleanup intent. Cleanup requires the original closed supervisor's
+settlement proof, moves the owned object to an opaque private quarantine, and
+rechecks identity before bounded deletion. A failed rename/receipt or a recreated
+old path never causes recursive deletion of a replacement. Legacy identity or
+lease evidence is not synthesized on restart. Windows deletes through an exact
+handle that excludes writers; Linux syncs the private directory transitions.
+Windows physical power-loss persistence remains unqualified.
+
+The Windows Job owner waits on retained root/member handles and requires its
+lifetime process count to match them; a fast, uncaptured descendant retains an
+uncertain owner. Linux now uses an exact kernel-created PID namespace init and
+pidfd through the shared process owner. Init exit/reap establishes descendant
+retirement; missing proof still retains the copy lease and reservation. A startup
+activation gate prevents dispatch after parent loss before ownership is confirmed.
+The native supervisor passes verified launcher/shell pins through private worker
+startup, separately from grant/HTTP input; nested workers reverify and inherit
+that owner. See [Linux evidence](../../docs/quality/evidence/worker-linux-namespace-2026-11-21.md).
+Failed launches and process-history eviction cannot turn unknown termination
+into cleanup permission. These conservative intermediate restrictions remain
+unfinished reliability work, not a claim of complete worker supervision. See
+[cleanup evidence](../../docs/quality/evidence/worker-copy-cleanup-ownership-2026-11-20.md).
+
+Windows now associates an owned completion port before the suspended root joins
+the Job, captures new member handles as notifications arrive, and drains the
+monitor before settlement. Notification delivery is not guaranteed: final handle
+waits and lifetime accounting still decide cleanup eligibility. The monitor
+accepts no external commands or PID-only cleanup authority. The actual compiler
+worker journey passes with this early discovery; missing discovery remains an
+explicit uncertain outcome. See [watcher evidence](../../docs/quality/evidence/worker-job-watch-2026-11-21.md).

@@ -112,6 +112,8 @@ func (s *Server) registerHealthRoutes(mux *http.ServeMux, guards routeGuards) {
 }
 
 func (s *Server) registerModelRoutes(mux *http.ServeMux, guards routeGuards) {
+	mux.HandleFunc(inferenceEndpointsPath, guards.adminOnly(s.handleInferenceEndpoints))
+	mux.HandleFunc(inferenceEndpointsPath+"/", guards.adminOnly(s.handleInferenceEndpoints))
 	modelManagerOnly := guards.modelManagerOnly
 	modelsOnly := guards.modelsOnly
 	// API v1 routes (OpenAI-compatible)

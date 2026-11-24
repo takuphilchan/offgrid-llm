@@ -1,6 +1,22 @@
 # OffGrid product experience audit and design plan
 
-**Updated:** 2026-11-05. **Audit baseline:** the then-running, installed OffGrid **v0.4.25**. The baseline findings and captures below are historical evidence, not the current installation. **Current installation:** v0.4.26 from `cbcf13e8`, installed on November 5 after packaged startup, terminal and appearance checks. See the [installation evidence](../quality/evidence/workspace-design-follow-up-2026-11-05.md#installed-v0426-and-release-source). The application source is in `apps/web` and `apps/desktop`; source locations identify owners, not proof of live behavior.
+**Review index updated:** 2026-11-21. **Historical audit baseline:** the then-running, installed OffGrid **v0.4.25**. The findings and captures in the baseline section below are historical evidence, not the current installation. **Historical November 5 installation:** v0.4.26 from `cbcf13e8`, installed after packaged startup, terminal and appearance checks. See its [installation evidence](../quality/evidence/workspace-design-follow-up-2026-11-05.md#installed-v0426-and-release-source). The application source is in `apps/web` and `apps/desktop`; source locations identify owners, not proof of live behavior.
+
+## November 21 implementation follow-through
+
+The [completion evidence](../quality/evidence/interface-completion-2026-11-21.md)
+records the installed terminal/recovery corrections, unchanged directory card,
+exact payload identities, rollback and checks against the actual installed
+executable with disposable data. The broader UI/UX goal remains open. The review
+below is the pre-correction assessment; its previews are historical artifacts.
+Current Models transfer-continuity work and its delivery status are recorded in
+the same completion evidence.
+
+## November 21 terminal and Workspace recovery review
+
+The complete UI/UX brief remains open. The current [review and completion assessment](../quality/evidence/interface-review-2026-11-21.md) identifies a contradictory recovery Ready status, unsupported installed recovery capabilities, an inset terminal background, and a misleading terminal return label. It records the 29 open UI-change tasks, exact focused checks, a twelve-section brief assessment and bounded corrective acceptance scenarios.
+
+The owner's directory-card design is preserved; the rejected line-based directory proposal is removed. The revised recovery and terminal previews are review artifacts only, available in `build/ui-review/review.html`. No production or installed asset changed during this review. The earlier [renderer-only installation](../quality/evidence/interface-refinement-2026-11-21.md#user-authorized-installation) retains the November 16 native desktop package; generic bridge compatibility did not prove support for every optional recovery API.
 
 ## Baseline findings
 

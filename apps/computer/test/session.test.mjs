@@ -5,6 +5,80 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {CompanionSession,localService} from '../session.mjs';
 import {createManifest,verifyPack} from '../pack.cjs';
+import {BrowserFailure} from '../browser-outcome.mjs';
+import {BrowserWorkspace} from '../browser-workspace.mjs';
+
+test('expanded scope rejects older services before browser launch or pairing',async()=>{
+ let opens=0;
+ const session=new CompanionSession({service:'http://127.0.0.1:11611',directory:'unused-fixture',openBrowser:async()=>{opens++;throw Error('should not open');}});
+ session.request=async()=>({product:'offgrid',api_version:2,capabilities:['browser-discovery-v1']});
+ await assert.rejects(session.start({origin:'https://one.example',additionalOrigins:['https://two.example'],code:'a'.repeat(64)}),/computer_upgrade_required/);
+ assert.equal(opens,0);
+});
+
+test('service capability cannot widen the tab limit after local consent',async()=>{
+ let opens=0;
+ const session=new CompanionSession({service:'http://127.0.0.1:11611',directory:'unused-fixture',openBrowser:async()=>{opens++;}});
+ session.request=async()=>({product:'offgrid',api_version:2,capabilities:['browser-workspace-v1']});
+ await assert.rejects(session.start({origin:'https://one.example',code:'a'.repeat(64),expectedBrowserWorkspace:false}),/computer_browser_scope_changed/);
+ assert.equal(opens,0);
+});
+
+test('real managed workspace pairs with exact negotiated demo scope and retains legacy journal ownership',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'offgrid-workspace-session-'));let paired;
+ const session=new CompanionSession({service:'http://127.0.0.1:11611',directory,openBrowser:(origin,options)=>BrowserWorkspace.open(origin,{...options,headless:true})});
+ session.request=async(path,body)=>{
+  if(path.endsWith('/system'))return {product:'offgrid',api_version:2,capabilities:['browser-discovery-v1','browser-workspace-v1']};
+  if(path.endsWith('/pair')){paired=body;return {token:'fixture',session:{id:'fixture-session',origin:'offgrid-demo://research'}};}
+  if(path.endsWith('/poll')){session.stopping=true;return {action:null};}
+  throw Error('Unexpected request');
+ };
+ try {
+  await session.start({origin:'demo',code:'a'.repeat(64)});await session.running;
+  assert.deepEqual(paired.browser_features,{discovery:1,workspace:1});
+  assert.deepEqual(paired.browser_origins,['offgrid-demo://research']);
+  assert.equal(session.state,'stopped');
+ } finally {await session.stop();await rm(directory,{recursive:true});}
+});
+
+test('structured browser negotiation is additive only for a matching owned workspace',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'offgrid-structured-session-'));let paired;
+ const session=new CompanionSession({service:'http://127.0.0.1:11611',directory,openBrowser:(origin,options)=>BrowserWorkspace.open(origin,{...options,headless:true})});
+ session.request=async(path,body)=>{
+  if(path.endsWith('/system'))return {product:'offgrid',api_version:2,capabilities:['browser-discovery-v1','browser-workspace-v1','browser-structured-v1']};
+  if(path.endsWith('/pair')){paired=body;return {token:'fixture',session:{id:'structured-session',origin:'offgrid-demo://research'}};}
+  if(path.endsWith('/poll')){session.stopping=true;return {action:null};}
+  throw Error('Unexpected request');
+ };
+ try{await session.start({origin:'demo',code:'a'.repeat(64)});await session.running;assert.deepEqual(paired.browser_features,{discovery:1,workspace:1,structured:1});}
+ finally{await session.stop();await rm(directory,{recursive:true});}
+});
+
+test('safe failure receipts survive redelivery while the same browser session continues',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'offgrid-safe-replay-'));
+ let reads=0,polls=0;const replies=[];
+ const action={id:'safe-read',kind:'browser_observe',arguments:{},authorization:'auto'};
+ const session=new CompanionSession({service:'http://127.0.0.1:11611',directory,openBrowser:async()=>({
+  close:async()=>{},prepare:async()=>({prepared:true,approval_class:'read_only'}),
+  execute:async()=>{reads++;if(reads===1)throw new BrowserFailure('computer_browser_observation_failed','private page error');return {observation_id:'fresh'};}
+ })});
+ session.request=async(path,body)=>{
+  if(path.endsWith('/system'))return {product:'offgrid',api_version:2,workspace_id:'workspace'};
+  if(path.endsWith('/pair'))return {token:'test-only',session:{id:'session',origin:'https://example.com'}};
+  if(path.endsWith('/poll'))return {action:++polls<3?action:{...action,id:'next-read'}};
+  if(path.endsWith('/reply')){replies.push(body);if(replies.length===3)session.stopping=true;return {};}
+  throw Error('unexpected request');
+ };
+ try {
+  await session.start({origin:'https://example.com',code:'d'.repeat(64)});await session.running;
+  assert.equal(reads,2);assert.equal(replies.length,3);
+  assert.deepEqual(replies[0],replies[1]);
+  assert.equal(replies[0].error,'computer_browser_observation_failed');
+  assert.equal(JSON.stringify(replies).includes('private page error'),false);
+  assert.equal(JSON.parse(replies[2].result).observation_id,'fresh');
+  assert.equal(session.state,'stopped');
+ } finally {await session.stop();await rm(directory,{recursive:true});}
+});
 
 test('companion transport rejects remote services and credentials',()=>{
  for(const url of ['https://example.com','http://localhost:11611','http://a:b@127.0.0.1:11611','http://127.0.0.1:11611/path']) assert.throws(()=>localService(url));

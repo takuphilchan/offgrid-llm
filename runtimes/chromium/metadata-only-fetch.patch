@@ -1,0 +1,305 @@
+diff --git a/third_party/blink/public/devtools_protocol/domains/Fetch.pdl b/third_party/blink/public/devtools_protocol/domains/Fetch.pdl
+index 69852c2d..757ee626 100644
+--- a/third_party/blink/public/devtools_protocol/domains/Fetch.pdl
++++ b/third_party/blink/public/devtools_protocol/domains/Fetch.pdl
+@@ -84,6 +84,12 @@ domain Fetch
+       # If true, authRequired events will be issued and requests will be paused
+       # expecting a call to continueWithAuth.
+       optional boolean handleAuthRequests
++      # Whether to collect request bodies for requestPaused and authRequired events.
++      # Defaults to true. If false, postData and postDataEntries are omitted, while
++      # hasPostData reports native body presence. The original upload is unchanged;
++      # continueRequest may still explicitly override it. Applies to new requests;
++      # existing requests retain their setting through redirects and auth retries.
++      experimental optional boolean includePostData
+ 
+   # Causes the request to fail with specified reason.
+   command failRequest
+diff --git a/content/browser/devtools/protocol/fetch_handler.h b/content/browser/devtools/protocol/fetch_handler.h
+index 8bab55ef..243245e2 100644
+--- a/content/browser/devtools/protocol/fetch_handler.h
++++ b/content/browser/devtools/protocol/fetch_handler.h
+@@ -71,6 +71,7 @@ class FetchHandler : public DevToolsDomainHandler, public Fetch::Backend {
+   // Protocol methods.
+   void Enable(std::unique_ptr<Array<Fetch::RequestPattern>> patterns,
+               std::optional<bool> handleAuth,
++              std::optional<bool> includePostData,
+               std::unique_ptr<EnableCallback> callback) override;
+ 
+   void FailRequest(const String& fetchId,
+diff --git a/content/browser/devtools/protocol/fetch_handler.cc b/content/browser/devtools/protocol/fetch_handler.cc
+index 66e64598..56764cdb 100644
+--- a/content/browser/devtools/protocol/fetch_handler.cc
++++ b/content/browser/devtools/protocol/fetch_handler.cc
+@@ -118,6 +118,7 @@ bool FetchHandler::MaybeCreateProxyForInterception(
+ void FetchHandler::Enable(
+     std::unique_ptr<Array<Fetch::RequestPattern>> patterns,
+     std::optional<bool> handleAuth,
++    std::optional<bool> includePostData,
+     std::unique_ptr<EnableCallback> callback) {
+   if (!interceptor_) {
+     interceptor_ =
+@@ -143,7 +144,8 @@ void FetchHandler::Enable(
+     return;
+   }
+   interceptor_->SetPatterns(std::move(interception_patterns),
+-                            handleAuth.value_or(false));
++                            handleAuth.value_or(false),
++                            includePostData.value_or(true));
+   update_loader_factories_callback_.Run(
+       base::BindOnce(&EnableCallback::sendSuccess, std::move(callback)));
+ }
+diff --git a/content/browser/devtools/devtools_url_loader_interceptor.h b/content/browser/devtools/devtools_url_loader_interceptor.h
+index 7c40f68b..885dac8d 100644
+--- a/content/browser/devtools/devtools_url_loader_interceptor.h
++++ b/content/browser/devtools/devtools_url_loader_interceptor.h
+@@ -195,7 +195,9 @@ class DevToolsURLLoaderInterceptor {
+ 
+   ~DevToolsURLLoaderInterceptor();
+ 
+-  void SetPatterns(std::vector<Pattern> patterns, bool handle_auth);
++  void SetPatterns(std::vector<Pattern> patterns,
++                   bool handle_auth,
++                   bool include_post_data = true);
+ 
+   void GetResponseBody(
+       const std::string& interception_id,
+@@ -276,6 +278,7 @@ class DevToolsURLLoaderInterceptor {
+ 
+   std::vector<Pattern> patterns_;
+   bool handle_auth_ = false;
++  bool include_post_data_ = true;
+   std::map<std::string, raw_ptr<InterceptionJob, CtnExperimental>> jobs_;
+   std::map<int32_t, std::string> network_request_id_to_interception_id_;
+ 
+diff --git a/content/browser/devtools/devtools_url_loader_interceptor.cc b/content/browser/devtools/devtools_url_loader_interceptor.cc
+index 65336876..e22353c9 100644
+--- a/content/browser/devtools/devtools_url_loader_interceptor.cc
++++ b/content/browser/devtools/devtools_url_loader_interceptor.cc
+@@ -553,6 +553,8 @@ class InterceptionJob : public network::mojom::URLLoaderClient,
+   const GlobalRequestID global_req_id_;
+   const base::UnguessableToken frame_token_;
+   const bool report_upload_;
++  // Snapshot the diagnostic policy for the entire request, including redirects.
++  const bool include_post_data_;
+ 
+   raw_ptr<DevToolsURLLoaderInterceptor> interceptor_;
+   DevToolsURLLoaderInterceptor::InterceptionStages stages_;
+@@ -916,9 +918,11 @@ DevToolsURLLoaderInterceptor::~DevToolsURLLoaderInterceptor() {
+ 
+ void DevToolsURLLoaderInterceptor::SetPatterns(
+     std::vector<DevToolsURLLoaderInterceptor::Pattern> patterns,
+-    bool handle_auth) {
++    bool handle_auth,
++    bool include_post_data) {
+   patterns_ = std::move(patterns);
+   handle_auth_ = handle_auth;
++  include_post_data_ = include_post_data;
+   DCHECK(patterns_.size() || !handle_auth);
+ }
+ 
+@@ -1033,6 +1037,7 @@ InterceptionJob::InterceptionJob(
+                      create_loader_params->request_id),
+       frame_token_(frame_token),
+       report_upload_(!!create_loader_params->request.request_body),
++      include_post_data_(interceptor->include_post_data_),
+       interceptor_(interceptor),
+       create_loader_params_(std::move(create_loader_params)),
+       is_download_(is_download),
+@@ -1742,7 +1747,10 @@ void InterceptionJob::NotifyClient(
+   CHECK(!have_cookies || want_cookies);
+ 
+   const bool have_request_bodies = !request_bodies_.empty();
+-  const bool want_request_bodies = !!request.request_body;
++  // Do not clone, drain or serialize upload bytes for metadata-only clients.
++  // The original ResourceRequestBody stays owned by the network request.
++  const bool want_request_bodies =
++      include_post_data_ && !!request.request_body;
+   CHECK(!have_request_bodies || want_request_bodies);
+ 
+   const int pending_callback_count =
+@@ -1793,6 +1801,12 @@ void InterceptionJob::CompleteNotifyingClient(
+       protocol::NetworkHandler::CreateRequestFromResourceRequest(
+           create_loader_params_->request,
+           request_cookies_.value_or(std::string()), request_bodies_);
++  if (!include_post_data_) {
++    CHECK(request_bodies_.empty());
++    CHECK(!request_body_collector_);
++    request_info->network_request->SetHasPostData(
++        !!create_loader_params_->request.request_body);
++  }
+ 
+   TRACE_EVENT_BEGIN("devtools", "Fetch.requestPaused",
+                     perfetto::Track::FromPointer(this));
+diff --git a/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/offgrid-metadata-only.js b/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/offgrid-metadata-only.js
+new file mode 100644
+--- /dev/null
++++ b/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/offgrid-metadata-only.js
+@@ -0,0 +1,121 @@
++(async function(testRunner) {
++  const {session, dp} = await testRunner.startBlank(
++      'OffGrid opt-in metadata-only Fetch preserves native upload semantics');
++  const endpoint = testRunner.url('./resources/offgrid-metadata-echo.py');
++  const patterns = [{urlPattern: '*offgrid-metadata-echo.py*'}];
++  const legacyHash = '53d78b316bb8272d761c0011d62a258618d2a374ee727b786a64671ba58726b3';
++  const fileHash = 'dff28c51e4c67e6197520d68f9a7aa73f4d47b1faf1b21afebc6a50765f396cb';
++  const replacementHash = '95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d6631f4f7c97b89dc47';
++  function check(value, message) {
++    if (!value) throw new Error(message);
++  }
++  async function enable(options = {}) {
++    const result = await dp.Fetch.enable({patterns, ...options});
++    check(!result.error, JSON.stringify(result.error));
++  }
++  function metadata(event, hasBody = true) {
++    check(event.request.hasPostData === hasBody, 'native body presence');
++    check(event.request.postData === undefined, 'postData must be omitted');
++    check(event.request.postDataEntries === undefined, 'entries must be omitted');
++  }
++  function receipt(result, bytes, sha256) {
++    check(result.bytes === bytes && result.sha256 === sha256,
++          'independent receiver digest/size differs: ' + JSON.stringify(result));
++  }
++  async function begin(body, query = '', method = 'POST') {
++    const paused = dp.Fetch.onceRequestPaused();
++    const response = session.evaluateAsync(`
++      window.offgridAbort = new AbortController();
++      fetch(${JSON.stringify(endpoint)} + ${JSON.stringify(query)}, {
++        method: ${JSON.stringify(method)}, body: ${body},
++        signal: window.offgridAbort.signal
++      }).then(r => r.json(), e => ({error: e.name}))`);
++    return {event: (await paused).params, response};
++  }
++  async function proceed(event) {
++    const result = await dp.Fetch.continueRequest({requestId: event.requestId});
++    check(!result.error, 'continue failed: ' + JSON.stringify(result.error));
++  }
++
++  await dp.Network.enable();
++  for (const options of [{}, {includePostData: true}]) {
++    await enable(options);
++    const {event, response} = await begin(`'legacy-body'`);
++    check(event.request.postData === 'legacy-body', 'default body collection changed');
++    check(event.request.postDataEntries.length > 0, 'default entries missing');
++    await proceed(event);
++    receipt(await response, 11, legacyHash);
++  }
++  testRunner.log('PASS omitted and explicit true retain legacy collection');
++
++  await enable({includePostData: false});
++  for (const body of [
++    `new Uint8Array(131072).fill(81)`,
++    `new Blob([new Uint8Array(131072).fill(81)])`,
++    `new File([new Uint8Array(131072).fill(81)], 'fixture.bin')`,
++  ]) {
++    const {event, response} = await begin(body);
++    metadata(event);
++    await proceed(event);
++    receipt(await response, 131072, fileHash);
++  }
++  testRunner.log('PASS byte, Blob and File bodies arrive unchanged without diagnostic bytes');
++
++  {
++    const {event, response} = await begin('undefined', '', 'GET');
++    metadata(event, false);
++    await proceed(event);
++    receipt(await response, 0, 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
++  }
++  testRunner.log('PASS absent body remains distinguishable');
++  {
++    const {event, response} = await begin(`'legacy-body'`);
++    metadata(event);
++    const result = await dp.Fetch.continueRequest({requestId: event.requestId, postData: btoa('replacement')});
++    check(!result.error, 'explicit body override rejected');
++    receipt(await response, 11, replacementHash);
++  }
++  testRunner.log('PASS explicit continue body override remains supported');
++
++  {
++    const {event, response} = await begin(`new Blob(['legacy-body'])`);
++    metadata(event);
++    const result = await dp.Fetch.failRequest({requestId: event.requestId, errorReason: 'BlockedByClient'});
++    check(!result.error && (await response).error === 'TypeError', 'abort did not reject fetch');
++  }
++  testRunner.log('PASS failRequest rejects the paused native upload');
++  {
++    const {event, response} = await begin(`new Blob(['legacy-body'])`);
++    metadata(event);
++    await session.evaluate('window.offgridAbort.abort()');
++    check((await response).error === 'AbortError', 'page cancellation did not settle');
++  }
++  testRunner.log('PASS page cancellation settles a paused upload');
++
++  {
++    const {event, response} = await begin(`new Blob(['legacy-body'])`, '?redirect=1');
++    metadata(event);
++    await enable({includePostData: true});
++    const redirected = dp.Fetch.onceRequestPaused();
++    await proceed(event);
++    const next = (await redirected).params;
++    metadata(next);
++    check(next.request.method === 'POST', '307 did not preserve method');
++    await proceed(next);
++    receipt(await response, 11, legacyHash);
++  }
++  testRunner.log('PASS existing request retains metadata-only setting through 307');
++
++  await enable({includePostData: false, patterns: [{urlPattern: '*offgrid-metadata-echo.py*', requestStage: 'Response'}]});
++  {
++    const {event, response} = await begin(`new Blob(['legacy-body'])`);
++    metadata(event);
++    check(event.responseStatusCode === 200, 'not a response-stage pause');
++    const result = await dp.Fetch.continueResponse({requestId: event.requestId});
++    check(!result.error, 'response continuation failed');
++    receipt(await response, 11, legacyHash);
++  }
++  testRunner.log('PASS response-stage metadata preserves native receipt');
++  await dp.Fetch.disable();
++  testRunner.completeTest();
++})
+diff --git a/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/offgrid-metadata-only-expected.txt b/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/offgrid-metadata-only-expected.txt
+new file mode 100644
+--- /dev/null
++++ b/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/offgrid-metadata-only-expected.txt
+@@ -0,0 +1,9 @@
++OffGrid opt-in metadata-only Fetch preserves native upload semantics
++PASS omitted and explicit true retain legacy collection
++PASS byte, Blob and File bodies arrive unchanged without diagnostic bytes
++PASS absent body remains distinguishable
++PASS explicit continue body override remains supported
++PASS failRequest rejects the paused native upload
++PASS page cancellation settles a paused upload
++PASS existing request retains metadata-only setting through 307
++PASS response-stage metadata preserves native receipt
+diff --git a/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/resources/offgrid-metadata-echo.py b/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/resources/offgrid-metadata-echo.py
+new file mode 100755
+--- /dev/null
++++ b/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/resources/offgrid-metadata-echo.py
+@@ -0,0 +1,27 @@
++#!/usr/bin/env python3
++"""Disposable Chromium HTTP fixture; no filesystem writes or outbound requests."""
++import hashlib
++import json
++import os
++import sys
++
++length = int(os.environ.get('CONTENT_LENGTH') or '0')
++if length < 0 or length > 8 * 1024 * 1024:
++    sys.stdout.write('Status: 413 Payload Too Large\r\nContent-Length: 0\r\n\r\n')
++else:
++    digest = hashlib.sha256()
++    remaining = length
++    while remaining:
++        chunk = sys.stdin.buffer.read(min(65536, remaining))
++        if not chunk:
++            raise RuntimeError('incomplete request body')
++        digest.update(chunk)
++        remaining -= len(chunk)
++    if os.environ.get('QUERY_STRING') == 'redirect=1':
++        sys.stdout.write('Status: 307 Temporary Redirect\r\n'
++                         'Location: offgrid-metadata-echo.py\r\n'
++                         'Content-Length: 0\r\n\r\n')
++    else:
++        body = json.dumps({'bytes': length, 'sha256': digest.hexdigest()})
++        sys.stdout.write('Content-Type: application/json\r\n'
++                         'Cache-Control: no-store\r\n\r\n' + body)

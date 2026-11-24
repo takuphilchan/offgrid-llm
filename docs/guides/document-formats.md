@@ -71,6 +71,18 @@ shows original and extracted text together where an original view is available;
 on narrow screens the panes stack. A correction draft survives reader-tab changes,
 and navigation is disabled until that edit is saved or cancelled.
 
+For a spreadsheet or presentation-table cell, expand **Cell metadata** to inspect
+the retained value, extracted display text, number format, formula and cached
+result separately. Shared formulas retain their source cell and range; merged
+cells retain their spans, and hidden sheets, rows or columns are identified.
+Missing formula caches remain unavailable, including shared formulas without
+local formula text. An empty retained string is shown as `""`.
+
+These details describe the extraction, not a recalculated workbook or the original
+Office layout. Source format identifiers and state codes are preserved verbatim;
+counts use the interface language. Opening the disclosure does not change the
+document, evaluate a formula, follow a source link or submit a question.
+
 New DOCX extractions resolve declared paragraph-style outline levels, including
 same-type style inheritance and explicit body-text overrides. Localized style
 names are not guessed. Historical paragraph-formatting changes do not replace

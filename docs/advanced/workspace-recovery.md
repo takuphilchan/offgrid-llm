@@ -1,5 +1,14 @@
 # Workspace ownership and offline recovery
 
+Restoring an archive verifies its historical bytes and then creates a fresh
+activation epoch before publishing the new workspace directory. Endpoint access
+approvals from the archive therefore require new administrator review; restoring
+an older enabled policy cannot silently reverse a later revocation. The returned
+manifest describes the verified original archive, while the next backup records
+the newly generated epoch. Restore still never changes the active workspace or
+replays interrupted effects. See [endpoint administration](http-inference-endpoints.md)
+for review, corruption and uncertain-publication behavior.
+
 ## Profile-enabled conversation recovery (development)
 
 Agent-enabled Chat uses a durable admission record plus a canonical job. The
@@ -179,13 +188,97 @@ lock. Preserve models, runtime binaries, configuration, integrations, MCP server
 and external agent homes **outside that directory separately**. This is not yet a
 portable offline installation pack or an external-agent environment backup.
 
-Archives are unencrypted private material. Restrict access and use encrypted
-storage for copies. SHA-256 hashes detect damaged files; they do not authenticate
-an archive supplied by an attacker. Use only your own trusted backups.
+The existing syntax above creates an **unencrypted** ZIP, regardless of its filename.
+Use the encryption options below for confidential backups. Restrict access to all
+archives. SHA-256 hashes detect damaged files; they do not authenticate an archive
+publisher. Use only your own trusted backups.
 
 Backup refuses symlinks, special files, nonportable paths, and case/normalization
-collisions rather than silently skipping files. Limits: 100,000 files and 100 GiB
-uncompressed data. Failed/incomplete backups are not published as usable archives.
+collisions rather than silently skipping files. Limits are 100,000 files, 100 GiB
+expanded data, 101 GiB raw archive, a 32 MiB manifest and a 64 MiB ZIP directory
+index. Each archive path is limited to 4096 UTF-8 bytes and 128 components,
+including the `state/` prefix. Collision indexing is bounded to 200,002 nodes and
+64 MiB of retained component strings. Manifest entries are streamed and capped
+against the actual ZIP inventory before allocating a claimed large array.
+Exceeding a bound rejects the operation; files are never silently skipped.
+Failed/incomplete backups are not published as usable archives.
+
+## Encrypted workspace archives
+
+Native age X25519 and Hybrid recipient keys are supported. Keep private identity
+files outside the backed-up workspace, with access restricted to their owner;
+retain an independently protected recovery copy. The CLI does not generate keys
+or place them in the workspace. SSH keys and executable age plugins are not accepted.
+
+```sh
+offgrid workspace backup --data-dir /path/to/data --output /path/to/backups/workspace.zip.age --recipients-file /path/to/public-recipients.txt
+offgrid workspace verify /path/to/backups/workspace.zip.age --identity /path/to/private-identity.txt
+offgrid workspace restore /path/to/backups/workspace.zip.age --identity /path/to/private-identity.txt --data-dir /path/to/new-restored-data --yes
+```
+
+Repeat `--recipient AGE_PUBLIC_KEY` or `--recipients-file FILE` for backup; repeat
+`--identity FILE` for verify/restore. Native key files use one key per line, with
+empty lines and `#` comments allowed. Limits are 1 MiB per key file and 32 selected
+keys total. Invalid key diagnostics exclude key material.
+
+For an interactive passphrase backup, use:
+
+```sh
+offgrid workspace backup --data-dir /path/to/data --output /path/to/backups/workspace.zip.age --passphrase
+offgrid workspace verify /path/to/backups/workspace.zip.age --passphrase
+```
+
+The terminal hides input and confirms the passphrase for backup/rebuild. Ctrl+C
+cancels input and restores terminal mode. Pending pasted/typeahead secret input
+is discarded before echo is restored. `--passphrase-stdin` instead reads one
+secret from redirected standard input until EOF, accepting an optional final LF
+or CRLF. It never prompts. Preserve other whitespace exactly. Secrets must contain
+1–4096 UTF-8 bytes without NUL or embedded line endings. Do not put a passphrase in
+an argument, environment variable or shell-history literal. Recipient/identity
+keys and passphrase modes cannot be combined; encryption failures never fall back
+to plaintext. Prefer recipient keys for unattended backups.
+
+Passphrase encryption uses scrypt logN18, approximately 256 MiB for derivation.
+Archives requiring higher costs are rejected before that allocation. Cancellation
+is checked around derivation, but the KDF itself cannot be interrupted; Stop can
+therefore wait for the current bounded derivation to finish. No claim of immediate
+KDF cancellation or perfect memory zeroization is made.
+
+Encryption wraps the existing ZIP in binary age v1. Backup streams directly into
+private ciphertext staging; verification and restore authenticate the complete
+encrypted stream without writing a plaintext ZIP temporary file. Restore extracts
+only into a fresh private stage and retains the existing database/version checks.
+Content, not the extension, determines format. Supplying an identity/passphrase to
+verify or restore requires encrypted input and rejects a legacy plaintext ZIP.
+JSON results retain the manifest and add `encryption` (`none` or `age-v1`) and
+`authenticated`. Authenticated encryption detects tampering; possession of a
+public recipient key permits creating another archive and does not prove who
+published it.
+
+`rebuild-knowledge` accepts the same backup encryption options. It keeps the same
+exclusive owner on the resolved workspace directory through backup and rebuild.
+Its encrypted recovery archive must be verified and published before rebuilding starts. Failed
+backup or cancellation prevents that mutation; a later rebuild failure reports
+the retained backup and does not restore it automatically. Use a new archive
+destination on an explicit retry.
+
+The workspace and restore destination must remain offline. Private creation,
+rooted file access and before/open/final identity checks detect observed source,
+temporary-file and destination substitutions. Workspace locking coordinates
+OffGrid processes; it does not isolate a hostile process running as the same OS
+user between filesystem checks and syscalls. Keep destination directories trusted.
+
+A crash can retain `.offgrid-backup-*` archive staging (ciphertext when encryption
+was selected) or `.offgrid-restore-*` directories containing restored plaintext.
+Inspect the exact retained paths and ownership before any explicit cleanup. The
+CLI does not enumerate/delete guessed stages, replay work or promise secure
+erasure. A cleanup failure preserves the original operation error and identifies
+retained state. Published output is retained if later durability confirmation
+fails; verify and inspect it instead of blindly repeating or overwriting it.
+
+These source-level storage, CLI and administrator controls are under integration.
+Installed recovery and remaining platform/participant qualification are
+tracked in [the encrypted-backup change](../../openspec/changes/encrypted-workspace-backups/tasks.md).
 
 ## Verify and restore without replacing newer data
 
@@ -210,20 +303,39 @@ and external configuration paths as needed. Do not start an older application
 against a newer schema. Keep the original directory until you have verified the
 restored conversations, knowledge, identities, and agent recovery states.
 
-This is deliberately a manual recovery flow. Revision-qualified matched snapshots,
-automatic pre-update backup, migration, approved update/rollback, signatures, and
-administrator UI controls still require implementation and qualification.
+The CLI procedure above remains available independently of the desktop. Source now
+includes a [trusted desktop recovery bridge](../../apps/desktop/README.md#trusted-workspace-recovery-bridge)
+that pins administrator/owned-service authority, obtains paths and secrets in host
+dialogs, drains the original service, and invokes these same operations through
+private pipes. It never activates a restored directory or resumes automatically.
+In the desktop source, open Settings → Storage and backup. Choose backup, verification
+or restore and the encryption mode, then select paths and supply keys in host dialogs.
+The workspace remains stopped after maintenance until you explicitly choose Resume
+original workspace. A retained-stage warning includes the exact path and whether it
+contains plaintext; inspect that operation-owned state before any separately scoped
+cleanup. Cancel waits for a confirmed helper outcome; uncertainty does not authorize
+restart. Browser and externally managed editions use the host-local CLI procedure.
+The real hidden Electron fixture exercises renderer, host dialogs, private helper,
+failure and cancellation together. Native file-picker interaction, installed editions
+and human usability/accessibility still require their separate qualification; see
+[dated evidence](../quality/evidence/desktop-encrypted-recovery-2026-11-20.md).
+Revision-qualified matched snapshots, automatic pre-update backup, migration,
+approved update/rollback and signatures retain their separate implementation and
+qualification requirements.
 
 ## Agent database migrations
 
-The current agent snapshot schema is **4**; it is separate from the public API
+The current agent snapshot schema is **25**; it is separate from the public API
 version and from knowledge-index metadata. See [sqlite_tasks.go](../../internal/agents/sqlite_tasks.go)
 and [input_migration.go](../../internal/agents/input_migration.go) for the version
 gate and supported paths. Unknown schema versions block startup.
 
-- Schema 1 upgrades through schema 2's transactional activity replay migration.
-- Schema 2 or 3 upgrades to schema 4 after validated backup. Schema 3 introduced
-  task interruptions; schema 4 includes durable context and child-task graphs.
+- Schema 1 upgrades through schema 2's transactional activity replay migration,
+  then through the current validated migration path.
+- Schemas 2 through 24 upgrade to schema 25 after validated backup. The current
+  schema retains conversation controls, durable context/child graphs, worker and
+  resource reservations, and canonical result provenance. Exact version gates
+  remain in the linked implementation; do not infer older-binary compatibility.
 - Legacy JSON imports validate every source and ownership record before a
   transaction activates the database. Originals and a recovery manifest remain.
 
@@ -244,7 +356,7 @@ startup instead of being discarded. Backups contain private information and must
 remain protected. This database migration backup is **not** a substitute for a
 full workspace backup before deployment.
 
-### Schema 2 or 3 to 4
+### Schemas 2 through 24 to 25
 
 Before activation, the service validates snapshots/activity, uses `VACUUM INTO`
 to create `agent-schema-<old-version>-backup-*/agent-state.sqlite`, validates the

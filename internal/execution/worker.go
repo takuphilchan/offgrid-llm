@@ -27,6 +27,8 @@ type Worker struct {
 	finishing            sync.WaitGroup
 	initializing         sync.Once
 	initializationError  error
+	protectedStartup     json.RawMessage
+	protectedAdmission   func(io.Reader) error
 }
 
 type fileArguments struct {
@@ -116,7 +118,7 @@ func (w *Worker) prepare(ctx context.Context, r Request) (operation, bool, error
 					return nil, err
 				}
 			}
-			return w.Processes.start(ctx, r.Binding, a, &r)
+			return w.Processes.start(ctx, r.Binding, a, &r, w.Journal)
 		}, true, nil
 	case "process_inspect":
 		var a struct {
@@ -237,6 +239,11 @@ func (w *Worker) Handle(ctx context.Context, r Request) Response {
 		if err != nil {
 			receipt.State = "uncertain"
 		}
+		if r.Operation == "process_stop" {
+			if page, ok := value.(ProcessPage); ok && page.State != "running" && !ProcessDescendantsSettled(page.ProcessResult) {
+				receipt.State = "uncertain"
+			}
+		}
 	}
 	if mutating {
 		if r.Operation == "directory_change" && operationErr == nil {
@@ -266,7 +273,7 @@ func (w *Worker) Handle(ctx context.Context, r Request) Response {
 				if err == nil {
 					encoded, _ := json.Marshal(result)
 					state := "complete"
-					if result.State == "uncertain" || result.ExitCode == nil {
+					if !ProcessDescendantsSettled(result) {
 						state = "uncertain"
 						w.Session.Revoke()
 					}
@@ -283,11 +290,21 @@ func (w *Worker) Handle(ctx context.Context, r Request) Response {
 
 // Serve is supervised private stdio, not a public HTTP command endpoint. The
 // parent owns the input stream and credential. EOF/cancellation stops children.
-func (w *Worker) Serve(ctx context.Context, input io.ReadCloser, output io.Writer) error {
+func (w *Worker) Serve(ctx context.Context, input io.ReadCloser, output io.Writer) (serveErr error) {
+	return w.serve(ctx, input, output, nil)
+}
+
+func (w *Worker) serve(ctx context.Context, input io.ReadCloser, output io.Writer, settled func(error) error) (serveErr error) {
 	stop := context.AfterFunc(ctx, func() { input.Close() })
 	defer stop()
 	endpoint := NewLocalEndpoint(w)
-	defer endpoint.Close()
+	defer func() {
+		cleanup := endpoint.Close()
+		if settled != nil {
+			cleanup = errors.Join(cleanup, settled(cleanup))
+		}
+		serveErr = errors.Join(serveErr, cleanup)
+	}()
 	if err := w.initialize(); err != nil {
 		return err
 	}
@@ -295,8 +312,16 @@ func (w *Worker) Serve(ctx context.Context, input io.ReadCloser, output io.Write
 		return err
 	}
 	identity, _ := json.Marshal(workerIdentity(w.Version))
+	if w.protectedStartup != nil {
+		identity = w.protectedStartup
+	}
 	if err := WriteFrame(output, Response{Version: ProtocolVersion, ID: "startup", Receipt: &Receipt{State: "ready", Result: identity}}); err != nil {
 		return err
+	}
+	if w.protectedAdmission != nil {
+		if err := w.protectedAdmission(input); err != nil {
+			return err
+		}
 	}
 	for {
 		var request Request

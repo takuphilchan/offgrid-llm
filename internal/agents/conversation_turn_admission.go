@@ -95,7 +95,7 @@ func (r *Runner) AdmitConversationTurn(scope ControlScope, conversationID, input
 	config.AllowedTools, config.AllowedCapabilities = nil, nil
 	config.DelegateProfiles = nil
 	origin := &ConversationOrigin{Workspace: scope.Workspace, Conversation: conversationID, TurnID: inputID}
-	task, err := prepareConversationRun(entry.Input.Content, model, scope.Actor, config, origin)
+	task, err := prepareConversationRunInput(entry.Input.Content, model, scope.Actor, config, origin, sourceOnlyConversationInput(entry.Input))
 	if err != nil {
 		return nil, err
 	}

@@ -5,10 +5,15 @@ import { messageText } from './chat-presentation';
 import {clearSubmittedDraft, draftKey} from '../../lib/drafts';
 import {useDraftScope} from '../../lib/draft-scope';
 import type {useConversationConfiguration} from './agent-configuration';
+import type {SpeechSource} from '../../lib/speech-delivery';
+
+export function canonicalSpeechSource(session: string, input: CanonicalInput): SpeechSource {
+  return {kind: 'canonical', session, turnID: input.id, conversationID: input.conversation_id, runID: input.run_id};
+}
 
 export function useCanonicalConversation(name: string, id: string, handlers: {
   receive: (session: ChatSession, turn: SessionTurn | null) => void;
-  answered: (answer: string) => void; unavailable: () => void;
+  answered: (answer: string, input: CanonicalInput) => void; unavailable: (input: CanonicalInput) => void;
 }) {
   const [inputs, setInputs] = useState<CanonicalInput[]>([]);
   const [question, setQuestion] = useState<CanonicalQuestion | null>(null);
@@ -37,9 +42,9 @@ export function useCanonicalConversation(name: string, id: string, handlers: {
         const reply = entries.find(input => input.id === replyID.current);
         if (reply?.run_status === 'completed' && !reply.context_unavailable) {
           const answer = session.messages.find(message => message.turn_id === reply.id && message.job_id === reply.run_id && message.role === 'assistant');
-          if (answer) {replyID.current = ''; receiver.current.answered(messageText(answer.content));}
+          if (answer) {replyID.current = ''; receiver.current.answered(messageText(answer.content), reply);}
         } else if (reply && (reply.state === 'failed' || reply.stopped_at || reply.context_unavailable)) {
-          replyID.current = ''; receiver.current.unavailable();
+          replyID.current = ''; receiver.current.unavailable(reply);
         }
       } catch (reason) { if (alive && reason instanceof Error) setError(reason.message); }
       finally { pending = false; }
@@ -53,12 +58,13 @@ export function useCanonicalConversation(name: string, id: string, handlers: {
     await api.conversations.inputCommand(id, {request_id: crypto.randomUUID(), target_id: input.id, expected_revision: current.revision, kind, payload: {}});
     wake.current();
   };
-  const send = async (options: Parameters<typeof submitCanonicalSession>[0], draftKey: string, submitted: string, valid: () => boolean) => {
-    const input = await submitCanonicalSession({...options, question: inputMode === 'auto' ? question : null, intent: inputMode === 'auto' ? undefined : inputMode});
+  const send = async (options: Parameters<typeof submitCanonicalSession>[0], draftKey: string, submitted: string, valid: () => boolean, accepted?: (input: CanonicalInput) => void, mode = inputMode) => {
+    const input = await submitCanonicalSession({...options, question: mode === 'auto' ? question : null, intent: mode === 'auto' ? undefined : mode});
     clearSubmittedDraft(draftKey, submitted);
-    if (valid()) {setInputMode('auto'); replyID.current = input.incorporation === 'worker_answer' ? '' : input.id; wake.current();}
+    if (valid()) {accepted?.(input); setInputMode('auto'); replyID.current = input.incorporation === 'worker_answer' ? '' : input.id; wake.current();}
   };
-  return {inputs, question, inputMode, setInputMode, pendingAnswer, answeringQuestion: inputMode === 'auto' && !!question || pendingAnswer, error, control, replyID, send, refresh: () => wake.current()};
+  const isAnsweringQuestion = (mode = inputMode) => mode === 'auto' && !!question || pendingAnswer;
+  return {inputs, question, inputMode, setInputMode, pendingAnswer, answeringQuestion: isAnsweringQuestion(), isAnsweringQuestion, error, control, replyID, send, refresh: () => wake.current()};
 }
 
 export async function canonicalConfiguration(id: string) {

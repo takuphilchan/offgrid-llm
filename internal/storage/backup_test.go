@@ -196,7 +196,7 @@ func TestPublishDirectoryDoesNotReplaceExisting(t *testing.T) {
 
 func TestBackupPathAliases(t *testing.T) {
 	for _, pair := range [][2]string{{"Docs/a", "docs/b"}, {"café/a", "cafe\u0301/b"}, {"a", "a/b"}, {"a/b", "a"}, {"a/b", "a/b"}} {
-		paths := make(backupPaths)
+		paths := backupPaths{}
 		if err := paths.add(pair[0]); err != nil {
 			t.Fatal(err)
 		}
@@ -204,7 +204,7 @@ func TestBackupPathAliases(t *testing.T) {
 			t.Fatalf("alias accepted: %v", pair)
 		}
 	}
-	paths := make(backupPaths)
+	paths := backupPaths{}
 	for _, name := range []string{"Docs/a", "Docs/b", "资料/文档.txt"} {
 		if err := paths.add(name); err != nil {
 			t.Fatal(err)
@@ -229,6 +229,11 @@ func TestBackupWALCrashHelper(t *testing.T) {
 }
 
 func TestBackupRestoresCommittedWALAfterCrash(t *testing.T) {
+	testBackupRestoresCommittedWALAfterCrash(t, BackupWriteOptions{}, BackupReadOptions{})
+}
+
+func testBackupRestoresCommittedWALAfterCrash(t *testing.T, writeOptions BackupWriteOptions, readOptions BackupReadOptions) {
+	t.Helper()
 	root := t.TempDir()
 	data := filepath.Join(root, "data")
 	if err := os.Mkdir(data, 0700); err != nil {
@@ -244,11 +249,11 @@ func TestBackupRestoresCommittedWALAfterCrash(t *testing.T) {
 		t.Fatalf("missing WAL fixture: %v", err)
 	}
 	archive := filepath.Join(root, "backup.zip")
-	if _, err := BackupWorkspace(context.Background(), data, archive, "0.4.3"); err != nil {
+	if _, err := BackupWorkspaceWithOptions(context.Background(), data, archive, "0.4.3", writeOptions); err != nil {
 		t.Fatal(err)
 	}
 	target := filepath.Join(root, "restored")
-	if _, err := RestoreWorkspace(context.Background(), archive, target, "0.4.3"); err != nil {
+	if _, err := RestoreWorkspaceWithOptions(context.Background(), archive, target, "0.4.3", readOptions); err != nil {
 		t.Fatal(err)
 	}
 	db, err := OpenSQLite(filepath.Join(target, "workspace.db"))

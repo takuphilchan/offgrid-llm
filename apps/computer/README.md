@@ -4,6 +4,189 @@ This is the implementation/developer reference. For normal setup and useful
 task examples, start with [Computer Tasks](../../docs/guides/computer-tasks.md).
 Capabilities described here remain preview; the reliability plan owns evidence.
 
+## Managed browser recovery and discovery
+
+Matching services additionally advertise `browser-workspace-v1`. Updated managed
+companions negotiate `browser_features: {discovery: 1, workspace: 1}` and an exact
+`browser_origins` list. The local user selects the starting site and up to 15
+additional public HTTPS origins, including resource domains. Every destination
+is validated and pinned at the CONNECT relay before startup; redirects cannot
+escape this set. Old clients keep their one-origin contract, and expanded scope
+is rejected when the service lacks workspace support.
+
+`browser_tabs` lists up to eight task-owned tabs. `browser_tab_open` opens an
+approved URL; `browser_tab_select` and `browser_tab_close` take an issued `tab_id`.
+Workspace observations include `tab_id` and `document_id`. Each page keeps its own
+references; selection returns a fresh observation. Commands are serialized, tab
+overflow is rejected, and unknown/closed identities never target another tab.
+Closing a tab is consequential because it can discard unsaved content. Owned
+popups count toward the cap; no personal browser profile or tab is attached.
+New-tab navigation failures remain uncertain if creation has already started.
+
+CLI consent displays the full site list and tab limit. Network scope cannot be
+expanded by model arguments or page text. Stop and obtain fresh local consent
+to change it. Signed-in extension attachment remains separate required work in
+the transformation tracker.
+
+Matching services advertise `browser-discovery-v1` in `/api/v2/system`. The
+companion then pairs with `browser_features: {discovery: 1}`. Older services receive
+the legacy pairing shape; older companions are not offered `browser_inspect`.
+The existing zero-argument `browser_observe` contract remains valid.
+
+Observations return at most 80 visible controls after scanning at most 400
+candidates per response. Follow `next_cursor` through `browser_inspect` with the
+same `observation_id` to inspect later controls and text. An empty control page
+can still have a continuation. Dropdowns expose `options_cursor` for remaining
+options; only observed option IDs can be selected. Responses fit the 48 KiB hub
+limit, including Unicode. Field values and target hashes remain local. Text and
+control paging alone does not grant additional frame tools or network authority.
+
+Input checks the exact retained control, its semantics and form state, document
+identity, URL and observation age, including same-address document replacement. Unrelated DOM text changes do not invalidate an unchanged
+target. Captures and continuations additionally require a stable page revision.
+Changed input values, form destinations and replacement controls still reject
+dispatch. All page-authored text remains untrusted.
+
+Typed `computer_browser_precondition_failed` and
+`computer_browser_observation_failed` receipts are journaled before acknowledgement
+and keep the companion connected. The service admits only the reviewed browser
+descriptor and error stage to bounded repair. It allows at most three consecutive
+repair attempts, then pauses. Arbitrary input exceptions remain uncertain.
+
+Successful input reports `effect_status` separately from `verified` and
+`observation_status`. A failed follow-up read does not discard the input receipt
+or authorize repetition. Use the observation returned by an action when available;
+otherwise inspect again. A click receipt is dispatch evidence, not task success.
+Authenticated mutation receipts persist through the existing service receipt path;
+restart can recover the original result without input, while the old session
+expires. Older replies without effect stages remain conservative.
+
+Clicks are consequential even when labelled Save/Apply. Scoped-changes mode asks
+for exact approval; existing full-task grants continue within their scope.
+Credentials, payments and other prohibited operations remain blocked.
+
+See [dated evidence](../../docs/quality/evidence/browser-execution-2026-11-20.md)
+for checks and remaining qualifications.
+
+## Structured search, controls and frames
+
+Matching services advertise `browser-structured-v1`. An owned workspace pairs
+with `{discovery: 1, workspace: 1, structured: 1}`; older services receive the
+existing shape and older companions are not offered the new tools.
+
+- `browser_search` starts a fresh observation with exact string fields `role`,
+  `name` and `text`. At least one must be nonblank; name/text are at most 256 UTF-8
+  bytes. Matching is literal, NFC-normalized, case-insensitive and whitespace
+  normalized. Supported roles are button, link, textbox, checkbox, radio, switch,
+  combobox, option, tab and menuitem; an empty role applies no role filter.
+  Filters combine. A full accessible label can match even when its displayed
+  label is truncated. Results retain every matching exact control, so duplicate
+  labels never cause automatic selection. No CSS, XPath, regex or executable
+  expression is accepted.
+- Continue the returned `next_cursor` with `browser_inspect` and the original
+  `observation_id`. The cursor retains its query; a new search invalidates old
+  cursors and targets. Coverage reports scanned/total controls. Text chunks remain
+  complete and bounded, including on empty control pages; `text_match` describes
+  only the returned chunk, not the whole document. Follow all continuations to
+  establish complete text coverage, including matches spanning chunk boundaries.
+- Open-shadow controls use labels in their own root and retain host ancestry in
+  freshness checks. Silent property changes, replaced hosts and changed semantic
+  state invalidate old input. Contenteditable fill checks the resulting exact
+  multiline text. Native checkboxes and boolean ARIA checkbox/switch controls
+  report verified, mismatch or unavailable read-back. An already-matching state
+  sends no input. Custom checked-state input invokes a website click and therefore
+  remains consequential. Mixed/absent checked semantics are unsupported.
+- Custom combobox expansion and option activation use observed clicks; inspect
+  newly rendered options before selecting one. These clicks remain consequential.
+  `browser_select` still supports a single enabled native select option only.
+- `browser_frames` lists at most 64 owned frames with exact `frame_id`,
+  `document_id`, parent identity and availability. `browser_frame_select` accepts
+  the issued frame/document pair and returns a fresh observation. Observations
+  also carry `frame_id` and `frame_document_id`, separate from the tab document.
+  Reload, detach and parent replacement invalidate old references. Loss of a
+  selected frame requires explicit reselection; it never falls back to the page.
+  `browser_navigate` explicitly navigates the task tab and returns to its main frame.
+
+Frame access requires approved origins for the selected document and all its
+ancestors. The companion reads the actual origin in a Chromium isolated world;
+page-authored `window.origin`, iframe `src` and the inspector's precursor-origin
+metadata are not sufficient authority. Ambiguous same-URL frames are denied if
+any matching document has unavailable/opaque origin evidence. Inherited/opaque
+documents and frame processes without usable origin evidence remain unavailable.
+Scope checking never picks the control; retained browser handles do that.
+
+Visible text omits protected inputs and explicitly private/editable content,
+including open shadows. Text/state scans reject more than 50,000 visited nodes;
+text also rejects more than 2 Mi UTF-16 code units. Captures inspect at most 1,000
+controls across readable frames, mask sensitive fields and private containers,
+and conservatively mask whole child-surface groups for unavailable frames. Closed
+shadow content or incomplete child-document masking coverage rejects capture.
+Capture checks browser DOM counts, bounded markup, document identity and property
+state before returning pixels. An isolated-world mutation witness and native
+Chromium stylesheet/animation events reject transient changes even if the page
+restores its original markup. Local PNG masking includes descendant boxes and
+direct text rectangles, including overflowing and `display: contents` content.
+Inspection and mask output are bounded to 2,000 elements/rectangles. Raw pixels
+stay in companion memory and their buffer is cleared after masking or rejection;
+only the masked image can leave the companion. The packaged decoder is pinned
+`pngjs` 7.0.0 (MIT), with dimensions checked before decoding.
+
+Capture preserves page styles. Present animations (including paused/fill effects
+and SVG animation), protected generated content, shadows/reflections/filters and
+transformed child-frame geometry reject capture when private paint cannot be
+bounded. Structured reading and controls remain available independently. These
+explicit limits do not qualify general animated-page vision, visual model actions
+or arbitrary closed-root widgets.
+
+See [structured browser evidence](../../docs/quality/evidence/browser-structured-controls-2026-11-20.md)
+for actual fixture results, retained failures and remaining product qualification.
+
+## Manual handoff implementation
+
+The workspace now supports an internal handoff fence: it immediately refuses new
+automated reads, captures, preparation and input, then drains admitted work before
+reporting manual readiness. A 15-second confirmation timeout leaves automation
+fenced and reports an unconfirmed handoff. It does not undo or repeat an input.
+The browser context, tabs and cookies remain in the owned process; old observation
+handles, cursors, frame selections issued to the model and upload grants are cleared.
+An explicitly resumed workspace requires fresh observations and never chooses a
+replacement for a manually closed selected tab.
+
+The companion retires polling and its old session token after admitted result
+handling settles. The existing utility process retains the browser until explicit
+consent and fresh task-bound pairing resume it. Correlated host replies distinguish
+confirmed manual control from a timeout; duplicate resume requests observe the
+same operation. Failed close retains the cleanup resource and reports unconfirmed
+Stop instead of claiming termination. These methods are not model tools or service
+authorization bypasses. The [manual takeover evidence](../../docs/quality/evidence/browser-manual-takeover-2026-11-20.md)
+records the scoped checks and unfinished integration verification; installed,
+model and human qualification remain open. Personal browser attachment remains
+separate required work.
+
+## File transfer integrity in progress
+
+Uploads now capture the locally approved bytes into a private, exclusive snapshot
+before browser assignment. Subsequent actions revalidate the original selection,
+while input uses the snapshot. All task tabs share its owner; manual takeover
+revokes the old grant, and actual browser closure precedes snapshot cleanup.
+This lifetime matters because Chromium can read a selected File after the tool
+returns. Failed cleanup retains ownership for explicit retry.
+
+The 512 MiB admission limit remains unchanged; a real 51 MiB delayed read and
+independent HTTP digest check pass. [Transfer evidence](../../docs/quality/evidence/browser-file-transfers-2026-11-20.md)
+records the original hash-to-reopen defect, repeated-action regression and actual
+checks. Isolated native File read-back now verifies the complete selected content
+and reports selection separately from remote receipt. The durable owner is now
+connected to task binding, shared tabs and lost-reply recovery. Matching managed
+packs use a storage-only native permission check before activation and snapshot
+use; existing insecure storage is rejected without permission repair. Older packs
+can browse without enabling the protected transfer path. Cross-client custom-profile
+exclusion, unrestricted command containment, download limits/publication/provenance,
+explicit artifact export and platform/model
+qualification remain unfinished. Random private paths/read-only mode do not
+defend against another process controlling the user's full OS identity. No
+stronger negotiated transfer capability is advertised from these partial changes.
+
 ## Workflow evidence and bounded discovery
 
 New task-first native runs retain at most 12 immutable outcome checks per user
@@ -168,8 +351,8 @@ installed application or select an existing window, then perform only the
 currently implemented structured operations (observe, bounded text replacement,
 explicit checkbox state, activation, fixed application shortcuts and read-back
 verification). Native app control does not use vision, attach to personal browser
-profiles, enter credentials, or perform file transfers. Managed browser mode has
-separate verified staging for downloads and user-selected uploads. All drivers
+profiles, enter credentials, or perform file transfers. Managed browser transfer
+integrity and bounded download staging remain under qualification above. All drivers
 remain **unqualified** until the full task/model/platform evaluation gates pass.
 
 ## Installed desktop: no terminal setup
@@ -234,8 +417,9 @@ enabled. This permits only the selected hostname's `198.18.0.0/15` fake-DNS
 mapping through the existing VPN, not arbitrary private-network destinations.
 OffGrid cannot independently verify the routing hidden by that VPN. TLS hostname
 and certificate checks remain enabled. Explicit authenticated HTTP/SOCKS proxy
-configuration, IPv6-only sites, and consented cross-origin resources are not yet
-supported; some sites will remain incomplete or unavailable.
+configuration and IPv6-only sites are not yet supported. Resource domains must
+be explicitly included in the approved origin list; omitted resources remain
+blocked and some sites will remain incomplete or unavailable.
 
 One useful read-only test with the updated host runtime is to open
 `https://playwright.dev/docs/intro` and ask: "Find the Writing tests documentation,
@@ -339,8 +523,9 @@ starting new work; never blindly repeat a click.
 - A pairing permits one task, 100 actions and ten minutes. Pair again for another
   task. Codes expire in two minutes; tokens stay only in host/service memory and
   are invalid after restart. There is no persistent credential enrollment yet.
-- Network requests are restricted to the selected origin. A loopback HTTPS
-  CONNECT relay checks the exact hostname and port and pins its destination;
+- Network requests are restricted to the selected origin set (one site for
+  legacy clients). A loopback HTTPS CONNECT relay checks each exact hostname
+  and port and pins its destination;
   this covers redirect escapes that browser route callbacks alone miss. Direct
   mode rejects private/reserved DNS results. Trusted-VPN mode additionally permits
   the consented fake-DNS range, with the disclosed routing trust boundary above.
@@ -383,12 +568,13 @@ starting new work; never blindly repeat a click.
   Legacy tasks lacking both a criterion and the new verification policy remain
   incomplete; their outcomes are not silently reinterpreted.
 
-Browser sessions support bounded file transfer. Downloads go only to a private
-per-task staging directory and return verified size and SHA-256 metadata; they
-are never executed or silently moved into user data. Uploads use one file chosen
-in the trusted desktop main process. The renderer and model receive an opaque,
-digest-bound grant and filename, never its host path; the companion rechecks the
-file immediately before attachment. Neither operation submits a form.
+Browser transfer support remains partial. Download size/digest metadata alone
+does not establish an in-flight staging bound; durable publication and artifact
+export remain required work. Uploads use one file chosen in trusted desktop main.
+The renderer and model receive an opaque, digest-bound grant and filename, never
+its host path. The companion captures and verifies approved bytes before native
+selection, which does not establish remote receipt. The unchanged 512 MiB maximum
+still has a failing intercepted raw-body transport case in the evidence tracker.
 
 Tests: `npm test` exercises a real isolated Chromium fixture, including bounded
 capture and protected-control masking. The service separately checks typed image

@@ -16,6 +16,7 @@ func (r *Runner) repairWorkspaceReadFailure(task *Task, descriptor capabilities.
 		return false, nil
 	}
 	cp := task.Checkpoint
+	chargeAuxiliaryModelRepair(task, "workspace_read:"+descriptor.Name)
 	cp.WorkspaceReadFailures++ // Persisted root allowance; successes do not refund it.
 	for _, pending := range cp.Calls {
 		result := `{"error":"tool_proposal_abandoned","effects":"none","verified":false,"message":"Not executed because an earlier read failed. Decide again from the actual request and recorded evidence."}`

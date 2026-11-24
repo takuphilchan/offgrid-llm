@@ -32,6 +32,7 @@ type ProfileSettings struct {
 	Description   string                        `json:"description,omitempty"`
 	Instructions  string                        `json:"instructions,omitempty"`
 	Model         string                        `json:"model"`
+	ModelPolicy   *ProfileModelPolicy           `json:"model_policy,omitempty"`
 	Knowledge     []string                      `json:"knowledge,omitempty"`
 	Tools         []ProfileToolReference        `json:"tools,omitempty"`
 	Computer      bool                          `json:"computer,omitempty"`
@@ -57,6 +58,9 @@ func validProfileText(s string, max int, required bool) bool {
 }
 
 func validateProfileSettings(s ProfileSettings) error {
+	if s.ModelPolicy.Validate(s.Model) != nil {
+		return ErrInvalidProfile
+	}
 	if !validProfileText(s.Name, 128, true) || !validProfileText(s.Description, 512, false) || !validProfileText(s.Instructions, 8192, false) || !validProfileText(s.Model, 256, true) || s.MaxIterations < 1 || s.MaxIterations > 50 || len(s.Knowledge) > 32 || len(s.Tools) > 128 || len(s.Delegates) > 4 || len(s.Skills) > 16 {
 		return ErrInvalidProfile
 	}

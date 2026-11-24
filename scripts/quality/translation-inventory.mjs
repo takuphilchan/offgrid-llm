@@ -56,6 +56,8 @@ export function catalogInventory(){
  const legacy=['en','fr','es','ar','sw','sn','nd','zu','de'];
  tables.push({id:'core',file:'i18n/locales',values:Object.fromEntries(legacy.map(code=>[code,load(`i18n/locales/${code}.ts`,code)]))});
  tables.push({id:'i18n/catalog-descriptions',file:'i18n/catalog-descriptions.json',sourceOnly:true,values:{en:JSON.parse(readFileSync(resolve(source,'i18n/catalog-descriptions.json'),'utf8'))}});
+ tables.push({id:'i18n/workspace-recovery:copy',file:'i18n/workspace-recovery.json',sourceOnly:true,values:{en:JSON.parse(readFileSync(resolve(source,'i18n/workspace-recovery.json'),'utf8'))}});
+ tables.push({id:'i18n/browser-manual:copy',file:'i18n/browser-manual.json',sourceOnly:true,values:{en:JSON.parse(readFileSync(resolve(source,'i18n/browser-manual.json'),'utf8'))}});
  tables.push({id:'i18n/computer-experience:copy',file:'i18n/computer-experience.json',values:JSON.parse(readFileSync(resolve(source,'i18n/computer-experience.json'),'utf8'))});
  const voiceSource=readFileSync(resolve(source,'i18n/voice.ts'),'utf8'),voiceAst=ts.createSourceFile('voice.ts',voiceSource,ts.ScriptTarget.Latest,true);
  let english;

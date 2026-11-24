@@ -16,18 +16,20 @@ import (
 
 // EmbeddingEngine handles text embedding generation
 type EmbeddingEngine struct {
-	mu                sync.RWMutex
-	modelPath         string
-	loaded            bool
-	resident          atomic.Bool // Lock-free scheduler observation during a slow load.
-	parked            bool
-	loadOptions       EmbeddingOptions
-	expectedIdentity  string
-	scheduler         atomic.Pointer[ProviderScheduler]
-	dimensions        int
-	maxBatchSize      int
-	implementation    EmbeddingImpl // Platform-specific implementation
-	newImplementation func() (EmbeddingImpl, error)
+	mu                     sync.RWMutex
+	modelPath              string
+	loaded                 bool
+	resident               atomic.Bool // Lock-free scheduler observation during a slow load.
+	parked                 bool
+	loadOptions            EmbeddingOptions
+	expectedIdentity       string
+	scheduler              atomic.Pointer[ProviderScheduler]
+	dimensions             int
+	maxBatchSize           int
+	implementation         EmbeddingImpl // Platform-specific implementation
+	retirementErr          error         // Sticky uncertainty; never silently re-admit capacity.
+	newImplementation      func() (EmbeddingImpl, error)
+	newModelImplementation func(string) (EmbeddingImpl, bool, error)
 }
 
 // EmbeddingImpl is the interface for platform-specific embedding implementations
@@ -173,27 +175,30 @@ func (e *EmbeddingEngine) Load(ctx context.Context, modelPath string, opts Embed
 }
 
 func (e *EmbeddingEngine) loadLocked(ctx context.Context, modelPath string, opts EmbeddingOptions) error {
-
-	if e.loaded {
+	if e.retirementErr != nil {
+		return e.retirementErr
+	}
+	if e.implementation != nil {
 		if err := e.unloadUnsafe(); err != nil {
 			return fmt.Errorf("failed to unload previous model: %w", err)
 		}
 	}
 
 	// Create platform-specific implementation
-	impl, err := e.newImplementation()
+	impl, err := e.createEmbeddingImplementation(modelPath)
 	if err != nil {
+		if impl != nil {
+			return e.rejectEmbeddingLoad(impl, fmt.Errorf("failed to create embedding implementation: %w", err))
+		}
 		return fmt.Errorf("failed to create embedding implementation: %w", err)
 	}
 
 	// Load the model
 	if err := impl.Load(ctx, modelPath, opts); err != nil {
-		_ = impl.Unload()
-		return fmt.Errorf("failed to load embedding model: %w", err)
+		return e.rejectEmbeddingLoad(impl, fmt.Errorf("failed to load embedding model: %w", err))
 	}
 	if impl.GetDimensions() <= 0 {
-		_ = impl.Unload()
-		return fmt.Errorf("embedding runtime returned no dimensions")
+		return e.rejectEmbeddingLoad(impl, errors.New("embedding runtime returned no dimensions"))
 	}
 
 	e.implementation = impl
@@ -237,6 +242,9 @@ func (e *EmbeddingEngine) Unload() error {
 func (e *EmbeddingEngine) RetireForProvider() (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.retirementErr != nil {
+		return e.implementation != nil, e.retirementErr
+	}
 	if !e.loaded {
 		return false, nil
 	}
@@ -252,13 +260,9 @@ func (e *EmbeddingEngine) RetireForProvider() (bool, error) {
 }
 
 func (e *EmbeddingEngine) unloadUnsafe() error {
-	if !e.loaded {
-		return nil
-	}
-
 	if e.implementation != nil {
 		if err := e.implementation.Unload(); err != nil {
-			return err
+			return e.recordEmbeddingRetirementFailure(err)
 		}
 		e.implementation = nil
 	}
@@ -268,7 +272,31 @@ func (e *EmbeddingEngine) unloadUnsafe() error {
 	e.modelPath = ""
 	e.dimensions = 0
 
-	return nil
+	return e.retirementErr
+}
+
+// A failed Load may already own a process. Track it before cleanup so an
+// unconfirmed stop cannot disappear when the load's admission is released.
+func (e *EmbeddingEngine) rejectEmbeddingLoad(impl EmbeddingImpl, cause error) error {
+	e.implementation = impl
+	e.loaded = false
+	e.parked = false
+	e.loadOptions = EmbeddingOptions{}
+	e.expectedIdentity = ""
+	e.resident.Store(true)
+	return errors.Join(cause, e.unloadUnsafe())
+}
+
+func (e *EmbeddingEngine) recordEmbeddingRetirementFailure(err error) error {
+	e.loaded = false
+	e.resident.Store(true)
+	if e.retirementErr == nil {
+		e.retirementErr = errors.Join(errProviderStopUncertain, err)
+		if scheduler := e.scheduler.Load(); scheduler != nil {
+			scheduler.recordUnloadFailure(e.retirementErr)
+		}
+	}
+	return e.retirementErr
 }
 
 // IsLoaded returns whether a model is loaded
@@ -417,6 +445,9 @@ func (e *EmbeddingEngine) generateLocked(ctx context.Context, req *api.Embedding
 		// Generate embeddings for this batch
 		embeddings, err := impl.Embed(ctx, batch)
 		if err != nil {
+			if errors.Is(err, errProviderStopUncertain) {
+				err = e.recordEmbeddingRetirementFailure(err)
+			}
 			return nil, fmt.Errorf("failed to generate embeddings: %w", err)
 		}
 		if err := ctx.Err(); err != nil {

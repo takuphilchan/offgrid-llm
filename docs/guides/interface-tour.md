@@ -9,12 +9,13 @@ See [image provenance](../images/README.md) for versions, scope, and regeneratio
 
 ## Find your work
 
-Startup uses an animated OffGrid mark, changing welcome messages and the actual
-loading stage. It stays visible while the initial model list, conversation history
-and selected conversation are restored. A failed read opens recovery; a stalled
-application offers a retry. Animation is automatic; there is no startup motion
-prompt. Appearance's Reduce motion setting and the system accessibility preference
-keep the text updates without movement.
+Startup pairs the compact OffGrid mark with one loading status. The mark gently
+fades without changing shape or position. The same entrance stays visible while
+the initial model list, conversation history and selected conversation are restored.
+Connection failures keep the same visual identity with a reason and Retry; a
+stalled application offers reload. There is no rotating greeting or seconds counter.
+Appearance's Reduce motion setting and the system accessibility preference disable
+the animation. Technical service details remain available in desktop recovery.
 Background refreshes and running tasks do not reopen the startup screen.
 
 The destination rail opens Chat, Library, Activity, and Models. The adjacent
@@ -27,11 +28,21 @@ Start in Chat for a request. Use an agent profile when the work needs its config
 instructions and tools. Activity shows saved work, approvals, results, and recovery.
 Opening a document or changing settings keeps your unsent draft available.
 
+On first use, **Inference engine** checks preparation separately from the service
+connection and model list. **Prepare engine** is an explicit action; opening the
+guide starts no download. If the status cannot be read, **Try again** checks it
+without starting preparation. Services that do not offer engine setup here show
+an explanation. Choosing a model or importing one offline remains available.
+Engine readiness alone does not finish setup: send a prompt and receive a reply.
+
 ## Chat
 
 Choose an installed model beside the composer, write your request, and send it.
 The model button uses a compact name; its searchable chooser retains full names
-and exact identities. Attach files or select sources as needed. Response settings
+and exact identities. If there are no installed chat models, that same chooser
+explains setup and links to **Models**. **Return to your draft** brings you back
+without sending the request. A removed or unavailable saved choice is kept until
+you explicitly replace it. Attach files or select sources as needed. Response settings
 link to the relevant configuration without putting model installation or voice
 setup in the writing area.
 
@@ -141,6 +152,13 @@ and speech-generation models. Category filters and unsubmitted searches are
 retained as you move between views. Model bytes on disk do not establish that
 its runtime, vision, or tool capabilities are ready.
 
+**Downloads** keeps ongoing and interrupted transfers together across categories
+and views. Cancel stops the transfer; Resume continues its saved source only when
+you choose it. Cancelled history starts collapsed on return. Expanding Downloads
+keeps it open while progress changes, and discarding partial data requires confirmation.
+If a status read fails, **Check saved state** reads the existing operation without
+starting it again.
+
 ![Model discovery with category selection and three sample catalog entries](../images/models-discover.png)
 
 Choose **Review download**, inspect the package, license, and requirements, then
@@ -223,7 +241,10 @@ reply, and a qualified tool workflow are different checks. See [MCP](mcp.md),
 ## Settings and Help
 
 Settings separates everyday preferences from model behavior, access, and storage.
-Search its sidebar to locate a setting.
+Search its sidebar to locate a setting. Search replaces the settings content
+with result rows showing each setting and its section. Choose a row to open and
+focus that setting without changing its value; clear search to return to the
+selected section.
 
 | Section | Contains |
 | --- | --- |
@@ -261,7 +282,9 @@ language. See [localization guidance](../advanced/workspace-ui.md).
 **Help** opens searchable local guidance in the workspace. Topics cover Chat,
 models, documents, agents, voice, Activity, and service connections, plus desktop
 Quick window and CLI guidance. Topic links open the relevant page without starting
-work or granting access. Escape returns to the previous page and focus.
+work or granting access. The Help heading and close action stay visible while
+topics and articles scroll underneath. Escape returns to the previous page and
+focus, retaining the conversation draft.
 
 For failed chat deletion, retain unsuccessful selections for retry and inspect the
 recovery details. If work is active, choose whether to stop it or keep it in
@@ -272,7 +295,8 @@ See [history management](history-management.md).
 
 On supported Windows desktop builds, the terminal shares the main work area with
 Chat. Choose **OffGrid CLI** or **Agent** to begin in a local folder. The new-tab
-menu also offers PowerShell. Returning to Chat keeps terminal sessions open.
+menu also offers PowerShell. **Back to workspace** reveals the previous page and
+keeps its draft and terminal sessions open.
 Closing a terminal tab stops its owned processes; leaving an Agent session with
 `/exit` returns to its shell.
 

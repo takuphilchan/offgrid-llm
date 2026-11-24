@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import {classifyBrowserAction,policyAllows} from '../approval-policy.mjs';
 
 test('browser approval modes preserve non-bypassable blocks',()=>{
-  assert.equal(classifyBrowserAction('browser_click',{label:'Save draft',tag:'button'}),'reversible');
+  for (const label of ['Save draft', 'Save', 'Apply', 'Add', 'Update draft']) {
+    const classification = classifyBrowserAction('browser_click',{label,tag:'button'});
+    assert.equal(classification,'consequential', 'page labels cannot establish reversibility');
+    assert.equal(policyAllows('scoped_changes',classification),false);
+  }
   assert.equal(classifyBrowserAction('browser_click',{label:'Submit report',tag:'button'}),'consequential');
   assert.equal(classifyBrowserAction('browser_click',{label:'Pay now',tag:'button'}),'forbidden');
   assert.equal(policyAllows('ask_every_time','reversible'),false);

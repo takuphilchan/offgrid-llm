@@ -1047,6 +1047,27 @@ use TLS at a reverse proxy, and grant only the permissions a client needs.
 
 ## Models
 
+Administrator endpoint review is separate from model-file maintenance:
+
+- `GET /api/v2/inference-endpoints` returns configured/installed status, exact
+  configuration pins, current policy revision and credential availability only.
+- `POST /api/v2/inference-endpoints/review` accepts `id`, `revision`, `config_pin`,
+  `policy_revision` and `enabled`. It enables or disables an already provisioned
+  identity; it cannot create destinations or expand owner-file actor grants.
+- `POST /api/v2/inference-endpoints/probe` accepts the same identity/revisions
+  without `enabled` and checks metadata through the shared scheduler. It may start
+  a configured managed runtime; success returns `connection_verified: true` and
+  `qualified: false`, never a model-quality qualification.
+
+Current administrator permission is required, and probing also requires enrolled
+chat authority. Stale revisions return 409. Uncertain publication returns 503
+with `endpoint_policy_publication_uncertain`; admitted work is canceled and this
+service blocks further endpoint authority. Disable prevents later HTTP admission
+but cannot undo prompts/effects already sent. Restored policies require fresh
+review. These responses use `Cache-Control: no-store` and never expose credential
+values. Full owner creation/update remains separate unfinished work; see
+[endpoint administration](../advanced/http-inference-endpoints.md).
+
 List installed models and discover the curated catalog:
 
 ```bash
@@ -1546,11 +1567,20 @@ summary that drops those requirements is not a verified completion.
 
 ## Conversation input (preview)
 
-With `OFFGRID_ENABLE_CONVERSATION_PREVIEW` enabled, canonical conversations accept
-text without a mandatory profile through
+Canonical admission is enabled by default in service configuration. Set
+`OFFGRID_ENABLE_CONVERSATION_PREVIEW=false` (or the configuration field
+`enable_conversation_preview: false`) to disable new input while retaining
+inspection, controls and exact retries of accepted input. Canonical conversations
+accept input without a mandatory profile through
 `POST /api/v2/conversations/{id}/inputs`. The command envelope carries
 `request_id`, `target_id`, `expected_revision`, `kind: submit_input` and
-`payload.content`. Input is persisted independently of model availability;
+`payload.content`. Services advertising `conversation-input-options-v1` also accept
+`payload.response_profile: "interactive" | "extended"` and `payload.max_tokens`
+(0–4096), pinned before model qualification and retained for exact retries.
+Omitted settings preserve existing canonical defaults. With
+`conversation-source-inputs-v1`, an ordinary image/file message may have an empty
+caption; corrections, new work and clarification answers require text.
+Input is persisted independently of model availability;
 the existing service runner handles delivery and ongoing work.
 
 Inspect `/api/v2/conversations/{id}/inputs` or a specific input. Submit `stop`,
@@ -1562,8 +1592,9 @@ attempt's identity and budget. Primary clarification answers use `intent: "answe
 with the displayed `question_id` and focused work identity; host approvals retain
 their existing access controls. See the [client contracts](../advanced/client-contracts.md)
 and [OpenAPI source](../../pkg/api/openapi.yaml) for exact payloads, redaction,
-retry rules and current limitations. Default CLI/UI flows have not switched to
-these preview resources.
+retry rules and current limitations. Matching Chat and eligible CLI conversation
+flows use these resources by default. Profile selection remains optional; model
+coordination qualification is still required for ongoing work.
 
 ## Durable jobs and computer access
 

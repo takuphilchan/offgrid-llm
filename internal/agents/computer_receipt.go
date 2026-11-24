@@ -29,6 +29,10 @@ func nativeMutation(d *capabilities.Descriptor, tool string) bool {
 	return ok && effect == capabilities.NativeChange
 }
 
+func receiptableComputerMutation(d *capabilities.Descriptor, tool string) bool {
+	return nativeMutation(d, tool) || (d != nil && d.Name == tool && capabilities.TrustedBrowserOperation(*d) && d.Risk == capabilities.RiskHigh)
+}
+
 // RecordComputerReceipt has no public HTTP route. Only the server's authenticated
 // pending-action reply handler calls it, before acknowledging that reply.
 func (m *Manager) RecordComputerReceipt(id, actor, session, callID, tool string, args json.RawMessage, result string) error {
@@ -38,7 +42,7 @@ func (m *Manager) RecordComputerReceipt(id, actor, session, callID, tool string,
 	}
 	_, err = m.updateTask(id, func(t *Task) error {
 		cp := t.Checkpoint
-		if (t.Status != TaskRunning && t.Status != TaskUncertain) || t.Actor != actor || t.Config.ComputerSession != session || session == "" || cp == nil || cp.ExecutingCall != callID || len(cp.Calls) == 0 || cp.Calls[0].ID != callID || cp.Calls[0].Function.Name != tool || !nativeMutation(cp.ExecutingCapability, tool) {
+		if (t.Status != TaskRunning && t.Status != TaskUncertain) || t.Actor != actor || t.Config.ComputerSession != session || session == "" || cp == nil || cp.ExecutingCall != callID || len(cp.Calls) == 0 || cp.Calls[0].ID != callID || cp.Calls[0].Function.Name != tool || !receiptableComputerMutation(cp.ExecutingCapability, tool) {
 			return ErrRunConflict
 		}
 		expected, e := CanonicalArguments(json.RawMessage(cp.Calls[0].Function.Arguments))
@@ -68,7 +72,7 @@ func recoverComputerReceipt(t *Task) bool {
 	}
 	r, call := cp.ComputerReceipt, cp.Calls[0]
 	args, err := CanonicalArguments(json.RawMessage(call.Function.Arguments))
-	if err != nil || r.Actor != t.Actor || r.Session != t.Config.ComputerSession || r.CallID != cp.ExecutingCall || r.CallID != call.ID || r.Tool != call.Function.Name || r.Arguments != string(args) || !nativeMutation(cp.ExecutingCapability, r.Tool) || !json.Valid([]byte(r.Result)) {
+	if err != nil || r.Actor != t.Actor || r.Session != t.Config.ComputerSession || r.CallID != cp.ExecutingCall || r.CallID != call.ID || r.Tool != call.Function.Name || r.Arguments != string(args) || !receiptableComputerMutation(cp.ExecutingCapability, r.Tool) || !json.Valid([]byte(r.Result)) {
 		return false
 	}
 	t.Steps = append(t.Steps, Step{ID: len(t.Steps) + 1, CallID: r.CallID, Type: "action", Provenance: "companion_receipt", ToolName: r.Tool, ToolArgs: r.Arguments, ToolResult: r.Result, Timestamp: r.At})

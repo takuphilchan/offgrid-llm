@@ -66,7 +66,8 @@ func (r *Runner) reuseCompletedDelegation(task *Task, call api.ToolCall, specs [
 		cp.Messages = append(cp.Messages, api.ChatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: step.ToolResult})
 		cp.Calls = nil
 		task.Steps = append(task.Steps, Step{ID: len(task.Steps) + 1, Type: "delegation_reused", ToolName: call.Function.Name, ToolResult: step.ToolResult, Timestamp: time.Now().UTC()})
-		return true, r.persist(task)
+		resolveAuxiliaryModelRepair(task, "delegation_admission")
+		return true, r.persistModelProgress(task)
 	}
 	return false, nil
 }
@@ -76,6 +77,7 @@ func (r *Runner) reuseCompletedDelegation(task *Task, call api.ToolCall, specs [
 // the parent can answer from completed child evidence. Bound repeated bad
 // proposals instead of presenting a false completed answer.
 func (r *Runner) recordRejectedDelegation(task *Task, call api.ToolCall, reason string) error {
+	chargeAuxiliaryModelRepair(task, "delegation_admission")
 	result, _ := json.Marshal(map[string]any{
 		"error": "delegation_not_admitted", "message": reason,
 		"effects": "none", "verified": false,

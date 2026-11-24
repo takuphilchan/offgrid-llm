@@ -12,6 +12,9 @@ func validConversationDecision(d *api.ConversationDecision) bool {
 }
 
 func validateConversationDecision(entry *api.ConversationInboxEntry, d *api.ConversationDecision) error {
+	if sourceOnlyConversationInput(entry.Input) && (d == nil || d.Kind != "answered") {
+		return ErrControlCommand
+	}
 	if !validConversationDecision(d) || d.Kind == "correction" && entry.WorkID == "" ||
 		d.Kind == "answered" && (entry.Input.Intent == "correction" || entry.Input.Intent == "new_work" || entry.Input.Intent == "answer") ||
 		d.Kind == "new_work" && (entry.Input.Intent == "correction" || entry.Input.Intent == "answer") {
@@ -49,7 +52,7 @@ func (r *Runner) prepareConversationDecision(task *Task, arguments string) (stri
 		return "", ErrRunConflict
 	}
 	if err = validateConversationDecision(entry, &decision); err != nil {
-		return "", err
+		return "", &runtimeArgumentError{cause: err}
 	}
 	if previous := task.ConversationTurn.Decision; previous != nil && *previous != decision {
 		return "", fmt.Errorf("this input already has a recorded decision")

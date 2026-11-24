@@ -99,7 +99,7 @@ test('01 ready Chat saves a reply, survives navigation and saves a follow-up onc
 });
 test('02 missing model setup returns to the preserved draft before the first reply',async({page})=>{
   const s=await workspace(page);s.models=false;await page.goto('/ui/#/chat');await page.locator('.composer textarea').fill('Preserve this');
-  await page.getByRole('button',{name:'Choose a chat model',exact:true}).click();expect(s.writes).toEqual([]);s.models=true;
+  await page.locator('.composer .model-select-trigger').click(); await page.locator('.model-select-panel').getByRole('link', {name:'Models',exact:true}).click();expect(s.writes).toEqual([]);s.models=true;
   await page.getByRole('button',{name:'Return to your draft'}).click();await expect(page.locator('.composer textarea')).toHaveValue('Preserve this');
   await page.getByRole('button',{name:'Send',exact:true}).click();await expect(page.locator('.message.assistant')).toContainText('Preserve this');expect(s.turns).toHaveLength(1);
 });

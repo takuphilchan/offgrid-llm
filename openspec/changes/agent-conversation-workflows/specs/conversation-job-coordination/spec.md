@@ -6,6 +6,66 @@ Keep conversations and durable agent work linked reliably across failures, navig
 
 ## ADDED Requirements
 
+### Requirement: Default canonical admission preserves request semantics
+Matching ordinary clients SHALL use the canonical conversation inbox without
+mandatory profile setup. Normal service configuration SHALL permit this
+admission; an explicit operator disable SHALL stop new admission while preserving
+saved observations, controls, recovery and identical accepted-command receipts.
+Canonical inputs SHALL preserve explicitly selected response context and output
+limits in their durable request identity. Source-only ordinary input SHALL retain
+its image or attachment meaning without inventing an external work objective.
+Legacy requests SHALL retain their explicit semantics, and imported conversation
+ownership SHALL prevent a legacy writer from starting a second execution path.
+
+#### Scenario: Default service and ordinary conversation
+- **WHEN** a matching client submits ordinary conversation on default service configuration without selecting a profile
+- **THEN** one canonical input is accepted through the existing service runner
+- **AND** reload or inspection creates no additional input, inference or work
+
+#### Scenario: Response settings and retry
+- **WHEN** input selects interactive or extended context and an output token limit
+- **THEN** the service pins those options before model qualification and inference
+- **AND** identical retry retains the options while changed reuse conflicts
+
+#### Scenario: Source-only ordinary input
+- **WHEN** an ordinary input contains authorized supported images or attachment references without text
+- **THEN** it can be answered using the same source and model capability checks as text-bearing input
+- **AND** empty input without sources, invalid sources and textless corrections or work objectives remain invalid
+
+#### Scenario: Explicitly disabled admission
+- **WHEN** the operator disables conversation admission after input was accepted
+- **THEN** new input is rejected without discarding its draft
+- **AND** observation, Stop, recovery and identical accepted retries remain available without replay
+
+#### Scenario: Explicit legacy request or native protocol
+- **WHEN** an existing client explicitly uses a legacy conversation API or a model has a pinned native tool protocol
+- **THEN** the legacy request is not silently reinterpreted as canonical work and imported ownership remains enforced
+- **AND** default admission does not add unqualified native coordination tools or discard qualification pins
+
+### Requirement: Foreground discovery is metadata only
+New canonical foreground turns SHALL pin a versioned discovery ceiling separately
+from executable capabilities. The existing task_find_tools control SHALL expose
+only bounded, progressively selected metadata after current actor, conversation,
+profile and provider identity checks. Discovery SHALL NOT invoke providers, contact
+execution hosts, read resource contents, acquire approval, promote executable
+schemas, create work or refresh a budget. Provider prose is untrusted metadata.
+
+#### Scenario: Relevant tool found without execution
+- **WHEN** an authorized foreground turn searches its pinned tool inventory
+- **THEN** at most eight matching metadata entries and a continuation offset are returned
+- **AND** each result states that work admission and live authorization remain required
+- **AND** subsequent foreground model turns and direct forged calls still cannot execute those tools
+
+#### Scenario: Current scope narrows or provider changes
+- **WHEN** actor authority, conversation restrictions, a selected profile or a provider identity no longer permits a pinned discovery entry
+- **THEN** ranking and pagination exclude that entry, including after restart
+- **AND** metadata already recorded remains historical evidence rather than renewed authority
+
+#### Scenario: Existing protocol and qualification
+- **WHEN** a historical turn lacks the versioned discovery ceiling or a runtime is qualified for text only
+- **THEN** no new discovery behavior is enabled for that turn
+- **AND** pinned native tool scope and native coordination guards remain unchanged
+
 ### Requirement: Canonical conversation control
 Projects, conversations, work, runs and workers SHALL have stable scoped identities. Accepted commands SHALL atomically persist state, revision, event and outbox before dispatch. Legacy conversation files SHALL become projections only after an explicit versioned migration. Identical retries SHALL return the original outcome and conflicting payloads SHALL be rejected.
 

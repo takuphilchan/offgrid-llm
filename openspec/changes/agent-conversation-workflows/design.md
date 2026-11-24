@@ -26,6 +26,72 @@ Retain durable output/time reservations; add input/context costs, graph settleme
 
 Trusted supervisors create narrowed per-worker sessions/cwd/process ownership/journals and bounded private copies. Preserve required dirty/untracked inputs and record exclusions; no writable hard links, implicit dependencies or credential exposure. Reuse versioned authorized environment templates. Preparation failure cannot silently fall back to shared-root workers. Working copies are not OS sandboxes.
 
+The first environment increment freezes the existing allowed host environment
+as `minimal-host-v1` at session construction. Child sessions inherit a copy;
+command lookup uses its captured PATH/PATHEXT without implicit cwd search.
+Before journaled local dispatch, schema 4 records the binding, operation/request
+digest, selected executable/cwd and non-secret template descriptor. The descriptor
+contains names and a values digest, not raw values. Record it in copy preparation
+metadata too. Failed/altered publication blocks launch; existing session evidence
+cannot adopt a changed environment on restart. Legacy receipts do not acquire
+invented manifests. This is not executable-byte pinning, cache isolation, custom
+template selection or permission to reconstruct a live grant.
+
+Working-copy inventory and growth measurement must bound directory enumeration
+before allocation, not only count entries after a whole-directory read. Preserve
+deterministic manifest ordering and existing exclusion accounting. Open inspected
+files relative to retained directory handles without following substituted links;
+Unix opens must reject a substituted FIFO without waiting for a writer. Recheck
+opened identity/type before reads or replacement sync. Cancellation and failed
+measurement retain conservative reservations; post-dispatch errors retain the
+displaced content and existing uncertain/conflict receipts.
+
+New private copies persist native directory identity (including volume/device,
+file/inode identity and creation/birth time) before copying input bytes. Explicit
+cleanup requires a durable worker-use lease to be settled by the retained closed
+supervisor, including proof of descendant exit. Restart cannot clear that lease.
+Persist an opaque quarantine intent, move the directory without replacing a
+destination, then verify its native identity before deleting any contents. A
+raced replacement is retained in quarantine without rollback over newer data.
+Inventory remains bounded and removals occur in postorder through the verified
+root. A durable empty-directory checkpoint precedes final removal and capacity
+settlement. Windows disposal targets the retained exact file/directory handle
+and excludes writers. Unix pathname removal is admitted only in the detached
+private namespace after worker settlement. Linux directory changes are synced;
+Windows physical power-loss durability requires separate qualification.
+
+The existing Windows Job owner retains the launched root and captured member
+handles, waits for their actual exits, and compares retained membership with the
+Job's lifetime process count. Accounting zero alone is not sufficient. Unobserved
+members, failed launches, lost owner state and bounded history eviction cannot
+erase uncertainty. Linux uses the shared exact namespace-init/pidfd owner, with
+a pre-dispatch activation gate covering parent loss before PDEATHSIG is armed.
+A pinned native supervisor supplies launcher/shell hashes through its private
+worker startup environment; grant JSON and HTTP/model input cannot select them.
+Nested sessions verify the pins and prepared workers inherit the same owner.
+Init exit/reap permits settlement; missing ownership proof retains the lease.
+Actual escape/nested/native-compiler evidence and remaining platform gates are
+recorded in `docs/quality/evidence/worker-linux-namespace-2026-11-21.md`.
+Replaced/recreated paths, unobserved content, cancellation and receipt failures
+retain uncertainty and reserved capacity; restart never dispatches cleanup.
+Legacy artifacts lacking ownership or settlement evidence remain inspectable
+without automatic adoption. These safe intermediate restrictions do not close
+the required complete descendant ownership, environment-template reuse or
+background supervision contracts.
+
+The Windows owner associates a private completion port before assigning the
+suspended root. New-process notifications prompt immediate membership-validated
+handle capture; they are discovery hints because Windows does not guarantee
+delivery. A bounded, sequenced drain precedes final handle/count settlement.
+Closing the port requires the owned monitor to stop. Missing notifications,
+foreign/recycled process IDs and monitor failures cannot manufacture settlement.
+
+Service completion indexes recorded processes by host/session/handle, not handle
+text alone. Observations must match their recorded start. Terminal completion
+requires a complete receipt, an exit code and versioned descendant-settlement
+proof; another owner's result or an uncertain/dispatched receipt cannot satisfy
+that requirement. Honest failed exits remain reportable without claiming success.
+
 Change sets follow draft/sealed/validating/ready/applying/integrated, with conflict/validation_failed/partial/uncertain/abandoned alternatives. Validate combined candidate changes, assignment epochs, authority and preimages; journal each integration operation and quarantine deletes. A hash check followed by rename is insufficient: qualified backends must retain actual displaced contents and detect mismatches, preserving both versions without blind rollback. Unsupported replacement yields a reviewable change set. Multi-file integration is not atomic and retains per-file receipts.
 
 Service-owned work can outlive a client only with live authorized background supervision. Existing client-owned grants retain their original lifetime. Feature flags stop new admission, not observation/recovery.
@@ -33,6 +99,58 @@ Service-owned work can outlive a client only with live authorized background sup
 ### Delivery and qualification
 
 Tasks 8-14 implement the approved seven increments. Freeze regressions and model/hardware/usability cases before tuning. Require no mandatory agent setup, no classification call on simple answers, all deterministic continuity/control/authorization cases passing, and investigate unexplained single-agent overhead above 10% on matching qualified hardware. Model/native evidence remains separate from fixture success. No deployment, downloads, installed-app replacement, commits or publication are implied.
+
+The default-admission increment makes the existing canonical input capability
+available in normal configuration while retaining the explicit operator disable.
+Clients continue to use explicit import and durable input commands; legacy APIs
+retain their semantics and canonical ownership continues to reject stale legacy
+writes. Response profile and output token options belong to the accepted input
+envelope and are resolved before context-sensitive model qualification. Missing
+options keep established canonical behavior for old envelopes; matching clients
+send their visible response settings rather than silently dropping them.
+
+Source-only ordinary input retains an empty user caption and validated source
+references. It does not synthesize a user objective or relax correction/work
+intent validation. Source validity, actor access, immutable revisions and model
+vision checks remain shared with text-bearing admission and are rechecked at
+preparation. The existing runner must accept this bounded foreground source case
+without permitting empty generic jobs. Request options and source identities
+remain part of retry comparison, including unknown transport outcomes.
+
+Foreground discovery continues task 10.1 through the existing `task_find_tools`
+control. New foreground admission retains a separately versioned ceiling of
+capability identities before clearing executable grants. A service-owned metadata
+callback intersects that ceiling with current actor/conversation/profile policy
+and enabled provider identities. It must not contact host sessions, load resource
+contents or invoke provider operations. Bounded search returns metadata marked
+`work_admission_required`; it never populates the executable discovered-tool pins
+or adds provider schemas to the foreground menu. The original tool schema and
+native qualification guards stay unchanged. Historical turns without the new pin
+retain their existing contract. Test ranking/paging, identity replacement, scope
+revocation, restart, direct forged dispatch and zero provider/host calls. Tasks
+10.1–10.3 stay open until their full client, control and qualification contracts
+are supported by evidence.
+
+Canonical interactive CLI source drafts reuse `ConversationFileDraft`,
+`ChatImageCommand` and the authenticated owning-session attachment transport.
+The canonical loop snapshots image bytes and immutable attachment references
+into the existing input envelope; it does not call legacy generation or own a
+second executor. Source capability checks precede upload and new submission.
+The pending input remains detached from editable draft state. An acknowledgment
+clears only the draft version that was submitted, preserving later changes.
+Explicit retry first observes the existing canonical receipt, including after
+admission is disabled. Answers to pending questions cannot silently absorb or
+discard new sources. Historical source-bearing session import remains governed
+by its existing migration gates rather than erasing old source history.
+Unresolved source-bearing input blocks replacement text until exact retry
+recovery or explicit `/discard-retry`. Discard forgets the local retry only and
+explains that accepted work must be inspected/stopped through service controls.
+An initial required-capability failure before POST or submit POST's 400/413/422
+validation response releases the retry for a corrected draft; receipt-read
+failures, identity conflicts, post-dispatch transport/5xx failures
+and any rejection after prior uncertainty retain it. Receipt lookup precedes
+fresh capability checks, so existing acceptance can be recovered after admission
+or capability withdrawal without a second submission.
 
 ## Historical delivery design
 

@@ -7,6 +7,7 @@ import {stopBrowserAssistance} from './stopBrowser';
 import {nativeAppFeedback,approvalPolicyText} from '../../i18n/native-app';
 import {taskDesktopText} from '../../i18n/task-desktop';
 import {taskSessionAccessText} from '../../i18n/task-session-access';
+import {browserManualText} from '../../i18n/browser-manual';
 
 // Mounted in the workspace shell, not a page. Stopping the local browser must
 // remain possible while navigating, checking a model or waiting for approval.
@@ -46,9 +47,11 @@ export function ComputerActivity() {
  useEffect(() => { if (sessions.some(s => s.state === 'ready')) setStopping(false); }, [sessions]);
  if (!sessions.length && !local.active && !stopping && !error) return null;
  const sessionReady=local.active&&local.state==='access_ready';
- const heading=sessionReady?taskSessionAccessText(locale).ready:native?nativeText.connected:text.connected;
+ const handoff=['manual','taking_over','resuming'].includes(local.state),manualCopy=browserManualText(locale);
+ const locallyStopped=!native&&local.state==='stopped';
+ const heading=locallyStopped?computerExperience(locale).stopped:local.state==='manual'?manualCopy.manual:handoff?manualCopy.pending:sessionReady?taskSessionAccessText(locale).ready:native?nativeText.connected:text.connected;
  return <aside className="computer-activity" aria-label={heading}>
-  <div><strong>{heading}</strong>{sessions.map(s => <p key={s.id}>{s.desktop?taskDesktopText(locale).desktop:s.origin} · {s.approval_mode==='full_task'?approvalText.full:s.approval_mode==='scoped_changes'?approvalText.scoped:approvalText.ask} · {s.state==='awaiting_consent'?taskDesktopText(locale).working:text[s.state ?? 'in_use']}</p>)}
+  <div><strong>{heading}</strong>{!handoff&&!locallyStopped&&sessions.map(s => <p key={s.id}>{s.desktop?taskDesktopText(locale).desktop:s.origin} · {s.approval_mode==='full_task'?approvalText.full:s.approval_mode==='scoped_changes'?approvalText.scoped:approvalText.ask} · {s.state==='awaiting_consent'?taskDesktopText(locale).working:text[s.state ?? 'in_use']}</p>)}
   {stopping && <p role="status">{native?nativeText.stopping:text.stopping}</p>}{(lost || error) && <p role="alert">{error || text.lost}</p>}</div>
   {stopping && !sessions.length && !local.active && !lost && !error ? <button type="button" className="secondary-button" onClick={() => setStopping(false)}>{text.close}</button> : <button type="button" className="secondary-button" disabled={busy} onClick={() => void stop()}>{native||local.active?nativeText.stop:text.stop}</button>}
  </aside>;

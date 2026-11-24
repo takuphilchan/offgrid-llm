@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-startup-state="loading">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,19 +7,16 @@
   <title>OffGrid</title>
   <link rel="stylesheet" href="startup.css">
   <link rel="stylesheet" href="startup-surface.css">
-  <script src="startup-welcome.js" defer></script>
   <script src="startup.js" defer></script>
 </head>
 <body>
-  <main>
+  <main class="startup-content">
     <header class="startup-brand"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 12l10 5 10-5"/><path d="M2 17l10 5 10-5"/></svg><span>OffGrid</span></header>
-    <p id="startup-welcome" class="startup-welcome">Welcome to OffGrid.</p>
     <section class="connection" aria-labelledby="status-title">
-      <div class="status-row" role="status" aria-live="polite"><div><h1 id="status-title">Checking your service</h1><p id="status-text">Connecting to OffGrid…</p></div></div>
+      <div class="status-row" role="status" aria-live="polite"><div><h1 id="status-title">Checking your service</h1><p id="status-text" class="startup-message" hidden>Connecting to OffGrid…</p></div></div>
 
-      <span id="startup-elapsed" class="startup-elapsed" aria-hidden="true"></span>
       <div id="recovery" hidden>
-        <div class="actions"><button id="retry" data-copy="retry" type="button">Retry connection</button><button id="repair" data-copy="guide" type="button" hidden>Setup and recovery guide</button></div>
+        <div class="startup-actions"><button id="retry" data-copy="retry" type="button">Retry connection</button><button id="repair" data-copy="guide" type="button" hidden>Setup and recovery guide</button></div>
       </div>
       <details id="technical" hidden><summary data-copy="details">Technical details</summary>
         <button id="browser" data-copy="browser" type="button" class="secondary" hidden>Open existing web workspace</button>

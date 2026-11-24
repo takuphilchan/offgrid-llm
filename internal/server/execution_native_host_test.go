@@ -17,6 +17,7 @@ import (
 
 	"github.com/takuphilchan/offgrid-llm/internal/execution"
 	"github.com/takuphilchan/offgrid-llm/internal/serviceclient"
+	"github.com/takuphilchan/offgrid-llm/internal/testhost"
 )
 
 func TestNativeApplicationPrivateHostIPCUsesCanonicalExecution(t *testing.T) {
@@ -32,7 +33,7 @@ func TestNativeApplicationPrivateHostIPCUsesCanonicalExecution(t *testing.T) {
 	if err = client.StrictJSON(ctx, http.MethodPost, "/api/v2/execution/pairing", struct{}{}, &pair, 4096); err != nil {
 		t.Fatal(err)
 	}
-	root, state := t.TempDir(), filepath.Join(t.TempDir(), "native-state")
+	root, state := t.TempDir(), filepath.Join(testhost.PrivateDirectory(t), "native-state")
 	file := "offgrid-executor"
 	if runtime.GOOS == "windows" {
 		file += ".exe"
@@ -53,12 +54,29 @@ func TestNativeApplicationPrivateHostIPCUsesCanonicalExecution(t *testing.T) {
 	if err = command.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { input.Close(); _ = command.Process.Kill() }()
+	waited := false
+	wait := func() error {
+		if waited {
+			return nil
+		}
+		waited = true
+		return command.Wait()
+	}
+	stop := func() {
+		input.Close()
+		if !waited {
+			_ = command.Process.Kill()
+			_ = wait()
+		}
+	}
+	defer stop()
 	if err = execution.WriteFrame(input, execution.NativeHostRequest{Protocol: 1, Service: server.URL, Pairing: pair, Folder: root, Permissions: execution.Permissions{Read: true, Write: true}}); err != nil {
 		t.Fatal(err)
 	}
 	var ready execution.NativeHostState
 	if err = execution.ReadFrame(output, &ready); err != nil {
+		// Wait also joins os/exec's stderr copier before reading its buffer.
+		stop()
 		t.Fatal(err, diagnostics.String())
 	}
 	if ready.State != "ready" || ready.Resource == nil || ready.Resource.Root != root || ready.Resource.Permissions.Processes {
@@ -81,9 +99,10 @@ func TestNativeApplicationPrivateHostIPCUsesCanonicalExecution(t *testing.T) {
 	input.Close()
 	var stopped execution.NativeHostState
 	if err = execution.ReadFrame(output, &stopped); err != nil || stopped.State != "stopped" {
+		stop()
 		t.Fatal(stopped, err, diagnostics.String())
 	}
-	if err = command.Wait(); err != nil {
+	if err = wait(); err != nil {
 		t.Fatal(err, diagnostics.String())
 	}
 	if got := s.executionHosts.List(ctx, pair.Actor, pair.Workspace); len(got) != 0 {
@@ -96,7 +115,8 @@ func TestNativeApplicationPrivateHostIPCUsesCanonicalExecution(t *testing.T) {
 
 func buildExecutionPackFixture(t *testing.T, ctx context.Context) string {
 	t.Helper()
-	directory := t.TempDir()
+	testhost.Account(t)
+	directory := testhost.PrivateDirectory(t)
 	file, gofile := "offgrid-executor", "go"
 	if runtime.GOOS == "windows" {
 		file += ".exe"
@@ -155,7 +175,7 @@ func TestNativeApprovalStartsPinnedWorkerOverAuthenticatedBridge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root, state := t.TempDir(), filepath.Join(t.TempDir(), "private-state")
+	root, state := t.TempDir(), filepath.Join(testhost.PrivateDirectory(t), "private-state")
 	options := execution.LocalHostOptions{Folder: root, PackDirectory: pack, StateDirectory: state, Version: "development", Permissions: execution.Permissions{Read: true, Write: true, Processes: true}}
 	if _, err = execution.StartLocalHost(ctx, client, options, func(execution.LocalApproval) bool { return false }); err == nil {
 		t.Fatal("decline created authority")
@@ -214,7 +234,8 @@ func TestNativeApprovalStartsPinnedWorkerOverAuthenticatedBridge(t *testing.T) {
 	processArgs, _ := json.Marshal(execution.ProcessSpec{Program: "go", Arguments: []string{"test", "."}, TimeoutSeconds: 45})
 	response, err = s.executionHosts.Call(ctx, host.Context.Binding.Actor, host.Context.Binding.Workspace, "pinned-job", "routine-test-once", ref, "process_start", processArgs)
 	if err != nil || response.Receipt == nil || response.Receipt.State != "dispatched" {
-		t.Fatal(response, err)
+		diagnostic, _ := json.Marshal(response)
+		t.Fatal(string(diagnostic), err)
 	}
 	var process execution.ProcessResult
 	if err = json.Unmarshal(response.Receipt.Result, &process); err != nil || process.Handle == "" {

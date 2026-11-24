@@ -40,7 +40,7 @@ func (s *Server) switchModelWithContextSize(ctx context.Context, modelID string,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	metadata, err := s.registry.GetChatModel(modelID)
+	metadata, err := s.localChatMetadata(modelID)
 	if err != nil {
 		return err
 	}
@@ -159,6 +159,9 @@ func (s *Server) llamaBindingCurrent(modelID string) bool {
 
 func (s *Server) acquireInferenceContextTimed(ctx context.Context, modelID string, contextWindow int, loading func() error) (func(), inference.ProviderTiming, error) {
 	var timing inference.ProviderTiming
+	if isEndpointModel(modelID) {
+		return nil, timing, errors.New("explicit HTTP endpoint cannot acquire a local model lease")
+	}
 	// The shared scheduler coordinates admission and the established llama
 	// lifecycle lease through the caller's generation. The model cache still
 	// owns the actual llama process during this compatibility migration.

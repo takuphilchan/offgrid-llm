@@ -228,7 +228,10 @@ func RunPlainConversationChat(ctx context.Context, client *serviceclient.Client,
 		return RunCanonicalConversationChat(ctx, client, saved, in, out)
 	}
 	if serviceclient.PlainSessionCanMigrate(saved) {
-		if identity, e := client.Identity(ctx); e == nil && identity.Supports("conversation-input-admission-v1") {
+		if identity, e := client.Identity(ctx); e == nil && (identity.Supports("conversation-input-admission-v1") || identity.Supports("conversation-input-options-v1")) {
+			if !identity.Supports("conversation-input-admission-v1") {
+				return fmt.Errorf("New conversation admission is disabled; saved work remains available for inspection and controls")
+			}
 			c, e := client.ImportSessionConversation(ctx, name, "chat-"+name)
 			if e != nil {
 				return e

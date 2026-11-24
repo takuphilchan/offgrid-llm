@@ -64,6 +64,9 @@ func (r *Runner) prepareWorkerWorkAttempt(tx *sql.Tx, scope ControlScope, worker
 	// proposals belong to the old run and remain there for inspection.
 	checkpoint := &Checkpoint{Messages: cp.Messages, Iteration: cp.Iteration, BudgetedModelCalls: cp.BudgetedModelCalls, ReservedChildIterations: cp.ReservedChildIterations, ChargedCompletionTokens: cp.ChargedCompletionTokens, ChargedInferenceNS: cp.ChargedInferenceNS, MeasuredCompletionTokens: cp.MeasuredCompletionTokens, MeasuredInferenceNS: cp.MeasuredInferenceNS, UnmeasuredModelCalls: cp.UnmeasuredModelCalls, SyntheticProbeCalls: cp.SyntheticProbeCalls, SyntheticProbeTokens: cp.SyntheticProbeTokens, SyntheticProbeNS: cp.SyntheticProbeNS}
 	checkpoint.ChildBudgetSettlements = cp.ChildBudgetSettlements
+	checkpoint.AuxiliaryModelRepairs = newAuxiliaryModelRepairs()
+	checkpoint.ModelBudget = cp.ModelBudget
+	checkpoint.ModelSwitches = cp.ModelSwitches
 	checkpoint.InheritedChildIterations = cp.ReservedChildIterations
 	checkpoint.InputBudget = cp.InputBudget
 	checkpoint.ToolBudget = cp.ToolBudget
@@ -95,6 +98,15 @@ func (r *Runner) prepareWorkerWorkAttempt(tx *sql.Tx, scope ControlScope, worker
 		}
 	}
 	next := &Task{ID: "run-" + runID(), WorkID: current.WorkID, PreviousWorkerIDs: previous, Actor: current.Actor, Model: current.Model, Prompt: current.Prompt, Status: TaskChildren, Config: config, Origin: copy.Origin, CreatedAt: time.Now().UTC(), InstructionVersion: current.InstructionVersion, ControlEpoch: current.ControlEpoch + 1, Checkpoint: checkpoint, Context: copy.Context, ContextArchive: copy.ContextArchive}
+	if modelGraphEnabled(current) {
+		next.Checkpoint.ModelBudget, err = r.manager.initialModelGraphBudget(current)
+		if err != nil {
+			return nil, err
+		}
+		if err = transferModelCorrections(next, current, next); err != nil {
+			return nil, err
+		}
+	}
 	if len(work.RunIDs) == 0 {
 		work.RunIDs = []string{work.RunID}
 	}

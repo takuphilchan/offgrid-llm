@@ -212,6 +212,31 @@ func copyContainerOutput(input io.Reader, output io.Writer) error {
 }
 
 func (i *LinuxIsolation) start(ctx context.Context, revoked <-chan struct{}, journal *Journal, r Request, spec ProcessSpec, directory string, p *ownedProcess) error {
+	ctx, cancelActivation := context.WithCancel(ctx)
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			cancelActivation()
+		}
+	}()
+	go func() {
+		select {
+		case <-revoked:
+			cancelActivation()
+		case <-ctx.Done():
+		}
+	}()
+	activationError := func() error {
+		select {
+		case <-revoked:
+			return ErrAuthority
+		default:
+			return ctx.Err()
+		}
+	}
+	if err := activationError(); err != nil {
+		return err
+	}
 	if err := inspectIsolationRoot(i.root); err != nil {
 		return err
 	}
@@ -249,11 +274,32 @@ func (i *LinuxIsolation) start(ctx context.Context, revoked <-chan struct{}, jou
 	if _, exists, err := i.inspect(ctx, c); err != nil || !exists {
 		return uncertain(ErrAuthority)
 	}
-	streamctx, stopStream := context.WithCancel(context.Background())
+	// Acknowledged create is not process dispatch. If activation is cancelled,
+	// reconcile only this durable owner; an unproven cleanup remains uncertain.
+	abandon := func(cause error) error {
+		control, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := i.cleanup(control, c); err != nil {
+			return uncertain(errors.Join(cause, err))
+		}
+		if err := journal.forgetContainer(control, c); err != nil {
+			return uncertain(errors.Join(cause, err))
+		}
+		return cause
+	}
+	if err := activationError(); err != nil {
+		return abandon(err)
+	}
+	streamctx, stopStream := context.WithCancel(ctx)
 	stream, err := i.attach(streamctx, c.ID)
 	if err != nil {
 		stopStream()
-		return uncertain(err)
+		return abandon(err)
+	}
+	if err := activationError(); err != nil {
+		stream.Close()
+		stopStream()
+		return abandon(err)
 	}
 	outputDone := make(chan error, 1)
 	go func() { outputDone <- copyContainerOutput(stream, &p.output) }()
@@ -268,7 +314,11 @@ func (i *LinuxIsolation) start(ctx context.Context, revoked <-chan struct{}, jou
 		}
 		return uncertain(ErrHostUnavailable)
 	}
-	go i.supervise(ctx, revoked, journal, c, p, stream, stopStream, outputDone)
+	handedOff = true
+	go func() {
+		defer cancelActivation()
+		i.supervise(ctx, revoked, journal, c, p, stream, stopStream, outputDone)
+	}()
 	return nil
 }
 
@@ -365,6 +415,7 @@ func (i *LinuxIsolation) supervise(ctx context.Context, revoked <-chan struct{},
 	}
 	p.mu.Lock()
 	p.state, p.exit = state, exit
+	p.cleanupVerified = state != "uncertain" && exit != nil
 	p.elapsed = time.Since(p.started)
 	p.mu.Unlock()
 }

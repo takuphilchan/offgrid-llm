@@ -20,16 +20,19 @@ import (
 // supervisor operation, not an HTTP/renderer/model entry point. The expected
 // digest must come from the matching trusted application asset manifest.
 type StdioEndpoint struct {
-	identity      WorkerIdentity
-	input         io.WriteCloser
-	output        io.ReadCloser
-	token         string
-	gate          chan struct{}
-	done          chan struct{}
-	stop          func() error
-	closeOnce     sync.Once
-	closeErr      error
-	cleanupResult chan error
+	identity          WorkerIdentity
+	input             io.WriteCloser
+	output            io.ReadCloser
+	token             string
+	gate              chan struct{}
+	done              chan struct{}
+	stop              func() error
+	closeOnce         sync.Once
+	closeErr          error
+	cleanupResult     chan error
+	protectionMu      sync.Mutex
+	protection        *stdioProtectionOwner
+	protectionCleanup *stdioNativeCleanup
 }
 
 func StartStdio(ctx context.Context, binary, digest, grant, state string) (*StdioEndpoint, error) {
@@ -41,11 +44,9 @@ func StartStdio(ctx context.Context, binary, digest, grant, state string) (*Stdi
 	}
 	// Capture only a private native configuration. It never authorizes new
 	// operations: after worker exit the supervisor may only stop owned objects.
-	var approved Context
-	if grantInfo, err := os.Lstat(grant); err == nil && grantInfo.Mode().IsRegular() && grantInfo.Size() <= MaxFrameBytes && CheckPrivatePath(grant) == nil {
-		if data, err := os.ReadFile(grant); err == nil {
-			_ = decodeStrict(data, &approved)
-		}
+	approved, err := readProtectionGrant(grant)
+	if err != nil {
+		return nil, err
 	}
 	info, err := os.Lstat(binary)
 	if err != nil || !info.Mode().IsRegular() {
@@ -66,8 +67,16 @@ func StartStdio(ctx context.Context, binary, digest, grant, state string) (*Stdi
 		return nil, err
 	}
 	token := hex.EncodeToString(secret[:])
+	runtimeEnvironment, err := supervisedProcessEnvironment(state)
+	if err != nil {
+		return nil, err
+	}
 	command := exec.Command(binary, "--stdio", "--grant-file", grant, "--state-dir", state)
 	command.Env = append(processEnvironment(), "OFFGRID_EXECUTOR_TOKEN="+token)
+	command.Env = append(command.Env, runtimeEnvironment...)
+	if approved.Backend == "local" && nativeCleanupVerified(nil) {
+		command.Env = append(command.Env, protectionRecoveryEnvironment+"=1")
+	}
 	input, err := command.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -86,13 +95,17 @@ func StartStdio(ctx context.Context, binary, digest, grant, state string) (*Stdi
 	e := &StdioEndpoint{input: input, output: output, token: token, gate: make(chan struct{}, 1), done: make(chan struct{}), stop: stop, cleanupResult: make(chan error, 1)}
 	go func() {
 		waitErr := wait()
-		release()
+		releaseErr := release()
+		e.recordProtectionCleanup(releaseErr)
 		input.Close()
 		output.Close()
-		cleanupErr := waitErr
+		cleanupErr := errors.Join(waitErr, releaseErr)
 		if runtime.GOOS == "linux" && approved.Backend == "isolated_linux" {
 			cleanupErr = errors.Join(cleanupErr, cleanupStoppedWorker(approved, state))
 		}
+		settled, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cleanupErr = errors.Join(cleanupErr, e.finishProtection(settled))
+		cancel()
 		e.cleanupResult <- cleanupErr
 		close(e.done)
 	}()
@@ -121,9 +134,9 @@ func StartStdio(ctx context.Context, binary, digest, grant, state string) (*Stdi
 		e.Close()
 		return nil, ErrProtocol
 	}
-	if decodeStrict(ready.Receipt.Result, &e.identity) != nil || e.identity.Protocol != ProtocolVersion || e.identity.Revision != PackRevision {
+	if err = e.acceptProtectionStartup(ctx, ready.Receipt.Result, approved, state); err != nil {
 		e.Close()
-		return nil, ErrProtocol
+		return nil, err
 	}
 	return e, nil
 }
@@ -255,5 +268,7 @@ func (e *StdioEndpoint) Close() error {
 			e.closeErr = errors.Join(ErrHostUnavailable, signalErr)
 		}
 	})
-	return e.closeErr
+	settled, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return errors.Join(e.closeErr, e.finishProtection(settled))
 }

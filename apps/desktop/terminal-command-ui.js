@@ -8,18 +8,37 @@ function mountTerminalCommands({current,request,onOpen}) {
   const dialog=document.createElement('dialog');dialog.id='terminal-commands';dialog.setAttribute('aria-label',terminalText("Command context"));
   dialog.dataset.terminalLabel='Command context';
   dialog.innerHTML=`<div class="command-context-heading"><div><h2><span data-terminal-text="Command context">Command context</span></h2>
-    <p class="display-note"><span data-terminal-text="Review terminal output before sharing it with Chat. Shell reports are not verified agent actions.">Review terminal output before sharing it with Chat. Shell reports are not verified agent actions.</span></p></div>
-    <button class="command-context-close" type="button" aria-label="Close command context" data-terminal-label="Close command context">×</button></div>
-    <section id="context-empty" hidden><h3><span data-terminal-text="No output selected">No output selected</span></h3><p><span data-terminal-text="Run a command, or select text in the terminal, then open Commands to review and share it.">Run a command, or select text in the terminal, then open Commands to review and share it.</span></p><button id="context-return"><span data-terminal-text="Return to terminal">Return to terminal</span></button></section>
-    <div id="context-content"><div class="context-command-row"><label id="context-command-label"><span data-terminal-text="Recent command">Recent command</span><select id="context-command"></select></label><p id="context-state" role="status"></p></div>
-    <div class="context-navigation"><button id="context-jump"><span data-terminal-text="Go to output">Go to output</span></button><button id="context-selection"><span data-terminal-text="Use selected text">Use selected text</span></button></div>
-    <details id="context-metadata"><summary><span data-terminal-text="Command and folder">Command and folder</span></summary><label><span data-terminal-text="Command">Command</span><input id="context-title" maxlength="4096"></label><label><span data-terminal-text="Folder">Folder</span><input id="context-folder" maxlength="2048"></label></details>
-    <label id="context-output-label"><span data-terminal-text="Output">Output</span><textarea id="context-output" rows="3" maxlength="32768" spellcheck="false"></textarea></label>
+  <p class="display-note"><span data-terminal-text="Review terminal output before sharing it with Chat. Shell reports are not verified agent actions.">Review terminal output before sharing it with Chat. Shell reports are not verified agent actions.</span></p></div>
+  <button class="command-context-close" type="button" aria-label="Close command context" data-terminal-label="Close command context"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 6 12 12M6 18 18 6"/></svg></button></div>
+<section id="context-empty" hidden><h3><span data-terminal-text="No output selected">No output selected</span></h3><p><span data-terminal-text="Run a command, or select text in the terminal, then open Commands to review and share it.">Run a command, or select text in the terminal, then open Commands to review and share it.</span></p><button id="context-return"><span data-terminal-text="Return to terminal">Return to terminal</span></button></section>
+<div id="context-content">
+  <label id="context-command-label"><span data-terminal-text="Recent command">Recent command</span><select id="context-command"></select></label>
+  <div class="context-source-toolbar"><p id="context-state" role="status"></p><details id="context-metadata"><summary><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/></svg><span data-terminal-text="Command and folder">Command and folder</span></summary><label><span data-terminal-text="Command">Command</span><input id="context-title" maxlength="4096"></label><label><span data-terminal-text="Folder">Folder</span><input id="context-folder" maxlength="2048"></label></details></div>
+  <section class="context-review">
+    <div class="context-output-heading"><label id="context-output-label" for="context-output"><span data-terminal-text="Output">Output</span></label><div class="context-navigation"><button id="context-jump"><span data-terminal-text="Go to output">Go to output</span></button><button id="context-selection"><span data-terminal-text="Use selected text">Use selected text</span></button><button id="context-copy"><span data-terminal-text="Copy context">Copy context</span></button></div></div>
+    <textarea id="context-output" rows="1" maxlength="32768" spellcheck="false" aria-describedby="context-limits"></textarea>
     <p id="context-limits" class="display-note"></p>
-    <label id="context-question-label"><span data-terminal-text="Your question">Your question</span><textarea id="context-question" rows="2" maxlength="2000" placeholder="What would you like help with?" data-terminal-placeholder="What would you like help with?"></textarea></label>
-    <div id="context-error" role="alert"></div><div class="display-actions"><button id="context-copy"><span data-terminal-text="Copy context">Copy context</span></button><button id="context-share"><span data-terminal-text="Continue in Chat">Continue in Chat</span></button></div></div>`;
+  </section>
+  <section class="context-compose">
+    <label id="context-question-label"><span class="context-sr-only" data-terminal-text="Your question">Your question</span><textarea id="context-question" rows="2" maxlength="2000" placeholder="What would you like help with?" data-terminal-placeholder="What would you like help with?"></textarea></label>
+    <div id="context-error" role="alert"></div>
+    <div class="context-compose-actions"><button id="context-share"><span data-terminal-text="Continue in Chat">Continue in Chat</span></button></div>
+  </section>
+</div>`;
   document.body.append(dialog);
   const field=id=>dialog.querySelector('#context-'+id);
+  function fitOutput(){
+    if(!dialog.open||field('output').getClientRects().length===0)return;
+    const output=field('output'),top=output.scrollTop;
+    output.style.height='auto';
+    const available=innerHeight-42-(dialog.scrollHeight-output.offsetHeight);
+    output.style.height=Math.min(Math.max(54,output.scrollHeight+2),Math.max(96,Math.min(240,available)))+'px';
+    output.scrollTop=top;
+  }
+  let previewWidth=0;
+  new ResizeObserver(()=>{const width=dialog.clientWidth;if(width!==previewWidth){previewWidth=width;fitOutput();}}).observe(dialog);
+  window.addEventListener('resize',fitOutput);
+  document.fonts.ready.then(fitOutput);
   function showError(error){
     const message=document.createElement('p'),details=document.createElement('details'),summary=document.createElement('summary'),technical=document.createElement('pre');
     message.dataset.terminalText='The terminal request could not be confirmed. Check its state before trying again.';
@@ -39,7 +58,7 @@ function mountTerminalCommands({current,request,onOpen}) {
     if(!edited)field('output').value=result.text;
     state(!selected.finished?terminalText("Command still running"):selected.exit===null?(selected.failed?terminalText("Shell reported failure; exact exit code unavailable"):terminalText("Outcome unknown")):terminalText('Shell reported exit {code} · {seconds}s',{code:selected.exit,seconds:(selected.duration/1000).toLocaleString(document.documentElement.lang,{minimumFractionDigits:1,maximumFractionDigits:1})}));
     field('limits').textContent=!selected.finished?terminalText("Output will appear here when the command finishes."):!result.available?terminalText("Output unavailable or removed from scrollback. Select visible output instead."):!result.text.trim()?terminalText("This command produced no text output."):truncated?terminalText("Output or command shortened to the preview limit. Review before sharing."):terminalText("Only this command’s visible output is included. Edit to remove private content.");
-    field('jump').disabled=!selected.start||selected.start.isDisposed;content();
+    field('jump').disabled=!selected.start||selected.start.isDisposed;content();fitOutput();
   }
   function selection() {
     const text=tab?.term.getSelection()||'';
@@ -47,7 +66,7 @@ function mountTerminalCommands({current,request,onOpen}) {
     selected=null;edited=false;truncated=text.length>32768;field('content').dataset.emptyOutput='false';
     field('title').value='';field('folder').value=tab.commands.cwd||tab.cwd;
     field('output').value=text.slice(0,32768).replace(/[\uD800-\uDBFF]$/,'');field('jump').disabled=true;
-    field('command').selectedIndex=-1;content();
+    field('command').selectedIndex=-1;content();fitOutput();
     state(terminalText("Manually selected output · command and outcome not verified"));field('limits').textContent=truncated?terminalText("Selection shortened to 32,768 characters."):terminalText("Review the selected text before sharing.");
   }
   function payload(){return {version:1,command:field('title').value,cwd:field('folder').value,output:field('output').value,question:field('question').value.trim(),truncated,source:'terminal_selection'};}
@@ -57,9 +76,11 @@ function mountTerminalCommands({current,request,onOpen}) {
     field('error').textContent='';field('question').value='';field('command').replaceChildren();field('metadata').open=false;field('command-label').hidden=!tab.commands.commands.length;field('selection').hidden=!tab.term.hasSelection();field('selection').disabled=!tab.term.hasSelection();
     for(const command of [...tab.commands.commands].reverse()) {const option=document.createElement('option');option.value=String(command.id);option.textContent=command.command.slice(0,100);field('command').append(option);}
     if(tab.term.hasSelection())selection();else if(tab.commands.commands.length)choose();else{field('title').value='';field('folder').value=tab.commands.cwd||tab.cwd;field('output').value='';field('jump').disabled=true;field('empty').hidden=false;field('content').hidden=true;}
-    dialog.showModal();onOpen(true);(field('content').hidden?field('return'):field('question')).focus();
+    dialog.showModal();onOpen(true);(field('content').hidden?field('return'):field('command-label').hidden?field('output'):field('command')).focus();
+    field('output').scrollTop=0;
+    fitOutput();
   }
-  field('output').oninput=()=>{edited=true;field('content').dataset.emptyOutput='false';actions();};field('question').oninput=actions;field('return').onclick=()=>dialog.close();
+  field('output').oninput=()=>{edited=true;field('content').dataset.emptyOutput='false';actions();fitOutput();};field('question').oninput=actions;field('return').onclick=()=>dialog.close();
   button.onclick=open;field('command').onchange=()=>choose();field('selection').onclick=selection;
   field('jump').onclick=()=>{if(selected?.start&&!selected.start.isDisposed){dialog.close();tab.term.scrollToLine(selected.start.line);}};
   dialog.querySelector('[aria-label]').onclick=()=>dialog.close();

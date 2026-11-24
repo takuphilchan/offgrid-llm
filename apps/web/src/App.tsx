@@ -1,5 +1,4 @@
-import { updateWorkspaceStartup } from './lib/workspace-startup';
-import startupTranslations from './i18n/feature-packs.json';
+import { startupCopy, updateWorkspaceStartup } from './lib/workspace-startup';
 import { refreshWorkspace } from './lib/workspace-refresh';
 import { workSurface } from './i18n/work-surface';
 import {CommandWindowHeader, useCommandWindow} from './components/shell/CommandWindow';
@@ -24,7 +23,7 @@ import { WorkspaceNavigation } from './components/shell/WorkspaceNavigation';
 import { SidebarContext } from './components/shell/SidebarSlot';
 import { navigationGroups, pageFromLocation, type Page, type ServiceHealth as Health } from './lib/navigation';
 import { useTheme } from './theme';
-import { readPreference, writePreference } from './lib/preferences';
+import { readPreference, writePreference, reportPreferenceSave } from './lib/preferences';
 import { WorkspaceContext, clearWorkspaceState } from './lib/workspace-context';
 import { SetupHandoffProvider } from './lib/setup-handoff';
 import { WorkspaceDraftProvider, DraftRecoveryNotice } from './lib/draft-scope';
@@ -35,6 +34,7 @@ import { chatReadiness } from './i18n/chat-readiness';
 import { readableModelName } from './features/models/model-display';
 import { workspaceOrder } from './i18n/workspace-order';
 import { modelImport } from './i18n/model-import';
+import type {WorkspaceRecoveryState} from './platform';
 
 const ActivityPage = deferredPage(() => import('./features/activity/ActivityPage').then(module => module.ActivityPage));
 const AgentPage = deferredPage(() => import('./features/agents/AgentPage').then(module => module.AgentPage));
@@ -80,7 +80,13 @@ export function App() {
   const [appearance, setAppearance] = useState(readAppearance);
   useEffect(() => { const changed = () => setAppearance(readAppearance()); window.addEventListener('offgrid-appearance', changed); return () => window.removeEventListener('offgrid-appearance', changed); }, []);
   useEffect(() => {
-    if (window.electron?.setPresentation) void window.electron.setPresentation({ locale:language, theme: theme.choice, appearance }).then(() => window.dispatchEvent(new CustomEvent('offgrid-preference-save',{detail:{key:'desktop-presentation',saved:true}}))).catch(() => window.dispatchEvent(new CustomEvent('offgrid-preference-save',{detail:{key:'desktop-presentation',saved:false}})));
+    if (!window.electron?.setPresentation) return;
+    let current = true;
+    reportPreferenceSave('desktop-presentation', 'pending');
+    void window.electron.setPresentation({ locale:language, theme: theme.choice, appearance })
+      .then(() => { if (current) reportPreferenceSave('desktop-presentation', 'saved'); })
+      .catch(() => { if (current) reportPreferenceSave('desktop-presentation', 'unsaved'); });
+    return () => { current = false; };
   }, [language, theme.choice, appearance]);
   const [page, setPage] = useState<Page>(pageFromLocation);
   const [route,setRoute]=useState(location.hash);
@@ -92,6 +98,13 @@ export function App() {
   const [authUser, setAuthUser] = useState<PublicUser | null>(null);
   const [guest, setGuest] = useState(false);
   const [authRequired, setAuthRequired] = useState(true);
+  const recoveryState=useRef<WorkspaceRecoveryState|undefined>(undefined);
+  useEffect(()=>{
+    const bridge=window.electron;if(bridge?.workspaceRecoveryProtocol!==1)return;
+    const accept=(next:WorkspaceRecoveryState)=>{if(next.version===1&&(!recoveryState.current||next.revision>=recoveryState.current.revision))recoveryState.current=next;};
+    const unsubscribe=bridge.onWorkspaceRecovery?.(accept);void bridge.getWorkspaceRecovery?.().then(accept).catch(()=>{});
+    return()=>{unsubscribe?.();recoveryState.current=undefined;};
+  },[]);
   const [loadError, setLoadError] = useState('');
   const [chatInitialized, setChatInitialized] = useState(false);
   const finishChatStartup = useCallback(() => setChatInitialized(true), []);
@@ -112,8 +125,12 @@ export function App() {
   useEffect(() => {
     if (!onboardingIdentity) return;
     const state = readOnboarding(onboardingIdentity);
-    setOnboardingPending(state.pending); setShowOnboarding(state.visible);
-  }, [onboardingIdentity]);
+    // Identity arrives asynchronously. Restoring a new workspace's pending
+    // setup must not cover an explicit Settings/Library/etc. route that already
+    // dismissed automatic onboarding before that identity was available.
+    const entryRoute = !route || route === '#/' || route === '#/chat' || route === '#/home';
+    setOnboardingPending(state.pending); setShowOnboarding(state.visible && entryRoute);
+  }, [onboardingIdentity, route]);
   const [showCommands, setShowCommands] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   useEffect(() => { setShowHelp(false); }, [route]);
@@ -143,6 +160,12 @@ export function App() {
     setHealth(healthResult.status === 'fulfilled' ? 'ready' : 'offline');
     if (userResult.status === 'rejected') {
       if (userResult.reason instanceof APIError && userResult.reason.status === 401) { setAuthUser(null); setAccess('login'); }
+      else if(lastIdentity.current&&recoveryState.current?.id&&(recoveryState.current.active||recoveryState.current.serviceStopped)&&!(userResult.reason instanceof APIError)){
+        // Keep the already admitted recovery controls reachable through the
+        // intentional service outage. HTTP authentication failures still revoke
+        // access above; host operations retain their own operation authority.
+        setInventoryState('failed');
+      }
       else { setLoadError(userResult.reason instanceof Error ? userResult.reason.message : text.common.error); setAccess('checking'); }
       return;
     }
@@ -257,8 +280,8 @@ export function App() {
     // workspace" status while the initial model/history/turn reads settle.
     // A route label such as "Loading · Chat" is neither a real stage nor
     // useful progress feedback.
-    updateWorkspaceStartup({locale:language, startupOverrides:(startupTranslations as Record<string,Record<string,Record<string,string>>>)[language]?.['desktop/startup-welcome'], retry:text.common.retry});
-    const ready = access === 'login' || !!loadError || (access === 'ready' && (page !== 'chat' || showOnboarding || chatInitialized));
+    updateWorkspaceStartup({locale:language, copy:startupCopy(language), error:access === 'checking' ? loadError : '', onRetry:() => void refreshBase()});
+    const ready = access === 'login' || (access === 'ready' && (!!loadError || page !== 'chat' || showOnboarding || chatInitialized));
     if (!ready) return;
     let second = 0;
     const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => {
@@ -266,7 +289,7 @@ export function App() {
       updateWorkspaceStartup({ready:true});
     }); });
     return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
-  }, [access,loadError,page,showOnboarding,chatInitialized,text,language]);
+  }, [access,loadError,page,showOnboarding,chatInitialized,language,refreshBase]);
   const commandShortcut = navigator.userAgent.includes('Mac') ? '⌘ K' : 'Ctrl K';
 
   if (access === 'checking') return <div className="boot-screen"><div className="orb"><Icon name="models" size={28} /></div><span>{loadError || text.status.checking}</span>{loadError && <button className="secondary-button" onClick={() => void refreshBase()}>{text.common.retry}</button>}</div>;

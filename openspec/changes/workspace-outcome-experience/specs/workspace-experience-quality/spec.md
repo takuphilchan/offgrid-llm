@@ -314,6 +314,72 @@ Desktop confirmations SHALL use application palette tokens while retaining host 
 - **THEN** a host-owned modal shows the folder and stop warning with Cancel focused
 - **AND** only an explicit response from that modal main frame can authorize stopping; closing or losing the modal cancels
 
+#### Scenario: Desktop confirmation follows the workspace appearance
+- **WHEN** a desktop confirmation opens in a supported palette, language or zoom level
+- **THEN** its surface, text, rounded rectangular controls and focus treatment follow the workspace design
+- **AND** its height fits the content within the display, with long details scrolling inside and actions remaining reachable
+- **AND** geometry messages from any other frame cannot resize or confirm the dialog
+
+#### Scenario: Terminal covers a scrollable workspace route
+- **WHEN** the native terminal is open over a long Settings page
+- **THEN** the covered page does not expose an outer scrollbar or respond to wheel scrolling
+- **AND** terminal output retains its own scrollback and returning preserves the page position, draft and terminal session
+
+#### Scenario: Review terminal output and ask a question
+- **WHEN** command context is opened with short or long output
+- **THEN** the editable preview fits its content up to a bounded scrollable height instead of reserving a large empty field
+- **AND** a compact toolbar exposes command/folder details without default browser disclosure chrome, and the question uses the existing Chat composer pattern
+- **AND** command selection and shell-reported status precede the output, while secondary tools stay subordinate to Continue in Chat
+- **AND** commands and output use monospace, questions and explanations use the application typography, and focus is clearly visible without a double field frame
+- **AND** narrow or short windows retain readable output and reachable controls in a scrollable layout; commands keep their original direction in RTL interfaces
+- **AND** opening, resizing, changing appearance, editing or cancelling never submits terminal input or shares context
+
 #### Scenario: Navigation while a permission prompt is queued
 - **WHEN** the parent navigates or closes before a queued decision is made
 - **THEN** active and queued prompts cancel without granting access
+
+### Requirement: Coherent isolated interface refinement
+The shared renderer SHALL provide bounded recent-work continuation, discoverable command search, consistent management navigation and compact saved-result metadata using existing state and authorization contracts.
+
+#### Scenario: Resume from the empty workspace
+- **WHEN** an authorized user opens the empty conversation with saved history
+- **THEN** at most three recent conversations are available through existing activation
+- **AND** navigation preserves the original unsent draft and never submits a request
+
+#### Scenario: Inspect a completed result
+- **WHEN** a completed task already has its answer saved in the conversation
+- **THEN** its work summary is compact and profile revision remains available in details
+- **AND** verification limitations, errors, uncertain effects and access controls are not hidden
+
+#### Scenario: Use management navigation with a keyboard
+- **WHEN** a user moves through model, agent or Activity navigation in narrow/RTL or forced-color layouts
+- **THEN** selected and focused controls remain distinguishable and labels remain readable
+- **AND** switching views never downloads models, changes permissions or starts work
+
+#### Scenario: Scroll local Help in a short window
+- **WHEN** Help topics or articles are scrolled in a narrow, short or enlarged desktop window
+- **THEN** content stays below the fixed Help heading and close action
+- **AND** choosing a topic focuses its article with the title visible, without moving the outer document
+- **AND** closing Help restores focus and the unsent conversation draft
+- **AND** search uses a bounded field with the shared control shape and a single focus surface; result counts remain available to assistive technology without a separate visual counter
+
+#### Scenario: Open the nested workspace access panel
+- **WHEN** Workspace is opened from the composer's attachments menu
+- **THEN** the heading, refresh action, host choices and folder controls retain their own layout rather than inheriting full-width menu-item styling
+- **AND** the title does not split inside a word, keyboard focus is visible around the complete host row, and controls remain reachable when the panel scrolls
+- **AND** inspecting, scrolling or dismissing the panel never grants access, executes commands or submits the draft
+
+#### Scenario: Search for a setting
+- **WHEN** a Settings search has matches
+- **THEN** the content area shows complete result rows with setting names and their sections, rather than bare inline links above editable settings
+- **AND** activating a result clears the query, reveals its existing destination and focuses the control or section heading without changing its value
+- **AND** empty results remain explicit, section and palette searches retain a destination, and clearing search restores the selected section
+
+#### Scenario: Enter the workspace through a restrained startup surface
+- **WHEN** the native host connects and the renderer waits for initial workspace reads
+- **THEN** both use the same compact, intact OffGrid mark, wordmark, palette and one truthful status line
+- **AND** the mark may gently change opacity, without separating layers, a glow, greeting rotation, a seconds counter or artificial progress
+- **AND** the app and operating system reduced-motion preferences disable the animation
+- **AND** failed access stays on the same entrance with a reason and Retry, while a stalled bundle offers reload without exposing inactive Chat controls
+- **AND** native recovery retains its existing explicit actions and expandable technical details without changing authority or service ownership
+- **AND** initial readiness, login, history failure, background refresh and draft preservation retain their existing behavior; narrow, short, RTL, enlarged and forced-color views keep controls reachable

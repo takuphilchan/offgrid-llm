@@ -28,13 +28,17 @@ func main() {
 
 var Version = "development"
 
-func run(args []string) error {
+func run(args []string) (runErr error) {
 	flags := flag.NewFlagSet("offgrid-executor", flag.ContinueOnError)
 	stdio := flags.Bool("stdio", false, "Use supervised private stdio")
 	connect := flags.Bool("connect", false, "Use native application private enrollment IPC")
+	inspection := registerHostProtectionInspection(flags)
 	grant := flags.String("grant-file", "", "Locally approved session configuration")
 	state := flags.String("state-dir", "", "Private dispatch journal directory")
 	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if handled, err := inspection.run(flags, *stdio, *connect, *grant, *state); handled {
 		return err
 	}
 	if *connect {
@@ -78,14 +82,30 @@ func run(args []string) error {
 	if err = execution.PrivateStateOutsideRoot(config.Root, *grant, *state); err != nil {
 		return errors.New("grant and journal must be outside the approved file workspace")
 	}
-	session, err := execution.OpenSession(config)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	registry, err := execution.SupervisedHostProtectionRegistry(os.Getenv("OFFGRID_EXECUTOR_PROCESS_RUNTIME"), *state)
+	if err != nil {
+		return err
+	}
+	if err = execution.EnsurePrivateDirectory(*state); err != nil {
+		return errors.New("journal directory must be private to this account")
+	}
+	lease, err := registry.ReserveExecution(ctx, config, *state)
+	if err != nil {
+		return err
+	}
+	handedOff, recoveringPriorEffects := false, false
+	defer func() {
+		if !handedOff && !recoveringPriorEffects {
+			runErr = errors.Join(runErr, lease.CancelUnactivated(context.Background()))
+		}
+	}()
+	session, err := execution.OpenSupervisedSession(config, os.Getenv("OFFGRID_EXECUTOR_PROCESS_RUNTIME"))
 	if err != nil {
 		return err
 	}
 	defer session.Close()
-	if err = execution.EnsurePrivateDirectory(*state); err != nil {
-		return errors.New("journal directory must be private to this account")
-	}
 	journal, err := execution.OpenJournal(*state)
 	if err != nil {
 		return err
@@ -93,6 +113,10 @@ func run(args []string) error {
 	defer journal.Close()
 	processes := execution.NewProcessManager(session)
 	if config.Backend == "isolated_linux" {
+		// A pre-registry journal may still own containers from an older worker.
+		// Failure to recover them is not proof this reservation never had effects.
+		// Only the eventual worker's verified cleanup may retire this fence.
+		recoveringPriorEffects = true
 		processes, err = execution.NewIsolatedProcessManager(context.Background(), session, journal)
 		if err != nil {
 			return err
@@ -112,7 +136,12 @@ func run(args []string) error {
 	if config.Permissions.Processes {
 		worker.AuthorizeProcess = execution.TrustedProcessPolicy
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-	return worker.Serve(ctx, os.Stdin, os.Stdout)
+	handedOff = true
+	if recovery := os.Getenv("OFFGRID_EXECUTOR_PROTECTION_RECOVERY"); recovery != "" {
+		if recovery != "1" {
+			return execution.ErrAuthority
+		}
+		return worker.ServeProtectedRecoverable(ctx, os.Stdin, os.Stdout, lease)
+	}
+	return worker.ServeProtected(ctx, os.Stdin, os.Stdout, lease)
 }

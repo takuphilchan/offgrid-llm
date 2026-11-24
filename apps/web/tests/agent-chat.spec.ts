@@ -56,6 +56,9 @@ test('desktop folder UI invokes only an access enum, pins the native grant and s
   await page.keyboard.press('Escape');await page.locator('.composer-attachments-menu > button').click();
   await page.getByRole('button',{name:'Workspace',exact:true}).click();
   const panel=page.locator('.execution-workspace-panel');
+  const heading=panel.locator('.execution-workspace-heading strong');
+  const titleLines=await heading.evaluate(el=>{const range=document.createRange();range.selectNodeContents(el);return new Set([...range.getClientRects()].filter(rect=>rect.width>0).map(rect=>Math.round(rect.top))).size;});
+  expect(titleLines).toBe(1);
   await expect(panel.getByRole('combobox',{name:executionNativeText.en.access})).toBeVisible();
   await expect(panel.getByText(executionNativeText.en.access,{exact:true})).toHaveCount(1);
   await expect(panel).not.toContainText('offgrid agent workspace start');

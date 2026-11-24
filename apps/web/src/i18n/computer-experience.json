@@ -32,7 +32,10 @@
       "Select an option",
       "Set a checkbox"
     ],
-    "checkboxStates": ["Checked","Unchecked"],
+    "checkboxStates": [
+      "Checked",
+      "Unchecked"
+    ],
     "change": "Proposed change",
     "target": "Target",
     "value": "New text",
@@ -47,7 +50,19 @@
     "localStoppedDisconnected": "The browser is closed locally. OffGrid is unreachable; check the task outcome when it reconnects.",
     "stopUnconfirmed": "Browser shutdown was not confirmed. Close the separate browser manually and inspect the task before trying again.",
     "verified": "Verified",
-    "notVerified": "Not verified"
+    "notVerified": "Not verified",
+    "additionalSites": "Additional sites",
+    "additionalSitesHint": "Optional: one HTTPS site per line, including resource sites. Up to 15 additional sites; no paths, queries or login credentials.",
+    "invalidScope": "Enter up to 15 different public HTTPS sites without paths, queries or login credentials.",
+    "workspaceConsent": "This task can use up to 8 separate tabs on the listed sites. The selected approval policy applies. Personal profiles and saved logins are not used. Access lasts ten minutes. Stop at any time.",
+    "scopeChanged": "The service, account or browser scope changed during consent. Review the scope and try again.",
+    "scopeUnsupported": "Update the OffGrid service to allow additional sites. No browser was started.",
+    "tabActions": [
+      "List browser tabs",
+      "Open browser tab",
+      "Select browser tab",
+      "Close browser tab"
+    ]
   },
   "fr": {
     "networkSettings": "Paramètres réseau",
@@ -82,7 +97,10 @@
       "Sélectionner une option",
       "Définir une case à cocher"
     ],
-    "checkboxStates": ["Cochée","Décochée"],
+    "checkboxStates": [
+      "Cochée",
+      "Décochée"
+    ],
     "change": "Modification proposée",
     "target": "Cible",
     "value": "Nouveau texte",
@@ -97,7 +115,19 @@
     "localStoppedDisconnected": "Le navigateur est fermé localement. OffGrid est inaccessible ; vérifiez le résultat après reconnexion.",
     "stopUnconfirmed": "La fermeture du navigateur n’a pas été confirmée. Fermez le navigateur séparé manuellement et vérifiez la tâche avant de réessayer.",
     "verified": "Vérifié",
-    "notVerified": "Non vérifié"
+    "notVerified": "Non vérifié",
+    "additionalSites": "Sites supplémentaires",
+    "additionalSitesHint": "Facultatif : un site HTTPS par ligne, y compris les sites de ressources. Jusqu’à 15 sites supplémentaires, sans chemin, requête ni identifiants.",
+    "invalidScope": "Saisissez jusqu’à 15 sites HTTPS publics distincts, sans chemin, requête ni identifiants.",
+    "workspaceConsent": "Cette tâche peut utiliser jusqu’à 8 onglets séparés sur les sites indiqués. La politique d’approbation choisie s’applique. Aucun profil personnel ni identifiant enregistré n’est utilisé. L’accès dure dix minutes. Arrêtez à tout moment.",
+    "scopeChanged": "Le service, le compte ou la portée du navigateur a changé pendant le consentement. Vérifiez la portée et réessayez.",
+    "scopeUnsupported": "Mettez à jour le service OffGrid pour autoriser d’autres sites. Aucun navigateur n’a été démarré.",
+    "tabActions": [
+      "Lister les onglets",
+      "Ouvrir un onglet",
+      "Sélectionner un onglet",
+      "Fermer un onglet"
+    ]
   },
   "de": {
     "networkSettings": "Netzwerkeinstellungen",
@@ -132,7 +162,10 @@
       "Option auswählen",
       "Kontrollkästchen setzen"
     ],
-    "checkboxStates": ["Aktiviert","Deaktiviert"],
+    "checkboxStates": [
+      "Aktiviert",
+      "Deaktiviert"
+    ],
     "change": "Vorgeschlagene Änderung",
     "target": "Ziel",
     "value": "Neuer Text",
@@ -147,7 +180,19 @@
     "localStoppedDisconnected": "Der Browser ist lokal geschlossen. OffGrid ist nicht erreichbar; prüfen Sie das Ergebnis nach der Wiederverbindung.",
     "stopUnconfirmed": "Das Schließen des Browsers wurde nicht bestätigt. Schließen Sie den separaten Browser manuell und prüfen Sie die Aufgabe vor einem neuen Versuch.",
     "verified": "Überprüft",
-    "notVerified": "Nicht überprüft"
+    "notVerified": "Nicht überprüft",
+    "additionalSites": "Weitere Websites",
+    "additionalSitesHint": "Optional: eine HTTPS-Website pro Zeile, einschließlich Ressourcen-Websites. Bis zu 15 weitere Websites, ohne Pfade, Abfragen oder Zugangsdaten.",
+    "invalidScope": "Geben Sie bis zu 15 verschiedene öffentliche HTTPS-Websites ohne Pfade, Abfragen oder Zugangsdaten ein.",
+    "workspaceConsent": "Diese Aufgabe kann bis zu 8 separate Tabs auf den aufgeführten Websites verwenden. Die gewählte Genehmigungsrichtlinie gilt. Persönliche Profile und gespeicherte Anmeldungen werden nicht verwendet. Der Zugriff gilt zehn Minuten. Sie können jederzeit stoppen.",
+    "scopeChanged": "Dienst, Konto oder Browserumfang haben sich während der Zustimmung geändert. Prüfen Sie den Umfang und versuchen Sie es erneut.",
+    "scopeUnsupported": "Aktualisieren Sie den OffGrid-Dienst, um weitere Websites zu erlauben. Es wurde kein Browser gestartet.",
+    "tabActions": [
+      "Browser-Tabs auflisten",
+      "Browser-Tab öffnen",
+      "Browser-Tab auswählen",
+      "Browser-Tab schließen"
+    ]
   },
   "es": {
     "networkSettings": "Configuración de red",
@@ -182,7 +227,10 @@
       "Seleccionar una opción",
       "Establecer una casilla"
     ],
-    "checkboxStates": ["Marcada","Desmarcada"],
+    "checkboxStates": [
+      "Marcada",
+      "Desmarcada"
+    ],
     "change": "Cambio propuesto",
     "target": "Destino",
     "value": "Texto nuevo",
@@ -197,7 +245,19 @@
     "localStoppedDisconnected": "El navegador se cerró localmente. OffGrid no responde; revise el resultado al reconectar.",
     "stopUnconfirmed": "No se confirmó el cierre del navegador. Cierre manualmente el navegador separado y revise la tarea antes de reintentar.",
     "verified": "Verificado",
-    "notVerified": "No verificado"
+    "notVerified": "No verificado",
+    "additionalSites": "Sitios adicionales",
+    "additionalSitesHint": "Opcional: un sitio HTTPS por línea, incluidos los sitios de recursos. Hasta 15 sitios adicionales, sin rutas, consultas ni credenciales.",
+    "invalidScope": "Introduzca hasta 15 sitios HTTPS públicos diferentes, sin rutas, consultas ni credenciales.",
+    "workspaceConsent": "Esta tarea puede usar hasta 8 pestañas separadas en los sitios indicados. Se aplica la política de aprobación elegida. No se usan perfiles personales ni accesos guardados. El acceso dura diez minutos. Puede detenerlo en cualquier momento.",
+    "scopeChanged": "El servicio, la cuenta o el alcance del navegador cambió durante el consentimiento. Revise el alcance e inténtelo de nuevo.",
+    "scopeUnsupported": "Actualice el servicio OffGrid para permitir sitios adicionales. No se inició ningún navegador.",
+    "tabActions": [
+      "Listar pestañas",
+      "Abrir pestaña",
+      "Seleccionar pestaña",
+      "Cerrar pestaña"
+    ]
   },
   "ar": {
     "networkSettings": "إعدادات الشبكة",
@@ -232,7 +292,10 @@
       "اختيار خيار",
       "تعيين حالة مربع الاختيار"
     ],
-    "checkboxStates": ["محدد","غير محدد"],
+    "checkboxStates": [
+      "محدد",
+      "غير محدد"
+    ],
     "change": "التغيير المقترح",
     "target": "الهدف",
     "value": "النص الجديد",
@@ -247,7 +310,19 @@
     "localStoppedDisconnected": "أُغلق المتصفح محلياً. لا يمكن الوصول إلى OffGrid؛ تحقق من نتيجة المهمة عند إعادة الاتصال.",
     "stopUnconfirmed": "لم يتم تأكيد إغلاق المتصفح. أغلق المتصفح المنفصل يدويًا وراجع المهمة قبل إعادة المحاولة.",
     "verified": "تم التحقق",
-    "notVerified": "لم يتم التحقق"
+    "notVerified": "لم يتم التحقق",
+    "additionalSites": "مواقع إضافية",
+    "additionalSitesHint": "اختياري: موقع HTTPS واحد في كل سطر، بما في ذلك مواقع الموارد. حتى 15 موقعًا إضافيًا، دون مسارات أو استعلامات أو بيانات تسجيل دخول.",
+    "invalidScope": "أدخل حتى 15 موقع HTTPS عامًا مختلفًا دون مسارات أو استعلامات أو بيانات تسجيل دخول.",
+    "workspaceConsent": "يمكن لهذه المهمة استخدام ما يصل إلى 8 علامات تبويب منفصلة على المواقع المدرجة. تسري سياسة الموافقة المحددة. لا تُستخدم الملفات الشخصية أو بيانات الدخول المحفوظة. يستمر الوصول عشر دقائق. يمكنك الإيقاف في أي وقت.",
+    "scopeChanged": "تغيرت الخدمة أو الحساب أو نطاق المتصفح أثناء الموافقة. راجع النطاق وحاول مجددًا.",
+    "scopeUnsupported": "حدّث خدمة OffGrid للسماح بمواقع إضافية. لم يتم تشغيل أي متصفح.",
+    "tabActions": [
+      "عرض علامات التبويب",
+      "فتح علامة تبويب",
+      "اختيار علامة تبويب",
+      "إغلاق علامة تبويب"
+    ]
   },
   "sw": {
     "networkSettings": "Mipangilio ya mtandao",
@@ -282,7 +357,10 @@
       "Chagua chaguo",
       "Weka hali ya kisanduku"
     ],
-    "checkboxStates": ["Imechaguliwa","Haijachaguliwa"],
+    "checkboxStates": [
+      "Imechaguliwa",
+      "Haijachaguliwa"
+    ],
     "change": "Badiliko linalopendekezwa",
     "target": "Lengo",
     "value": "Maandishi mapya",
@@ -297,7 +375,19 @@
     "localStoppedDisconnected": "Kivinjari kimefungwa hapa. OffGrid haipatikani; angalia matokeo baada ya kuunganishwa tena.",
     "stopUnconfirmed": "Kufungwa kwa kivinjari hakujathibitishwa. Funga kivinjari tofauti mwenyewe na ukague kazi kabla ya kujaribu tena.",
     "verified": "Imethibitishwa",
-    "notVerified": "Haijathibitishwa"
+    "notVerified": "Haijathibitishwa",
+    "additionalSites": "Tovuti za ziada",
+    "additionalSitesHint": "Si lazima: tovuti moja ya HTTPS kwa kila mstari, pamoja na tovuti za rasilimali. Hadi tovuti 15 za ziada, bila njia, hoja au taarifa za kuingia.",
+    "invalidScope": "Weka hadi tovuti 15 tofauti za umma za HTTPS bila njia, hoja au taarifa za kuingia.",
+    "workspaceConsent": "Kazi hii inaweza kutumia hadi vichupo 8 tofauti kwenye tovuti zilizoorodheshwa. Sera ya idhini iliyochaguliwa inatumika. Wasifu binafsi na taarifa za kuingia zilizohifadhiwa hazitumiki. Ufikiaji hudumu dakika kumi. Simamisha wakati wowote.",
+    "scopeChanged": "Huduma, akaunti au wigo wa kivinjari umebadilika wakati wa idhini. Kagua wigo na ujaribu tena.",
+    "scopeUnsupported": "Sasisha huduma ya OffGrid ili kuruhusu tovuti za ziada. Hakuna kivinjari kilichoanzishwa.",
+    "tabActions": [
+      "Orodhesha vichupo",
+      "Fungua kichupo",
+      "Chagua kichupo",
+      "Funga kichupo"
+    ]
   },
   "sn": {
     "networkSettings": "Marongero enetiweki",
@@ -332,7 +422,10 @@
       "Sarudza sarudzo",
       "Seta bhokisi rekusarudza"
     ],
-    "checkboxStates": ["Rakasarudzwa","Harina kusarudzwa"],
+    "checkboxStates": [
+      "Rakasarudzwa",
+      "Harina kusarudzwa"
+    ],
     "change": "Shanduko yakumbirwa",
     "target": "Chinangwa",
     "value": "Mashoko matsva",
@@ -347,7 +440,19 @@
     "localStoppedDisconnected": "Bhurawuza ravharwa pakombiyuta. OffGrid haisvikiki; tarisa zvakaitika pabasa kana yabatanazve.",
     "stopUnconfirmed": "Kuvharwa kwebhurawuza hakuna kusimbiswa. Vhara bhurawuza rakaparadzana nemaoko woongorora basa usati waedza zvakare.",
     "verified": "Zvasimbiswa",
-    "notVerified": "Hazvina kusimbiswa"
+    "notVerified": "Hazvina kusimbiswa",
+    "additionalSites": "Mamwe masaiti",
+    "additionalSitesHint": "Kana uchida: saiti imwe yeHTTPS pamutsetse, kusanganisira masaiti ezviwanikwa. Masaiti ekuwedzera anosvika 15, pasina nzira, mibvunzo kana mashoko ekupinda.",
+    "invalidScope": "Isa masaiti eruzhinji eHTTPS anosvika 15 akasiyana, pasina nzira, mibvunzo kana mashoko ekupinda.",
+    "workspaceConsent": "Basa iri rinogona kushandisa matabhu anosvika 8 akaparadzana pamasaiti akanyorwa. Mutemo wemvumo wakasarudzwa unoshanda. Maprofairi ako nemashoko ekupinda akachengetwa hazvishandiswi. Mvumo inotora maminitsi gumi. Misa chero nguva.",
+    "scopeChanged": "Sevhisi, akaundi kana muganhu webhurawuza zvachinja panguva yemvumo. Ongorora muganhu woedza zvakare.",
+    "scopeUnsupported": "Gadziridza sevhisi yeOffGrid kuti ubvumire mamwe masaiti. Hapana bhurawuza ratangwa.",
+    "tabActions": [
+      "Ratidza matabhu",
+      "Vhura tabhu",
+      "Sarudza tabhu",
+      "Vhara tabhu"
+    ]
   },
   "nd": {
     "networkSettings": "Izilungiselelo zenethiwekhi",
@@ -382,7 +487,10 @@
       "Khetha inketho",
       "Setha ibhokisi lokukhetha"
     ],
-    "checkboxStates": ["Likhethiwe","Alikhethwanga"],
+    "checkboxStates": [
+      "Likhethiwe",
+      "Alikhethwanga"
+    ],
     "change": "Inguquko eceliweyo",
     "target": "Okuqondiweyo",
     "value": "Umbhalo omutsha",
@@ -397,7 +505,19 @@
     "localStoppedDisconnected": "Ibhrawuza ivaliwe kukhompyutha. I-OffGrid ayitholakali; hlola umphumela nxa isixhunyiwe futhi.",
     "stopUnconfirmed": "Ukuvalwa kwebhrawuza akuqinisekiswanga. Vala ibhrawuza ehlukileyo ngesandla uhlole umsebenzi ungakazami futhi.",
     "verified": "Kuqinisekisiwe",
-    "notVerified": "Akuqinisekiswanga"
+    "notVerified": "Akuqinisekiswanga",
+    "additionalSites": "Amanye amasayithi",
+    "additionalSitesHint": "Nxa ufuna: isayithi yeHTTPS eyodwa emzileni ngamunye, kuhlanganise amasayithi ezinsiza. Amasayithi angeziwe angafika ku-15, kungelandlela, imibuzo kumbe imininingwane yokungena.",
+    "invalidScope": "Faka amasayithi eHTTPS omphakathi angafika ku-15 ahlukileyo, kungelandlela, imibuzo kumbe imininingwane yokungena.",
+    "workspaceConsent": "Umsebenzi lo ungasebenzisa amathebhu ahlukileyo angafika ku-8 kumasayithi abhalwe lapha. Umthetho wemvumo okhethiwe uyasebenza. Amaphrofayili akho lokungena okugciniweyo akusetshenziswa. Imvumo ihlala imizuzu elitshumi. Misa loba nini.",
+    "scopeChanged": "Isevisi, i-akhawunti kumbe umkhawulo webhrawuza kutshintshile ngesikhathi semvumo. Hlola umkhawulo uzame futhi.",
+    "scopeUnsupported": "Vuselela isevisi yeOffGrid ukuze uvumele amanye amasayithi. Akukho bhrawuza eqalisiweyo.",
+    "tabActions": [
+      "Bhala amathebhu",
+      "Vula ithebhu",
+      "Khetha ithebhu",
+      "Vala ithebhu"
+    ]
   },
   "zu": {
     "networkSettings": "Izilungiselelo zenethiwekhi",
@@ -432,7 +552,10 @@
       "Khetha inketho",
       "Setha ibhokisi lokukhetha"
     ],
-    "checkboxStates": ["Likhethiwe","Alikhethiwe"],
+    "checkboxStates": [
+      "Likhethiwe",
+      "Alikhethiwe"
+    ],
     "change": "Ushintsho oluceliwe",
     "target": "Okuqondiwe",
     "value": "Umbhalo omusha",
@@ -447,6 +570,18 @@
     "localStoppedDisconnected": "Isiphequluli sivaliwe kule khompyutha. I-OffGrid ayitholakali; hlola umphumela uma ixhuma futhi.",
     "stopUnconfirmed": "Ukuvalwa kwesiphequluli akuqinisekisiwe. Vala isiphequluli esihlukile ngesandla bese uhlola umsebenzi ngaphambi kokuzama futhi.",
     "verified": "Kuqinisekisiwe",
-    "notVerified": "Akuqinisekisiwe"
+    "notVerified": "Akuqinisekisiwe",
+    "additionalSites": "Amanye amasayithi",
+    "additionalSitesHint": "Uma uthanda: isayithi elilodwa leHTTPS emugqeni ngamunye, kuhlanganise namasayithi ezinsiza. Amasayithi engeziwe afinyelela ku-15, ngaphandle kwezindlela, imibuzo noma imininingwane yokungena.",
+    "invalidScope": "Faka amasayithi omphakathi eHTTPS afinyelela ku-15 ahlukene, ngaphandle kwezindlela, imibuzo noma imininingwane yokungena.",
+    "workspaceConsent": "Lo msebenzi ungasebenzisa amathebhu ahlukene afinyelela ku-8 kumasayithi asohlwini. Kusebenza inqubomgomo yemvume ekhethiwe. Amaphrofayela akho nokungena okulondoloziwe akusetshenziswa. Ukufinyelela kuthatha imizuzu eyishumi. Misa noma nini.",
+    "scopeChanged": "Isevisi, i-akhawunti noma ububanzi besiphequluli kushintshile ngesikhathi semvume. Hlola ububanzi bese uzama futhi.",
+    "scopeUnsupported": "Buyekeza isevisi yeOffGrid ukuze uvumele amanye amasayithi. Asikho isiphequluli esiqalisiwe.",
+    "tabActions": [
+      "Bonisa amathebhu",
+      "Vula ithebhu",
+      "Khetha ithebhu",
+      "Vala ithebhu"
+    ]
   }
 }

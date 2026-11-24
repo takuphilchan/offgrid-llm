@@ -41,7 +41,11 @@ func TestProcessAuthorizationUsesRunnerApprovalNotModelArguments(t *testing.T) {
 func TestProcessCompletionRequiresTerminalHostEvidence(t *testing.T) {
 	tools := &browserRunTools{}
 	step := func(name, state string, exit *int) agents.Step {
-		process, _ := json.Marshal(execution.ProcessResult{Handle: "owned", State: state, ExitCode: exit})
+		outcome := execution.ProcessResult{Handle: "owned", State: state, ExitCode: exit}
+		if state != "running" {
+			outcome.Descendants = &execution.ProcessDescendants{Version: 1, State: "settled"}
+		}
+		process, _ := json.Marshal(outcome)
 		result, _ := json.Marshal(map[string]any{"receipt": execution.Receipt{State: "complete", Result: process}})
 		return agents.Step{Type: "action", ToolName: name, ToolResult: string(result)}
 	}

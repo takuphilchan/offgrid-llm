@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "tag": "151.0.7922.34",
+  "revision": "782af9cb30a53f54487e5d2e44738645a8ec457c",
+  "status": "uncompiled",
+  "patch": "metadata-only-fetch.patch",
+  "patchSha256": "728507d858342bcf8997394927b940d0c3db674ec92aaf7d75b90264f8907e88",
+  "upstream": [
+    {
+      "path": "third_party/blink/public/devtools_protocol/domains/Fetch.pdl",
+      "url": "https://raw.githubusercontent.com/chromium/chromium/782af9cb30a53f54487e5d2e44738645a8ec457c/third_party/blink/public/devtools_protocol/domains/Fetch.pdl",
+      "bytes": 11003,
+      "sha256": "bb280686ab4e602a56f3abfc24c47f141b62da387d0ba7d7aa7cf23f7f2111e6"
+    },
+    {
+      "path": "content/browser/devtools/protocol/fetch_handler.h",
+      "url": "https://raw.githubusercontent.com/chromium/chromium/782af9cb30a53f54487e5d2e44738645a8ec457c/content/browser/devtools/protocol/fetch_handler.h",
+      "bytes": 4943,
+      "sha256": "a4d9ecf45639f0a2d1e757cfed26cab9c8d1fff62b5db0a54f6eee0b6bb08b4e"
+    },
+    {
+      "path": "content/browser/devtools/protocol/fetch_handler.cc",
+      "url": "https://raw.githubusercontent.com/chromium/chromium/782af9cb30a53f54487e5d2e44738645a8ec457c/content/browser/devtools/protocol/fetch_handler.cc",
+      "bytes": 19203,
+      "sha256": "fea86da2bdf4e148f189316e23f9b664af475a9d39e015ae2d9e9cf83aefb5a3"
+    },
+    {
+      "path": "content/browser/devtools/devtools_url_loader_interceptor.h",
+      "url": "https://raw.githubusercontent.com/chromium/chromium/782af9cb30a53f54487e5d2e44738645a8ec457c/content/browser/devtools/devtools_url_loader_interceptor.h",
+      "bytes": 10685,
+      "sha256": "478feb5f16ab0801a78ad6557fb4f87761011fa386fc520e364559d7e843ee38"
+    },
+    {
+      "path": "content/browser/devtools/devtools_url_loader_interceptor.cc",
+      "url": "https://raw.githubusercontent.com/chromium/chromium/782af9cb30a53f54487e5d2e44738645a8ec457c/content/browser/devtools/devtools_url_loader_interceptor.cc",
+      "bytes": 86656,
+      "sha256": "3a32ee4b80c4ff06efafd7535aa5abe867e8c673a493f8154c13f469f6887984"
+    },
+    {
+      "path": "third_party/blink/web_tests/http/tests/inspector-protocol/fetch/fetch-post-data.js",
+      "url": "https://raw.githubusercontent.com/chromium/chromium/782af9cb30a53f54487e5d2e44738645a8ec457c/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/fetch-post-data.js",
+      "bytes": 980,
+      "sha256": "ebfd94189ea53a4cdf7802acf68cc89f9ba133db9001159bb4954c2fbcec57ba"
+    },
+    {
+      "path": "third_party/blink/web_tests/http/tests/inspector-protocol/fetch/fetch-post-data-continue.js",
+      "url": "https://raw.githubusercontent.com/chromium/chromium/782af9cb30a53f54487e5d2e44738645a8ec457c/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/fetch-post-data-continue.js",
+      "bytes": 1374,
+      "sha256": "9ff0fae3ddf54603616ffe8412ea30b11dab179e103e8a88a9ce4e676f46b44c"
+    },
+    {
+      "path": "third_party/blink/web_tests/http/tests/inspector-protocol/fetch/post-data-blobs.js",
+      "url": "https://raw.githubusercontent.com/chromium/chromium/782af9cb30a53f54487e5d2e44738645a8ec457c/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/post-data-blobs.js",
+      "bytes": 1691,
+      "sha256": "ca9502607fc9d934e002d4bdf39b3d4dc2664a1b268039ca61046a51e337b87f"
+    },
+    {
+      "path": "third_party/blink/web_tests/http/tests/inspector-protocol/fetch/post-data-blobs-expected.txt",
+      "url": "https://raw.githubusercontent.com/chromium/chromium/782af9cb30a53f54487e5d2e44738645a8ec457c/third_party/blink/web_tests/http/tests/inspector-protocol/fetch/post-data-blobs-expected.txt",
+      "bytes": 1594,
+      "sha256": "19eeeac949ddf10c044cf73552bf8f1bbe1470b6772bc2faf535fe816001dda9"
+    }
+  ],
+  "changes": [
+    {
+      "path": "third_party/blink/public/devtools_protocol/domains/Fetch.pdl",
+      "before": "bb280686ab4e602a56f3abfc24c47f141b62da387d0ba7d7aa7cf23f7f2111e6",
+      "after": "5a589c22138d528d4e449a80ad178a9f210953c94d1043ee6d921e88c437de91"
+    },
+    {
+      "path": "content/browser/devtools/protocol/fetch_handler.h",
+      "before": "a4d9ecf45639f0a2d1e757cfed26cab9c8d1fff62b5db0a54f6eee0b6bb08b4e",
+      "after": "3bbd0c1f73182df4091e8ca67a8648e4b06692a7157384fc8628bae5233bc23f"
+    },
+    {
+      "path": "content/browser/devtools/protocol/fetch_handler.cc",
+      "before": "fea86da2bdf4e148f189316e23f9b664af475a9d39e015ae2d9e9cf83aefb5a3",
+      "after": "3fcc50fb353cd17b180d29474a7c661e3d2d323260d9d72099392fbbe744ebe4"
+    },
+    {
+      "path": "content/browser/devtools/devtools_url_loader_interceptor.h",
+      "before": "478feb5f16ab0801a78ad6557fb4f87761011fa386fc520e364559d7e843ee38",
+      "after": "3c60ba78e61f6a28e97828554651b201a12c16a5424bb1180d24c7879408daff"
+    },
+    {
+      "path": "content/browser/devtools/devtools_url_loader_interceptor.cc",
+      "before": "3a32ee4b80c4ff06efafd7535aa5abe867e8c673a493f8154c13f469f6887984",
+      "after": "cf098a1799887c55793c4926220e41dae093c3b38a06a3e3f3fd71538754ca5e"
+    },
+    {
+      "path": "third_party/blink/web_tests/http/tests/inspector-protocol/fetch/offgrid-metadata-only.js",
+      "before": null,
+      "after": "c4493ecf2ce6eec534a925bd4bda748d6c0550fa0b8a20305c4fcdbc02f8b34f"
+    },
+    {
+      "path": "third_party/blink/web_tests/http/tests/inspector-protocol/fetch/offgrid-metadata-only-expected.txt",
+      "before": null,
+      "after": "951f9d620a41d95810f5ff2dfbf9b08608a5051c267507c5f4c8edf7d164c201"
+    },
+    {
+      "path": "third_party/blink/web_tests/http/tests/inspector-protocol/fetch/resources/offgrid-metadata-echo.py",
+      "before": null,
+      "after": "77af7279d30c9cf3dbcdcd89e1325bd0fabc83760ae662de53d5e06c965577ea"
+    }
+  ]
+}

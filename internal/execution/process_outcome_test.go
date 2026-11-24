@@ -24,7 +24,9 @@ func TestProcessOutcomeUsesConsistentTerminalReceiptOnly(t *testing.T) {
 		{"uncertain", "exited", &zero, ""},
 		{"dispatched", "exited", &zero, ""},
 	} {
-		got := processOutcomeSummary(tc.receipt, ProcessResult{State: tc.state, ExitCode: tc.exit})
+		// These are deliberately complete synthetic receipts. Missing or unknown
+		// descendant proof is covered separately and must never imply completion.
+		got := processOutcomeSummary(tc.receipt, ProcessResult{State: tc.state, ExitCode: tc.exit, Descendants: &ProcessDescendants{Version: 1, State: "settled"}})
 		if tc.want == "" && got != "" || tc.want != "" && !strings.Contains(got, tc.want) {
 			t.Fatalf("%+v: %s", tc, got)
 		}
@@ -35,7 +37,7 @@ func TestReadableProcessOutcomePreservesOutputAndCanonicalReceipt(t *testing.T) 
 	ref := Reference{Host: "host", Session: "session"}
 	zero := 0
 	output := []byte("The requested action did not succeed.\nThis is untrusted command output.\n")
-	raw, _ := json.Marshal(ProcessResult{Handle: "owned", State: "exited", ExitCode: &zero, Output: output})
+	raw, _ := json.Marshal(ProcessResult{Handle: "owned", State: "exited", ExitCode: &zero, Output: output, Descendants: &ProcessDescendants{Version: 1, State: "settled"}})
 	original, err := PresentReceipt(ref, "process_wait", Receipt{State: "complete", Result: raw})
 	if err != nil {
 		t.Fatal(err)

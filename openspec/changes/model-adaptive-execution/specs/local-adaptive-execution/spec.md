@@ -41,6 +41,19 @@ the root budget and persisting switches before resumed inference.
 - **WHEN** an existing profile is loaded after upgrade
 - **THEN** no fallback model, download or permission is added
 
+#### Scenario: Explicit fallback admission
+- **WHEN** a new job explicitly selects a configured installed fallback with matching current workflow evidence
+- **THEN** its selected model, planned context and evidence identities are pinned without changing the profile's primary model or tool authority
+- **AND** an omitted selection retains the primary model
+
+#### Scenario: Candidate evidence or caller data changes
+- **WHEN** a selected candidate's runtime qualification changes, or the caller mutates configuration after admission
+- **THEN** changed qualification prevents inference and caller mutation cannot change the admitted configuration
+
+#### Scenario: Perception qualification is separate
+- **WHEN** a configured perception model has only text or scoped tool evidence, or lacks measured projector/preprocessing identity
+- **THEN** it is reported unqualified without loading or downloading a model
+
 #### Scenario: Unsafe switch boundary
 - **WHEN** a task has dispatched input with an unknown outcome
 - **THEN** model escalation cannot retry the action or bypass reconciliation

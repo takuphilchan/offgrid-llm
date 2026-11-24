@@ -336,10 +336,12 @@ permission or opt into playback.
 - **AND** manual Stop and a bounded recording limit remain available if speech is not reliably detected
 
 ### Requirement: Explicit interruptible Talk session
-Talk in ordinary Chat SHALL require a visible user start action and ready local
-ASR and TTS. A completed utterance SHALL create at most one Chat request. Only a
-committed answer SHALL be spoken as final and natural playback completion MAY
-restart listening. Agent work and external effects SHALL NOT silently enter Talk.
+Talk SHALL require a visible user start action and independently ready local
+ASR and TTS. A completed utterance SHALL create at most one canonical conversation
+input. Only a committed answer SHALL be spoken as final. During an explicitly
+active Talk session, spoken corrections and side questions SHALL use existing
+canonical steering while a response or agent job runs. Voice SHALL NOT silently
+grant tools, start a different executor or transfer conversation ownership.
 
 #### Scenario: Continue after a spoken reply
 - **WHEN** a Talk utterance is transcribed, its Chat turn commits, and response playback naturally ends
@@ -348,7 +350,27 @@ restart listening. Agent work and external effects SHALL NOT silently enter Talk
 #### Scenario: Interrupt or fail at any phase
 - **WHEN** the user stops Talk, selects Speak again during playback, changes conversation, or a capture/transcription/request/playback fails
 - **THEN** owned work is stopped or fenced, no uncertain request is resent, and any transcript remains available for review
-- **AND** microphone capture is inactive during speaker playback so the system cannot submit its own voice
+- **AND** supported interactive capture distinguishes user speech from owned playback and noise; speaker output never becomes a submitted user turn
+
+#### Scenario: User speaks over playback
+- **WHEN** an active Talk session detects qualified user speech during response playback
+- **THEN** local playback stops promptly, queued stale audio cannot resume, and the utterance remains owned by the same conversation
+- **AND** generation/synthesis cancellation is reconciled independently of any running job; playback silence never proves job Stop
+
+#### Scenario: Spoken correction during active work
+- **WHEN** the user finishes a correction while the canonical response or agent job is active
+- **THEN** the original turn/input identity and existing steering rules govern delivery, without a duplicate task or bypassed permission
+- **AND** lost acknowledgements are inspected rather than replayed, and explicit Stop retains its normal confirmed/uncertain semantics
+
+#### Scenario: Interrupted answer context
+- **WHEN** an answer is interrupted after only part of its audio played
+- **THEN** generated text, queued speech, completed playback and uncertain partial playback remain distinguishable
+- **AND** the next voice turn does not treat unplayed content as delivered; canonical text/evidence is preserved rather than silently rewritten
+
+#### Scenario: Hesitation and false interruption
+- **WHEN** the user pauses mid-thought, produces a short backchannel, or nearby sound resembles speech
+- **THEN** bounded endpointing and explicit completion controls prevent duplicate or premature submission, with visible capture state
+- **AND** model/language/device limits and acoustic failures remain recorded rather than replaced by cloud processing
 
 #### Scenario: Silence does not end Talk
 - **WHEN** active Talk capture finishes without audio or recognition succeeds with empty text

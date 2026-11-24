@@ -807,6 +807,7 @@ for(const theme of ['light','dark'] as const) test(`compact voice uses one surfa
  await page.setViewportSize({width:420,height:540});
  await page.getByRole('button',{name:'Talk',exact:true}).click();
  const panel=page.locator('.talk-surface');await expect(panel).toBeVisible();
+ await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
  await page.evaluate(()=>(window as any).micTest.allow());
  await expect(panel.locator('.talk-surface-copy [role=status]')).toHaveText('Listening');
  await expect(panel).toHaveCSS('opacity','1');
@@ -881,6 +882,71 @@ test('silence keeps the draft and reports an actionable result without sending',
   await page.evaluate(()=>(window as any).micTest.finish(''));
   await expect(page.getByText('No speech was detected. Try again or type your message. Your draft is unchanged.',{exact:true})).toBeVisible();
   await expect(editor).toHaveValue('Keep my words');
+});
+
+test('manual microphone recovery selects a device and preserves the editable draft', async ({page}) => {
+  await microphoneFixture(page);
+  await page.evaluate(() => {
+    const media = navigator.mediaDevices, original = media.getUserMedia.bind(media);
+    media.enumerateDevices = async () => [{kind:'audioinput', deviceId:'headset', label:'Test headset'}] as MediaDeviceInfo[];
+    media.getUserMedia = constraints => {(window as any).micTest.constraints = constraints; return original(constraints);};
+  });
+  const editor = page.locator('.composer textarea');
+  await editor.fill('Keep my draft');
+  await page.getByRole('button', {name:'Use microphone', exact:true}).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await page.getByRole('button', {name:'Stop recording', exact:true}).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.finish(''));
+  await page.getByRole('combobox', {name:'Microphone', exact:true}).selectOption('headset');
+  await page.getByRole('button', {name:'Use microphone', exact:true}).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(2);
+  expect(await page.evaluate(() => (window as any).micTest.constraints.audio.deviceId)).toEqual({exact:'headset'});
+  await page.evaluate(() => (window as any).micTest.allow());
+  await page.getByRole('button', {name:'Stop recording', exact:true}).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.requests)).toBe(2);
+  await page.evaluate(() => (window as any).micTest.finish('recognized speech'));
+  await expect(editor).toHaveValue('Keep my draft recognized speech');
+  await page.evaluate(() => {location.hash = '#/models';});
+  await expect(editor).toHaveCount(0);
+  await page.evaluate(() => {
+    const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = constraints => {
+      if ((constraints?.audio as MediaTrackConstraints)?.deviceId) return Promise.reject(new DOMException('Selected microphone disconnected', 'NotFoundError'));
+      return original(constraints);
+    };
+    location.hash = '#/chat';
+  });
+  await page.getByRole('button', {name:'Use microphone', exact:true}).click();
+  await page.getByRole('combobox', {name:'Microphone', exact:true}).selectOption('');
+  await page.getByRole('button', {name:'Use microphone', exact:true}).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(3);
+  expect(await page.evaluate(() => (window as any).micTest.constraints.audio.deviceId)).toBeUndefined();
+  await page.getByRole('button', {name:'Cancel microphone setup', exact:true}).click();
+  await page.evaluate(() => (window as any).micTest.allow());
+});
+
+test('disconnected manual microphone cancels recording without sending partial audio', async ({page}) => {
+  await microphoneFixture(page);
+  await page.evaluate(() => {
+    const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = async constraints => {
+      const stream = await original(constraints), track = Object.assign(new EventTarget(), stream.getTracks()[0], {readyState:'live'});
+      (window as any).micTest.track = track;
+      return {getTracks:() => [track]} as unknown as MediaStream;
+    };
+  });
+  await page.locator('.composer textarea').fill('Keep this');
+  await page.getByRole('button', {name:'Use microphone', exact:true}).click();
+  await expect.poll(() => page.evaluate(() => (window as any).micTest.permissions)).toBe(1);
+  await page.evaluate(() => (window as any).micTest.allow());
+  await expect(page.getByRole('button', {name:'Stop recording', exact:true})).toBeVisible();
+  await page.evaluate(() => (window as any).micTest.track.dispatchEvent(new Event('ended')));
+  await expect(page.getByText('The microphone disconnected. Choose a microphone and try again. Your draft is unchanged.', {exact:true})).toBeVisible();
+  await expect(page.locator('.composer textarea')).toHaveValue('Keep this');
+  expect(await page.evaluate(() => (window as any).micTest.requests)).toBe(0);
+  expect(await page.evaluate(() => (window as any).micTest.stops)).toBeGreaterThan(0);
 });
 
 

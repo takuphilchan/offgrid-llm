@@ -3,7 +3,6 @@ package execution
 import (
 	"context"
 	"encoding/json"
-	"io/fs"
 	"math"
 	"os"
 )
@@ -83,25 +82,7 @@ func (s *WorkingCopies) measureLocked(ctx context.Context, id string, owner Bind
 
 func measureCopyTree(ctx context.Context, root *os.Root, limit int) (int64, error) {
 	var measured int64
-	entries := 0
-	err := fs.WalkDir(root.FS(), ".", func(name string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if name == "." {
-			return nil
-		}
-		entries++
-		if entries > limit {
-			return ErrLimit
-		}
-		info, err := root.Lstat(name)
-		if err != nil {
-			return err
-		}
+	err := walkWorkingCopy(ctx, root, limit, func(_ string, info os.FileInfo) error {
 		if info.Mode().Type() != 0 && info.Mode().Type() != os.ModeDir {
 			return ErrUnsupported
 		}

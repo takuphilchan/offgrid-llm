@@ -1,4 +1,11 @@
-import type { ModelPackageManifest } from '../../api/client';
+import type { ModelCategory, ModelPackageManifest } from '../../api/client';
+
+export function packageMatchesCategory(manifest: ModelPackageManifest, category: ModelCategory): boolean {
+  if (manifest.architecture === 'onnx-embedding') return category === 'embeddings';
+  if (manifest.architecture === 'mlx-text' || manifest.architecture === 'transformers-text') return category === 'language';
+  if (category === 'language' || category === 'embeddings') return false;
+  return Array.isArray(manifest.capabilities) && manifest.capabilities.includes(category === 'speech_recognition' ? 'transcription' : 'speech_synthesis');
+}
 
 export async function preparePackageImport(files: File[]): Promise<{ manifest: ModelPackageManifest; body: FormData }> {
   const entries = new Map<string, File>();

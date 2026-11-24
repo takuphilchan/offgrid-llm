@@ -1,5 +1,5 @@
 import { defineMessages } from './catalog';
-import originalCopy from './computer-experience.json';
+import originalCopy from './computer-experience.json' with {type:'json'};
 const copy = defineMessages('i18n/computer-experience:copy', originalCopy);
 import type {LocaleCode} from './index';
 import {nativeAppText} from './native-app';
@@ -27,6 +27,9 @@ export function browserActionLabel(locale: LocaleCode, name: string) {
  if(name==='browser_download')return transferLabels[locale][0];
  if(name==='browser_upload')return transferLabels[locale][1];
  if(name==='browser_capture')return captureLabels[locale];
+ if(name==='browser_inspect')return copy[locale].actions[0];
+ const tabIndex=['browser_tabs','browser_tab_open','browser_tab_select','browser_tab_close'].indexOf(name);
+ if(tabIndex>=0)return copy[locale].tabActions[tabIndex];
  const index = ['browser_observe','browser_navigate','browser_fill','browser_click','browser_verify','browser_select','browser_set_checked'].indexOf(name);
  return index < 0 ? name : copy[locale].actions[index];
 }

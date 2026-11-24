@@ -12,7 +12,7 @@ Implement under the approved three-entry-point direction; no new goal or executo
 - [x] 44.4 Replace document-led Home and redundant navigation with a restrained request-first workspace and recent work. Preserve deep links, keyboard navigation, narrow layouts and ongoing-work visibility.
 - [x] 44.5 Move advanced response/voice/runtime configuration into Settings; retain compact model/profile choice, source scope and per-task restrictions. Verify scoped preferences round-trip without granting access or altering pinned profiles.
 - [x] 44.6 Simplify shared document reader chrome and dark-mode layering; keep original content dominant, coverage discoverable, and page/source identity intact. Inspect actual rendered light/dark/RTL/zoom views.
-- [ ] 44.7 Unify model inventory, Add models, curated discovery and explicit online search with a persistent transfer surface. Verify category/filter/back navigation, long names, empty results and cancellation/retry.
+- [x] 44.7 Unify model inventory, Add models, curated discovery and explicit online search with a persistent transfer surface. Verify category/filter/back navigation, long names, empty results and cancellation/retry.
 - [ ] 44.8 Add reviewed capability-pack plans over existing pinned model/package/runtime installers; include missing bytes, platform/language prerequisites, deduplication, interruption/retry and explicit activation. Do not claim ready until required runtime checks pass.
 - [ ] 44.9 Coordinate default agent/tool admission and cross-client continuation with agent-conversation-workflows. Qualify app launch, scoped browser search, file/project work and a correction/Stop using isolated targets, with real model evidence separately from fixtures.
 - [x] 44.10 Localize new controls/errors in all 29 supported languages and extend translator packs. Run translation completeness, RTL/IME, keyboard/focus, screen-reader announcements, 200% zoom and reduced-motion checks; do not claim native-language approval.
@@ -142,8 +142,30 @@ Knowledge. The combined renderer suite passes 182 tests, including all 29
 languages. D2 remains open for the remaining library metadata, versions, exports
 and wider reader presentation; these checks do not qualify native translations.
 
-- [ ] D1 Consume the additive structured-source/coverage contracts from `document-ingestion-reliability`; unify Chat/Knowledge readers and truthful coverage without duplicating backend ownership.
+- [x] D1 Consume the additive structured-source/coverage contracts from `document-ingestion-reliability`; unify Chat/Knowledge readers and truthful coverage without duplicating backend ownership.
 - [ ] D2 Implement the approved library/collection/review/export presentation and all-29-language, RTL, keyboard, narrow/zoom/theme tests; keep linguistic approval separate from catalog completeness.
+
+2026-11-22 D1 reconciliation supersedes the reader-integration gaps in the
+historical notes below. Chat attachments/citations and retained Knowledge sources
+now use `DocumentReader` and `DocumentReview`, with revision-pinned reads,
+original/text/side-by-side views where supported, outlines, coverage maps,
+thumbnails, source regions and source-bound navigation memory. Legacy text stays
+readable; Office extraction is not presented as original rendered layout.
+The 521-pass/two-skip journey run covers shared readers, all-language coverage,
+uncertain correction/draft retention, source mismatch and read-only attachment
+contracts. A separate real-service PDF check and the exact staged native TXT
+journey passed. See interface-completion-2026-11-21.md for exact evidence and
+limits. D2 remains open for richer cell/table metadata and its wider complete
+presentation acceptance; D1 does not claim semantic or native-language approval.
+
+2026-11-22 cell-inspection increment: the existing collapsed metadata disclosure
+now preserves raw/display/format/date-system, shared-formula anchor/range/cache,
+merged-table spans and hidden-source reasons. Merge-only cells are inspectable;
+a shared formula without local formula text still reports a missing cache.
+Exact source codes remain inert, and counts/localized labels cover all 29 catalogs.
+This implements the richer-cell gap above. D2 remains open until its complete
+library/review/export presentation acceptance is reconciled; this increment does
+not claim original Office rendering or human linguistic approval.
 
 Backend coordination: documents now expose an additive `extraction_revision`;
 historical citation reads retain exact evidence under current collection access.
@@ -481,14 +503,26 @@ Evidence: [native installer refresh](../../../docs/quality/evidence/native-insta
 ## 31. Approved personalization implementation (2026-11-11)
 
 Partial implementation and exact evidence: `docs/quality/evidence/personalization-2026-11-11.md`.
-The initial palette/settings slice passes its targeted tests; broader scope below
-remains open and must not be inferred complete from those passes.
+The initial palette/settings slice passed its targeted tests. Task 31.1 was
+reconciled on 22 November against current palette lifecycle/recovery browser
+checks, the matched native terminal palette evidence, and installed native
+save-failure/restart verification; see the Settings persistence section in
+`docs/quality/evidence/interface-completion-2026-11-21.md`. The broader tasks
+below remain open and are not inferred complete from those passes.
 
-- [ ] 31.1 Implement versioned named light/dark palettes, preview/apply/cancel/reset, text sizing and reduced motion; preserve legacy mode preferences and drafts, synchronize desktop/terminal, and validate preference recovery.
-- [ ] 31.2 Implement individual-setting search/deep links, explicit scope and truthful persistence feedback; preserve grants and service-owned settings.
+- [x] 31.1 Implement versioned named light/dark palettes, preview/apply/cancel/reset, text sizing and reduced motion; preserve legacy mode preferences and drafts, synchronize desktop/terminal, and validate preference recovery.
+- [x] 31.2 Implement individual-setting search/deep links, explicit scope and truthful persistence feedback; preserve grants and service-owned settings.
 - [ ] 31.3 Repair corrupted translations and add independent quality checks; complete regional formatting and language/speech separation without implying model language capability.
 - [ ] 31.4 Complete workspace interaction improvements described in the approved review, reusing existing palette, context and work controls.
 - [ ] 31.5 Run API/type/build, affected browser/desktop and complete relevant CI checks; inspect palette/locale/RTL/zoom states and record manual native-language, accessibility and platform gates separately.
+
+2026-11-22 task 31.2 reconciliation: localized individual-control discovery and
+legacy routes, stable asynchronous focus, browser/desktop capability filtering,
+scoped preferences and persistence feedback passed 242 renderer cases, 289
+desktop checks and matched staged/installed native inspection. Search and focus
+made zero service writes and preserved drafts. The full-program and broader
+personalization gates remain open; see the individual Settings discovery section
+in `docs/quality/evidence/interface-completion-2026-11-21.md`.
 
 ## 32. Established themes and global languages (2026-11-11)
 
@@ -664,3 +698,32 @@ Installation stage completed on 2026-11-15: verified local preview and rollback 
 Full-plan follow-through (2026-11-15): broad renderer inventory reconciled with focused corrected reruns, real-service storage/navigation, Windows Go, WSL race, Python and desktop results. Library page/block scope and private draft persistence complete; Stop Talk remains available during generation. Disposable upgrade/restart/rollback and production baseline comparisons pass. See the dated evidence for exact failures, remedies, opt-in skips and installation identity.
 
 Final follow-through installation: `0.4.31-preview.20261115044922071.gda2a178e`, 1,191 verified payload files, unchanged workspace/profile, separate verified rollback backup. The app is left closed. Task 43.16 remains an external qualification gate; implementation and local installation do not certify physical 8 GB behavior, native-language review or the full document benchmark.
+
+## 45. Isolated interface refinement (2026-11-21)
+
+- [x] 45.1 Record isolated baseline and inspect current screens; implement bounded recent-work continuation and discoverable shared navigation without submitting work or losing drafts.
+- [x] 45.2 Apply consistent management navigation, headings, empty/error states and list geometry across Models, Knowledge, Activity, Agents and Settings; retain localized controls and readiness states.
+- [x] 45.3 Compact completed saved-work presentation with profile metadata in details; preserve verification, uncertainty, approval and lifecycle controls and Quick Access continuity.
+- [x] 45.4 Run API/translation/TypeScript/build checks, relevant browser and desktop suites; inspect before/after light/dark, narrow, RTL, enlarged text, focus and recovery screenshots. Record exact evidence and unavailable checks.
+- [x] 45.5 Produce a change-only integration patch against the frozen baseline, documenting overlaps with concurrent system work; leave the active checkout and installed app untouched.
+
+Implementation and exact validation outcomes: `docs/quality/evidence/interface-refinement-2026-11-21.md`. This closes only group 45; the historical qualification gates remain unchanged. Integration artifacts are in `build/ui-integration`, and the active checkout and installed application have not received these changes.
+
+Subsequent explicit user request authorized installation: the renderer-only update is installed and the normal app is open. Existing desktop/service binaries and the other thread's checkout remain unchanged; rollback and isolated packaged smoke evidence are recorded in the dated evidence document.
+
+## 46. UI/UX completion and matched local delivery (2026-11-21)
+
+The owner's active goal authorizes implementation of the existing direction and a final verified local installation. It does not authorize unrelated backend expansion or changes to the concurrent checkout. Continue the unfinished earlier tasks; this group records newly confirmed corrections and the delivery evidence, not a replacement for their acceptance gates.
+
+- [x] 46.1 Correct recovery eligibility/status presentation for missing desktop capability, browser/external service, denied role, pending/failed reads and confirmed lifecycle states. Retain explicit native operations, Stop/Resume, uncertainty and no mutation on inspection; preserve the directory card exactly. Pass `UI(workspace-recovery.spec.ts settings-organization.spec.ts)` and API/type/build checks.
+- [x] 46.2 Remove the terminal's inner panel contrast/border, match canvas and cursor backgrounds to the workspace, and correct return wording/context without route, draft, process or input changes. Pass desktop terminal/palette/navigation suites and `node scripts/test/test-terminal-display.mjs`; inspect light/dark, named palettes, forced colors, short/narrow and RTL.
+- [x] 46.3 Localize new recovery and terminal states across all supported catalogs; pass `i18n:check`, `i18n:complete`, `i18n:consistency` and rendered checks. Record authored translation evidence separately from independent linguistic review.
+- [ ] 46.4 Reconcile the goal's first-use, returning-work, Chat/execution, source/Knowledge, model/transfer, Agents/Activity and Settings journeys against existing code and unfinished tasks. Complete actionable presentation/contract work and retain a requirement-to-current-evidence matrix; do not replace missing service contracts with simulated product features.
+- [x] 46.5 Verify Quick Access/full/text/voice continuity, draft/identity retention, no duplicate execution, supported and unsupported desktop contracts, keyboard/IME, themes, narrow/short/RTL, native 200% zoom and reduced motion using isolated data. Keep unavailable human/OS qualification explicit. Evidence: 22 November Quick Access sizing continuation in `docs/quality/evidence/interface-completion-2026-11-21.md`; final 75 command/voice cases, two browser IME cases and staged/installed Windows native matrices passed. Physical shortcut/audio, real models, other OSs and human reviews remain explicitly unqualified.
+- [ ] 46.6 Run applicable existing CI and responsiveness comparisons on the final candidate, investigate failures and inspect actual renders. Record fixture, real-service/model, native and human evidence separately; preserve failure history and unrun gates.
+- [x] 46.7 Stage a matched, bounded renderer/native presentation payload excluding unrelated unfinished backend changes; verify optional capability absence and supported behavior in a disposable packaged profile, with rollback and exact identities.
+- [x] 46.8 Install the verified local result under the user's authorization when no active work would be terminated; preserve data and verify the actual installed screens/identity. Record rollback and any external qualification still open without declaring the full program complete prematurely.
+- [x] 46.9 Redesign command context around content-sized editable output, a compact details toolbar and the existing Chat composer pattern; align host-owned confirmations with the app and contain covered-route scrolling while the terminal is visible. Verify cancellation, source editing, keyboard/RTL/native zoom, staged and installed payloads, preserving the concurrent checkout and runtime. Evidence: `docs/quality/evidence/terminal-dialog-redesign-2026-11-22.md`.
+- [x] 46.10 Correct Help heading/scroll/search composition, nested Workspace access layout/focus and structured Settings search results; verify browser and staged Windows views without granting host access or changing the directory card. Evidence: `docs/quality/evidence/help-workspace-layout-2026-11-22.md`.
+- [x] 46.11 Replace the expanded startup stack, glow, greeting carousel and timer with a compact shared entrance; preserve readiness/retry/native recovery boundaries and verify light/dark, all locales, reduced motion, narrow/short, forced colors, actual Windows handoff and enlarged RTL. Evidence: `docs/quality/evidence/startup-entrance-2026-11-22.md`; the intact-mark animation remains and the recovery divider is removed.
+- [x] 46.12 Qualify and install the combined Help, Workspace, Settings and startup presentation payload when the installed app is idle; verify exact renderer/native identities, preserve runtime/data/concurrent work and retain rollback. Installed 23 November; actual installed startup and Help/Workspace/Settings matrices passed. See `docs/quality/evidence/startup-entrance-2026-11-22.md`.
