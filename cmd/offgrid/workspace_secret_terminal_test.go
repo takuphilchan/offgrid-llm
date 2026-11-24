@@ -53,27 +53,39 @@ original = termios.tcgetattr(slave)
 env = dict(os.environ, OFFGRID_WORKSPACE_SECRET_PTY=sys.argv[2])
 child = subprocess.Popen([sys.argv[1], '-test.run=^TestWorkspaceSecretTerminalHelper$'], stdin=slave, stdout=slave, stderr=slave, env=env)
 seen = bytearray()
+phrase='isolated café 日本語 😀'.encode()
+def diagnostic():
+    output=bytes(seen)
+    for secret in [phrase, b'different secret', b'x', b'private-pasted-suffix']:
+        output=output.replace(secret,b'[redacted]')
+    return repr(output[-2048:])
 def until(marker):
     limit=time.monotonic()+5
     while marker not in seen:
-        if time.monotonic()>limit: raise AssertionError('protected prompt deadline')
+        if time.monotonic()>limit: raise AssertionError('protected prompt deadline: '+diagnostic())
         if select.select([master],[],[],0.1)[0]: seen.extend(os.read(master,4096))
-until(b'Backup passphrase: ')
-mode=sys.argv[2]
-phrase='isolated café 日本語 😀'.encode()
-if mode=='cancel': pass
-elif mode=='interrupt': os.write(master,b'\x03')
-elif mode=='oversize': os.write(master,b'x'*4097)
-elif mode=='oversize-suffix': os.write(master,b'x'*4097+b'private-pasted-suffix\r')
-else:
-    os.write(master,phrase+b'\r')
-    until(b'Confirm backup passphrase: ')
-    os.write(master,(phrase if mode=='confirm' else b'different secret')+b'\r')
-until(b'PROTECTED_INPUT_DONE')
-assert child.wait(timeout=3)==0
-assert termios.tcgetattr(slave)==original, 'terminal mode was not restored'
-if mode=='oversize-suffix':
-    assert not select.select([slave],[],[],0)[0], 'unread secret suffix escaped to the next terminal consumer'
-assert phrase not in seen and b'different secret' not in seen and b'x'*30 not in seen and b'private-pasted-suffix' not in seen, 'input was echoed'
-os.close(master);os.close(slave)
+        if marker not in seen and child.poll() is not None and not select.select([master],[],[],0)[0]:
+            raise AssertionError('protected helper exited: '+diagnostic())
+try:
+    until(b'Backup passphrase: ')
+    mode=sys.argv[2]
+    if mode=='cancel': pass
+    elif mode=='interrupt': os.write(master,b'\x03')
+    elif mode=='oversize': os.write(master,b'x'*4097)
+    elif mode=='oversize-suffix': os.write(master,b'x'*4097+b'private-pasted-suffix\r')
+    else:
+        os.write(master,phrase+b'\r')
+        until(b'Confirm backup passphrase: ')
+        os.write(master,(phrase if mode=='confirm' else b'different secret')+b'\r')
+    until(b'PROTECTED_INPUT_DONE')
+    assert child.wait(timeout=3)==0
+    assert termios.tcgetattr(slave)==original, 'terminal mode was not restored'
+    if mode=='oversize-suffix':
+        assert not select.select([slave],[],[],0)[0], 'unread secret suffix escaped to the next terminal consumer'
+    assert phrase not in seen and b'different secret' not in seen and b'x'*30 not in seen and b'private-pasted-suffix' not in seen, 'input was echoed'
+finally:
+    if child.poll() is None:
+        child.kill()
+    child.wait(timeout=3)
+    os.close(master);os.close(slave)
 `
