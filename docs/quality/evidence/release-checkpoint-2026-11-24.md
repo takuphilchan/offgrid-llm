@@ -66,3 +66,29 @@ investigated rather than bypassing the exact-source release gate:
   both passed (executor 1.391 seconds, execution 1.613 seconds); no assertions or
   deadlines changed. Original logs are retained, with the successful invocation
   in `build/release-ci-namespace-native-fs-20261124.log`.
+
+## Second remote CI result and corrections
+
+[CI run 45358141297](https://github.com/takuphilchan/offgrid-llm/actions/runs/45358141297)
+tested `d36533b27145015df259fcdb201841f4eca9557b`. Python on both platforms,
+all three document-worker runners, OCR packaging, container builds and the
+native parser passed. Linux integration and Windows/macOS native client jobs
+still failed; no release was created.
+
+- Linux can expose an established TCP tuple with inode zero before the server
+  accepts it. Ownership verification now waits within its existing bounded
+  deadline, without sending HTTP until identity is proven. A real 200 ms
+  delayed-accept regression reproduces the race. Full processowner/inference
+  race suites passed in 4.855/40.725 seconds; evidence is retained in
+  `build/release-connection-race-20261124.log`.
+- The Windows desktop monitor fixture lacked a referenced event-loop handle.
+  It now owns a bounded wait for the actual unreferenced production monitor.
+  Full desktop checks passed: 292 passed, 4 opt-in skips, no failures or
+  cancellations (`build/ci-windows-desktop-monitor-final-20261124.log`).
+- The macOS account fixture now resolves and preserves Go compiler cache paths
+  before isolating HOME, preventing helper builds from placing read-only module
+  caches inside disposable application state. Windows executor checks passed
+  in 13.034 seconds (`build/release-account-cache-20261124.log`); native macOS
+  confirmation remains pending alongside its other execution/terminal failures.
+
+These corrections are incremental; they do not establish a passing release gate.

@@ -15,6 +15,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+var errSocketNotAccepted = errors.New("provider socket has not acquired an inode")
+
 func linuxTCPTuple(address *net.TCPAddr) (string, error) {
 	if address == nil || address.IP.To4() == nil || !address.IP.IsLoopback() {
 		return "", errors.New("owned provider requires an IPv4 loopback peer")
@@ -30,7 +32,12 @@ func linuxSocketInode(raw []byte, server, client string, uid int) (string, error
 			continue
 		}
 		value, err := strconv.ParseUint(fields[9], 10, 64)
-		if err != nil || value == 0 || fields[7] != strconv.Itoa(uid) || inode != "" {
+		if err == nil && value == 0 {
+			// Linux can publish an established tuple before accept assigns an
+			// inode. It is still unverified: callers may wait, never send HTTP.
+			return "", errSocketNotAccepted
+		}
+		if err != nil || fields[7] != strconv.Itoa(uid) || inode != "" {
 			return "", errors.New("provider socket identity is unavailable or ambiguous")
 		}
 		inode = fields[9]
@@ -150,7 +157,7 @@ func (job *Namespace) VerifyConnection(ctx context.Context, conn net.Conn) error
 			return err
 		}
 		inode, err := linuxConnectionInode(server, client)
-		if err != nil {
+		if err != nil && !errors.Is(err, errSocketNotAccepted) {
 			return err
 		}
 		if inode != "" {

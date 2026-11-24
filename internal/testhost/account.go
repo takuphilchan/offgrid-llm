@@ -3,17 +3,42 @@
 package testhost
 
 import (
+	"context"
+	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/takuphilchan/offgrid-llm/internal/execution"
 )
 
 func Account(t *testing.T) string {
 	t.Helper()
+	if runtime.GOOS == "darwin" {
+		// Keep compiler caches at their original locations before isolating HOME.
+		// Otherwise helper builds populate the disposable application profile with
+		// read-only module trees, and its cleanup fails even after a passing test.
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		output, err := exec.CommandContext(ctx, "go", "env", "-json", "GOPATH", "GOMODCACHE", "GOCACHE").Output()
+		if err != nil {
+			t.Fatalf("resolve compiler cache paths before isolating account: %v", err)
+		}
+		var paths map[string]string
+		if err := json.Unmarshal(output, &paths); err != nil {
+			t.Fatal(err)
+		}
+		for _, key := range []string{"GOPATH", "GOMODCACHE", "GOCACHE"} {
+			if paths[key] == "" {
+				t.Fatalf("compiler environment omitted %s", key)
+			}
+			t.Setenv(key, paths[key])
+		}
+	}
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

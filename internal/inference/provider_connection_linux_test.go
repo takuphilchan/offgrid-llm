@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestProviderConnectionHelper(t *testing.T) {
@@ -23,6 +24,9 @@ func TestProviderConnectionHelper(t *testing.T) {
 		os.Exit(2)
 	}
 	fmt.Fprintln(os.Stdout, listener.Addr().String())
+	// A connected socket can appear in /proc/net/tcp before accept gives it an
+	// inode. Exercise that real scheduler window before serving any HTTP bytes.
+	time.Sleep(200 * time.Millisecond)
 	_ = http.Serve(listener, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, "owned") }))
 	os.Exit(0)
 }

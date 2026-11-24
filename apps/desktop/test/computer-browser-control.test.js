@@ -158,12 +158,17 @@ test('unconfirmed child or host Stop retains the exact target for scoped cleanup
 test('background authority checks close revoked sessions but retain temporary outages',async()=>{
  for(const code of ['computer_scope_violation','service_unavailable','fetch failed']){
   const f=await fixture({browserMonitorMs:2});await f.manual();
-  let checked;const observed=new Promise(resolve=>{checked=resolve;});
-  f.runtime.principal=async()=>{checked();throw Error(code);};
-  await observed;await tick();await tick();
-  if(code==='computer_scope_violation')assert.equal(f.runtime.child,null);
-  else {assert.equal(f.runtime.child,f.child);assert.equal(f.runtime.state.state,'manual');}
-  await f.runtime.stop();
+  let checked,timer;
+  // Production's monitor intentionally does not keep Electron alive. This
+  // EventEmitter child has no process handle, so the fixture must own a bounded
+  // referenced wait until a real monitor tick runs (not invoke checks itself).
+  const observed=new Promise((resolve,reject)=>{checked=resolve;timer=setTimeout(()=>reject(Error('background authority monitor did not run')),5000);});
+  try{
+   f.runtime.principal=async()=>{checked();throw Error(code);};
+   await observed;await tick();await tick();
+   if(code==='computer_scope_violation')assert.equal(f.runtime.child,null);
+   else {assert.equal(f.runtime.child,f.child);assert.equal(f.runtime.state.state,'manual');}
+  }finally{clearTimeout(timer);await f.runtime.stop();}
  }
 });
 
