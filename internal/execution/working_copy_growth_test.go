@@ -73,7 +73,7 @@ func TestWorkingCopyUnknownGrowthBlocksAdmissionAndReleasePreservesLinkTarget(t 
 	if _, err = e.PrepareWorker(context.Background(), workingCopyRequest(b, "blocked")); !errors.Is(err, ErrLimit) {
 		t.Fatal("unknown storage allowed new preparation", err)
 	}
-	if err = child.Release(context.Background()); err != nil {
+	if err = child.Release(context.Background()); err != nil && !assertDarwinCleanupRefusal(t, store, b, record, err) {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(target)

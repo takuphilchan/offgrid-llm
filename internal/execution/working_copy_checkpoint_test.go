@@ -59,7 +59,11 @@ func TestWorkingCopyAlteredSettlementRetainsLease(t *testing.T) {
 	if _, err = store.db.Exec(`DROP TRIGGER alter_settlement`); err != nil {
 		t.Fatal(err)
 	}
-	if err = child.Release(ctx); err != nil {
+	err = child.Release(ctx)
+	if assertDarwinCleanupRefusal(t, store, binding, child.Record, err) {
+		return
+	}
+	if err != nil {
 		t.Fatal("same closed owner could not retry", err)
 	}
 }
@@ -98,6 +102,9 @@ func TestWorkingCopyAlteredCleanupCheckpointRollsBack(t *testing.T) {
 				}
 				return nil
 			})
+			if assertDarwinCleanupRefusal(t, store, binding, child.Record, err) {
+				return
+			}
 			if !errors.Is(err, ErrRevision) {
 				t.Fatal("altered checkpoint acknowledged", err)
 			}
@@ -115,7 +122,11 @@ func TestWorkingCopyAlteredCleanupCheckpointRollsBack(t *testing.T) {
 			if _, err = store.db.Exec(`DROP TRIGGER alter_checkpoint`); err != nil {
 				t.Fatal(err)
 			}
-			if err = store.Release(ctx, child.Record.ID, binding); err != nil {
+			err = store.Release(ctx, child.Record.ID, binding)
+			if assertDarwinCleanupRefusal(t, store, binding, child.Record, err) {
+				return
+			}
+			if err != nil {
 				t.Fatal("original ownership could not be explicitly resumed", err)
 			}
 		})

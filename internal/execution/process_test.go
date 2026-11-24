@@ -82,8 +82,11 @@ func TestProcessDeadlineIsReportedTruthfully(t *testing.T) {
 	if err != nil || result.State != "timed_out" {
 		t.Fatal(result, err)
 	}
-	if result.Runtime == nil || result.Runtime.Version != 1 || !result.Runtime.Settled || result.Runtime.ElapsedNS < int64(time.Second) {
+	if result.Runtime == nil || result.Runtime.Version != 1 || result.Runtime.Settled != (runtime.GOOS != "darwin") || result.Runtime.ElapsedNS < int64(time.Second) {
 		t.Fatal("timeout lost supervised lifetime", result.Runtime)
+	}
+	if runtime.GOOS == "darwin" && (ProcessDescendantState(result) != "unknown" || ProcessDescendantsSettled(result)) {
+		t.Fatal("Darwin timeout invented descendant retirement", result)
 	}
 	again, err := m.Inspect(ctx, b, p.Handle)
 	if err != nil || again.Runtime == nil || *again.Runtime != *result.Runtime {

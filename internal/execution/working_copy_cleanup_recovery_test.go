@@ -75,7 +75,11 @@ func TestWorkingCopyCleanupOwnershipSurvivesRenameAndRestart(t *testing.T) {
 	if err != nil || after != before {
 		t.Fatal("native identity changed through bookkeeping", after, before, err)
 	}
-	if err = reopened.Release(context.Background(), child.Record.ID, binding); err != nil {
+	err = reopened.Release(context.Background(), child.Record.ID, binding)
+	if assertDarwinCleanupRefusal(t, reopened, binding, child.Record, err) {
+		return
+	}
+	if err != nil {
 		t.Fatal("original object could not be explicitly released", err)
 	}
 	if _, err = reopened.Manifest(context.Background(), child.Record.ID, binding); err != nil {
@@ -127,7 +131,11 @@ func TestWorkingCopyCleanupPublishedReceiptDoesNotTouchRecreatedPath(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = child.Release(context.Background()); err != nil {
+	err = child.Release(context.Background())
+	if assertDarwinCleanupRefusal(t, store, binding, child.Record, err) {
+		return
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 	recreated := filepath.Join(store.directory, child.Record.ID)

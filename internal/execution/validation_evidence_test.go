@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 )
@@ -93,6 +94,26 @@ func TestValidationEvidenceUsesNativeReceiptsAndExactInputs(t *testing.T) {
 				if _, err = w.Endpoint.Worker.Journal.db.Exec(`UPDATE execution_operations SET result=? WHERE id=?`, data, intent.OperationID); err != nil {
 					t.Fatal(err)
 				}
+			}
+			if runtime.GOOS == "darwin" && mode != "not-run" && mode != "changed-before" {
+				receipt, receiptErr := w.Endpoint.Worker.Journal.Inspect(ctx, intent)
+				if receiptErr != nil || receipt.State != "uncertain" {
+					t.Fatal("unproven descendants lost uncertain validation receipt", receipt, receiptErr)
+				}
+				closeErr := w.Close()
+				assertDarwinWorkerUnsettled(t, store, binding, w, closeErr)
+				if _, sealErr := w.SealChangeSet(ctx, SealChangeSetRequest{RequestID: "seal", CopyID: w.Record.ID, Source: binding, InstructionVersion: req.InstructionVersion, ControlEpoch: req.ControlEpoch}); !errors.Is(sealErr, ErrHostUnavailable) {
+					t.Fatal("unproven descendants sealed validated output", sealErr)
+				}
+				var sets int
+				if queryErr := store.db.QueryRow("SELECT COUNT(*) FROM worker_change_sets WHERE copy_id=?", w.Record.ID).Scan(&sets); queryErr != nil || sets != 0 {
+					t.Fatal("unproven descendants published a sealed set", sets, queryErr)
+				}
+				data, readErr := os.ReadFile(filepath.Join(source, "input.txt"))
+				if readErr != nil || string(data) != "candidate input" {
+					t.Fatal("validation changed original", string(data), readErr)
+				}
+				return
 			}
 			if mode == "late-change" {
 				if err = w.Close(); err != nil {

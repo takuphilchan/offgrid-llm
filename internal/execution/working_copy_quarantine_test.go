@@ -27,6 +27,9 @@ func TestWorkingCopyCleanupInterruptedBoundariesRetainCapacity(t *testing.T) {
 				}
 				return nil
 			})
+			if assertDarwinCleanupRefusal(t, store, binding, child.Record, err) {
+				return
+			}
 			if !errors.Is(err, interrupted) {
 				t.Fatal("did not exercise boundary", err)
 			}
@@ -46,7 +49,11 @@ func TestWorkingCopyCleanupInterruptedBoundariesRetainCapacity(t *testing.T) {
 			if err != nil || record.State != "uncertain" || record.ReservedBytes == 0 {
 				t.Fatal("restart dispatched release", record, err)
 			}
-			if err = reopened.Release(ctx, child.Record.ID, binding); err != nil {
+			err = reopened.Release(ctx, child.Record.ID, binding)
+			if assertDarwinCleanupRefusal(t, reopened, binding, child.Record, err) {
+				return
+			}
+			if err != nil {
 				t.Fatal("explicit owned retry failed", err)
 			}
 			record, err = reopened.Inspect(ctx, child.Record.ID, binding)
@@ -81,6 +88,9 @@ func TestWorkingCopyCleanupSubstitutionBeforeDetachRetainsBothObjects(t *testing
 		}
 		return os.WriteFile(filepath.Join(original, "unrelated"), []byte("preserve"), 0600)
 	})
+	if assertDarwinCleanupRefusal(t, store, binding, child.Record, err) {
+		return
+	}
 	if !errors.Is(err, ErrRevision) {
 		t.Fatal("post-rename identity was not checked", err)
 	}
@@ -133,6 +143,9 @@ func TestWorkingCopyCleanupRecreatedOriginalSurvivesSuccessfulDetach(t *testing.
 		}
 		return os.WriteFile(sentinel, []byte("new owner"), 0600)
 	})
+	if assertDarwinCleanupRefusal(t, store, binding, child.Record, err) {
+		return
+	}
 	if !errors.Is(err, ErrRevision) {
 		t.Fatal("reused old pathname resolved cleanup", err)
 	}

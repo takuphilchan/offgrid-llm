@@ -4,6 +4,14 @@ OffGrid's built-in task runner uses a local chat model and enabled tools. The
 model must support structured tool calls; an installed model or successful
 health check alone does not prove it can complete a useful task.
 
+On macOS, native process groups do not prove that every detached descendant has
+stopped. A worker that launched a process therefore retains an uncertain receipt,
+its private working copy and storage reservation when cleanup cannot be proven.
+Restart does not clear that lease or replay the work. Automatic working-copy
+quarantine/removal and atomic replacement are also unsupported on macOS; retained
+changes require review. These local execution capabilities remain incomplete in
+the transformation roadmap, even when refusal and retention tests pass.
+
 ## Reusable agents in Chat
 
 Open **Agents → Agent profiles** to create or edit a profile. Search and the

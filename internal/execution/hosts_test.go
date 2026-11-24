@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -134,7 +135,11 @@ func TestLocalEndpointBackgroundJobOutlivesStartRequestButCannotRestartAfterCanc
 	if err != nil || actual.State != "running" {
 		t.Fatal("request completion killed background job", actual, err)
 	}
-	if err = e.Cancel(ctx, b); err != nil {
+	if err = e.Cancel(ctx, b); runtime.GOOS == "darwin" {
+		if !errors.Is(err, ErrHostUnavailable) || w.Processes.cleanupConfirmed() {
+			t.Fatal("Darwin cancellation invented descendant retirement", err)
+		}
+	} else if err != nil {
 		t.Fatal(err)
 	}
 	actual, err = w.Processes.Inspect(ctx, b, process.Handle)

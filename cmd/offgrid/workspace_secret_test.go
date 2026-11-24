@@ -43,7 +43,9 @@ func TestWorkspaceSecretTerminalHelper(t *testing.T) {
 	}
 	after, stateErr := term.GetState(os.Stdin.Fd())
 	if stateErr != nil || !reflect.DeepEqual(before, after) {
-		t.Fatal("terminal mode was not restored", stateErr)
+		// Termios flags/control bytes contain configuration, never input bytes.
+		// Preserve the exact comparison and expose which field failed on a PTY.
+		t.Fatalf("terminal mode was not restored: before=%+v after=%+v err=%v", before, after, stateErr)
 	}
 	fmt.Print("PROTECTED_INPUT_DONE\n")
 }

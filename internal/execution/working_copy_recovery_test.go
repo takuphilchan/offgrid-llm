@@ -79,7 +79,11 @@ func TestWorkingCopyFailedWritesRetainArtifactsAndReservations(t *testing.T) {
 			if _, err = reopened.Prepare(context.Background(), e.Worker.Session, req); !errors.Is(err, ErrConflict) {
 				t.Fatal("restart retried preparation", err)
 			}
-			if err = reopened.Release(context.Background(), id, b); err != nil {
+			err = reopened.Release(context.Background(), id, b)
+			if assertDarwinCleanupRefusal(t, reopened, b, record, err) {
+				return
+			}
+			if err != nil {
 				t.Fatal(err)
 			}
 		})

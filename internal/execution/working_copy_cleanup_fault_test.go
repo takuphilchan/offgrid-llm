@@ -60,6 +60,9 @@ func TestWorkingCopyCleanupCancellationRetainsRemainingContents(t *testing.T) {
 		}
 		return nil
 	})
+	if assertDarwinCleanupRefusal(t, store, binding, child.Record, err) {
+		return
+	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatal("cleanup ignored cancellation after its first removal", err)
 	}
@@ -107,7 +110,11 @@ func TestWorkingCopyOversizedCleanupRejectsBeforeDeletion(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reopened.Close()
-	if err = reopened.Release(context.Background(), child.Record.ID, binding); !errors.Is(err, ErrLimit) {
+	err = reopened.Release(context.Background(), child.Record.ID, binding)
+	if assertDarwinCleanupRefusal(t, reopened, binding, child.Record, err) {
+		return
+	}
+	if !errors.Is(err, ErrLimit) {
 		t.Fatal("oversized cleanup was not bounded", err)
 	}
 	ownership, err := reopened.copyOwnership(context.Background(), child.Record.ID)

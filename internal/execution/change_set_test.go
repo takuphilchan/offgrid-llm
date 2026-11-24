@@ -100,7 +100,11 @@ func TestChangeSetCapturesImmutableOperationsWithoutEditingSource(t *testing.T) 
 	if err = s.AbandonChangeSet(ctx, set.ID, req.Source); err != nil {
 		t.Fatal(err)
 	}
-	if err = w.Release(ctx); err != nil {
+	err = w.Release(ctx)
+	if assertDarwinCleanupRefusal(t, s, req.Source, w.Record, err) {
+		return
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 }

@@ -92,3 +92,60 @@ still failed; no release was created.
   confirmation remains pending alongside its other execution/terminal failures.
 
 These corrections are incremental; they do not establish a passing release gate.
+
+## Included follow-up work and outstanding CI findings
+
+The subsequent release pass committed and pushed:
+
+- `9af507e6`: provider ownership and native test fixture corrections.
+- `89b92a8e`: redacted protected-terminal diagnostics and fixture cleanup.
+- `64d3e81b`: verified offline-kit preparation and safe model imports.
+- `28f24b70`: accurate package/trust-report counts and preview release procedure.
+- `9be55324`: supervised Kokoro speech and Qwen language normalization.
+
+The additional [speech and kit evidence](offline-kit-corrections-2026-11-24.md)
+records exact automated scope and remaining real-model/media qualification.
+Fresh committed kit checks passed (models 4.566 s, CLI 1.904 s, schema checker
+1.300 s), as did six builder tests and the web API contract check. Focused
+server audio/model checks passed in 0.725 s. These are not installed-payload tests.
+
+[CI 45402239314](https://github.com/takuphilchan/offgrid-llm/actions/runs/45402239314)
+passed the earlier Windows native and desktop checks but failed packaged
+terminal navigation at the `Return to Chat` locator. Linux advanced to the
+translation checks, which found four missing messages in preview locales.
+macOS execution contracts remain under investigation. The next diagnostic run
+confirmed that protected input succeeds but its terminal-state restoration
+assertion fails; it did not establish successful restoration. These failures
+remain release blockers until corrected and verified on the final source.
+
+The next run, [45416730931](https://github.com/takuphilchan/offgrid-llm/actions/runs/45416730931),
+failed earlier on Linux due to a checksum-server HTTP/2 transport error. Checksum
+verification remains enabled. Windows exposed a concurrent registry-directory
+creation race: an initial missing-path probe followed by another process's
+creation was incorrectly rejected as `execution_path_outside_workspace`.
+Commit `27a90d36` adds a bounded retry with physical identity verification;
+appearing files, symlinks and junctions still fail closed. A deterministic
+negative control reproduced the CI error, then the Windows host-protection suite
+passed ten repetitions (44.758 s), focused/subprocess checks passed fifty
+repetitions (6.012 s), and Linux race checks passed three repetitions (4.179 s).
+Logs are retained as `build/host-admission-path-negative.log`,
+`build/host-admission-path-fixed.log`, `build/host-admission-path-repeat-final.log`
+and `build/host-admission-path-linux-login.log`. Initial WSL invocation errors
+are retained separately and do not count as passing tests.
+
+The contract-test correction batch passed Windows execution (36.520 s) and
+executor checks (7.146 s). Darwin arm64 test binaries cross-compiled, which is
+not native runtime proof. Linux helper builds on `/mnt/d` exceeded their unchanged
+60-second limits; a fresh native Linux snapshot of the same HEAD plus reviewed
+patch and two added contract tests passed execution (7.022 s), executor (1.315 s)
+and real isolated PTY tests (8.574 s). The snapshot is retained at
+`/home/phil/.cache/offgrid-native-contract-MS8FfO`; its run is recorded in
+`build/macos-contract-native-final.log`. macOS terminal restoration remains
+unresolved: the next run includes configuration-only before/after state details
+without relaxing the exact comparison or exposing passphrase bytes.
+
+Commit `be8f320d` completes four voice messages in twenty preview locales and
+updates stale terminal navigation selectors. All 29 locales have 1,719 authored
+messages; native-language review remains pending. Eleven quality tests and the
+isolated headless terminal display passed. This does not replace packaged native
+PTY verification on the Windows runner.

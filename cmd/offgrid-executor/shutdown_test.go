@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -62,8 +64,14 @@ func main(){os.WriteFile("started",[]byte("ready"),0600);time.Sleep(3*time.Secon
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if err := endpoint.Close(); err != nil {
-		t.Fatal("worker failed to settle its command", err)
+	closeErr := endpoint.Close()
+	if runtime.GOOS == "darwin" {
+		var exitErr *exec.ExitError
+		if !errors.As(closeErr, &exitErr) || exitErr.ExitCode() != 1 {
+			t.Fatal("Darwin worker did not report its unsettled shutdown", closeErr)
+		}
+	} else if closeErr != nil {
+		t.Fatal("worker failed to settle its command", closeErr)
 	}
 	journal, err := execution.OpenJournal(state)
 	if err != nil {
@@ -72,6 +80,15 @@ func main(){os.WriteFile("started",[]byte("ready"),0600);time.Sleep(3*time.Secon
 	defer journal.Close()
 	receipt, err := journal.Inspect(context.Background(), r)
 	var process execution.ProcessResult
+	if runtime.GOOS == "darwin" {
+		if err != nil || receipt.State != "uncertain" || json.Unmarshal(receipt.Result, &process) != nil || process.State != "cancelled" || process.ExitCode == nil || execution.ProcessDescendantsSettled(process) || execution.ProcessDescendantState(process) != "unknown" {
+			t.Fatal("shutdown lost leader outcome or invented descendant retirement", receipt, process, err)
+		}
+		if _, err := os.Stat(filepath.Join(root, "late")); !os.IsNotExist(err) {
+			t.Fatal("owned command continued after shutdown", err)
+		}
+		return
+	}
 	if err != nil || receipt.State != "complete" || json.Unmarshal(receipt.Result, &process) != nil || process.State != "cancelled" || process.ExitCode == nil {
 		t.Fatal("shutdown did not persist observed command termination", receipt, process, err)
 	}

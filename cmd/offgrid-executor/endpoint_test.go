@@ -87,9 +87,13 @@ func TestPinnedStdioEndpointRunsRealExecutor(t *testing.T) {
 		t.Fatal("cancelled job dispatched", late)
 	}
 	t.Run("shutdown settles owned command", func(t *testing.T) {
+		testhost.Account(t)
 		testEndpointCommandShutdown(t, binary, digest)
 	})
 	t.Run("independent worker preparation and restart", func(t *testing.T) {
+		// The shutdown scenario deliberately retains an unresolved native lease
+		// on Darwin. This independent scenario needs its own account registry.
+		testhost.Account(t)
 		testEndpointWorkerPreparation(t, binary, digest)
 	})
 }

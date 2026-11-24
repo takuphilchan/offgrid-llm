@@ -16,7 +16,11 @@ func TestWorkingCopyCleanupPreservesRecreatedPathAfterLostReceipt(t *testing.T) 
 	if _, err = store.db.Exec(`CREATE TRIGGER reject_release BEFORE UPDATE ON worker_copies WHEN NEW.state='released' BEGIN SELECT RAISE(ABORT,'injected lost cleanup receipt'); END`); err != nil {
 		t.Fatal(err)
 	}
-	if err = child.Release(context.Background()); err == nil {
+	err = child.Release(context.Background())
+	if assertDarwinCleanupRefusal(t, store, binding, child.Record, err) {
+		return
+	}
+	if err == nil {
 		t.Fatal("cleanup receipt failure was acknowledged")
 	}
 	if _, err = store.db.Exec(`DROP TRIGGER reject_release`); err != nil {

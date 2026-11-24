@@ -113,7 +113,11 @@ func TestWorkingCopyIndependentInputsSessionsAndStorage(t *testing.T) {
 	if _, err = one.Endpoint.PrepareWorker(ctx, workingCopyRequest(one.Context.Binding, "nested")); err == nil {
 		t.Fatal("recursive worker creation enabled")
 	}
-	if err = one.Release(ctx); err != nil {
+	err = one.Release(ctx)
+	if assertDarwinCleanupRefusal(t, store, b, one.Record, err) {
+		return
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 	released, err := store.Inspect(ctx, one.Record.ID, b)
@@ -188,7 +192,7 @@ func TestWorkingCopyCopyRevalidatesContents(t *testing.T) {
 }
 
 func TestWorkingCopyIndependentProcessOwnershipAndParentCancellation(t *testing.T) {
-	e, _, b, _ := workingCopyFixture(t)
+	e, store, b, _ := workingCopyFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	one, err := e.PrepareWorker(ctx, workingCopyRequest(b, "one"))
@@ -218,7 +222,9 @@ func TestWorkingCopyIndependentProcessOwnershipAndParentCancellation(t *testing.
 	if err != nil || other.State != "running" {
 		t.Fatal("stopping one worker stopped its sibling", other, err)
 	}
-	if err = e.Cancel(ctx, b); err != nil {
+	if err = e.Cancel(ctx, b); assertDarwinWorkerUnsettled(t, store, b, one, err) {
+		assertDarwinWorkerUnsettled(t, store, b, two, err)
+	} else if err != nil {
 		t.Fatal(err)
 	}
 	for _, child := range []*PreparedWorker{one, two} {

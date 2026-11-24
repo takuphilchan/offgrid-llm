@@ -8,6 +8,12 @@ builds. Published artifacts must include their trust reports and SHA-256 manifes
 
 ## Changes
 
+- Adds a supervised Kokoro speech adapter with explicit runtime compatibility
+  checks, and fixes Qwen recognition language normalization and automatic
+  CustomVoice language handling. Actual Kokoro synthesis remains unqualified.
+- Adds verified offline-kit preparation and readback. Model imports preserve
+  existing files, verify manifest digests before publication and report partial
+  failures without restarting inference or selecting a model.
 - Extends browser workspaces with multiple managed tabs, explicitly scoped
   navigation and stronger file-transfer ownership, provenance and recovery.
 - Keeps spoken corrections and side questions in the existing conversation and
@@ -54,6 +60,12 @@ do not acquire that patch. Continuous voice still uses batch recognition;
 physical echo/noise rejection, conversational latency, languages and human
 naturalness remain unqualified. Durable played-speech context and complete
 owner-loss recovery also remain unfinished.
+
+macOS native execution cannot yet prove retirement of detached descendants or
+perform the qualified working-copy quarantine/atomic replacement operations.
+It retains uncertain receipts, copied artifacts and reservations instead of
+claiming cleanup, and restart does not authorize replay. Tests of those refusal
+boundaries do not qualify successful macOS cleanup or close the roadmap gates.
 
 Before publication, qualify the exact candidate source and produced packages,
 resolve release blockers and record the actual results. No all-platform,

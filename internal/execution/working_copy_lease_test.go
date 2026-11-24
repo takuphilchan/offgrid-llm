@@ -27,7 +27,11 @@ func TestWorkingCopyCleanupRequiresRetainedWorkerSettlement(t *testing.T) {
 	if err = child.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err = child.Release(ctx); err != nil {
+	err = child.Release(ctx)
+	if assertDarwinCleanupRefusal(t, store, binding, child.Record, err) {
+		return
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err = child.Close(); err != nil {
@@ -61,7 +65,11 @@ func TestWorkingCopySettlementWriteRequiresSameClosedOwnerRetry(t *testing.T) {
 	if err = child.Close(); err != nil {
 		t.Fatal("retained closed owner could not retry its proof", err)
 	}
-	if err = store.Release(ctx, child.Record.ID, binding); err != nil {
+	err = store.Release(ctx, child.Record.ID, binding)
+	if assertDarwinCleanupRefusal(t, store, binding, child.Record, err) {
+		return
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -116,6 +117,20 @@ func TestWorkerProcessReceiptSettlesWithActualExit(t *testing.T) {
 	}
 	w.finishing.Wait()
 	result = w.Handle(context.Background(), r)
+	if runtime.GOOS == "darwin" {
+		if result.Error != ErrAuthority.Error() {
+			t.Fatal("uncertain descendants did not revoke dispatch authority", result)
+		}
+		receipt, err := w.Journal.Inspect(context.Background(), r)
+		if err != nil || receipt.State != "uncertain" {
+			t.Fatal("lost uncertain native receipt", receipt, err)
+		}
+		var process ProcessResult
+		if err = json.Unmarshal(receipt.Result, &process); err != nil || process.State != "failed" || process.ExitCode == nil || *process.ExitCode != 7 || ProcessDescendantsSettled(process) || ProcessDescendantState(process) != "unknown" || process.Runtime == nil || process.Runtime.Settled {
+			t.Fatal("lost leader outcome or invented descendant retirement", process, err)
+		}
+		return
+	}
 	if result.Error != "" || result.Receipt.State != "complete" {
 		t.Fatal(result)
 	}
