@@ -118,7 +118,9 @@ func executorBuildEnv(base []string, host, platform, architecture string) ([]str
 		if host != "darwin" {
 			return nil, errors.New("Darwin executor requires a native macOS SDK and ACL inspector; cross-compiling without cgo is unsupported")
 		}
-		env = append(env, "CGO_ENABLED=1", "CC=clang", "MACOSX_DEPLOYMENT_TARGET=15.0")
+		// Retain the normal Go/SDK deployment target or an explicit inherited
+		// target. The computer companion's OS minimum does not apply here.
+		env = append(env, "CGO_ENABLED=1", "CC=clang")
 	}
 	return env, nil
 }

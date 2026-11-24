@@ -518,7 +518,7 @@ jobs:
           else
             mkdir -p build/macos
             for arch in amd64 arm64; do
-              CGO_ENABLED=1 CC=clang MACOSX_DEPLOYMENT_TARGET=15.0 GOARCH="$arch" go build -ldflags "-X main.Version=v$version" -o "build/macos/offgrid-$arch" ./cmd/offgrid
+              CGO_ENABLED=1 CC=clang GOARCH="$arch" go build -ldflags "-X main.Version=v$version" -o "build/macos/offgrid-$arch" ./cmd/offgrid
             done
           fi
 
