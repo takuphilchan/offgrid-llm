@@ -286,3 +286,25 @@ Independent review found no blocking defect in the correction. Native macOS
 confirmation and final exact-source CI remain required. The earlier source's
 remaining Linux browser run is superseded by the corrected revision; it must
 not be recorded as a passing full run.
+
+## Installer Finish observation correction
+
+CI [45471596462](https://github.com/takuphilchan/offgrid-llm/actions/runs/45471596462)
+at `40d3f68b` passed both complete macOS jobs, including packaged executors, and
+the Windows native/package checks. Linux Go and race checks also passed. Windows
+failed only its installer Finish timing assertion: the first post-click sample
+arrived at 3,345 ms and already observed a hidden window. The trace contains no
+observation establishing that the wizard stayed visible beyond two seconds.
+Retained evidence: `build/release-ci9-windows.log` and
+`build/release-ci9-windows-artifacts/`.
+
+The test driver now posts Finish and observes visibility in a dedicated native
+loop, outside PowerShell diagnostic serialization, screenshot-helper accounting
+and window enumeration. Its two-second requirement is unchanged: a visible or
+late-observed hidden window still fails, and the receipt records the largest
+observation gap. Pure timing checks passed for prompt closure, delayed diagnostic
+work, a stuck window, a 3,345 ms observation gap, a slow visibility query and the
+exact 2,000 ms boundary. Three installer contract tests, source-size and maintained
+developer-layout checks also passed. No local interactive installer or personal
+screen capture was used. Actual native installer qualification remains required;
+these tests do not certify responsiveness of the final package.

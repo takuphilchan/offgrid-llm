@@ -15,6 +15,26 @@ public static class OffGridWizard {
   [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
   [DllImport("user32.dll")] static extern int GetAwarenessFromDpiAwarenessContext(IntPtr context);
   public static bool DpiAware(IntPtr window) { return GetAwarenessFromDpiAwarenessContext(GetWindowDpiAwarenessContext(window)) > 0; }
+  public sealed class FinishResult { public long ClosedMs; public long MaxProbeGapMs; public bool Hidden; }
+  // Keep PowerShell serialization, capture helpers and window enumeration out
+  // of the visibility deadline. Late observations remain failures, not passes.
+  public static FinishResult ObserveFinish(Func<bool> visible, Func<long> elapsed, Action wait) {
+    long previous = 0, largestGap = 0;
+    while (true) {
+      bool showing = visible();
+      long now = elapsed();
+      largestGap = Math.Max(largestGap, now - previous);
+      if (!showing || now > 2000) return new FinishResult { ClosedMs = now, MaxProbeGapMs = largestGap, Hidden = !showing };
+      previous = now;
+      wait();
+    }
+  }
+  public static FinishResult ClickFinish(IntPtr window, IntPtr button) {
+    var clock = System.Diagnostics.Stopwatch.StartNew();
+    if (!PostMessage(button, 0x00F5, IntPtr.Zero, IntPtr.Zero)) throw new InvalidOperationException("Finish click could not be posted.");
+    return ObserveFinish(() => IsWindow(window) && IsWindowVisible(window),
+      () => clock.ElapsedMilliseconds, () => System.Threading.Thread.Sleep(10));
+  }
   public static void Capture(IntPtr window, string path) {
     var previousDpi = SetThreadDpiAwarenessContext(new IntPtr(-4));
     try {
@@ -197,7 +217,6 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $finishAt = -1L
     $finishPageAt = -1L
-    $finishWindow = [IntPtr]::Zero
     $finishClosedMs = -1L
     $consented = $false
     $detailsOpened = $false
@@ -215,14 +234,6 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
     try {
         while ($clock.Elapsed.TotalSeconds -lt 180) {
             foreach ($capture in $captures) { Update-WizardCapture $capture }
-            if ($finishAt -ge 0 -and $finishClosedMs -lt 0) {
-                # NSIS can keep a hidden handle while the launched app starts; only a visible page blocks the user.
-                $finishExists = [OffGridWizard]::IsWindow($finishWindow)
-                $finishVisible = $finishExists -and [OffGridWizard]::IsWindowVisible($finishWindow)
-                Write-WizardDiagnostic $diagnosticPath 'finish-window' @{ window = $finishWindow.ToInt64(); exists = $finishExists; visible = $finishVisible; owner = [OffGridWizard]::Owner($finishWindow); title = [OffGridWizard]::Text($finishWindow); elapsedMs = $clock.ElapsedMilliseconds - $finishAt }
-                if (-not $finishVisible) { $finishClosedMs = $clock.ElapsedMilliseconds - $finishAt }
-                elseif ($clock.ElapsedMilliseconds - $finishAt -gt 2000) { throw 'Finish remained visible for more than 2 seconds.' }
-            }
             if ($process.HasExited) { break }
             foreach ($window in [OffGridWizard]::Windows('OffGrid Desktop Install Test')) {
                 Assert-WizardResponsive $window $unresponsive $clock 'Installer UI failed consecutive responsiveness probes for at least 5 seconds.' $diagnosticPath
@@ -305,14 +316,18 @@ function Invoke-InstallerWizard([string]$Executable, [string]$InstallRoot, [bool
                     if (-not $finishCapture.done) { continue }
                     if (-not $Uninstall) { [OffGridWizard]::Check($checks[0], $Launch) }
                     $finishAt = $clock.ElapsedMilliseconds
-                    $finishWindow = $window
                 } elseif ($label -notin @('Next >', 'Install', 'Uninstall')) {
                     throw "Unexpected wizard page ($label): $text"
                 }
                 $clicked[$key] = $true
                 Write-Host "Installer control: $label (window=$window, elapsed=$($clock.ElapsedMilliseconds)ms)"
                 Write-WizardDiagnostic $diagnosticPath 'click' @{ window = $window.ToInt64(); label = $label; elapsedMs = $clock.ElapsedMilliseconds }
-                [OffGridWizard]::Click($button)
+                if ($label -eq 'Finish') {
+                    $finish = [OffGridWizard]::ClickFinish($window, $button)
+                    $finishClosedMs = $finish.ClosedMs
+                    Write-WizardDiagnostic $diagnosticPath 'finish-window' @{ window = $window.ToInt64(); visible = -not $finish.Hidden; elapsedMs = $finishClosedMs; maxProbeGapMs = $finish.MaxProbeGapMs }
+                    if (-not $finish.Hidden -or $finishClosedMs -gt 2000) { throw "Finish did not close within 2000ms (observed=${finishClosedMs}ms, maximum probe gap=$($finish.MaxProbeGapMs)ms)." }
+                } else { [OffGridWizard]::Click($button) }
             }
             Start-Sleep -Milliseconds 50
         }

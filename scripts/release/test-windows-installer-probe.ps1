@@ -56,6 +56,7 @@ exit
 }
 
 . (Join-Path $PSScriptRoot 'windows-installer-ui.ps1')
+& (Join-Path $PSScriptRoot 'test-windows-installer-finish.ps1')
 
 # Slow helper initialization is not a hung PrintWindow. Both phases still have
 # hard limits, including an overall ceiling if the parent observes readiness late.
