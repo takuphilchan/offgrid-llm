@@ -19,12 +19,22 @@ type PreparedWorker struct {
 	once          sync.Once
 	closeErr      error
 	done          chan struct{}
+	doneOnce      sync.Once
+	completionErr error
 	requestDigest string
 	settleMu      sync.Mutex
 	settled       bool
 }
 
-func (w *PreparedWorker) Close() error {
+func (w *PreparedWorker) Close() (resultErr error) {
+	// Completion includes the durable settlement/uncertainty outcome, not just
+	// closing process handles. Parent cancellation must not race that write.
+	defer func() {
+		w.doneOnce.Do(func() {
+			w.completionErr = resultErr
+			close(w.done)
+		})
+	}()
 	w.once.Do(func() {
 		w.closeErr = w.Endpoint.Close()
 		if w.Record.Purpose == "test" {
@@ -35,7 +45,6 @@ func (w *PreparedWorker) Close() error {
 			w.closeErr = errors.Join(w.closeErr, err)
 		}
 		w.closeErr = errors.Join(w.closeErr, w.Endpoint.Worker.Session.Close(), w.Endpoint.Worker.Journal.Close())
-		close(w.done)
 	})
 	if w.closeErr != nil || !w.Endpoint.Worker.Processes.cleanupConfirmed() {
 		// Closing the endpoint can fail before Release reaches the store. Save

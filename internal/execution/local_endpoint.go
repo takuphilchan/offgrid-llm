@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"errors"
 	"sync"
 )
 
@@ -146,27 +147,23 @@ func (e *LocalEndpoint) Cancel(ctx context.Context, b Binding) error {
 		return ErrAuthority
 	}
 	cancel()
-	if err := e.Worker.Processes.CancelJob(ctx, b); err != nil {
-		return err
-	}
+	resultErr := e.Worker.Processes.CancelJob(ctx, b)
 	for _, done := range pending {
 		select {
 		case <-done:
 		case <-ctx.Done():
-			return ctx.Err()
+			return errors.Join(resultErr, ctx.Err())
 		}
 	}
 	for _, child := range children {
 		select {
 		case <-child.done:
-			if child.closeErr != nil {
-				return child.closeErr
-			}
+			resultErr = errors.Join(resultErr, child.completionErr)
 		case <-ctx.Done():
-			return ctx.Err()
+			return errors.Join(resultErr, ctx.Err())
 		}
 	}
-	return nil
+	return resultErr
 }
 
 func (e *LocalEndpoint) Close() error {

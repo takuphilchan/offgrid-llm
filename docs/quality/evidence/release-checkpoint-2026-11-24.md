@@ -258,3 +258,31 @@ Evidence: `build/release-rendered-manual-gate-negative.log` and
 `build/release-rendered-all-locales-fixed.log` retains both the 29 passing locale
 cases and the superseded timer-regression failure; it is not a wholly passing
 invocation. A fresh complete CI run is still required for the combined source.
+
+## Durable cancellation acknowledgment correction
+
+CI [45466017652](https://github.com/takuphilchan/offgrid-llm/actions/runs/45466017652)
+at `c919dabe` passed Windows installation and Intel macOS, including the newly
+added real packaged-executor authority check. ARM64 macOS exposed an intermittent
+parent-cancellation ordering defect before packaging. A child could signal done
+before saving its uncertain working-copy state, and the parent could return
+after the first cleanup error without waiting for siblings. The observed record
+still retained its lease and reservation; it was not evidence of a capacity
+refund. The failed native log is `build/release-ci8-macos-arm.log`.
+
+Child completion now publishes an immutable result after the durable outcome
+attempt. Parent cancellation aggregates cleanup errors and waits for all children
+within its existing context deadline. Failed writes and unproven descendants
+remain errors with retained leases; the original closed owner can still retry
+settlement without replay. A deterministic blocked-store regression fails against
+the original code in 0.022 s. The fix passed ten focused Windows repetitions
+(14.602 s), ten Linux race repetitions (9.979 s), the full Windows execution suite
+(139.943 s) and the full Linux execution race suite (157.942 s). Evidence:
+`build/cancel-durable-outcomes-linux.log`,
+`build/cancel-durable-outcomes-windows.log` and
+`build/cancel-durable-outcomes-windows-full.log`.
+
+Independent review found no blocking defect in the correction. Native macOS
+confirmation and final exact-source CI remain required. The earlier source's
+remaining Linux browser run is superseded by the corrected revision; it must
+not be recorded as a passing full run.
