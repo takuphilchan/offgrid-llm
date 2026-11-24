@@ -5,6 +5,7 @@ package execution
 /*
 #include <sys/types.h>
 #include <sys/acl.h>
+#include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <membership.h>
 #include <unistd.h>

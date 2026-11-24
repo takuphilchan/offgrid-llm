@@ -19,6 +19,8 @@ func TestProtectedHostStateRejectsExtendedWindowsAliases(t *testing.T) {
 		"equal-root":            {extended(private), private},
 		"equal-protected":       {private, extended(private)},
 		"ancestor":              {extended(parent), private},
+		"mixed-separator-root":  {extended(filepath.ToSlash(parent)), private},
+		"mixed-protected":       {parent, extended(filepath.ToSlash(private))},
 		"descendant":            {extended(child), private},
 		"missing-tail":          {extended(parent), filepath.Join(parent, "future", "computer")},
 		"missing-extended-tail": {parent, extended(filepath.Join(parent, "future", "computer"))},
@@ -31,6 +33,9 @@ func TestProtectedHostStateRejectsExtendedWindowsAliases(t *testing.T) {
 	}
 	if err := PrivateStateDisjointFromRoot(extended(t.TempDir()), private); err != nil {
 		t.Fatalf("disjoint extended workspace rejected: %v", err)
+	}
+	if err := PrivateStateDisjointFromRoot(extended(filepath.ToSlash(t.TempDir())), private); err != nil {
+		t.Fatalf("disjoint mixed-separator extended workspace rejected: %v", err)
 	}
 }
 

@@ -14,7 +14,10 @@ func canonicalPrivateLocation(path string) (string, error) {
 	if !filepath.IsAbs(path) {
 		return "", ErrPath
 	}
-	p, err := windows.UTF16PtrFromString(path)
+	// Go accepts both separators, but the extended Win32 namespace bypasses
+	// ordinary slash normalization. CI temporary paths can retain forward
+	// slashes; normalize only separators before opening the physical directory.
+	p, err := windows.UTF16PtrFromString(strings.ReplaceAll(path, "/", `\`))
 	if err != nil {
 		return "", ErrPath
 	}

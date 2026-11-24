@@ -244,6 +244,11 @@ util-linux `unshare` executable. Use an ordinary Linux executable name and add
 `namespace_launcher` (canonical absolute path) and `namespace_launcher_sha256`
 (complete `sha256:` digest) to `managed_ollama`.
 
+Host policy, including AppArmor, must permit these namespace operations. If it
+does not, the provider remains unavailable; OffGrid does not change host policy
+or fall back to an unsupervised process. A host administrator must explicitly
+provision the required isolation facilities.
+
 An administrator must provision the runtime and single-model store outside
 user-writable directories. Every artifact and ancestor must be root-owned with
 no group/other writes, symlinks or regular-file hardlinks. The separate state

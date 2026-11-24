@@ -43,7 +43,9 @@ class ONNXEmbeddingContracts(unittest.TestCase):
                  patch.object(module["sys"], "path", [str(root / "Lib")]), \
                  patch.dict(constrain.__globals__, {"__file__": script}):
                 constrain(str(root))
-                self.assertEqual(module["sys"].path[-1], str(site))
+                # Windows temporary roots may use an 8.3 alias (RUNNER~1).
+                # The worker deliberately admits the resolved installation path.
+                self.assertEqual(module["sys"].path[-1], str(site.resolve(strict=True)))
                 module["sys"].path.append(str(root.parent))
                 with self.assertRaises(ValueError):
                     constrain(str(root))
