@@ -16,13 +16,18 @@ func protectionPathValid(path string) bool {
 // Pin the nearest existing directory as well as every missing component. A
 // missing leaf is a reservation, not permission to adopt a replacement later.
 func locateHostProtection(path string) (hostProtectionLocation, error) {
+	return locateHostProtectionWith(path, canonicalPrivateLocation)
+}
+
+func locateHostProtectionWith(path string, canonicalize func(string) (string, error)) (hostProtectionLocation, error) {
 	if !protectionPathValid(path) {
 		return hostProtectionLocation{}, ErrPath
 	}
 	cursor := filepath.Clean(path)
 	var suffix []string
+	appeared := 0
 	for len(suffix) <= 64 {
-		canonical, err := canonicalPrivateLocation(cursor)
+		canonical, err := canonicalize(cursor)
 		if err == nil {
 			info, err := os.Stat(canonical)
 			if err != nil || !info.IsDir() {
@@ -51,7 +56,18 @@ func locateHostProtection(path string) (hostProtectionLocation, error) {
 		if !os.IsNotExist(err) {
 			return hostProtectionLocation{}, ErrPath
 		}
-		if _, err := os.Lstat(cursor); err == nil || !os.IsNotExist(err) {
+		if info, err := os.Lstat(cursor); err == nil {
+			// Another supervisor can create the registry after our missing-path
+			// probe and before this check. Re-open a real directory to establish
+			// its physical identity; never accept a link or adopt lexical identity.
+			// Bound repeated inconsistencies. Admission revalidates this identity
+			// again under the account lock before publishing any reservation.
+			if info.IsDir() && info.Mode()&os.ModeSymlink == 0 && appeared < 2 {
+				appeared++
+				continue
+			}
+			return hostProtectionLocation{}, ErrPath
+		} else if !os.IsNotExist(err) {
 			return hostProtectionLocation{}, ErrPath
 		}
 		parent := filepath.Dir(cursor)
