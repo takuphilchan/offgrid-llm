@@ -110,6 +110,16 @@ None; this repository has no pre-existing OpenSpec capability artifacts.
 
 ## Impact
 
+### Starter-kit corrections (authorized 2026-11-24)
+
+The user requested code fixes for the speech/runtime gaps found while planning
+ten 64 GB offline kits. Correct Qwen language handling and implement the missing
+Kokoro execution path through the supervised local worker. Preserve explicit
+model/voice selection, package leases, offline loading and cancellation. A runtime
+module or passing fixture is not African-language, naturalness or hardware
+qualification. Omnilingual ASR's Windows runtime and broader language qualification
+remain explicit prerequisites, not silently enabled fallback paths.
+
 ### Native desktop speech setup (authorized 2026-11-03)
 
 Extend the earlier runtime correction to package pinned Whisper/Piper executables

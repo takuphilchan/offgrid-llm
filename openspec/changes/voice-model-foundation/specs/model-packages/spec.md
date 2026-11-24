@@ -8,6 +8,31 @@ or integrity with runtime compatibility or qualification.
 
 ## ADDED Requirements
 
+### Requirement: Speech adapters preserve language and model selection
+Qwen recognition SHALL normalize supported API language codes and reject unsupported
+explicit languages. Automatic recognition SHALL report a normalized detected
+language when available. Qwen read-aloud MUST NOT force English for all input.
+Kokoro SHALL execute only through an available local runtime using verified
+package artifacts and declared voices, retaining cancellation and model leases.
+
+#### Scenario: Explicit recognition language
+- **WHEN** a caller supplies `en`, `fr`, `ar` or `pt` to Qwen recognition
+- **THEN** the matching canonical Qwen language is used, while unsupported values fail explicitly without substitution
+
+#### Scenario: Non-English read-aloud
+- **WHEN** Qwen CustomVoice receives text without a language override
+- **THEN** the adapter selects automatic language handling rather than hard-coded English
+
+#### Scenario: Kokoro execution and missing dependencies
+- **WHEN** a verified Kokoro package and its local runtime are available
+- **THEN** read-aloud uses declared artifacts and voices and supports owned cancellation
+- **AND** a missing runtime or incompatible layout is reported without downloads or fallback
+
+#### Scenario: Kokoro runtime frontend compatibility
+- **WHEN** Kokoro runtime metadata identifies an unreviewed version or a version requiring lexicons with an espeak-only package
+- **THEN** readiness remains unavailable without loading model weights
+- **AND** worker startup independently rejects an unsupported runtime version or missing required frontend before synthesis
+
 ### Requirement: Packaged native speech setup
 Native desktop releases SHALL include pinned Whisper/Piper runtime assets and
 licenses, verified during packaging. Runtime discovery SHALL work independently

@@ -1802,10 +1802,14 @@ as implemented by these file/chunk endpoints.
 `response_format`. WAV is the only currently encoded output; another requested
 format returns `422 unsupported_audio_format`, never WAV labelled as MP3.
 Qwen currently accepts speed 1; unsupported values fail explicitly.
-The Qwen ASR adapter currently fails when the API language code `en` is explicitly
-passed. Omit the optional language field to use automatic detection; the UI
-dictation path does not set that override. This is a known adapter limitation,
-not evidence that all language overrides or profiles are qualified.
+Qwen ASR normalizes supported language codes (including `en`, `fr`, `ar`, `pt`)
+and canonical language names before inference. Omitted language or `auto` requests
+detection; detected languages are returned as codes when recognized. Unsupported
+explicit languages fail without substitution. Qwen CustomVoice uses automatic
+language handling. Kokoro uses declared numeric speaker IDs and a separately
+prepared local sherpa-onnx/soundfile runtime (reviewed versions 1.12.20 and 2.0.0;
+2.0.0 requires package lexicons). Its WAV adapter currently accepts
+speed 1. Runtime availability does not establish language or acoustic quality.
 
 Managed model selection accepts the installed ID, `id@revision`, exact display
 name, or source repository ID. Omitted models select an available profile for

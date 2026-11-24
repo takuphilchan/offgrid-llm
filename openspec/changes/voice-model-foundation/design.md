@@ -1,5 +1,17 @@
 # Design
 
+## Starter-kit correction decisions (2026-11-24)
+
+Normalize API language codes to Qwen's supported full names in the private worker;
+reject unsupported explicit values without echoing user data. Return normalized
+detected language codes. Qwen CustomVoice uses automatic language selection rather
+than forcing English. Kokoro uses the same owned worker, private WAV output,
+timeouts and package lease as Qwen, with configuration derived exclusively from
+the validated manifest. Probe the separate local sherpa-onnx dependency without
+installing it. Validate numeric voices against the manifest and the loaded model;
+do not infer language coverage from the engine name. Existing streaming Zipformer
+and Omnilingual runtime work is not completed by this TTS adapter.
+
 ## Context
 
 See proposal.md for the corrected user outcome. Package manifests, local import,

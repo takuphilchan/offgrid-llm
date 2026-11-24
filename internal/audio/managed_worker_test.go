@@ -50,6 +50,7 @@ class Qwen3TTSModel:
   return cls()
  def get_supported_speakers(self): return ["ryan"]
  def generate_custom_voice(self,**kw):
+  assert kw["language"] == "Auto", "speech must not force English"
   if kw["text"]=="wait": time.sleep(10)
   if kw["text"]=="fail": raise ValueError("PRIVATE TEXT MUST NOT LEAK")
   return [[0,0,0,0]],24000
@@ -60,7 +61,10 @@ class Qwen3ASRModel:
  def from_pretrained(cls,*a,**kw):
   assert kw["local_files_only"] is True
   return cls()
- def transcribe(self,**kw): return [{"text":"hello"}]
+ def transcribe(self,**kw):
+  language = kw["language"]
+  assert language is None or language in ["English", "French", "Arabic", "Portuguese", "Cantonese"]
+  return [{"text":"hello", "language":language or "French"}]
 `)
 	writeFixture(t, modules, "soundfile.py", `import wave
 def write(path,waveform,sr,**kw):
@@ -140,5 +144,30 @@ func TestManagedWorkerRejectsMissingModelDirectory(t *testing.T) {
 	w := newManagedWorker(RuntimeConfig{PythonPath: "python3"})
 	if w.available("asr", filepath.Join(t.TempDir(), "missing")) {
 		t.Fatal("missing package available")
+	}
+}
+
+func TestManagedWorkerNormalizesASRLanguage(t *testing.T) {
+	w, dir := fixtureWorker(t)
+	for _, tc := range []struct{ input, want string }{
+		{"en", "en"}, {"EN", "en"}, {" english ", "en"},
+		{"fr", "fr"}, {"Arabic", "ar"}, {"pt", "pt"}, {"yue", "yue"},
+		{"", "fr"}, {"auto", "fr"},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			out, err := w.transcribe(context.Background(), TranscriptionRequest{File: strings.NewReader("fixture"), Filename: "test.wav", Language: tc.input}, dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out.Language != tc.want || out.Text != "hello" {
+				t.Fatalf("unexpected result: %+v", out)
+			}
+		})
+	}
+	for _, language := range []string{"sw", "zu", "en-PRIVATE", "unknown PRIVATE"} {
+		_, err := w.transcribe(context.Background(), TranscriptionRequest{File: strings.NewReader("fixture"), Filename: "test.wav", Language: language}, dir)
+		if err == nil || !strings.Contains(err.Error(), "not supported") || strings.Contains(err.Error(), "PRIVATE") {
+			t.Fatalf("expected safe unsupported-language error: %v", err)
+		}
 	}
 }

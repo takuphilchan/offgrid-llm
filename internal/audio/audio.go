@@ -26,6 +26,7 @@ type RuntimeConfig struct {
 	WhisperModelPath string
 	PiperModelPath   string
 	PiperConfigPath  string
+	Kokoro           *KokoroConfig
 }
 
 // Engine manages audio transcription and synthesis
@@ -188,6 +189,9 @@ func (e *Engine) IsASRAvailable() bool {
 // IsTTSAvailable checks if text-to-speech is available
 func (e *Engine) IsTTSAvailable() bool {
 	if e.worker != nil && e.runtime.TTSModelDir != "" {
+		if e.runtime.Kokoro != nil {
+			return e.worker.available("kokoro", e.runtime.TTSModelDir)
+		}
 		return e.worker.available("tts", e.runtime.TTSModelDir)
 	}
 	return e.piperPath != "" && e.hasPiperModel()

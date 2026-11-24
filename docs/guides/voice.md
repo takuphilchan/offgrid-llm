@@ -78,11 +78,27 @@ category through **Set up recognition** or **Set up spoken responses**.
 | Qwen3-ASR | Requires the reviewed local Qwen ASR runtime and complete package |
 | Qwen3-TTS CustomVoice | Supported read-aloud adapter; requires its local runtime; real synthesis is not qualified by the recorded local checks |
 | Qwen3-TTS Base / VoiceDesign | Not supported for response read-aloud; Base requires reference audio, and OffGrid does not introduce voice cloning |
-| Kokoro / streaming Zipformer | Package acquisition is supported; the executable sherpa-onnx adapter is not implemented |
+| Kokoro | Supervised CPU read-aloud adapter; requires a separately prepared local Python runtime with `sherpa_onnx` and `soundfile`, plus the complete model package |
+| Streaming Zipformer | Package acquisition is supported; its executable adapter is not implemented |
 
 Search results and downloadable packages are not promises of execution support
 or model quality. The [quality evidence](../quality/README.md)
 owns measured qualification evidence.
+
+Qwen CustomVoice uses automatic language handling instead of forcing English.
+This does not add languages absent from the model. Kokoro's curated package
+currently declares English voice `0`; the adapter does not infer additional
+voices or languages from the Kokoro name. `OFFGRID_SPEECH_PYTHON` selects the
+maintainer-prepared local speech interpreter. The native desktop installer still
+bundles Whisper/Piper only. Kokoro dependency installation, actual synthesis
+quality and clean-machine latency require separate qualification.
+
+Kokoro currently accepts the source-reviewed `sherpa-onnx` versions **1.12.20**
+and **2.0.0**, with `soundfile`. Version 2.0.0 requires package lexicons;
+espeak data alone is insufficient because that runtime ignores `data_dir`.
+Other versions report unavailable until their API/frontend contract is reviewed.
+Dependency readiness does not mean a real model has passed synthesis testing.
+See the [upstream frontend change](https://github.com/k2-fsa/sherpa-onnx/pull/4055).
 
 **Automatic** uses an available profile. An explicit selection that is removed
 or becomes unavailable produces an error instead of silently changing models.
@@ -206,7 +222,7 @@ and CPU synthesis can still be slow; interactive latency is not guaranteed.
 | Model selection disappeared | Confirm the service/workspace and browser account, then explicitly reselect an available model |
 | Speech preparation is slow | Try a short answer; check memory contention and CPU runtime suitability, not only download size |
 | Model removal says it is in use | Stop playback/transcription and wait for the runtime lease to release; do not manually delete managed files |
-| Qwen API request fails with `language=en` | Automatic language detection worked in the recorded smoke test; omit the optional language override. This adapter limitation is not fixed by this UI release |
+| Qwen rejects an explicit recognition language | Supported codes such as `en`, `fr`, `ar` and `pt` are normalized to Qwen language names. Unsupported languages fail explicitly; omitting the field or using `auto` requests detection |
 
 For a read-only service diagnosis, inspect **GET `/v1/audio/status`** using your
 usual authenticated client. `profiles[].available` describes runtime availability;

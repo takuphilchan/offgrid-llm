@@ -74,7 +74,7 @@ func (p *PackageRuntime) pythonModules(ctx context.Context) map[string]bool {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	// Probe module metadata without importing inference libraries or loading models.
-	cmd := exec.CommandContext(ctx, speechPython(), "-c", `import importlib.util,json; print(json.dumps({m:importlib.util.find_spec(m) is not None for m in ('qwen_asr','qwen_tts')}))`)
+	cmd := exec.CommandContext(ctx, speechPython(), "-c", speechModuleProbe)
 	var found map[string]bool
 	b, err := cmd.Output()
 	if err != nil || json.Unmarshal(b, &found) != nil || found == nil {
@@ -123,6 +123,18 @@ func (p *PackageRuntime) Profiles(ctx context.Context) ([]SpeechProfile, error) 
 				if !profile.Available {
 					profile.Issue = "Install the Piper speech runtime for this model."
 				}
+			case "kokoro":
+				if modules == nil {
+					modules = p.pythonModules(ctx)
+				}
+				profile.Available = kokoroRuntimeAvailable(modules, *m)
+				if !profile.Available {
+					profile.Issue = "Kokoro needs sherpa-onnx 1.12.20 or 2.0.0 and soundfile; 2.0.0 also requires package lexicons."
+				}
+				if _, err := kokoroConfig(profile); err != nil {
+					profile.Available = false
+					profile.Issue = err.Error()
+				}
 			case "qwen3-asr", "qwen3-tts":
 				if modules == nil {
 					modules = p.pythonModules(ctx)
@@ -166,6 +178,19 @@ func (p *PackageRuntime) AdapterAvailable(ctx context.Context, adapter string) b
 	default:
 		return false
 	}
+}
+
+// RuntimeAvailable also checks architecture: installing sherpa for Kokoro does
+// not implement the streaming Zipformer adapter.
+func (p *PackageRuntime) RuntimeAvailable(ctx context.Context, manifest models.ModelPackageManifest) bool {
+	if manifest.Runtime.Adapter == "sherpa-onnx" {
+		if manifest.Architecture != "kokoro" {
+			return false
+		}
+		modules := p.pythonModules(ctx)
+		return kokoroRuntimeAvailable(modules, manifest)
+	}
+	return p.AdapterAvailable(ctx, manifest.Runtime.Adapter)
 }
 
 func matchesSpeechModel(profile SpeechProfile, requested string) bool {
@@ -282,6 +307,13 @@ func (p *PackageRuntime) withEngine(ctx context.Context, model string, capabilit
 			cfg.Runtime.ASRModelDir = profile.dir
 		case "qwen3-tts":
 			cfg.Runtime.TTSModelDir = profile.dir
+		case "kokoro":
+			cfg.Runtime.TTSModelDir = profile.dir
+			cfg.Runtime.Kokoro, err = kokoroConfig(*profile)
+			if err != nil {
+				release()
+				return err
+			}
 		case "whisper", "piper":
 			for _, artifact := range profile.manifest.Artifacts {
 				path := filepath.Join(profile.dir, filepath.FromSlash(artifact.Path))

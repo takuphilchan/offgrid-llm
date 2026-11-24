@@ -280,7 +280,7 @@ func (s *Server) resolveModelPackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if speech, err := s.getSpeechRuntime(); err == nil {
-		preflight.RuntimeAvailable = speech.AdapterAvailable(r.Context(), result.Manifest.Runtime.Adapter)
+		preflight.RuntimeAvailable = speech.RuntimeAvailable(r.Context(), result.Manifest)
 		if preflight.RuntimeAvailable {
 			preflight.Readiness.Issue = "model_not_validated"
 			preflight.Warnings[0] = "The matching runtime is installed. This model variant still needs compatibility and inference checks; installation does not establish speech quality or interactive latency."

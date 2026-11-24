@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -62,6 +63,7 @@ type workerRequest struct {
 	Op, Kind, ModelDir, InputPath, Filename, Language, Prompt, ResponseFormat, Voice string
 	Text                                                                             string
 	Speed                                                                            float64
+	Kokoro                                                                           *KokoroConfig `json:"Kokoro,omitempty"`
 }
 type workerResult struct {
 	OK         bool      `json:"ok"`
@@ -225,7 +227,7 @@ func (w *managedWorker) transcribe(ctx context.Context, req TranscriptionRequest
 	return &TranscriptionResponse{Text: out.Text, Language: out.Language, Duration: out.Duration, Segments: out.Segments}, nil
 }
 func (w *managedWorker) speak(ctx context.Context, req SpeechRequest, modelDir string) (io.Reader, error) {
-	if !SupportsQwenDirectSpeech(modelDir) {
+	if w.cfg.Kokoro == nil && !SupportsQwenDirectSpeech(modelDir) {
 		return nil, fmt.Errorf("Qwen response playback requires a CustomVoice model; Base requires reference audio and is not supported for read-aloud")
 	}
 	if req.ResponseFormat != "" && req.ResponseFormat != "wav" {
@@ -233,6 +235,9 @@ func (w *managedWorker) speak(ctx context.Context, req SpeechRequest, modelDir s
 	}
 	if req.Speed != 0 && req.Speed != 1 {
 		return nil, fmt.Errorf("this speech runtime supports playback speed 1 only")
+	}
+	if w.cfg.Kokoro != nil && req.Voice != "" && !slices.Contains(w.cfg.Kokoro.VoiceIDs, req.Voice) {
+		return nil, fmt.Errorf("this voice is not available in the selected model")
 	}
 	if len(strings.TrimSpace(req.Input)) == 0 || len(req.Input) > 12000 {
 		return nil, fmt.Errorf("speech input must contain 1 to 12000 bytes of text")
@@ -244,7 +249,11 @@ func (w *managedWorker) speak(ctx context.Context, req SpeechRequest, modelDir s
 	path := tmp.Name()
 	tmp.Close()
 	defer os.Remove(path)
-	out, err := w.call(ctx, workerRequest{Op: "synthesize", Kind: "tts", ModelDir: modelDir, InputPath: path, Text: req.Input, Voice: req.Voice, ResponseFormat: "wav", Speed: req.Speed})
+	kind := "tts"
+	if w.cfg.Kokoro != nil {
+		kind = "kokoro"
+	}
+	out, err := w.call(ctx, workerRequest{Op: "synthesize", Kind: kind, ModelDir: modelDir, InputPath: path, Text: req.Input, Voice: req.Voice, ResponseFormat: "wav", Speed: req.Speed, Kokoro: w.cfg.Kokoro})
 	if err != nil {
 		return nil, err
 	}

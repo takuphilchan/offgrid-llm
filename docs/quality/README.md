@@ -6,6 +6,10 @@ Start with [native document evidence](evidence/native-documents-2026-10.md), [mo
 
 Keep three states distinct: implemented in source, automatically tested, and qualified on a real platform/model. A mock, compilation, Xvfb run, or checked OpenSpec task does not by itself establish installed-user readiness. Unrun checks remain unverified.
 
+The [offline starter-kit correction record](evidence/offline-kit-corrections-2026-11-24.md)
+covers speech adapters, safe USB imports and verified kit assembly, separating
+automated results from the remaining language, clean-machine and physical-drive checks.
+
 The [workspace completion audit](evidence/workspace-completion-audit-2026-11-01.md)
 records the latest presentation follow-up, v0.4.23 candidate and downloaded-package
 checks, retained failures, and the remaining human/native qualification gates.

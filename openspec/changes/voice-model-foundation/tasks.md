@@ -1,5 +1,11 @@
 # Tasks
 
+## 15. Starter-kit speech corrections (authorized 2026-11-24)
+
+- [x] 15.1 Normalize Qwen ASR language codes, preserve detected language and remove English-only TTS forcing; run real embedded-worker protocol regressions with Python available and update voice/API guidance.
+- [x] 15.2 Implement manifest-bound Kokoro execution through the supervised worker with dependency readiness, voice validation, leases, private output and cancellation; run audio/router fixtures and document runtime and language limitations.
+- [x] 15.3 Run applicable Go and race checks, record actual outcomes and unrun hardware/model qualification in the existing evidence index. Keep African-language and clean-machine speech qualification open. See [dated evidence](../../../docs/quality/evidence/offline-kit-corrections-2026-11-24.md); the full WSL server race suite timed out and is not qualified.
+
 The six completed tasks below record the tested import-only foundation. They do
 not complete the revised change. Groups 4-8 are required before this change can
 be marked implemented or archived; their checks have not run merely because this
