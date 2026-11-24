@@ -15,10 +15,16 @@ or invent a new version just to rerun packaging.
    workflow for Docker Hub images. Container publication requires the
    `DOCKERHUB_TOKEN` repository secret with push access to
    `takuphilchan/offgrid-llm`.
-4. Verify all 14 expected GitHub assets and `checksums-vX.Y.Z.sha256`, plus
+4. Verify all 16 expected GitHub assets (14 packages and two desktop trust
+   reports) and `checksums-vX.Y.Z.sha256`, plus
    the Linux AMD64 and ARM64 images under the exact Docker Hub `X.Y.Z` tag
    and the Linux AMD64 image under `X.Y.Z-gpu`.
    A GitHub release is not complete merely because its page is public.
+
+The source commit must pass `ci.yml` before release builders proceed. An unsigned
+preview requires an explicit workflow dispatch with `unsigned_preview=true` and
+the immutable version tag; a tag-triggered run does not imply that disclosure.
+Preview publication remains a prerelease and must not promote stable aliases.
 
 The release finalizer checks every expected asset's uploaded state, nonzero
 size, and GitHub SHA-256 digest before attaching the checksum file. Desktop
