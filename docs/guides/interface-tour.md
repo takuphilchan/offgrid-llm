@@ -1,9 +1,9 @@
 # OffGrid workspace tour
 
-This tour follows the development interface captured on **16 November 2026**.
+This tour follows the v0.4.33 interface captured on **25 November 2026**.
 The screenshots use isolated sample conversations, documents, models, and agent
 profiles. They show the real UI, with fixture responses rather than live model
-inference. The terminal captures run the actual packaged preview CLI.
+inference. The terminal captures run the actual packaged v0.4.33 CLI.
 Your installed release and connected service may expose different capabilities.
 See [image provenance](../images/README.md) for versions, scope, and regeneration.
 
@@ -94,7 +94,7 @@ responds to microphone levels and respects reduced motion. Leaving Talk restores
 the conversation and draft. Ordinary microphone dictation places text in the
 editor for review; Talk sends utterances after you finish speaking.
 
-![Full workspace Talk view with microphone and stop controls; simulated microphone input](../images/voice-listening-light.png)
+![Full workspace Talk view in automatic listening mode with a centered Stop Talk control; simulated microphone input](../images/voice-listening-light.png)
 
 Escape hides the quick window and stops microphone capture and playback. Hiding
 a window does not cancel accepted work; use its Stop control for that. Quit stops

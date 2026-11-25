@@ -8,6 +8,9 @@ for (const theme of ['light', 'dark']) test(`capture documentation workspace (${
   test.skip(!process.env.OFFGRID_DOC_CAPTURES, 'Set OFFGRID_DOC_CAPTURES=1 to refresh documentation images.');
   await page.setViewportSize({ width: 1440, height: 900 });
   await craftFixture(page, 'en', theme);
+  await page.route('**/api/v2/inference-endpoints', r => r.fulfill({json: {
+    configured: false, policy_state: 'not_configured', policy_revision: '', items: [],
+  }}));
   await page.route('**/api/v2/system', r => r.fulfill({ json: {
     product: 'offgrid', version: 'documentation-preview', workspace_id: 'craft', api_version: 2,
     capabilities: ['task-first-agents-v2', 'agent-profiles-v1', 'session-files-v1',
@@ -64,6 +67,7 @@ for (const theme of ['light', 'dark']) test(`capture documentation workspace (${
   await page.screenshot({ path: resolve(output, 'agent-profiles.png'), animations: 'disabled' });
   await page.goto('/ui/#/models');
   await expect(page.getByRole('region', { name: 'Installed', exact: true })).toContainText('Qwen');
+  await expect(page.locator('.inference-endpoint-section .inline-error')).toHaveCount(0);
   await page.screenshot({ path: resolve(output, 'models-installed.png'), animations: 'disabled' });
   await page.locator('.model-library-navigation').getByRole('button', { name: 'Discover models', exact: true }).click();
   await expect(page.locator('.catalog-card')).toHaveCount(3);

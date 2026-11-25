@@ -18,9 +18,9 @@ Check memory, storage, CPU instructions, and model requirements before downloadi
 
 Use the [official releases](https://github.com/takuphilchan/offgrid-llm/releases). Download the package and `checksums-vX.Y.Z.sha256` from the same release. Do not mix packages from different revisions to resolve a compatibility warning.
 
-The newest published version is [OffGrid v0.4.32](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.32).
-GitHub's **Latest** badge and `/releases/latest` also select 0.4.32. It remains
-an unsigned preview despite its placement as the latest release; Windows
+The newest published version is [OffGrid v0.4.33](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.33).
+GitHub's **Latest** badge and `/releases/latest` also select 0.4.33. It remains
+unsigned despite its placement as the latest regular release; Windows
 installers have no verified publisher signature and macOS apps are not
 Developer ID signed or notarized. Checksums verify file integrity, not publisher
 trust. Read the release notes and OS trust guidance before installing.

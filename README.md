@@ -9,11 +9,11 @@ knowledge indexes, users, and run history on storage you control.
 
 *Chat with a purpose: a demonstration task with sample file and command receipts.*
 
-[Download OffGrid v0.4.32 (unsigned preview)](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.32) ·
+[Download OffGrid v0.4.33 (unsigned)](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.33) ·
 [Quickstart](docs/setup/quickstart.md) · [Interface tour](docs/guides/interface-tour.md)
 
-**Interface preview:** the images below show the development checkout captured
-on 16 November 2026, not the published v0.4.32 interface. Conversations and
+**Interface captures:** the images below show the v0.4.33 renderer captured
+on 25 November 2026. Conversations and
 library entries are demonstration data. [Capture details](docs/images/README.md).
 
 The project is being hardened from a prototype into a dependable local tool.
@@ -39,13 +39,13 @@ For help and responsible disclosure, see [Support](SUPPORT.md) and
 ## Desktop download
 
 The current GitHub Latest download for Windows, macOS and Linux is
-[OffGrid v0.4.32 (unsigned preview)](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.32).
+[OffGrid v0.4.33 (unsigned)](https://github.com/takuphilchan/offgrid-llm/releases/tag/v0.4.33).
 Windows packages are unsigned; macOS apps are not Developer ID signed or
 notarized. Checksums verify downloaded bytes, not publisher trust. Read the
 release's OS trust guidance before installing.
 [All published versions](https://github.com/takuphilchan/offgrid-llm/releases)
-remain available; the development preview pictured here is separate from those
-release downloads.
+remain available. The images use isolated demonstration data, not a personal
+workspace.
 Windows users should choose the **setup.exe** download. See the
 [platform and architecture guide](docs/setup/installation.md#download-and-verify-a-release)
 for the matching package and checksum instructions. Desktop includes the local
@@ -101,16 +101,16 @@ agent profile.
 
 Run commands in a terminal tab alongside your saved work.
 
-![OffGrid development preview terminal displaying actual packaged CLI help in an isolated Demo drive](docs/images/desktop-terminal.png)
+![OffGrid v0.4.33 terminal displaying actual packaged CLI help in an isolated Demo drive](docs/images/desktop-terminal.png)
 
 ### Speak naturally
 
 Open **Talk** for the full workspace listening view. With the required local speech
 models and runtimes installed, automatic turn detection lets you finish speaking
 before OffGrid sends your request. Text and voice share the same conversation;
-the microphone and stop controls stay within reach.
+automatic listening keeps a centered Stop Talk control within reach.
 
-![OffGrid full workspace voice view in its Listening state, with microphone and stop controls](docs/images/voice-listening-light.png)
+![OffGrid full workspace voice view in its Listening state, with its centered Stop Talk control](docs/images/voice-listening-light.png)
 
 This is a demonstration of the listening interface using simulated microphone
 input. See [voice setup](docs/guides/voice.md) for requirements and limitations.
@@ -147,7 +147,7 @@ separately from document and speech capabilities.
 The [illustrated tour](docs/guides/interface-tour.md) explains the current
 navigation, document reader, model setup, agents, voice, and settings. These are
 real renderer captures with isolated sample data. The terminal runs the actual
-packaged preview CLI; the GIF is a screenshot slideshow, not an inference-speed
+packaged v0.4.33 CLI; the GIF is a screenshot slideshow, not an inference-speed
 demonstration. [Provenance and regeneration](docs/images/README.md).
 
 ## Community
@@ -162,7 +162,7 @@ should still be reported through [GitHub Issues](https://github.com/takuphilchan
 Use the versioned stable image for a repeatable installation:
 
 ```bash
-docker pull takuphilchan/offgrid-llm:0.4.32
+docker pull takuphilchan/offgrid-llm:0.4.33
 
 docker run -d \
   --name offgrid \
@@ -173,7 +173,7 @@ docker run -d \
   -p 127.0.0.1:11611:11611 \
   -v offgrid-models:/var/lib/offgrid/models \
   -v offgrid-data:/var/lib/offgrid/data \
-  takuphilchan/offgrid-llm:0.4.32
+  takuphilchan/offgrid-llm:0.4.33
 ```
 
 Open <http://127.0.0.1:11611/ui/>. The named volumes survive container
@@ -189,11 +189,13 @@ docker exec -it offgrid offgrid download phi-3.5-mini-instruct
 docker logs -f offgrid
 ```
 
-Stable releases publish `latest`, full semantic versions, `sha-*` tags,
-provenance, SBOMs, and AMD64/ARM64 CPU manifests. NVIDIA images use the separate
-`0.4.32-gpu` tag (Linux AMD64). The `edge` tag is for development, not a stable
+Container releases publish full semantic versions, `sha-*` tags,
+provenance, SBOMs, and AMD64/ARM64 CPU manifests. GitHub Latest promotion does
+not move Docker aliases: use the explicit `0.4.33` and `0.4.33-gpu` tags for this
+release; `latest` and `latest-gpu` still point to the previous images. The NVIDIA
+image supports Linux AMD64. The `edge` tag is for development, not a stable
 upgrade channel. See [Docker deployment](docs/setup/docker.md) and the
-[v0.4.32 release notes](docs/releases/release-notes-v0.4.32.md).
+[v0.4.33 release notes](docs/releases/release-notes-v0.4.33.md).
 
 ## Build and run from source
 

@@ -1,10 +1,19 @@
 # OffGrid v0.4.33
 
-Unsigned preview — qualification scope and known limitations are listed below.
+Unsigned release — qualification scope and known limitations are listed below.
 
-This candidate continues the **unsigned preview** channel. Windows publisher
+This release uses the verified **unsigned** artifacts built by the preview workflow. Windows publisher
 signing and macOS Developer ID signing/notarization are not established by local
 builds. Published artifacts must include their trust reports and SHA-256 manifest.
+
+## Release verification
+
+Published as the regular latest release at the owner's request using the existing v0.4.33 tag and verified artifacts. The packages remain unsigned.
+
+- [Exact-source CI](https://github.com/takuphilchan/offgrid-llm/actions/runs/45483685216): all 14 jobs passed; browser integration reported 3,002 passed and 76 skipped.
+- [Release build](https://github.com/takuphilchan/offgrid-llm/actions/runs/45494171306): all 22 jobs passed, including Windows, macOS, Linux and CPU/CUDA containers.
+- All 16 required assets were verified against their published SHA-256 digests; the checksum manifest is attached.
+- The same source was installed locally on Windows, all 1,254 candidate payload files matched, and the running service health check passed.
 
 ## Changes
 
@@ -49,10 +58,9 @@ These checks do not replace exact-release-source CI and artifact verification.
 
 The November 24 integrated working-tree check passed the full Windows Go suite,
 292 desktop tests (4 opt-in skips) and 238 computer companion tests (6 opt-in
-skips). The current local Windows candidate installed successfully and its 73
+skips). That earlier local Windows candidate installed successfully and its 73
 checked payload files matched. See [voice and UI correction evidence](../quality/evidence/voice-barge-in-and-auto-ui-2026-11-24.md)
-for test scope, installed-source receipts and known limits. Release automation
-must still qualify and rebuild the immutable tagged source on supported runners.
+for test scope, installed-source receipts and known limits. The subsequent exact-source release qualification is recorded above.
 
 The 512 MiB browser upload requirement is not qualified: the prepared Chromium
 transport patch has not been built or integrated. Stock attached Chrome/Edge
@@ -72,6 +80,5 @@ It retains uncertain receipts, copied artifacts and reservations instead of
 claiming cleanup, and restart does not authorize replay. Tests of those refusal
 boundaries do not qualify successful macOS cleanup or close the roadmap gates.
 
-Before publication, qualify the exact candidate source and produced packages,
-resolve release blockers and record the actual results. No all-platform,
-all-model, complete-transformation or signed-release claim is made here.
+The release checks above do not close the remaining qualification gaps. No
+all-platform, all-model, complete-transformation or signed-release claim is made here.

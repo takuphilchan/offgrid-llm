@@ -1,0 +1,101 @@
+{
+    "captured":  "2026-11-16",
+    "source_commit":  "9adc304fbab6a21b29f36c22f6d88e0d8bbe7dca",
+    "modified_checkout":  true,
+    "desktop_version":  "0.4.31-preview.20261115174855379.g9adc304f",
+    "desktop_ui_build_id":  "ca1c5092d51ef210fad28541b2814f930841ed60a48ada0daabd25a638ec4400",
+    "sample_data":  true,
+    "model_inference":  false,
+    "files":  [
+                  {
+                      "file":  "chat-workspace.png",
+                      "bytes":  48155,
+                      "sha256":  "cebfaaa22ddb888e25b166e0549a855576e258e2ca70afd16b47acbaa890f799"
+                  },
+                  {
+                      "file":  "chat-dark.png",
+                      "bytes":  52030,
+                      "sha256":  "db04bfc682c6c0b954bd6399ef7a94acdaaf15ebb22b7a1b71fd2aaac5ae2601"
+                  },
+                  {
+                      "file":  "models-installed.png",
+                      "bytes":  46182,
+                      "sha256":  "7919820c57531767aaeecfb2d27a9f7192de3153eccbbd05511f057dae255c3a"
+                  },
+                  {
+                      "file":  "models-discover.png",
+                      "bytes":  61922,
+                      "sha256":  "c0bcb24233cd09a02667cbcee945537b8863f56ec1b01dd8e32e5a7aa0049ba8"
+                  },
+                  {
+                      "file":  "knowledge-library.png",
+                      "bytes":  59531,
+                      "sha256":  "a24b710de2f6aa3dd49601a2b83181354247a07ddb1be0057af63fba604777b0"
+                  },
+                  {
+                      "file":  "agent-profiles.png",
+                      "bytes":  60682,
+                      "sha256":  "81a13265d6faa91fbb358113d8fc29caf148660906fdc97a08cc5ab42b1e3dc7"
+                  },
+                  {
+                      "file":  "desktop-terminal.png",
+                      "bytes":  93205,
+                      "sha256":  "380ee834e7b1939057d76952a7634e2639b71f6a986dd960596b3c5551343c34"
+                  },
+                  {
+                      "file":  "terminal-command-context.png",
+                      "bytes":  134006,
+                      "sha256":  "8c44f1fd3e439fa4f267005e990f1ebb793f646e12b60ea5e0a437ab955a2335"
+                  },
+                  {
+                      "file":  "document-reader.png",
+                      "bytes":  110321,
+                      "sha256":  "e44a4c1326647cddfebf04cd85c2b7e3af7da295cec16f5b96cc154d6c3aae7a"
+                  },
+                  {
+                      "file":  "settings-appearance.png",
+                      "bytes":  45390,
+                      "sha256":  "37b8bd3e3ea52ce1da4717074ccad459d3f95454fe94e7a612a6c6da7ef31fbf"
+                  },
+                  {
+                      "file":  "settings-responses.png",
+                      "bytes":  68511,
+                      "sha256":  "648395bf2c83a59e5e328a2e5d02aa661d7121d169a5fcbc69abaa7f23a32494"
+                  },
+                  {
+                      "file":  "workspace-tour.gif",
+                      "bytes":  125715,
+                      "sha256":  "71c3cecd94baafa2ff311241875d092d97a51625eb5412d019ada053876720ac"
+                  },
+                  {
+                      "file":  "terminal-welcome.png",
+                      "bytes":  43308,
+                      "sha256":  "6ea2bcbf7cf2e2f7d469017e630a7af6aa25d1e9feeddfab85d0b07a9467d33b"
+                  },
+                  {
+                      "file":  "agent-workspace-light.png",
+                      "bytes":  60655,
+                      "sha256":  "f63a0935e6d33177b365fcb640e34899f94e21d6e4555396c54658074feee695"
+                  },
+                  {
+                      "file":  "voice-listening-light.png",
+                      "bytes":  32379,
+                      "sha256":  "abc513a2cf90f376358dc138fbd4bd44aba25772ecac612f7c60d9710f99c676"
+                  },
+                  {
+                      "file":  "voice-listening-dark.png",
+                      "bytes":  33177,
+                      "sha256":  "78041bb7314cfe250e6d86be7711740480f6bd4355bc195f2ef12ff1835c9d80"
+                  },
+                  {
+                      "file":  "quick-access-input.png",
+                      "bytes":  5531,
+                      "sha256":  "623b42b40bced54b13bc384f672262cd77b0c79f3ae5f7cd59f01c62f6959376"
+                  },
+                  {
+                      "file":  "quick-access-reply.png",
+                      "bytes":  23389,
+                      "sha256":  "7ff30903f0c881525f9a30b7752ae8881579cb8825123aa33dc632013f248301"
+                  }
+              ]
+}

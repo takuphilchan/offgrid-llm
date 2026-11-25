@@ -18,7 +18,7 @@ Bash continuation syntax; in PowerShell enter `docker run` on one line or use
 PowerShell backtick continuations.
 
 ```bash
-docker pull takuphilchan/offgrid-llm:0.4.25
+docker pull takuphilchan/offgrid-llm:0.4.33
 docker run -d \
   --name offgrid \
   --init \
@@ -28,7 +28,7 @@ docker run -d \
   -p 127.0.0.1:11611:11611 \
   -v offgrid-models:/var/lib/offgrid/models \
   -v offgrid-data:/var/lib/offgrid/data \
-  takuphilchan/offgrid-llm:0.4.25
+  takuphilchan/offgrid-llm:0.4.33
 ```
 
 Open <http://localhost:11611/ui/> and download a model from the Models page, or
@@ -47,12 +47,16 @@ and TLS for remote access.
 | Tag | Meaning |
 | --- | --- |
 | `edge` | Current development image; update deliberately |
-| `latest` | Moving alias for the latest published stable CPU release |
-| `<version>` | Versioned release, for example `0.4.25` |
+| `latest` | CPU alias; not advanced by the v0.4.33 GitHub promotion |
+| `<version>` | Versioned release, for example `0.4.33` |
 | `<major>.<minor>` | Most recent patch in a stable minor release |
 | `sha-<commit>` | Image built from an exact source revision |
-| `latest-gpu` | Most recent stable NVIDIA release (Linux AMD64) |
+| `latest-gpu` | NVIDIA alias; not advanced by the v0.4.33 GitHub promotion |
 | `<version>-gpu` | Versioned NVIDIA release (Linux AMD64) |
+
+For v0.4.33, use `0.4.33` (AMD64/ARM64 CPU) or `0.4.33-gpu` (AMD64 NVIDIA).
+As verified on 25 November 2026, Docker `latest` and `latest-gpu` still reference
+the previous images; GitHub's Latest badge does not update those registry aliases.
 
 Pin a full version, or an image digest for content identity. `latest` and `edge`
 can move; pulling them is an update, not a reproducible specification. A stable
@@ -66,7 +70,7 @@ Clone the repository only when using its Compose definitions:
 git clone https://github.com/takuphilchan/offgrid-llm.git
 cd offgrid-llm/docker
 cp .env.example .env
-# Edit .env: set OFFGRID_VERSION=0.4.25 before pulling.
+# Edit .env: set OFFGRID_VERSION=0.4.33 before pulling.
 docker compose pull
 docker compose up -d
 ```

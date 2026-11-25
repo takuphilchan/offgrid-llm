@@ -1,7 +1,7 @@
 import {expect, test, type Page} from '@playwright/test';
 import {canonicalTalkFixture} from './fixtures/canonical-talk';
 import {resolve} from 'node:path';
-import {readFile} from 'node:fs/promises';
+import {readFile, mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 
 async function continuousFixture(page: Page, echoCancellation: boolean | 'all' = true, noiseSuppression = true) {
@@ -31,6 +31,23 @@ async function continuousFixture(page: Page, echoCancellation: boolean | 'all' =
   await expect(page.locator('[data-capture-phase=monitoring]')).toHaveCount(1);
   return fixture;
 }
+
+for (const theme of ['light','dark']) test(`capture documentation automatic Talk ${theme}`, async ({page}) => {
+  test.skip(!process.env.OFFGRID_DOC_CAPTURES, 'Opt-in documentation capture with synthetic microphone input.');
+  await page.setViewportSize({width:1440,height:900});
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await continuousFixture(page);
+  await page.evaluate(theme => {document.documentElement.dataset.theme=theme;},theme);
+  const surface=page.locator('.talk-surface');
+  await expect(surface.locator('.talk-surface-copy [role=status]')).toHaveText('Listening');
+  await expect(surface.getByRole('button')).toHaveCount(1);
+  await expect(surface).toHaveCSS('opacity','1');
+  await page.evaluate(()=>document.fonts.ready);
+  await mkdir(resolve('../../build/documentation-captures'),{recursive:true});
+  await page.screenshot({path:resolve(`../../build/documentation-captures/voice-listening-${theme}.png`),animations:'disabled'});
+  await page.keyboard.press('Escape');
+  await expect(surface).toHaveCount(0);
+});
 
 for (const theme of ['light','dark']) for (const viewport of [{width:630,height:790},{width:360,height:640},{width:360,height:320}]) {
   test(`Talk controls stay separate with one status at ${viewport.width}x${viewport.height} ${theme}`, async ({page}) => {

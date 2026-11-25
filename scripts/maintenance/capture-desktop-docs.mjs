@@ -15,7 +15,13 @@ const load = createRequire(join(root, 'apps/web/package.json'));
 const {_electron: electron, expect} = load('@playwright/test');
 const {fingerprintUI} = load(join(root, 'apps/desktop/compatibility.cjs'));
 const hash = fingerprintUI(await readFile(join(dist, 'index.html')));
-const packageInfo = JSON.parse(await readFile(join(dirname(binary), '../preview.json'), 'utf8'));
+let metadata;
+try { metadata = await readFile(join(dirname(binary), '../candidate.json'), 'utf8'); }
+catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+  metadata = await readFile(join(dirname(binary), '../preview.json'), 'utf8');
+}
+const packageInfo = JSON.parse(metadata);
 const version = packageInfo.version;
 const profile = await mkdtemp(join(tmpdir(), 'offgrid-documentation-'));
 const folder = join(profile, 'OffGrid Demo'), output = join(root, 'build/documentation-captures');

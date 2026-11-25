@@ -1,0 +1,104 @@
+{
+  "captured": "2026-11-25",
+  "source_commit": "19fa067a0ddea2447f9f302b4fddf4a693a3efe6",
+  "source_tag": "v0.4.33",
+  "application_source_modified": false,
+  "capture_tooling_modified": true,
+  "desktop_version": "0.4.33",
+  "desktop_ui_build_id": "7b47cdcc3b3429ea7b637b4902e0d80201c47ee6d5bc515b52c213e2fddf8394",
+  "sample_data": true,
+  "model_inference": false,
+  "real_microphone": false,
+  "files": [
+    {
+      "file": "chat-workspace.png",
+      "bytes": 49739,
+      "sha256": "fb0ed5ab4eb4ddf6666a530ffbc9a6f945abf16562ab53b2b6cd12af060fc9ac"
+    },
+    {
+      "file": "chat-dark.png",
+      "bytes": 53879,
+      "sha256": "dc3ef334b57c9ae0332a0e72b8d92f5446a10bc23b18b429713c0cd702bec667"
+    },
+    {
+      "file": "models-installed.png",
+      "bytes": 56102,
+      "sha256": "d3a319238a6b9778d4994304989db79c19a146a3f2042864bc79b3cbca28659e"
+    },
+    {
+      "file": "models-discover.png",
+      "bytes": 64788,
+      "sha256": "a48b27b41f1940a913603a13be522937a926f1e976b6a1a14856f992c783ae46"
+    },
+    {
+      "file": "knowledge-library.png",
+      "bytes": 60034,
+      "sha256": "2abd3182a6501602dced48fba70a9ddd94080c004e61e7167975eadd50d0ac4d"
+    },
+    {
+      "file": "agent-profiles.png",
+      "bytes": 63403,
+      "sha256": "67cbbbd0d66e357e5356d1494ec59229f1941547e77939e8c31f1078aa58ddc5"
+    },
+    {
+      "file": "desktop-terminal.png",
+      "bytes": 90056,
+      "sha256": "88599c64ab532d34172b2cb4023e20f69904237913c1ca2bf1dc0118387f72ff"
+    },
+    {
+      "file": "terminal-command-context.png",
+      "bytes": 147835,
+      "sha256": "80a5e2bdf0c078a5809c522c8f1d129a058245b1ade520566e6c3d4f94dc5dbd"
+    },
+    {
+      "file": "document-reader.png",
+      "bytes": 111582,
+      "sha256": "63f0816f1883ca10c3e038c88947c9bcd663ada41d6512300c1c59f066df23be"
+    },
+    {
+      "file": "settings-appearance.png",
+      "bytes": 48014,
+      "sha256": "43fe415ba07539355b59a359d322f84b17ffb8b747e7d8aeb91598bdc0df5c20"
+    },
+    {
+      "file": "settings-responses.png",
+      "bytes": 71329,
+      "sha256": "1924c3a52fa9085ae1173fde4cf7c7a8080cabbefb424ff16c775d2b77c9d511"
+    },
+    {
+      "file": "workspace-tour.gif",
+      "bytes": 130948,
+      "sha256": "dda71d6aba31d2605e7594c29fb67bf36db98a68dca59ca599b6bd6df6aa4feb"
+    },
+    {
+      "file": "terminal-welcome.png",
+      "bytes": 47124,
+      "sha256": "6e81a336d3f41ca0a23f25cab63df1acb025dd040418582310aa06227a5eeef3"
+    },
+    {
+      "file": "agent-workspace-light.png",
+      "bytes": 61277,
+      "sha256": "bcf1269768752d7f6d8cd7c51b24205f2f1ff2cb2d66d3840115c0d21b04f2e6"
+    },
+    {
+      "file": "voice-listening-light.png",
+      "bytes": 29735,
+      "sha256": "fe6726259d152527d7fc14063b5aaa6a3ecf7aebc91a5fc1f8dcc15e2861d686"
+    },
+    {
+      "file": "voice-listening-dark.png",
+      "bytes": 30269,
+      "sha256": "d522c06fc19ad352721ab97e8afc9d2a7abdeafb3ed06433b0d398b2d1400c52"
+    },
+    {
+      "file": "quick-access-input.png",
+      "bytes": 5553,
+      "sha256": "57bea1d92fafd073d36ec15bf8c752dedfa3ed93f565b83b34919b352e959085"
+    },
+    {
+      "file": "quick-access-reply.png",
+      "bytes": 23127,
+      "sha256": "fbad56d36bee02862c1e1fbeec329e90088fc963b4f8f3d8dc72233c797c82e0"
+    }
+  ]
+}

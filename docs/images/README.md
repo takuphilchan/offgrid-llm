@@ -1,8 +1,8 @@
 # Current interface images
 
-Captured **16 November 2026** for the [README](../../README.md) and
-[workspace tour](../guides/interface-tour.md). These images show the development
-preview, not the published v0.4.32 release.
+Captured **25 November 2026** for the [README](../../README.md) and
+[workspace tour](../guides/interface-tour.md). These images show the v0.4.33 application source
+with isolated sample data.
 
 ## Provenance
 
@@ -17,11 +17,13 @@ preview, not the published v0.4.32 release.
 | Voice listening, light and dark | Real full workspace React voice view in headless Chromium at 1440 × 900, isolated speech capability and microphone fixtures; no real microphone, transcription or model inference |
 | Workspace GIF | Four screenshots, four seconds each; slideshow, not generation or execution footage |
 
-The source checkout was based on commit
-`9adc304fbab6a21b29f36c22f6d88e0d8bbe7dca` **with local development changes**.
-The terminal uses `0.4.31-preview.20261115174855379.g9adc304f`, whose packaged UI
-build identity is `ca1c5092d51ef210fad28541b2814f930841ed60a48ada0daabd25a638ec4400`.
-The commit alone does not reproduce this modified checkout.
+The application source is tag `v0.4.33`, commit
+`19fa067a0ddea2447f9f302b4fddf4a693a3efe6`. Only capture tooling and documentation
+were modified for this refresh; application code was unchanged. The terminal
+uses the locally verified 0.4.33 release candidate with UI identity
+`7b47cdcc3b3429ea7b637b4902e0d80201c47ee6d5bc515b52c213e2fddf8394`.
+The automatic Talk fixture uses a synthetic audio stream and simulated device
+settings; it does not test a physical microphone or echo cancellation.
 
 Conversations, model inventory, document entries, and agent profiles are synthetic
 demonstration data. No model inference, real document ingestion, tool workflow,
@@ -34,8 +36,8 @@ capture folder. Its output is real, not substituted text. Other screenshots are
 full renderer viewports. No controls, colors, or status labels were retouched.
 Renderer screenshot animations were disabled for a stable frame.
 
-[The capture manifest](captures-2026-11-16.json) records asset sizes and SHA-256
-hashes. Nine superseded assets were copied and hash-verified in
+[The capture manifest](captures-2026-11-25.json) records asset sizes and SHA-256
+hashes. Eighteen superseded assets were copied and hash-verified in
 [the historical archive](old-images/README.md) before replacement.
 
 ## Refresh the renderer captures
@@ -65,7 +67,7 @@ covered separately by desktop tests.
 
 ## Refresh the native terminal captures
 
-Use a locally packaged Windows preview with `preview.json` beside its
+Use a locally packaged Windows preview with `candidate.json` or `preview.json` beside its
 `win-unpacked` folder. From the repository root:
 
 ```powershell
@@ -88,14 +90,15 @@ From the repository root in PowerShell:
 ```powershell
 $env:OFFGRID_DOC_CAPTURES = '1'
 $env:OFFGRID_FIXTURE_PORT = '5197'
-npm --prefix apps/web run test:e2e -- voice-playback.spec.ts -g 'capture documentation full workspace voice' --workers=1
+npm --prefix apps/web run test:e2e -- talk-continuous-browser.spec.ts -g 'capture documentation automatic Talk' --workers=1
 ```
 
 The output is `build/documentation-captures/voice-listening-light.png` and its
 dark variant. The static frame has animations disabled. The capture checks
 listening, replacing the main view, and returning to Chat. Separate voice tests
 cover motion and reduced-motion behavior. These images
-demonstrate the listening controls, not automatic turn-detection accuracy.
+demonstrate automatic listening with a centered Stop Talk control, not
+automatic turn-detection accuracy.
 
 ## Build the optional slideshow
 
@@ -120,3 +123,17 @@ node scripts/maintenance/check-docs.mjs
 
 The capture checks and visual review verify presentation, not release readiness
 or the quality of a model's answers.
+
+## Verification of this refresh
+
+On 25 November 2026, all five workspace/reader/quick-window capture scenarios
+and both automatic Talk capture scenarios passed. The hidden packaged v0.4.33
+terminal capture passed its visibility and read-only service checks. Visual
+review caught an outdated endpoint fixture; it was corrected to the documented
+empty endpoint response and both workspace captures passed again. All current
+assets and all eighteen archived assets have SHA-256 manifests. The four GIF
+frames use the reviewed Chat, Models, Library and agent-profile captures.
+
+TypeScript checking, the seven documentation-checker tests, the maintained-doc
+scan, application/developer layout checks and source-size checks passed. These
+fixture checks do not establish inference or physical microphone quality.

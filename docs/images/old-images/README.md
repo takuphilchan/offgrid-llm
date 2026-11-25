@@ -3,6 +3,11 @@
 Keep these images for historical reference; use the current
 [interface tour](../../guides/interface-tour.md) for product images.
 
+## Replaced on 25 November 2026
+
+[pre-2026-11-25](pre-2026-11-25/) preserves all eighteen November 16 assets.
+[checksums.json](pre-2026-11-25/checksums.json) records the original verified hashes.
+
 ## Replaced on 16 November 2026
 
 [pre-2026-11-16](pre-2026-11-16/) preserves the previous eight PNG screenshots
